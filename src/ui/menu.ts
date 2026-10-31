@@ -1,9 +1,26 @@
 // Main menu (docs/01 section 10): title "Shape of War", Continue (Adventure at the highest
 // unlocked level), Level select, Endless, Settings.
-import { button, createScreen, el, type Screen } from './dom';
+// Look (Ryan, wave 2): a centred neon panel with a double glowing border over the grid, the title
+// in the game's own neon style, four stacked framed neon rows, the focused or last used row in a
+// warm orange frame, the seed and level line under the rows and a thin footer with the build id.
+// Rows animate in with a MENU_STAGGER_MS stagger each time the menu opens. Touch only: a tap on a
+// row marks it and runs its action; there is no keyboard focus code.
+// The geometry comes from the pure menuLayout: one stacked column on the main screen, and on the
+// short cover screen the title on the left with the rows and the info line under them on the
+// right, so four rows at the 44 px minimum still fit with room to spare.
+import type { Insets, Rect } from '../input/types';
+import { button, createScreen, el, MIN_HIT_PX, type Screen } from './dom';
+import { aspectClass } from './hudFrame';
 
 export const GAME_TITLE = 'Shape of War';
 export const SHOW_ENDLESS = true;
+/** Delay between one row's entrance and the next. */
+export const MENU_STAGGER_MS = 200;
+export const MENU_ROWS = 4;
+/** Clear space kept between the panel and the safe area edge: room for the outer border and glow. */
+export const MENU_MARGIN = 12;
+/** The title is about this many ems wide ("Shape of War", bold, 0.06 em tracking), used to size it to the panel. */
+export const TITLE_EMS = 7.8;
 
 export interface MenuActions {
   adventure(): void;
@@ -17,6 +34,12 @@ export interface MenuScreen extends Screen {
   setInfo(text: string): void;
   /** Label on the Adventure button, for example "Continue  L3". */
   setContinue(text: string): void;
+  /** Footer line, for example "build abc123". */
+  setFooter(text: string): void;
+  /** Size the panel for the viewport and its safe area insets (resize, fold and unfold). */
+  layout(cssW: number, cssH: number, insets: Insets): void;
+  /** Index of the row in the warm frame: the last row tapped, Play or Continue at first. */
+  focused(): number;
 }
 
 /** Pure: Adventure button label. */
@@ -24,16 +47,184 @@ export function continueLabel(unlocked: number): string {
   return unlocked > 1 ? `Continue  L${Math.floor(unlocked)}` : 'Adventure';
 }
 
+export type MenuArrangement = 'stack' | 'side';
+
+export interface MenuLayout {
+  arrangement: MenuArrangement;
+  /** Panel border box in CSS px, centred in the safe area. */
+  panel: Rect;
+  pad: number;
+  /** The four row hit rects, top to bottom. */
+  rows: Rect[];
+  rowH: number;
+  rowGap: number;
+  /** Gap between the title, rows, info and footer blocks. */
+  sectionGap: number;
+  /** Side arrangement: width of the title column, the rows column and the gap between them. 0 when stacked. */
+  leftW: number;
+  rightW: number;
+  colGap: number;
+  title: Rect;
+  info: Rect;
+  foot: Rect;
+  titleSize: number;
+  rowSize: number;
+  infoSize: number;
+  footSize: number;
+  /** True when the panel, its border and glow fit inside the safe area. */
+  fits: boolean;
+}
+
+interface Tier {
+  rowH: number;
+  rowGap: number;
+  pad: number;
+  sectionGap: number;
+  titleMax: number;
+  rowSize: number;
+  infoSize: number;
+  footSize: number;
+}
+
+/** Roomiest first; the first tier that fits wins, the last is the fallback. */
+const TIERS: readonly Tier[] = [
+  { rowH: 56, rowGap: 12, pad: 22, sectionGap: 14, titleMax: 52, rowSize: 18, infoSize: 15, footSize: 11 },
+  { rowH: 48, rowGap: 10, pad: 18, sectionGap: 10, titleMax: 40, rowSize: 16, infoSize: 14, footSize: 11 },
+  { rowH: MIN_HIT_PX, rowGap: 6, pad: 12, sectionGap: 6, titleMax: 30, rowSize: 15, infoSize: 13, footSize: 10 },
+];
+
+const lineH = (size: number, k: number): number => Math.round(size * k);
+/** Footer height: one line plus its 4 px top padding and 1 px top rule. */
+const footH = (size: number): number => lineH(size, 1.4) + 5;
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function build(safe: Rect, arrangement: MenuArrangement, t: Tier): MenuLayout {
+  const rowsH = MENU_ROWS * t.rowH + (MENU_ROWS - 1) * t.rowGap;
+  const panelW = Math.max(0, Math.min(safe.w - 2 * MENU_MARGIN, arrangement === 'side' ? 640 : 440));
+  const innerW = Math.max(0, panelW - 2 * t.pad);
+  const colGap = arrangement === 'side' ? 20 : 0;
+  const leftW = arrangement === 'side' ? Math.round((innerW - colGap) * 0.46) : 0;
+  const rightW = arrangement === 'side' ? innerW - colGap - leftW : innerW;
+  const titleSize = Math.floor(clamp((arrangement === 'side' ? leftW : innerW) / TITLE_EMS, 18, t.titleMax));
+  const titleH = lineH(titleSize, 1.25);
+  const infoH = lineH(t.infoSize, 1.5) * 2; // room for two lines (pre-line), the seed note can wrap
+  const fH = footH(t.footSize);
+  let bodyH: number;
+  if (arrangement === 'side') bodyH = Math.max(titleH, rowsH + t.sectionGap + infoH);
+  else bodyH = titleH + t.sectionGap + rowsH + t.sectionGap + infoH;
+  const panelH = 2 * t.pad + bodyH + t.sectionGap + fH;
+  const panel: Rect = { x: safe.x + (safe.w - panelW) / 2, y: safe.y + (safe.h - panelH) / 2, w: panelW, h: panelH };
+  const ix = panel.x + t.pad;
+  const iy = panel.y + t.pad;
+  let rowsX: number;
+  let rowsY: number;
+  let title: Rect;
+  let info: Rect;
+  if (arrangement === 'side') {
+    rowsX = ix + leftW + colGap;
+    rowsY = iy + (bodyH - rowsH - t.sectionGap - infoH) / 2;
+    title = { x: ix, y: iy + (bodyH - titleH) / 2, w: leftW, h: titleH };
+    info = { x: rowsX, y: rowsY + rowsH + t.sectionGap, w: rightW, h: infoH };
+  } else {
+    rowsX = ix;
+    rowsY = iy + titleH + t.sectionGap;
+    title = { x: ix, y: iy, w: innerW, h: titleH };
+    info = { x: ix, y: rowsY + rowsH + t.sectionGap, w: innerW, h: infoH };
+  }
+  const rows: Rect[] = [];
+  for (let i = 0; i < MENU_ROWS; i++) rows.push({ x: rowsX, y: rowsY + i * (t.rowH + t.rowGap), w: rightW, h: t.rowH });
+  const foot: Rect = { x: ix, y: iy + bodyH + t.sectionGap, w: innerW, h: fH };
+  const fits =
+    panel.x >= safe.x + MENU_MARGIN - 1e-6 &&
+    panel.y >= safe.y + MENU_MARGIN - 1e-6 &&
+    panel.x + panel.w <= safe.x + safe.w - MENU_MARGIN + 1e-6 &&
+    panel.y + panel.h <= safe.y + safe.h - MENU_MARGIN + 1e-6 &&
+    rightW >= 160;
+  return {
+    arrangement,
+    panel,
+    pad: t.pad,
+    rows,
+    rowH: t.rowH,
+    rowGap: t.rowGap,
+    sectionGap: t.sectionGap,
+    leftW,
+    rightW: arrangement === 'side' ? rightW : 0,
+    colGap,
+    title,
+    info,
+    foot,
+    titleSize,
+    rowSize: t.rowSize,
+    infoSize: t.infoSize,
+    footSize: t.footSize,
+    fits,
+  };
+}
+
+/**
+ * Pure: menu geometry for a viewport and its safe area insets. The cover screen (21:9) puts the
+ * title beside the rows; the main screen stacks everything. Rows never go below MIN_HIT_PX high.
+ */
+export function menuLayout(cssW: number, cssH: number, ins: Insets): MenuLayout {
+  const W = Math.max(1, cssW);
+  const H = Math.max(1, cssH);
+  const safe: Rect = { x: ins.left, y: ins.top, w: Math.max(1, W - ins.left - ins.right), h: Math.max(1, H - ins.top - ins.bottom) };
+  const arrangement: MenuArrangement = aspectClass(W, H) === 'cover' ? 'side' : 'stack';
+  let last: MenuLayout | null = null;
+  for (const t of TIERS) {
+    last = build(safe, arrangement, t);
+    if (last.fits) return last;
+  }
+  return last ?? build(safe, arrangement, TIERS[TIERS.length - 1] as Tier);
+}
+
+/** Pure: entrance delay for row i in CSS time. */
+export function rowDelay(i: number): string {
+  return `${Math.max(0, Math.floor(i)) * MENU_STAGGER_MS}ms`;
+}
+
 export function createMenuScreen(parent: HTMLElement, actions: MenuActions): MenuScreen {
   const s = createScreen(parent);
+  s.root.classList.add('sow-menu');
+  const panel = el('div', 'sow-menu-panel');
   const title = el('div', 'sow-title', GAME_TITLE);
-  const row = el('div', 'sow-row');
-  const adventure = button('Adventure', actions.adventure);
-  const endless = button('Endless', actions.endless);
+  title.style.gridArea = 'title';
+  const rowsBox = el('div', 'sow-menu-rows');
+  rowsBox.style.gridArea = 'rows';
+  let focus = 0;
+  const rows: HTMLButtonElement[] = [];
+  const paintFocus = (): void => {
+    rows.forEach((r, i) => r.classList.toggle('sow-focus', i === focus));
+  };
+  const row = (label: string, act: () => void): HTMLButtonElement => {
+    const index = rows.length;
+    const b = button(label, () => {
+      focus = index;
+      paintFocus();
+      act();
+    });
+    b.classList.add('sow-menu-row');
+    b.style.animationDelay = rowDelay(index);
+    rows.push(b);
+    return b;
+  };
+  const adventure = row('Adventure', () => actions.adventure());
+  const levels = row('Level select', () => actions.levels());
+  const endless = row('Endless', () => actions.endless());
+  const settings = row('Settings', () => actions.settings());
   endless.style.display = SHOW_ENDLESS ? '' : 'none';
-  row.append(adventure, button('Level select', actions.levels), endless, button('Settings', actions.settings));
-  const info = el('div', 'sow-sub', '');
-  s.root.append(title, row, info);
+  rowsBox.append(adventure, levels, endless, settings);
+  paintFocus();
+  const info = el('div', 'sow-menu-info', '');
+  info.style.gridArea = 'info';
+  const foot = el('div', 'sow-menu-foot', '');
+  foot.style.gridArea = 'foot';
+  panel.append(title, rowsBox, info, foot);
+  s.root.append(panel);
   return {
     ...s,
     setInfo(text) {
@@ -41,6 +232,41 @@ export function createMenuScreen(parent: HTMLElement, actions: MenuActions): Men
     },
     setContinue(text) {
       adventure.textContent = text;
+    },
+    setFooter(text) {
+      foot.textContent = text;
+    },
+    focused: () => focus,
+    layout(cssW, cssH, insets) {
+      const L = menuLayout(cssW, cssH, insets);
+      const p = panel.style;
+      p.width = `${L.panel.w}px`;
+      p.padding = `${L.pad}px`;
+      p.rowGap = `${L.sectionGap}px`;
+      if (L.arrangement === 'side') {
+        p.gridTemplateColumns = `${L.leftW}px ${L.rightW}px`;
+        p.gridTemplateRows = 'auto auto auto';
+        p.gridTemplateAreas = '"title rows" "title info" "foot foot"';
+        p.columnGap = `${L.colGap}px`;
+        title.style.alignSelf = 'center';
+        info.style.alignSelf = 'start';
+      } else {
+        p.gridTemplateColumns = '1fr';
+        p.gridTemplateRows = 'auto';
+        p.gridTemplateAreas = '"title" "rows" "info" "foot"';
+        p.columnGap = '0px';
+        title.style.alignSelf = '';
+        info.style.alignSelf = '';
+      }
+      title.style.fontSize = `${L.titleSize}px`;
+      rowsBox.style.gap = `${L.rowGap}px`;
+      for (const r of rows) {
+        r.style.height = `${L.rowH}px`;
+        r.style.minHeight = `${L.rowH}px`;
+        r.style.fontSize = `${L.rowSize}px`;
+      }
+      info.style.fontSize = `${L.infoSize}px`;
+      foot.style.fontSize = `${L.footSize}px`;
     },
   };
 }

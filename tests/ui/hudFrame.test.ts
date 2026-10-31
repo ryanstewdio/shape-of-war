@@ -10,8 +10,11 @@ import { fitArena } from '../../src/render/layout';
 import { MULTIPLIER_CAP } from '../../src/game/scoring';
 import { hudText, playRect, superHint, superLabel } from '../../src/ui/hud';
 import {
+  COVER_DRONE_ROW,
   COVER_LEFT,
   hudFrame,
+  mainIndicators,
+  MAIN_DRONE_MIN_W,
   hudRects,
   MAIN_RIGHT,
   MAIN_ROWS,
@@ -340,6 +343,95 @@ describe('V2-B weapon indicator boxes', () => {
     expect(hudFrame(960, 411, ZERO, 1600, 1000).playRect.y).toBe(20);
     const main = hudFrame(832, 750, ZERO, 1800, 1000);
     expect(main.playRect.y).toBe(mainTop(main.buttons, ZERO));
+  });
+});
+
+describe('GW1 drone indicator boxes', () => {
+  /** Boss runs (the default strip) and no boss runs on cover; main ignores the option. */
+  const withStrip = (views: Array<[number, number]>, bossStrip: boolean): HudFrame[] => {
+    const out: HudFrame[] = [];
+    for (const [w, h] of views) for (const ins of INSETS) for (const [aw, ah] of ARENAS) out.push(hudFrame(w, h, ins, aw, ah, { bossStrip }));
+    return out;
+  };
+  const cover = [...withStrip(COVER_VIEWS, true), ...withStrip(COVER_VIEWS, false)];
+  const main = frames(MAIN_VIEWS);
+  const all = [...cover, ...main];
+  const others = (f: HudFrame): Array<[string, Rect]> =>
+    Object.entries(f.boxes).filter(([id, b]) => id !== 'drone' && id !== 'droneBar' && b.w > 0 && b.h > 0);
+
+  it('overlaps no other HUD box, the boss bar included, nor the arena, the play rect or the buttons', () => {
+    for (const f of all) {
+      for (const id of ['drone', 'droneBar'] as const) {
+        const b = f.boxes[id];
+        for (const [oid, o] of others(f)) expect(overlaps(b, o), `${label(f)} ${id} vs ${oid}`).toBe(false);
+        for (const k of ['bomb', 'super', 'pause'] as const) expect(overlaps(b, f.buttons[k]), `${label(f)} ${id} vs ${k}`).toBe(false);
+        expect(overlaps(b, f.arena), `${label(f)} ${id} arena`).toBe(false);
+        expect(overlaps(b, f.playRect), `${label(f)} ${id} play rect`).toBe(false);
+        expect(overlaps(b, f.banner), `${label(f)} ${id} banner`).toBe(false);
+      }
+    }
+  });
+
+  it('the bar sits directly under the label, same left edge and width', () => {
+    for (const f of all) {
+      const { drone, droneBar } = f.boxes;
+      expect(droneBar.x, label(f)).toBe(drone.x);
+      expect(droneBar.w, label(f)).toBe(drone.w);
+      expect(droneBar.y, label(f)).toBeGreaterThanOrEqual(drone.y + drone.h);
+      expect(droneBar.h, label(f)).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  it('cover: under the weapon indicator in the left column, above the objective bar', () => {
+    for (const f of cover) {
+      const { weapon, weaponBar, drone, droneBar, bar } = f.boxes;
+      expect(drone.x, label(f)).toBe(weapon.x);
+      expect(drone.w, label(f)).toBe(weapon.w);
+      expect(drone.y, label(f)).toBeGreaterThanOrEqual(weaponBar.y + weaponBar.h);
+      expect(droneBar.y + droneBar.h, label(f)).toBeLessThanOrEqual(bar.y);
+      expect(drone.x + drone.w, label(f)).toBeLessThanOrEqual(f.insets.left + COVER_LEFT);
+      expect(COVER_DRONE_ROW).toBeGreaterThanOrEqual(drone.h + droneBar.h);
+    }
+  });
+
+  it('main: right of the weapon indicator on the same row, inside the top band, left of the objective and boss boxes', () => {
+    for (const f of main) {
+      const { weapon, weaponBar, drone, droneBar, objLabel, par, bossName, bossBar } = f.boxes;
+      expect(drone.y, label(f)).toBe(weapon.y);
+      expect(droneBar.y, label(f)).toBe(weaponBar.y);
+      expect(drone.x, label(f)).toBeGreaterThanOrEqual(weapon.x + weapon.w);
+      expect(drone.w, label(f)).toBeGreaterThanOrEqual(MAIN_DRONE_MIN_W);
+      expect(droneBar.y + droneBar.h, label(f)).toBeLessThanOrEqual(f.insets.top + MAIN_ROWS);
+      for (const o of [objLabel, par, bossName, bossBar]) expect(drone.x + drone.w, label(f)).toBeLessThanOrEqual(o.x);
+    }
+  });
+
+  it('keeps the band and columns: the play rect is the same with or without the indicator', () => {
+    expect(hudFrame(960, 411, ZERO, 1600, 1000, { bossStrip: false }).playRect).toEqual({ x: 160, y: 0, w: 960 - 160 - 112, h: 411 });
+    const m = hudFrame(832, 750, ZERO, 1800, 1000);
+    expect(m.playRect.y).toBe(mainTop(m.buttons, ZERO));
+  });
+
+  it('labels fit: the longest mode name, and the longest pair name with its caption, on the Fold 7 screens', () => {
+    // Rough widths for the system sans-serif at weight 600: capitals 0.68 em, lower case 0.56 em.
+    const caps = (t: string, size: number): number => t.length * 0.68 * size;
+    const mixed = (t: string, size: number): number => (0.68 + (t.length - 1) * 0.56) * size;
+    for (const f of [hudFrame(960, 411, ZERO, 1600, 1000), hudFrame(904, 388, ZERO, 1600, 1000), hudFrame(832, 750, ZERO, 1600, 1000)]) {
+      const { weapon, drone } = f.boxes;
+      const pair = caps('TRIDENT', weapon.size) + 0.4 * weapon.size + 'combined'.length * 0.56 * 0.75 * weapon.size;
+      expect(weapon.w, label(f)).toBeGreaterThanOrEqual(pair);
+      expect(drone.w, label(f)).toBeGreaterThanOrEqual(mixed('Double', drone.size));
+    }
+  });
+
+  it('mainIndicators splits the run: weapon, gap, drone, never past the end', () => {
+    for (const run of [80, 120, 153, 172, 260]) {
+      const r = mainIndicators(100, 100 + run);
+      expect(r.droneW).toBeGreaterThanOrEqual(MAIN_DRONE_MIN_W);
+      expect(r.droneX).toBeGreaterThanOrEqual(100 + r.weaponW);
+      if (run >= 120) expect(r.droneX + r.droneW).toBeCloseTo(100 + run, 6);
+      expect(r.weaponW).toBeGreaterThanOrEqual(0);
+    }
   });
 });
 

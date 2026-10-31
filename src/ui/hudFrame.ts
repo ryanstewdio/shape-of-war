@@ -17,6 +17,10 @@
 // with no boss (bossStrip false) keeps the v2 play rect exactly and the old left column boxes.
 // Main puts the boxes in the level line's slot and the strip under it, so the top band stays 60 px.
 // None is a pointer target and none reaches the bomb, super or pause rects.
+// GW1 drone indicator: beside the weapon indicator. Cover stacks it in the row under the weapon
+// (same left edge and width), and the objective, level line and column boss rows step down by
+// COVER_DRONE_ROW. Main splits the free run right of the multiplier, up to the objective and boss
+// boxes, between the weapon (left) and the drone (right), so the top band stays MAIN_ROWS high.
 // The boss banner (G3A) is not a HUD box: it is a transient line at the top of the play rect, the
 // place overlays use, and it is checked against every HUD rect instead (HudFrame.banner).
 // B9: the main screen bands are measured from the real HUD elements (text row heights, and the
@@ -51,6 +55,8 @@ export type BoxId =
   | 'mult'
   | 'weapon'
   | 'weaponBar'
+  | 'drone'
+  | 'droneBar'
   | 'bar'
   | 'objLabel'
   | 'par'
@@ -119,12 +125,20 @@ export const MAIN_RIGHT = Math.max(BOMB_HIT, SUPER_HIT, PAUSE_HIT) + 2 * MAIN_CO
  * Multiplier box widths. The multiplier tops out at 999 ("x999"), so the box is only as wide as
  * that text needs and the weapon indicator (V2-B) takes the row to its right.
  */
-export const COVER_MULT_W = 52;
-export const MAIN_MULT_W = 64;
+export const COVER_MULT_W = 40;
+export const MAIN_MULT_W = 48;
 /** Gap between the multiplier box and the weapon indicator box. */
 export const WEAPON_GAP = 8;
 /** Height of the weapon countdown bar, border included (the element is border-box). */
 export const WEAPON_BAR_H = 5;
+/** Cover: height of the drone indicator row (label and bar) under the weapon row. */
+export const COVER_DRONE_ROW = 22;
+/** Main: gap between the weapon and drone indicators, and the drone indicator's width range. */
+export const DRONE_GAP = 8;
+export const MAIN_DRONE_MIN_W = 48;
+export const MAIN_DRONE_MAX_W = 64;
+/** Main: gap kept between the indicators and the objective or boss boxes to their right. */
+export const MAIN_INDICATOR_PAD = 4;
 /**
  * Width of the boss phase pips box (V3-A): room for the four pips of the longest boss (Prism) at
  * 8 px with 4 px gaps, plus a little. The boss name box takes the rest of the row.
@@ -237,7 +251,7 @@ function coverStripBoss(b: Base): BossBoxes {
  * boss that shows up anyway is still drawn. Text is 13 px, the floor, not the old 11.
  */
 function coverColumnBoss(b: Base, lx: number, lw: number): BossBoxes {
-  const t = b.ins.top;
+  const t = b.ins.top + COVER_DRONE_ROW;
   return {
     bossName: box(lx, t + 140, lw - BOSS_PIPS_W, 17, BOSS_TEXT_MIN),
     bossPips: box(lx + lw - BOSS_PIPS_W, t + 140, BOSS_PIPS_W, 17, 0, 'right'),
@@ -281,9 +295,12 @@ function sides(b: Base, strip: boolean): Partial0 {
       // above the objective bar at t + 58.
       weapon: box(lx + COVER_MULT_W + WEAPON_GAP, t + 32, lw - COVER_MULT_W - WEAPON_GAP, 13, 10),
       weaponBar: box(lx + COVER_MULT_W + WEAPON_GAP, t + 47, lw - COVER_MULT_W - WEAPON_GAP, WEAPON_BAR_H, 0),
-      bar: box(lx, t + 58, lw, 12, 11),
-      objLabel: box(lx, t + 72, lw, 30, 11, 'left', true),
-      par: box(lx, t + 106, lw, 28, 11, 'left', true),
+      // GW1 drone indicator: the row under the weapon, same left edge and width.
+      drone: box(lx + COVER_MULT_W + WEAPON_GAP, t + 54, lw - COVER_MULT_W - WEAPON_GAP, 13, 10),
+      droneBar: box(lx + COVER_MULT_W + WEAPON_GAP, t + 69, lw - COVER_MULT_W - WEAPON_GAP, WEAPON_BAR_H, 0),
+      bar: box(lx, t + 58 + COVER_DRONE_ROW, lw, 12, 11),
+      objLabel: box(lx, t + 72 + COVER_DRONE_ROW, lw, 30, 11, 'left', true),
+      par: box(lx, t + 106 + COVER_DRONE_ROW, lw, 28, 11, 'left', true),
       // V3 boss bar, drawn only while a boss lives: the top strip on a boss run (G3A), the left
       // column under the level line otherwise. The right column, with the moved bomb and super
       // buttons, is untouched either way.
@@ -293,6 +310,19 @@ function sides(b: Base, strip: boolean): Partial0 {
       ...superBoxes(buttons, rx - 4, rw + 8, 11, 9),
     },
   };
+}
+
+/**
+ * Pure: main split of the run from x0 to x1 (right of the multiplier, up to the objective and boss
+ * boxes) into the weapon indicator, a gap and the drone indicator. The drone takes about a third (0.34),
+ * between MAIN_DRONE_MIN_W and MAIN_DRONE_MAX_W, so the weapon keeps room for a pair name and its
+ * "combined" caption.
+ */
+export function mainIndicators(x0: number, x1: number): { weaponW: number; droneX: number; droneW: number } {
+  const run = Math.max(0, x1 - x0);
+  const droneW = Math.max(MAIN_DRONE_MIN_W, Math.min(MAIN_DRONE_MAX_W, Math.round(run * 0.34)));
+  const weaponW = Math.max(0, run - DRONE_GAP - droneW);
+  return { weaponW, droneX: x0 + weaponW + DRONE_GAP, droneW };
 }
 
 /** Main screen top band rows (docs/01 table 9.2), shared by both main arrangements. */
@@ -309,13 +339,15 @@ function topRows(b: Base): Omit<HudBoxes, 'superLabel' | 'superHint'> {
   const mx = ins.left + 24;
   const multW = Math.min(sideW, MAIN_MULT_W);
   const wx = mx + multW + WEAPON_GAP;
-  const ww = sideW - multW - WEAPON_GAP;
   const bossHalf = Math.max(BOSS_PIPS_W + 20, Math.min(objW / 2, livesRight - sideW - cx - 4));
+  const ind = mainIndicators(wx, Math.min(cx - objW / 2, cx - bossHalf) - MAIN_INDICATOR_PAD);
   return {
     score: box(mx, t + 6, sideW, 32, 28),
     mult: box(mx, t + 38, multW, MAIN_ROWS - 38, 18),
-    weapon: box(wx, t + 38, ww, 14, 12),
-    weaponBar: box(wx, t + 54, ww, WEAPON_BAR_H, 0),
+    weapon: box(wx, t + 38, ind.weaponW, 14, 12),
+    weaponBar: box(wx, t + 54, ind.weaponW, WEAPON_BAR_H, 0),
+    drone: box(ind.droneX, t + 38, ind.droneW, 14, 12),
+    droneBar: box(ind.droneX, t + 54, ind.droneW, WEAPON_BAR_H, 0),
     bar: box(cx - objW / 2, t + 8, objW, 20, 14),
     objLabel: box(cx - objW / 2, t + 8, objW, 20, 14, 'center'),
     par: box(cx - objW / 2, t + 32, objW, 20, 14, 'center'),

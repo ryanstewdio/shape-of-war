@@ -421,6 +421,7 @@ async function boot(): Promise<void> {
     applySpacePhysics(settingsModel.state.spacePhysics); // new world: push the stored level to it
     applyWeaponPickups(settingsModel.state.weaponPickups); // and the stored pickups choice
     hud.clearWeapon(); // a new world starts on spread: drop any indicator left from the last run
+    hud.clearDrone(); // and with an unarmed drone: drop a drone indicator or combine caption left over
     hud.clearBoss(); // and has no boss yet: drop a bar left from the last run
     bossDown = false;
     endCheck = true;
@@ -469,6 +470,7 @@ async function boot(): Promise<void> {
     // Pause, results and the intro card lay out inside the play rect, clear of the HUD rings.
     const pad = overlayPadding(frame);
     for (const s of [pauseScreen, results, introScreen]) confine(s.root, pad);
+    menu.layout(last.cssW, last.cssH, insets); // the menu panel sizes itself to the safe area, not the HUD frame
     return frame;
   }
 
@@ -482,6 +484,7 @@ async function boot(): Promise<void> {
     endless: () => bus.emit('game:start', { mode: 'endless', levelIndex: 1 }),
     settings: () => dispatch({ type: 'openSettings' }),
   });
+  menu.setFooter(`build ${__BUILD_ID__}`);
   const levelSelect = createLevelSelect(uiRoot, {
     play: (index) => {
       if (customSeed) {
