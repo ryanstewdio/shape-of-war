@@ -62,6 +62,8 @@ interface DropRec {
   y: number;
   /** Ordinal of the scoring kill that spawned it, 1 based. */
   killNo: number;
+  /** V3 wave D: a non spread weapon was active at the drop, so spread was in the pool. */
+  armed: boolean;
 }
 
 /** Everything a session leaves behind that the replay must reproduce. */
@@ -134,7 +136,8 @@ function traceOf(w: World): number {
   const s = weaponState(w);
   const pk = livePickup(w);
   const life = pk > 0 ? Math.round((w.t[pk] ?? 0) * 1e4) : -1;
-  const kindIx = WEAPON_KINDS.indexOf(s.kind);
+  // A pair (v3 wave D) reads as -1: the trace only has to match between the two runs.
+  const kindIx = (WEAPON_KINDS as readonly string[]).indexOf(s.kind);
   return (((s.kills * 31 + s.dropIndex) * 7 + kindIx) * 100003 + Math.round(Math.max(0, s.timer) * 1e4) * 3 + (pk > 0 ? 1 : 0) * 17 + life) | 0;
 }
 
@@ -153,7 +156,7 @@ function observer(): { start: (w: World) => void; tick: (w: World, tick: number)
         const s = weaponState(world);
         if (s.dropIndex > out.drops.length) {
           const id = livePickup(world);
-          out.drops.push({ tick: current, index: s.dropIndex - 1, weapon: w.a[id] ?? -1, x: w.x[id] ?? 0, y: w.y[id] ?? 0, killNo: out.kills });
+          out.drops.push({ tick: current, index: s.dropIndex - 1, weapon: w.a[id] ?? -1, x: w.x[id] ?? 0, y: w.y[id] ?? 0, killNo: out.kills, armed: s.kind !== 'spread' });
         }
       };
     },
@@ -318,17 +321,26 @@ describe('weapon drop log replay from a recorded session', { timeout: 120_000 },
     expect(b.trace).toEqual(a.trace);
   });
 
-  it('every drop follows SPEC 3.5: pool by band, hash01 choice, no immediate repeat, first at kill 15, later ones not before kill 40, 65, ...', () => {
+  // V3 wave D (docs/13 "Spread as an ingredient", "Drop schedule"): a drop made while a weapon is
+  // active draws from the band pool plus spread (0), and a drop falls due within 12 kills while a
+  // weapon is active, so the v2 kill bound (15, 40, 65, ...) holds only until the first equip.
+  it('every drop follows SPEC 3.5 and docs/13: pool by band (plus spread while armed), hash01 choice, no immediate repeat, first at kill 15', () => {
     for (const s of sessions) {
       let previous = 0;
+      let prevKill = 0;
+      const firstEquip = s.equips.map((e) => Number(e.split('|')[0])).find((t) => Number.isFinite(t)) ?? Infinity;
       s.drops.forEach((d, n) => {
-        const pool = POOLS[s.level.band] ?? [];
+        const base = POOLS[s.level.band] ?? [];
+        const pool = d.armed ? [...base, 0] : base;
         expect(d.index, 'dropIndex counts up from 0').toBe(n);
         expect(d.weapon, `level ${s.level.levelIndex} drop ${n}`).toBe(specWeapon(s.level.seed, n, pool, previous));
         expect(pool).toContain(d.weapon);
         if (pool.length > 1) expect(d.weapon).not.toBe(previous);
-        expect(d.killNo).toBeGreaterThanOrEqual(15 + 25 * n);
+        expect(d.killNo).toBeGreaterThan(prevKill);
+        if (d.tick < firstEquip) expect(d.killNo).toBeGreaterThanOrEqual(15 + 25 * n);
+        if (!d.armed) expect(d.weapon).not.toBe(0);
         previous = d.weapon;
+        prevKill = d.killNo;
       });
       if (s.drops[0] !== undefined) expect(s.drops[0].killNo).toBe(15);
     }
@@ -434,14 +446,17 @@ describe('weapon drop log replay from a synthetic kill log', { timeout: 120_000 
   it('different levels give different schedules (the seed really feeds it) and the band limits the pool', () => {
     const weapons = (runSeed: number, levelIndex: number): string[] =>
       playSynthetic(generateLevel(runSeed, levelIndex), log).drops.map((d) => d.split('|')[2] ?? '');
+    // V3 wave D: spread ('0') may drop while a collected weapon is active, on top of the band pool.
     const band1 = weapons(1, 1);
-    expect(new Set(band1)).toEqual(new Set(['1']));
+    expect([...new Set(band1)].every((x) => x === '0' || x === '1')).toBe(true);
+    expect(band1).toContain('1');
     const band2 = weapons(42, 13);
-    expect([...new Set(band2)].every((x) => x === '1' || x === '2')).toBe(true);
-    expect(new Set(band2).size).toBe(2);
+    expect([...new Set(band2)].every((x) => x === '0' || x === '1' || x === '2')).toBe(true);
+    expect(band2).toContain('1');
+    expect(band2).toContain('2');
     const band4a = weapons(0xdeadbeef, 36);
     const band4b = weapons(0x4e464f4c, 31);
-    expect(new Set(band4a).size).toBe(3);
+    for (const k of ['1', '2', '3']) expect(band4a).toContain(k);
     expect(band4a).not.toEqual(band4b);
   });
 

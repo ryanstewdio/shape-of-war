@@ -73,8 +73,11 @@ export interface Events {
   'sim:threat': { level: number };
   /** Swarm (B) to Glow: a weapon pickup was collected at (x, y). */
   'fx:pickup': { x: number; y: number; weapon: WeaponKind };
-  /** Swarm (B) to Ledger: at most every 100 ms and on change. */
-  'hud:weapon': { kind: WeaponKind; remaining: number; total: number };
+  /**
+   * Swarm (B) to Ledger: at most every 100 ms and on change. title (v3 wave D) is the display name:
+   * the base kind, or the pair's COMBO_NAMES entry (Hail, Trident, Halo, Needle, Whirl, Eclipse).
+   */
+  'hud:weapon': { kind: WeaponKind; remaining: number; total: number; title?: string };
   // V3 contract stubs (docs/12-v3-plan.md Appendix B). Nothing emits these until waves A to D.
   // Payload objects are reused by the sim, so handlers copy what they need.
   /** Swarm (A) to Chorus, Glow and Ledger: a boss entered. */
@@ -107,8 +110,8 @@ export interface Events {
   'fx:weaponCombine': { x: number; y: number; kind: ComboKind; a: BaseWeaponKind; b: BaseWeaponKind };
   /** Swarm (D) to Chorus and Glow: the weapon of the ship expired (the ship only, not a drone). */
   'fx:weaponExpire': { kind: WeaponKind };
-  /** Swarm (D) to Glow and Chorus: a drone pickup armed the drone, also on a replacement. */
-  'fx:droneArm': { x: number; y: number; mode: DroneMode };
+  /** Swarm (D) to Glow and Chorus: a drone pickup armed the drone, also on a replacement. secondsLeft is the full 20 s. */
+  'fx:droneArm': { x: number; y: number; mode: DroneMode; secondsLeft: number };
   /** Swarm (D) to Chorus and Glow: the 20 s ran out (not on death or replacement). */
   'fx:droneExpire': { x: number; y: number; mode: DroneMode };
   /** Swarm (D) to Ledger and Glow: at most every 100 ms and on change. */

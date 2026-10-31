@@ -178,6 +178,8 @@ export interface GameState {
   droneTarget: number;
   /** Ram: 0 orbit, 1 charge, 2 return. */
   dronePhase: number;
+  /** V3 wave D: the second drone body of the double mode (Kind.DroneTwin), -1 for none. */
+  droneTwinId: number;
 
   // Edges.
   scoring: ScoringPort;
@@ -315,6 +317,7 @@ function createState(w: World): GameState {
     droneAngle: 0,
     droneTarget: -1,
     dronePhase: 0,
+    droneTwinId: -1,
     scoring: defaultScoring,
     vibrate: defaultVibrate,
     killFx: { x: 0, y: 0, colour: 'white', kind: Kind.None, id: 0 },
