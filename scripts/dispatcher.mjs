@@ -178,7 +178,8 @@ function cloudPrompt(brief) {
  * Max account; --model must come before --cloud.
  */
 function cloudArgv(job) {
-  return ['env', '-u', 'ANTHROPIC_API_KEY', 'claude', '--model', job.model, '--cloud', cloudPrompt(job.brief)];
+  // `claude --cloud` refuses a non interactive stdout, so wrap the call in a pseudo terminal (macOS script).
+  return ['script', '-q', '/dev/null', 'env', '-u', 'ANTHROPIC_API_KEY', 'claude', '--model', job.model, '--cloud', cloudPrompt(job.brief)];
 }
 
 /**
@@ -253,7 +254,7 @@ function selftest() {
   check('cloud: a brief outside docs/briefs is refused', validateJob({ ...cloud, brief: '../secrets.md' }) !== null);
   const argv = cloudArgv(cloud);
   check('cloud: argv drops the API key and puts --model before --cloud',
-    argv.slice(0, 4).join(' ') === 'env -u ANTHROPIC_API_KEY claude' && argv.indexOf('--model') < argv.indexOf('--cloud') && argv[argv.indexOf('--model') + 1] === 'sonnet');
+    argv.slice(3, 7).join(' ') === 'env -u ANTHROPIC_API_KEY claude' && argv.indexOf('--model') < argv.indexOf('--cloud') && argv[argv.indexOf('--model') + 1] === 'sonnet');
   check('cloud: the launch line names the brief and the rules',
     argv[argv.length - 1] === `Read ${brief} and carry it out exactly. Create the branch it names before any edit. Never push main.`);
 
