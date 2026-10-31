@@ -12,8 +12,8 @@ Session: https://claude.ai/code/session_018Gwqi51KevzKtDahLjTxuF
 - Decoy: `targetOf` returns the decoy for any entity within 640 u of it, and seekShip, angleToShip and distToShip read it. With no decoy it returns 0, so every v2 golden is unchanged.
 
 ## Files touched
-src/game: weapons.ts, pickup.ts, bullets.ts, combat.ts, drones.ts, state.ts (droneTwinId), steer.ts (outside ownership, see Requests); src/core/events.ts
-tests: game/weaponCombine.test.ts (new, 22), game/droneModes.test.ts (new, 14), game/weapons.test.ts (5 updated, 1 added), qa/weaponDropReplay.test.ts (2 updated, 1 type fix)
+src/game: weapons.ts, pickup.ts, bullets.ts, combat.ts, drones.ts, state.ts (droneTwinId), steer.ts and player.ts (outside ownership, see Requests); src/core/events.ts
+tests: game/weaponCombine.test.ts (new, 22), game/droneModes.test.ts (new, 15), game/weapons.test.ts (5 updated, 1 added), qa/weaponDropReplay.test.ts (2 updated, 1 type fix)
 
 ## Goldens and values changed (only where the spec requires)
 - weapons.test, orbit: 4 blades at 80 u become 4 blades at 80 u plus 4 spikes at 94 u. Forward bullets go from 6 a second to 0, and style 3 bullets from 4 to 8.
@@ -24,22 +24,21 @@ tests: game/weaponCombine.test.ts (new, 22), game/droneModes.test.ts (new, 14), 
 - Unchanged: the v1 spread goldens (V1_QUIET_10S, V1_BAND2_30S), the tests/qa level snapshots and the v2 determinism and physics replays. The guarded spread ingredient replay in weaponReplayV3 now runs and passes.
 
 ## Tests and build
-npm test: 214 files, 3109 passed, 1 todo, 0 failed. npm run build: pass. The v7 API grep is empty, and there is no Math.random in the touched files.
+npm test: 3110 tests, all wave D tests pass; on the final run only tests/levelgen/generator.test.ts "200 levels under 350 ms" failed, a wall-clock budget that also fails on unmodified main in this container (it passed on the earlier full run). npm run build: pass. The v7 API grep is empty, and there is no Math.random in the touched files.
 
 ## Risks
 - Spikes are style 3 bullets, so they draw as blades until Glow gives them a look, and DronePickup and DroneTwin have no render yet.
-- killShip (player.ts, not mine) removes a live drone pickup on death, unlike the weapon pickup. The spec is silent on this.
-- ship.ts still plays the shot sound on orbit volleys although nothing fires.
+- Ryan ruled: a live drone pickup survives a ship death like the weapon pickup (one line in killShip, player.ts), and the shot sound stays on orbit volleys as a shield whoosh.
 
 ## Requests (outside my ownership)
-- Fable: approve the steer.ts edit. The spec puts the decoy in `targetOf`, and seekShip, angleToShip and distToShip must follow it. Also approve the tests/qa/weaponDropReplay.test.ts update; the brief names it, but tests/qa is outside my listed paths.
+- Fable: approve the steer.ts edit. The spec puts the decoy in `targetOf`, and seekShip, angleToShip and distToShip must follow it. Also approve the tests/qa/weaponDropReplay.test.ts update; the brief names it, but tests/qa is outside my listed paths. The player.ts line (drone pickup survives death) was made on Ryan's direct answer.
 - Ledger: show `hud:weapon.title` and the `hud:droneWeapon` indicator. Glow and Chorus: combine, expire, droneArm and droneExpire visuals and sounds, spikes, the drone pickup glyph and the twin.
 
 ## Dependencies requested
 None.
 
 ## Open questions
-Should the orbit shot sound stay as a shield whoosh? Should a drone pickup survive a ship death like the weapon pickup?
+None (both answered by Ryan).
 
 ## Device check for Ryan
 1. With orbit, hold the right stick toward a group. The blades on that side should pulse out about twice as far and back, knocking enemies outward, and no bullet should leave the ship.

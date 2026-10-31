@@ -80,6 +80,20 @@ describe('drone pickup schedule and mode', () => {
     expect(w.a[id]).toBe(DRONE_MODES.indexOf(drones.chooseDroneMode(w.level.seed, 0, null)));
   });
 
+  it('a live drone pickup survives a ship death and is still collectable after the respawn', () => {
+    const { w } = makeGame({ drone: 'attack' });
+    const id = drones.spawnDronePickup(w, 300, 0);
+    killShip(w);
+    expect(drones.liveDronePickup(w)).toBe(id);
+    for (let i = 0; i < 120 * 2; i++) stepGame(w, DT, idle()); // respawn delay
+    expect(w.ship.active).toBe(true);
+    expect(drones.liveDronePickup(w)).toBe(id);
+    w.x[0] = 300;
+    w.y[0] = 0;
+    stepGame(w, DT, idle());
+    expect(drones.droneArm(w).mode).not.toBeNull();
+  });
+
   it('weapon pickups off: no drone pickup either', () => {
     const { w } = makeGame();
     setWeaponPickups(w, false);

@@ -17,8 +17,8 @@ export const BOMB_COOLDOWN = 1.0;
 export const DEATH_VIBRATE_MS = 60;
 
 /**
- * Ship death: lives minus 1, multiplier reset, arena clear without score (wells, spawners and a
- * weapon pickup stay), geoms removed, weapon back to spread, drone hidden, 1.5 s respawn delay,
+ * Ship death: lives minus 1, multiplier reset, arena clear without score (wells, spawners, a
+ * weapon pickup and a drone pickup stay), geoms removed, weapon back to spread, drone hidden, 1.5 s respawn delay,
  * 'fx:death' and one vibrate.
  * No op while gs(w).invulnerable is set (stress scene), so every kill path is covered.
  */
@@ -32,7 +32,8 @@ export function killShip(w: World): void {
   for (let id = 1; id < w.cap; id++) {
     if (w.alive[id] !== 1) continue;
     const k = w.kind[id] ?? 0;
-    if (k === Kind.GravityWell || k === Kind.Spawner || k === Kind.Geom || k === Kind.WeaponPickup) continue;
+    // Pickups survive a death: the weapon pickup (docs/11) and the drone pickup (Ryan, wave D).
+    if (k === Kind.GravityWell || k === Kind.Spawner || k === Kind.Geom || k === Kind.WeaponPickup || k === Kind.DronePickup) continue;
     // V3 boss rule 6: the boss keeps its hit points and its parts; adds and hazards are cleared.
     if (k === Kind.Boss || k === Kind.BossPart) continue;
     removeEntity(w, id); // enemies, telegraphs, segments and the drone
