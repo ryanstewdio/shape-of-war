@@ -322,6 +322,21 @@ docs/11 SPEC 3.9 stands. Added: boss music. docs/11 rule 3 (a pattern is a pure 
 5. Budget: at most 3 boss voices (a phase adds one) beside the bed and the enemy motifs, inside the 16 voice music cap, stealing enemy motif voices first. Summed gain at most 1.0, music master at most 0.35 of the synth master. The 24 voice sfx cap holds. The Music slider covers all of it: 0 is silence. Pause, a hidden tab and fold suspend and resume on the next bar line.
 6. Audio still subscribes to the bus and never imports src/game, src/ui or src/render. Music never feeds the simulation.
 
+## Canon updates after the device gates (v3.1)
+
+These lines bring the canon in line with what shipped and with Ryan's decisions after the device gates. Each line ends with its DECISIONS clock reference. Where a line conflicts with an older rule above, this section wins. Boss rule 9 already says boss death completes the level (54:40) and is not repeated.
+
+1. Ember colour is flame red with shifting multicolour flames (100:00).
+2. Bosses lose outline segments as damage, so the shape becomes incomplete. No dark marks or dark strokes are used for damage (101:20).
+3. Warden shield and hornet ability. The shield really blocks shots. The first hornet release comes at 10 s, then every 14 s. Hornets are capped at 8 live (the Warden's own cap, inside the add cap). The core opens for a 2.5 s window (100:00, 101:20).
+4. Gravitas splits into two Gravitants and Mirage leaves mirrors, both at the second crack (100:00).
+5. Brood splits into three Broodlings at 33 percent health (88:00).
+6. Orbit weapon v2. Two counter rotating spike rings, one at 80 u and one at 100 u. The rings stretch toward the aim like a chainsaw. There is no forward bullet. Pairs that contain orbit inherit the new rings (101:20).
+7. Drone pickup modes are homing, detach, rapid and double. The HUD shows an indicator with the mode glyph, name and countdown (100:00).
+8. Gravity well supernova. After 5 to 7 s a well goes supernova with pull radius x1.25 and strength x1.3. It looks like a white tornado with a multicolour shimmer and has no outer circle. After a further 3 to 4 s it releases harmless drifting nova snakes (88:00, 101:20).
+9. Music has three battle tracks in minor keys, not tied to a boss, with cross fades between them. `selectBossTune` takes the boss id (86:30, 88:00).
+10. The live hazard cap is 8 (47:00, 88:00).
+
 ## SPEC 5 Device and input rules
 
 SPEC 5's last bullet as replaced by docs/11 begins "Target 120 fps on the cover screen, unchanged. On the main screen 60 fps is a floor ...". Replace the whole bullet with:
