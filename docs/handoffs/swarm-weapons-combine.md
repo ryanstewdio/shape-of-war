@@ -7,19 +7,8 @@ Session: https://claude.ai/code/session_018Gwqi51KevzKtDahLjTxuF
 - Orbit redesign: no forward bullet. The shield is 4 blades at 80 u plus 4 spikes between them at 94 u (style 3, 5 u, a hit and cooldown like a blade). While the right stick is held the hitters on the aim side swing out to 1.8x and back every 0.4 s, weighted by cos squared of the angle to the aim. A pushed hit also shoves a surviving enemy up to 28 u outward. When the stick is released the current swing finishes.
 - Combining (COMBO_TABLE, COMBO_NAMES): a second kind makes the pair for a fresh 20 s, an ingredient refreshes without reordering, and a third kind replaces the older ingredient. A spread pickup with nothing active does nothing. Spread joins the drop pool only while a weapon is active, and while one is active the next drop falls due within 12 kills.
 - Events: `fx:weaponCombine {x,y,kind,a,b}` (the declared contract), `fx:weaponExpire {kind}` on timeout only, and `hud:weapon` gains an optional `title` (the pair name). `BulletPool.combo` gives the pair index 1 to 6.
-- The six pairs:
-  - Hail (22 volleys a second): 3 rapid bullets at plus and minus 5 deg, life 0.9.
-  - Trident (10 volleys a second): 3 pierce bullets at plus and minus 8 deg, radius 5, 2 hits.
-  - Halo (10 volleys a second): spread forward plus the orbit shield.
-  - Needle (14 volleys a second): 2 parallel pierce bullets, radius 4, 3 hits.
-  - Whirl (18 volleys a second): 2 parallel rapid bullets plus a shield at 3.0 rev/s.
-  - Eclipse (8 volleys a second): 1 pierce bullet with 3 hits, plus 5 blades at 100 u (2.0 rev/s, 0.15 s cooldown) and 5 piercing spikes that each hit up to 3 enemies.
-- Drone pickups (drones.ts, DRONE_MODE_TABLE): Kind.DronePickup comes at kill 30, then every 40. The mode is `DRONE_MODES[hash01(seed ^ 0x44524f4e, n) x 4]`, stepping on past a repeat. It arms the drone for 20 s, and armed, every drone type fires 4 volleys a second within 450 u.
-  - homing: its shots home.
-  - rapid: 10 volleys a second, rapid style.
-  - double: a Kind.DroneTwin at the opposite phase.
-  - detach: a post 280 u along the aim, out at 700 u/s and back at 900 u/s. It is a decoy while out.
-  - A new pickup replaces the mode. `fx:droneArm {x,y,mode,secondsLeft}`, `fx:droneExpire` at expiry only, and `hud:droneWeapon`.
+- The six pairs (volleys a second in brackets): Hail (22), 3 rapid bullets at plus and minus 5 deg, life 0.9. Trident (10), 3 pierce bullets at plus and minus 8 deg, radius 5, 2 hits. Halo (10), spread forward plus the orbit shield. Needle (14), 2 parallel pierce bullets, radius 4, 3 hits. Whirl (18), 2 parallel rapid bullets plus a shield at 3.0 rev/s. Eclipse (8), 1 pierce bullet with 3 hits, plus 5 blades at 100 u (2.0 rev/s, 0.15 s cooldown) and 5 piercing spikes that each hit up to 3 enemies.
+- Drone pickups (drones.ts, DRONE_MODE_TABLE): Kind.DronePickup comes at kill 30, then every 40. The mode is `DRONE_MODES[hash01(seed ^ 0x44524f4e, n) x 4]`, stepping on past a repeat. It arms the drone for 20 s, and armed, every drone type fires 4 volleys a second within 450 u. Homing: its shots home. Rapid: 10 volleys a second, rapid style. Double: a Kind.DroneTwin at the opposite phase. Detach: a post 280 u along the aim, out at 700 u/s and back at 900 u/s, a decoy while out. A new pickup replaces the mode. Events: `fx:droneArm {x,y,mode,secondsLeft}`, `fx:droneExpire` at expiry only, and `hud:droneWeapon`.
 - Decoy: `targetOf` returns the decoy for any entity within 640 u of it, and seekShip, angleToShip and distToShip read it. With no decoy it returns 0, so every v2 golden is unchanged.
 
 ## Files touched
@@ -50,8 +39,7 @@ npm test: 214 files, 3109 passed, 1 todo, 0 failed. npm run build: pass. The v7 
 None.
 
 ## Open questions
-- Should the orbit shot sound stay, as a shield whoosh, or should ship.ts skip it?
-- Should a drone pickup survive a ship death like the weapon pickup?
+Should the orbit shot sound stay as a shield whoosh? Should a drone pickup survive a ship death like the weapon pickup?
 
 ## Device check for Ryan
 1. With orbit, hold the right stick toward a group. The blades on that side should pulse out about twice as far and back, knocking enemies outward, and no bullet should leave the ship.
