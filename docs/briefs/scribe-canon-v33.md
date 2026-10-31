@@ -20,4 +20,4 @@ Bring the v3 canon in line with what shipped and what Ryan decided after the dev
 No em or en dashes in any file you write. Do not change any other file.
 
 ## Hand off
-Write docs/handoffs/scribe-canon-v33.md (under 50 lines): what changed, files touched, tests added, test and build output summary, risks, open questions, render or event contracts for other roles, an exact device check for Ryan written in words, and the session URL (echo https://claude.ai/code/${CLAUDE_CODE_REMOTE_SESSION_ID/#cse_/session_}). Commit and push the branch. Stop.
+Write docs/handoffs/scribe-canon-v33.md (under 50 lines): what changed, files touched, tests added, test and build output summary, risks, open questions, render or event contracts for other roles, an exact device check for Ryan written in words, and the session URL (echo https://claude.ai/code/${CLAUDE_CODE_REMOTE_SESSION_ID/#cse_/session_}). If git remote -v is empty first run: git remote add origin https://github.com/stoopstoop/shape-of-war.git. Commit and push the branch. Stop.

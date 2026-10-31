@@ -21,4 +21,4 @@ Add a `cloud` job type and a `watch` job type to the local dispatcher so the orc
 TypeScript strict where TypeScript, plain ESM in the dispatcher. No new runtime dependency. No secrets in files. No em or en dashes in any file you write.
 
 ## Hand off
-Write docs/handoffs/shipwright-cloud-dispatch.md (under 40 lines): what changed, how to restart the dispatcher to pick it up, the exact job examples, test output summary, risks, and the session URL (echo https://claude.ai/code/${CLAUDE_CODE_REMOTE_SESSION_ID/#cse_/session_}). Commit and push the branch. Stop.
+Write docs/handoffs/shipwright-cloud-dispatch.md (under 40 lines): what changed, how to restart the dispatcher to pick it up, the exact job examples, test output summary, risks, and the session URL (echo https://claude.ai/code/${CLAUDE_CODE_REMOTE_SESSION_ID/#cse_/session_}). If git remote -v is empty first run: git remote add origin https://github.com/stoopstoop/shape-of-war.git. Commit and push the branch. Stop.
