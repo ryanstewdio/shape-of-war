@@ -4,9 +4,8 @@
 // Pure functions and small state records only; the renderer owns the Graphics.
 import type { Bus, EventKey } from '../core/events';
 import { BOSS_IDS } from '../levelgen/leveldef';
-import { crackLayout, FRACTURE_GROW_SEC, FRACTURE_PTS, GAPS_PER_STAGE, type CrackLayout } from './bossDamage';
+import { BREAK_ARCS, BREAK_ARCS_MAX, breakArcs } from './bossDamage';
 
-export { FRACTURE_GROW_SEC, GAPS_PER_STAGE } from './bossDamage';
 import { BOSS_BROOD, BOSS_COUNT, BOSS_WARDEN, bossColourOf, bossIndex } from './bossLook';
 import { bossBodyR, buildBossSpec } from './bossShapes';
 import type { PaletteKey } from './neon';
@@ -311,59 +310,43 @@ export function hitSparkCount(seq: number): number {
   return 2 + ((seq | 0) & 1);
 }
 
-// Cracks (look v32): battle damage in the boss's own palette, never black. The outline drops out
-// at the crack points (gaps cut through the neon line, with dimmed shoulders), a soft fracture glow
-// in the boss hue at 35 percent brightness spreads in from the hit side with a noisy branching edge,
-// the fill near the gaps scorches (loses alpha), outline fragments tumble away in the boss colour,
-// and after stage 2 the whole outline flickers unevenly. The layout maths is in bossDamage.ts.
+// Cracks (look v33): battle damage by incompleteness, never black. At each stage the outline loses
+// whole segments (BREAK_SHARE of the perimeter, a hashed arc table per boss and seed) from the body
+// geometry itself, the remaining outline beside each gap shifts hue toward the accent and flickers,
+// torn ends carry bright stubs, and the removed pieces fall away as outline fragments in the boss
+// colours. The layout maths is in bossDamage.ts.
 
-/** Outline fragments per stage, points per fragment, drift (u), life (s) and spin (rad/s). */
-export const FRAGS_PER_STAGE = 3;
-export const FRAG_PTS = 4;
-export const PIECE_DRIFT = 46;
-export const PIECE_LIFE = 1.2;
-export const PIECE_SPIN = 2.6;
+/** Outline fragments: points per fragment, drift (u), life (s) and spin (rad/s). */
+export const FRAG_PTS = 8;
+export const PIECE_DRIFT = 60;
+export const PIECE_LIFE = 1.5;
+export const PIECE_SPIN = 1.6;
+/** Fragment slots: one per removed arc over both stages. */
+export const PIECES_MAX = BREAK_ARCS_MAX;
+/** Torn edges settle in over this many seconds after a stage lands (stubs flare then hold). */
+export const BREAK_SETTLE_SEC = 0.6;
 
 export interface BossCracks {
   stage: number;
-  /** Local break angles (radians, body frame) of stage 1 and 2. */
-  angle1: number;
-  angle2: number;
-  /** Seconds since each stage landed (drives the growth). */
-  age1: number;
-  age2: number;
-  /** Fracture polygons: FRACTURE_PTS (x, y) pairs in body radii (see crackLayout). */
-  frac1: Float32Array;
-  frac2: Float32Array;
-  /** Outline gaps: (angle, half width) pairs, GAPS_PER_STAGE per stage, stage 1 first. */
-  gaps: Float32Array;
-  /** Layout views over the arrays above, one per stage (built once). */
-  readonly lay1: CrackLayout;
-  readonly lay2: CrackLayout;
+  /** Local angle (radians, body frame) the arc table is laid from: the first hit side. */
+  offset: number;
+  /** Seed of the arc table (boss index mixed with the level seed). */
+  seed: number;
+  /** Seconds since the latest stage landed. */
+  age: number;
+  /** Removed arcs of the current stage: (start, end) local angle pairs, arcCount of them. */
+  arcs: Float32Array;
+  arcCount: number;
 }
 
 export function createBossCracks(): BossCracks {
-  const frac1 = new Float32Array(FRACTURE_PTS * 2);
-  const frac2 = new Float32Array(FRACTURE_PTS * 2);
-  const gaps = new Float32Array(GAPS_PER_STAGE * 2 * 2);
-  return {
-    stage: 0,
-    angle1: 0,
-    angle2: 0,
-    age1: 0,
-    age2: 0,
-    frac1,
-    frac2,
-    gaps,
-    lay1: { gaps: gaps.subarray(0, GAPS_PER_STAGE * 2), frac: frac1 },
-    lay2: { gaps: gaps.subarray(GAPS_PER_STAGE * 2), frac: frac2 },
-  };
+  return { stage: 0, offset: 0, seed: 0, age: 0, arcs: new Float32Array(BREAK_ARCS_MAX * 2), arcCount: 0 };
 }
 
 export function resetBossCracks(c: BossCracks): void {
   c.stage = 0;
-  c.age1 = 0;
-  c.age2 = 0;
+  c.age = 0;
+  c.arcCount = 0;
 }
 
 /** Pure: distance from the centre to the outline of p along local angle theta (arena units). */
@@ -407,32 +390,31 @@ export function outlineRadius(p: ShapePrim, theta: number): number {
 }
 
 /**
- * Apply 'sim:bossCrack' (stage 1 or 2) at local angle a. Stages only rise; a repeat is ignored. A
- * stage 2 that arrives first also lays the stage 1 damage (already grown). Returns true when the
- * stage advanced.
+ * Apply 'sim:bossCrack' (stage 1 or 2) at local angle a. Stages only rise; a repeat is ignored. The
+ * arc table is laid from the first hit side and kept, so stage 2 widens the stage 1 gaps and adds
+ * new ones. A stage 2 that arrives first lays its arcs directly. Returns true when the stage advanced.
  */
 export function crackEvent(c: BossCracks, stage: number, a: number, seed: number): boolean {
   const s = stage >= 2 ? 2 : 1;
   if (s <= c.stage) return false;
   if (c.stage < 1) {
-    c.angle1 = s === 1 ? a : a + Math.PI * 0.8;
-    c.age1 = s === 1 ? 0 : FRACTURE_GROW_SEC;
-    crackLayout(1, seed, c.angle1, c.lay1);
+    c.offset = fin(a, 0);
+    c.seed = Math.floor(fin(seed, 0));
   }
-  if (s === 2) {
-    c.angle2 = a;
-    c.age2 = 0;
-    crackLayout(2, seed + 101, a, c.lay2);
-  }
+  c.arcCount = breakArcs(s, c.seed, c.offset, c.arcs);
+  c.age = 0;
   c.stage = s;
   return true;
 }
 
-/** Advance the growth clocks on the draw clock. */
+/** Pure: the arc indices newly removed by a stage (stage 1: 0 to 2, stage 2: 3 and 4). */
+export function newArcRange(stage: number): [number, number] {
+  return stage >= 2 ? [BREAK_ARCS[0], BREAK_ARCS[1]] : [0, BREAK_ARCS[0]];
+}
+
+/** Advance the settle clock on the draw clock. */
 export function stepBossCracks(c: BossCracks, dt: number): void {
-  const d = fin(dt, 0);
-  if (c.stage >= 1 && c.age1 < FRACTURE_GROW_SEC) c.age1 += d;
-  if (c.stage >= 2 && c.age2 < FRACTURE_GROW_SEC) c.age2 += d;
+  if (c.stage >= 1 && c.age < BREAK_SETTLE_SEC) c.age += fin(dt, 0);
 }
 
 /**
@@ -479,7 +461,7 @@ export function pieceAlpha(age: number): number {
 /** Pure: tumble angle of a fragment at age seconds; dir is +1 or -1. It slows as it drifts. */
 export function pieceSpin(age: number, dir: number): number {
   const a = clamp01(fin(age, PIECE_LIFE) / PIECE_LIFE) * PIECE_LIFE;
-  return (dir < 0 ? -1 : 1) * PIECE_SPIN * (a - (a * a) / (PIECE_LIFE * 3));
+  return (dir < 0 ? -1 : dir > 0 ? 1 : 0) * PIECE_SPIN * (a - (a * a) / (PIECE_LIFE * 3));
 }
 
 // Tier 3 halo and Twins flare

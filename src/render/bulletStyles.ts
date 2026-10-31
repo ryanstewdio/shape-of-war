@@ -5,9 +5,9 @@
 import type { WeaponKind } from '../core/events';
 import { weaponPaletteKey, type PaletteKey } from './neon';
 
-export type BulletFrame = 'dot' | 'rapid' | 'pierce' | 'orbit';
+export type BulletFrame = 'dot' | 'rapid' | 'pierce' | 'orbit' | 'spike';
 
-export const BULLET_FRAMES: readonly BulletFrame[] = ['dot', 'rapid', 'pierce', 'orbit'];
+export const BULLET_FRAMES: readonly BulletFrame[] = ['dot', 'rapid', 'pierce', 'orbit', 'spike'];
 
 /** How a head is turned: along its velocity, or away from the ship (orbit blades). */
 export type BulletOrient = 'velocity' | 'radial';
@@ -80,7 +80,26 @@ const ORBIT: BulletStyleVisual = {
   emitsTrail: false,
 };
 
+/**
+ * Look v33: an orbit spike (a style 3 hitter at or past ShieldSpec.blades in WeaponState.blades): a
+ * sharp triangle in the weapon hue pointing away from the ship. No trail.
+ */
+const SPIKE: BulletStyleVisual = { ...ORBIT, frame: 'spike' };
+
 const BY_STYLE: readonly BulletStyleVisual[] = [SPREAD, RAPID, PIERCE, ORBIT];
+
+/** Style code of an orbit spike, past every (style, homing) code. */
+export const SPIKE_CODE = BY_STYLE.length * 2;
+
+/** Pure: the spike look (a shared constant). */
+export function spikeVisual(): BulletStyleVisual {
+  return SPIKE;
+}
+
+/** Pure: the spike triangle, nose on +x: tip at len / 2, base at -len / 2 with half width half. */
+export function spikePoints(len: number, half: number): number[] {
+  return [len / 2, 0, -len / 2, half, -len / 4, 0, -len / 2, -half];
+}
 
 /** Homing (super) shots keep their frame but take the homing colour and the long trail. */
 const HOMING_BY_STYLE: readonly BulletStyleVisual[] = BY_STYLE.map((v) => ({
@@ -108,6 +127,7 @@ export function styleCode(style: number, homing: boolean): number {
 /** Pure: inverse of styleCode. Negative or unknown codes give spread. */
 export function visualForCode(code: number): BulletStyleVisual {
   if (!(code >= 0)) return SPREAD;
+  if (code === SPIKE_CODE) return SPIKE;
   const n = BY_STYLE.length;
   return code >= n ? bulletStyleVisual(code - n, true) : bulletStyleVisual(code, false);
 }
@@ -138,6 +158,7 @@ const CELL_SIZE: Readonly<Record<BulletFrame, { w: number; h: number }>> = {
   rapid: { w: 24, h: 6 },
   pierce: { w: 44, h: 14 },
   orbit: { w: 26, h: 26 },
+  spike: { w: 18, h: 14 },
 };
 
 function layoutAtlas(): { cells: Readonly<Record<BulletFrame, AtlasCell>>; w: number; h: number } {

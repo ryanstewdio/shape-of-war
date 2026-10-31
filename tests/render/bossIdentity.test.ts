@@ -12,10 +12,10 @@ import {
   createBossFlashThrottle,
   createBossWindow,
   crackEvent,
-  FRACTURE_GROW_SEC,
   FRAG_PTS,
   fragmentPts,
-  GAPS_PER_STAGE,
+  newArcRange,
+  BREAK_SETTLE_SEC,
   hitFlashAlpha,
   hitSparkCount,
   outlineRadius,
@@ -107,31 +107,39 @@ describe('hit throttle', () => {
 });
 
 describe('crack state maths (look v32 battle damage)', () => {
-  it('stages only rise, lay gaps near the hit angle, grow on the clock, reset clears', () => {
+  it('stages only rise, lay the arc table from the first hit side, widen at stage 2, reset clears', () => {
     const c = createBossCracks();
     expect(crackEvent(c, 1, 0.5, 1)).toBe(true);
     expect(c.stage).toBe(1);
-    expect(c.gaps[0]).toBeCloseTo(0.5);
-    for (let k = 0; k < GAPS_PER_STAGE; k++) expect(Math.abs((c.gaps[k * 2] ?? 0) - 0.5)).toBeLessThan(0.7);
-    const first = Array.from(c.frac1);
+    expect(c.arcCount).toBe(3);
+    expect(c.offset).toBeCloseTo(0.5);
+    const first = Array.from(c.arcs.subarray(0, 6));
     stepBossCracks(c, 0.2);
-    expect(c.age1).toBeCloseTo(0.2);
+    expect(c.age).toBeCloseTo(0.2);
     expect(crackEvent(c, 1, 2, 1)).toBe(false);
     expect(crackEvent(c, 2, 2, 1)).toBe(true);
     expect(c.stage).toBe(2);
-    expect(Array.from(c.frac1)).toEqual(first);
-    expect(Array.from(c.frac2)).not.toEqual(first);
-    expect(c.gaps[GAPS_PER_STAGE * 2]).toBeCloseTo(2);
+    expect(c.arcCount).toBe(5);
+    expect(c.offset).toBeCloseTo(0.5);
+    for (let k = 0; k < 3; k++) {
+      expect(c.arcs[k * 2] ?? 0).toBeLessThanOrEqual((first[k * 2] ?? 0) + 1e-6);
+      expect(c.arcs[k * 2 + 1] ?? 0).toBeGreaterThanOrEqual((first[k * 2 + 1] ?? 0) - 1e-6);
+    }
+    expect(newArcRange(1)).toEqual([0, 3]);
+    expect(newArcRange(2)).toEqual([3, 5]);
     resetBossCracks(c);
     expect(c.stage).toBe(0);
+    expect(c.arcCount).toBe(0);
   });
 
-  it('a stage 2 first lays a grown stage 1 too', () => {
+  it('a stage 2 first lays the stage 2 arcs directly; the settle clock stops', () => {
     const c = createBossCracks();
     crackEvent(c, 2, 1, 4);
     expect(c.stage).toBe(2);
-    expect(c.age1).toBe(FRACTURE_GROW_SEC);
-    expect(c.age2).toBe(0);
+    expect(c.arcCount).toBe(5);
+    stepBossCracks(c, 5);
+    stepBossCracks(c, 5);
+    expect(c.age).toBeLessThanOrEqual(BREAK_SETTLE_SEC + 5);
   });
 
   it('outline radius follows circles, hexagons and polygons', () => {
@@ -144,7 +152,7 @@ describe('crack state maths (look v32 battle damage)', () => {
     expect(outlineRadius(sq, Math.PI / 4)).toBeCloseTo(5 * Math.SQRT2);
   });
 
-  it('fragments are short outline arcs that drift 46 u, tumble and fade over 1.2 s', () => {
+  it('fragments are outline arcs that drift 60 u, tumble and fade over 1.5 s', () => {
     const out = new Float32Array(FRAG_PTS * 2);
     const ctr = new Float32Array(2);
     fragmentPts({ t: 'circle', r: 50 }, 0, 0.1, out, ctr);
@@ -154,7 +162,9 @@ describe('crack state maths (look v32 battle damage)', () => {
     expect(Math.abs(sx)).toBeLessThan(1e-4);
     expect(pieceDrift(0)).toBe(0);
     expect(pieceDrift(PIECE_LIFE)).toBeCloseTo(PIECE_DRIFT);
-    expect(PIECE_LIFE).toBe(1.2);
+    expect(PIECE_LIFE).toBe(1.5);
+    expect(PIECE_DRIFT).toBe(60);
+    expect(pieceSpin(0.6, 0)).toBe(0);
     expect(pieceAlpha(0)).toBe(1);
     expect(pieceAlpha(PIECE_LIFE)).toBe(0);
     expect(pieceAlpha(0.6)).toBeLessThan(0.5);

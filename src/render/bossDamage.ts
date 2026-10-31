@@ -1,13 +1,19 @@
-// Boss battle damage layout (look v32). A crack stage is drawn as gaps in the neon outline, a soft
-// fracture glow in the boss hue spreading in from the hit side with a noisy branching edge, scorch
-// (lower fill alpha) beside the gaps, and outline fragments falling away. Nothing is black.
-// This module is the pure layout: the gap list and the fracture polygon for a stage, a seed and a
-// hit angle. Variation comes from a fixed hashed noise table, never the PRNG.
-import { hash01 } from './color';
+// Boss battle damage layout (look v33, device gate GW1). Damage is shown by the boss becoming
+// incomplete, never by dark paint: whole segments of the outline are removed from the body
+// geometry itself (a damaged copy of the body spec), the outline left beside each gap shifts hue
+// toward the boss accent and flickers, torn ends get short bright stubs in the boss primary, and the
+// removed pieces fall away as outline fragments in the boss colours. No erase or multiply blend,
+// no scorch, no dark fill: every damage colour keeps HSL lightness at or above DAMAGE_MIN_L.
+// This module is pure: the arc table, the spec clip and the colour maths. Variation comes from a
+// hashed table per boss and seed, never the PRNG.
+import { clampNum, hash01, hslToRgbInt } from './color';
+import type { ShapeLayer, ShapePrim, ShapeSpec } from './shapeSpecs';
 
 function fin(v: number, d: number): number {
   return Number.isFinite(v) ? v : d;
 }
+
+const TAU = Math.PI * 2;
 
 /** Hashed noise table (values 0 to 1), sampled with linear interpolation and wrapped. */
 export const NOISE_SIZE = 64;
@@ -17,7 +23,7 @@ export const DAMAGE_NOISE: Float32Array = (() => {
   return t;
 })();
 
-/** Pure: smooth periodic noise 0 to 1 at x (one table cell per unit). */
+/** Pure: smooth periodic noise 0 to 1 at x (one table cell per unit). Used by the Ember flame. */
 export function noiseAt(x: number): number {
   const v = fin(x, 0);
   const f = Math.floor(v);
@@ -29,179 +35,290 @@ export function noiseAt(x: number): number {
   return a + (b - a) * s;
 }
 
-/** Outline gaps per stage and their half width range (radians). */
-export const GAPS_PER_STAGE = 3;
-export const GAP_HALF: readonly [number, number] = [0.06, 0.1];
-/** Points on the fracture polygon: two on the outline either side of the hit, the rest the fan. */
-export const FRACTURE_PTS = 30;
-/** How far the fracture reaches in (body radii) per stage, and the fan half spread (radians). */
-export const FRACTURE_REACH: readonly [number, number] = [0.5, 0.78];
-export const FRACTURE_SPREAD = 1.15;
-/** Branch fingers per fracture: narrow bumps on the edge that read as cracks forking inward. */
-export const FRACTURE_BRANCHES = 4;
-/** The fracture's two outline points sit at this radius share; it never passes FRACTURE_MAX_R. */
-export const FRACTURE_EDGE_R = 0.96;
-export const FRACTURE_MAX_R = 0.94;
-/** The fan spreads from this point on the hit angle (radius share), just inside the outline. */
-export const FRACTURE_ORIGIN_R = 0.9;
-/** Fracture glow: the boss primary hue at this brightness. */
-export const FRACTURE_BRIGHTNESS = 0.35;
+/** Share of the outline perimeter removed at stage 1 and stage 2. */
+export const BREAK_SHARE: readonly [number, number] = [0.2, 0.4];
+/** Removed arcs at stage 1 and stage 2. Stage 2 keeps (and widens) the stage 1 arcs. */
+export const BREAK_ARCS: readonly [number, number] = [3, 5];
+export const BREAK_ARCS_MAX = 5;
+/** The stage 2 arc that detaches as one whole section of the outline. */
+export const DETACH_ARC = 3;
+/** Only outline at or beyond this share of the outermost radius is cut (inner detail stays). */
+export const BREAK_MIN_R = 0.62;
+/** Polygonise step for the clip, as a share of the outermost radius. */
+export const BREAK_STEP = 0.035;
 
-export interface CrackLayout {
-  /** GAPS_PER_STAGE (angle, half width) pairs, local radians, the first on the hit angle. */
-  readonly gaps: Float32Array;
-  /**
-   * FRACTURE_PTS (x, y) pairs in body radii. Points 0 and 1 sit on the outline either side of the
-   * hit; the rest fan between them. Drawn in fracturePointAt order and closed through the origin
-   * point (fractureOrigin), the polygon is star shaped about that origin, so it is always simple.
-   */
-  readonly frac: Float32Array;
-}
-
-export function createCrackLayout(): CrackLayout {
-  return { gaps: new Float32Array(GAPS_PER_STAGE * 2), frac: new Float32Array(FRACTURE_PTS * 2) };
+/** Pure: the hashed width weight (0.8 to 1.2) of arc k for a seed. */
+function arcWeight(seed: number, k: number): number {
+  return 0.8 + 0.4 * hash01(seed * 41 + k * 7 + 5);
 }
 
 /**
- * Pure: the gaps and fracture polygon of crack stage (1 or 2) hit at local angle a with seed,
- * written into out. The polygon starts at two outline points either side of the hit, then fans
- * inward from the hit point; its radius wanders on the noise table and carries FRACTURE_BRANCHES
- * narrow fingers, so the edge reads as a branching crack front, not a straight line.
+ * Pure: the removed arcs of a stage as (start, end) local angle pairs written into out (at least
+ * BREAK_ARCS_MAX * 2 long). Returns the arc count. The circle is split into BREAK_ARCS_MAX sectors
+ * starting at offset; arc k sits in sector k with a hashed width and a hashed shift, so arcs never
+ * overlap. Widths are scaled so the arcs cover BREAK_SHARE of the full turn, and every stage 1 arc
+ * lies inside the same arc at stage 2. seed should mix the boss index and the level seed.
  */
-export function crackLayout(stage: number, seed: number, a: number, out: CrackLayout): CrackLayout {
-  const s = stage >= 2 ? 2 : 1;
-  const ang = fin(a, 0);
-  const sd = Math.floor(fin(seed, 0)) * 31 + s * 7;
-  for (let k = 0; k < GAPS_PER_STAGE; k++) {
-    const off = k === 0 ? 0 : (k % 2 === 0 ? 1 : -1) * (0.28 + hash01(sd * 23 + k) * 0.32);
-    out.gaps[k * 2] = ang + off;
-    out.gaps[k * 2 + 1] = GAP_HALF[0] + (GAP_HALF[1] - GAP_HALF[0]) * hash01(sd * 29 + k);
+export function breakArcs(stage: number, seed: number, offset: number, out: Float32Array): number {
+  const s = stage >= 2 ? 2 : stage >= 1 ? 1 : 0;
+  if (s === 0) return 0;
+  const sd = Math.floor(fin(seed, 0));
+  const off = fin(offset, 0);
+  const n = BREAK_ARCS[s - 1] ?? 3;
+  let w5 = 0;
+  let w3 = 0;
+  for (let k = 0; k < BREAK_ARCS_MAX; k++) {
+    const w = arcWeight(sd, k);
+    w5 += w;
+    if (k < BREAK_ARCS[0]) w3 += w;
   }
-  const reach = FRACTURE_REACH[s - 1] ?? 0.5;
-  const ex = Math.cos(ang) * FRACTURE_ORIGIN_R;
-  const ey = Math.sin(ang) * FRACTURE_ORIGIN_R;
-  const side = 0.32 + 0.1 * hash01(sd * 3 + 1);
-  out.frac[0] = Math.cos(ang - side) * FRACTURE_EDGE_R;
-  out.frac[1] = Math.sin(ang - side) * FRACTURE_EDGE_R;
-  const fan = FRACTURE_PTS - 2;
-  const nOff = hash01(sd * 5 + 2) * NOISE_SIZE;
-  for (let k = 0; k < fan; k++) {
-    const u = k / (fan - 1);
-    // From the side of point 0 (ang - side) round to the side of point 1, so the polygon is simple.
-    const phi = ang + Math.PI + FRACTURE_SPREAD - u * 2 * FRACTURE_SPREAD;
-    // Wandering front: two octaves of table noise, tapering to the outline at both ends.
-    let r = 0.4 + 0.32 * noiseAt(nOff + u * 9) + 0.18 * noiseAt(nOff * 1.7 + u * 23) + 0.12 * noiseAt(nOff * 2.3 + u * 47);
-    for (let b = 0; b < FRACTURE_BRANCHES; b++) {
-      const c = 0.12 + 0.76 * hash01(sd * 11 + b);
-      const w = 0.035 + 0.03 * hash01(sd * 13 + b);
-      const d = (u - c) / w;
-      r += (0.35 + 0.35 * hash01(sd * 17 + b)) * Math.exp(-d * d);
+  const scale = s === 1 ? (BREAK_SHARE[0] * TAU) / w3 : (BREAK_SHARE[1] * TAU) / w5;
+  const sector = TAU / BREAK_ARCS_MAX;
+  // The widest stage 2 arc decides how far a centre may shift and stay inside its sector.
+  const maxHalf = ((BREAK_SHARE[1] * TAU) / (BREAK_ARCS_MAX * 0.8)) * 1.2 * 0.5;
+  const room = Math.max(0, sector / 2 - maxHalf) * 0.8;
+  for (let k = 0; k < n; k++) {
+    const shift = (hash01(sd * 53 + k * 11 + 1) * 2 - 1) * room;
+    const c = off + k * sector + shift;
+    const half = (arcWeight(sd, k) * scale) / 2;
+    out[k * 2] = c - half;
+    out[k * 2 + 1] = c + half;
+  }
+  return n;
+}
+
+/** Pure: angle wrapped to (-PI, PI]. */
+function wrapPi(a: number): number {
+  let v = fin(a, 0) % TAU;
+  if (v <= -Math.PI) v += TAU;
+  else if (v > Math.PI) v -= TAU;
+  return v;
+}
+
+/** Pure: whether local angle theta lies inside one of the first n arcs. */
+export function inArcs(theta: number, arcs: Float32Array, n: number): boolean {
+  for (let k = 0; k < n; k++) {
+    const a0 = arcs[k * 2] ?? 0;
+    const a1 = arcs[k * 2 + 1] ?? 0;
+    const mid = (a0 + a1) / 2;
+    if (Math.abs(wrapPi(theta - mid)) <= (a1 - a0) / 2) return true;
+  }
+  return false;
+}
+
+/** Pure: total angular share (0 to 1) covered by the first n arcs. */
+export function arcShare(arcs: Float32Array, n: number): number {
+  let s = 0;
+  for (let k = 0; k < n; k++) s += (arcs[k * 2 + 1] ?? 0) - (arcs[k * 2] ?? 0);
+  return s / TAU;
+}
+
+/** Pure: a primitive as a list of points (x, y pairs) and whether it closes. */
+export function primPoints(p: ShapePrim): { pts: number[]; closed: boolean } {
+  if (p.t === 'circle') {
+    const pts: number[] = [];
+    for (let k = 0; k < 72; k++) pts.push(Math.cos((k / 72) * TAU) * p.r, Math.sin((k / 72) * TAU) * p.r);
+    return { pts, closed: true };
+  }
+  if (p.t === 'regularPoly') {
+    const pts: number[] = [];
+    const n = Math.max(3, p.sides);
+    for (let k = 0; k < n; k++) {
+      const a = p.rot - Math.PI / 2 + (k * TAU) / n;
+      pts.push(Math.cos(a) * p.r, Math.sin(a) * p.r);
     }
-    // Fine grain: a small hashed roughness per point, so the front is ragged like a real fracture.
-    r *= 0.88 + 0.24 * hash01(sd * 37 + k);
-    const taper = Math.sin(u * Math.PI);
-    const dx = Math.cos(phi);
-    const dy = Math.sin(phi);
-    // Clip along the ray (not toward the centre) at FRACTURE_MAX_R, so the angle seen from the
-    // origin is kept and the polygon stays star shaped.
-    const len = Math.min(reach * r * (0.25 + 0.75 * taper), rayToCircle(ex, ey, dx, dy, FRACTURE_MAX_R));
-    out.frac[(k + 2) * 2] = ex + dx * len;
-    out.frac[(k + 2) * 2 + 1] = ey + dy * len;
+    return { pts, closed: true };
   }
-  // Point 1 closes the polygon on the far side of the hit, so the fan runs between the two.
-  out.frac[2] = Math.cos(ang + side) * FRACTURE_EDGE_R;
-  out.frac[3] = Math.sin(ang + side) * FRACTURE_EDGE_R;
+  if (p.t === 'rect') {
+    const x = p.w / 2;
+    const y = p.h / 2;
+    return { pts: [-x, -y, x, -y, x, y, -x, y], closed: true };
+  }
+  return { pts: [...p.pts], closed: p.t === 'poly' };
+}
+
+/** Pure: points subdivided so no edge is longer than step. */
+function densify(pts: readonly number[], closed: boolean, step: number): number[] {
+  const n = pts.length >> 1;
+  const out: number[] = [];
+  const edges = closed ? n : n - 1;
+  for (let k = 0; k < edges; k++) {
+    const ax = pts[k * 2] ?? 0;
+    const ay = pts[k * 2 + 1] ?? 0;
+    const j = (k + 1) % n;
+    const bx = pts[j * 2] ?? 0;
+    const by = pts[j * 2 + 1] ?? 0;
+    const m = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / Math.max(1e-3, step)));
+    for (let q = 0; q < m; q++) out.push(ax + ((bx - ax) * q) / m, ay + ((by - ay) * q) / m);
+  }
+  if (!closed && n > 0) out.push(pts[(n - 1) * 2] ?? 0, pts[(n - 1) * 2 + 1] ?? 0);
   return out;
 }
 
-/** Pure: distance along the ray from (x, y) inside a circle of radius R to its edge. */
-function rayToCircle(x: number, y: number, dx: number, dy: number, R: number): number {
-  const b = x * dx + y * dy;
-  const c = x * x + y * y - R * R;
-  const d = b * b - c;
-  return d <= 0 ? 0 : Math.max(0, -b + Math.sqrt(d));
-}
-
-/** Pure: the fan origin (body radii) of a layout hit at local angle a, written into out (x, y). */
-export function fractureOrigin(a: number, out: Float32Array): Float32Array {
-  out[0] = Math.cos(fin(a, 0)) * FRACTURE_ORIGIN_R;
-  out[1] = Math.sin(fin(a, 0)) * FRACTURE_ORIGIN_R;
-  return out;
-}
-
-/** Pure: the polygon point order for drawing (0, the fan, then 1), as a point index into frac. */
-export function fracturePointAt(k: number): number {
-  if (k <= 0) return 0;
-  if (k >= FRACTURE_PTS - 1) return 1;
-  return k + 1;
+/** Pure: the outermost point radius of every stroked or filled primitive of a spec. */
+export function specOuterRadius(spec: ShapeSpec): number {
+  let r = 0;
+  for (const l of spec.layers) {
+    for (const p of l.prims) {
+      const { pts } = primPoints(p);
+      for (let k = 0; k + 1 < pts.length; k += 2) r = Math.max(r, Math.hypot(pts[k] ?? 0, pts[k + 1] ?? 0));
+    }
+  }
+  return r;
 }
 
 /**
- * Pure: whether the drawn polygon of a layout hit at angle a (fracturePointAt order, closed through
- * the origin) is simple: no two edges cross. Used by the tests.
+ * Pure: the kept runs of a primitive after cutting every point that lies in an arc at or beyond
+ * rCut, as open polylines (x, y pairs, two points or more). A closed shape whose cut leaves the
+ * seam intact joins its last run to its first.
  */
-export function fractureIsSimple(frac: Float32Array, a: number): boolean {
-  const n = FRACTURE_PTS + 1;
-  const o = fractureOrigin(a, new Float32Array(2));
-  const px = (k: number): number => (k % n === FRACTURE_PTS ? (o[0] ?? 0) : (frac[fracturePointAt(k % n) * 2] ?? 0));
-  const py = (k: number): number => (k % n === FRACTURE_PTS ? (o[1] ?? 0) : (frac[fracturePointAt(k % n) * 2 + 1] ?? 0));
-  const cross = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number): number => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 2; j < n; j++) {
-      if (i === 0 && j === n - 1) continue;
-      const d1 = cross(px(i), py(i), px(i + 1), py(i + 1), px(j), py(j));
-      const d2 = cross(px(i), py(i), px(i + 1), py(i + 1), px(j + 1), py(j + 1));
-      const d3 = cross(px(j), py(j), px(j + 1), py(j + 1), px(i), py(i));
-      const d4 = cross(px(j), py(j), px(j + 1), py(j + 1), px(i + 1), py(i + 1));
-      if (d1 * d2 < 0 && d3 * d4 < 0) return false;
+export function clipPrim(p: ShapePrim, arcs: Float32Array, n: number, rCut: number, step: number): number[][] {
+  const src = primPoints(p);
+  const pts = densify(src.pts, src.closed, step);
+  const m = pts.length >> 1;
+  const cut = (k: number): boolean => {
+    const x = pts[k * 2] ?? 0;
+    const y = pts[k * 2 + 1] ?? 0;
+    return Math.hypot(x, y) >= rCut && inArcs(Math.atan2(y, x), arcs, n);
+  };
+  const runs: number[][] = [];
+  let cur: number[] = [];
+  let anyCut = false;
+  for (let k = 0; k < m; k++) {
+    if (cut(k)) {
+      anyCut = true;
+      if (cur.length >= 4) runs.push(cur);
+      cur = [];
+    } else {
+      cur.push(pts[k * 2] ?? 0, pts[k * 2 + 1] ?? 0);
     }
   }
-  return true;
+  if (!anyCut) {
+    // Nothing cut: hand back the whole outline (closed shapes close on the first point).
+    if (src.closed) cur.push(pts[0] ?? 0, pts[1] ?? 0);
+    return cur.length >= 4 ? [cur] : [];
+  }
+  if (src.closed && !cut(0) && !cut(m - 1) && runs.length > 0 && runs[0] !== undefined) {
+    // The seam (last point to first) is kept: join the tail run onto the head run.
+    runs[0] = cur.concat(runs[0]);
+  } else if (cur.length >= 4) {
+    runs.push(cur);
+  }
+  return runs;
 }
 
-/** The fracture grows in from the hit side over this many seconds. */
-export const FRACTURE_GROW_SEC = 0.6;
-
-/** Pure: fracture growth 0 to 1 at age seconds (eased out). */
-export function fractureGrow(age: number): number {
-  const u = Math.max(0, Math.min(1, fin(age, FRACTURE_GROW_SEC) / FRACTURE_GROW_SEC));
-  return 1 - (1 - u) * (1 - u);
+/**
+ * Pure: the damaged copy of a body spec. Every stroked layer keeps its fill as a fill only copy (so
+ * the body fill never drops below normal and never darkens) and its strokes become open polylines
+ * with the arcs removed beyond BREAK_MIN_R of the outermost radius. Same colours and widths, so the
+ * neon look is unchanged where the outline remains.
+ */
+export function damagedSpec(spec: ShapeSpec, arcs: Float32Array, n: number): ShapeSpec {
+  if (n <= 0) return spec;
+  const R = specOuterRadius(spec);
+  const rCut = R * BREAK_MIN_R;
+  const step = Math.max(0.5, R * BREAK_STEP);
+  const layers: ShapeLayer[] = [];
+  for (const l of spec.layers) {
+    if (l.width <= 0) {
+      layers.push(l);
+      continue;
+    }
+    if (l.fill > 0) layers.push({ ...l, width: 0, glow: false });
+    const prims: ShapePrim[] = [];
+    for (const p of l.prims) for (const run of clipPrim(p, arcs, n, rCut, step)) prims.push({ t: 'line', pts: run });
+    if (prims.length > 0) layers.push({ ...l, prims, fill: 0 });
+  }
+  return { tint: spec.tint, radius: spec.radius, layers };
 }
 
-/** Erase depth (0 to 1) of the outline at a gap core, and of the dimmed shoulders either side. */
-export const GAP_CUT = 1;
-export const GAP_SHOULDER_MIN = 0.35;
-export const GAP_SHOULDER_MAX = 0.75;
-/** Scorch: the fill near a gap loses this share of its alpha (it goes see through, not black). */
-export const SCORCH_CUT = 0.45;
+// Colours. Every damage colour is a bright member of the boss palette.
 
-/** Pure: how much the outline beside gap k is dimmed at timeSec (an uneven flicker, never 0 or 1). */
-export function shoulderDim(timeSec: number, k: number): number {
+/** Lowest HSL lightness any damage draw may use (the arena background is darker than this). */
+export const DAMAGE_MIN_L = 0.3;
+/** Hue shift (degrees) of the outline beside a gap, toward the boss accent colour. */
+export const EDGE_HUE_SHIFT = 25;
+/** Torn end stubs: the boss primary at this brightness multiplier. */
+export const STUB_BRIGHT = 1.3;
+
+/** Pure: 0xRRGGBB to HSL (h degrees, s and l 0 to 1). */
+export function rgbToHsl(rgb: number): [number, number, number] {
+  const r = ((rgb >> 16) & 255) / 255;
+  const g = ((rgb >> 8) & 255) / 255;
+  const b = (rgb & 255) / 255;
+  const mx = Math.max(r, g, b);
+  const mn = Math.min(r, g, b);
+  const l = (mx + mn) / 2;
+  const d = mx - mn;
+  if (d < 1e-6) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h: number;
+  if (mx === r) h = ((g - b) / d) % 6;
+  else if (mx === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, clampNum(s, 0, 1), l];
+}
+
+/** Pure: HSL lightness 0 to 1 of an RGB colour. */
+export function lightnessOf(rgb: number): number {
+  return rgbToHsl(rgb)[2];
+}
+
+/** Pure: rgb with its lightness raised to at least DAMAGE_MIN_L (hue and saturation kept). */
+export function liftToFloor(rgb: number): number {
+  const [h, s, l] = rgbToHsl(rgb);
+  return l >= DAMAGE_MIN_L ? rgb : hslToRgbInt(h, s, DAMAGE_MIN_L + 0.02);
+}
+
+/**
+ * Pure: rgb with its hue moved deg degrees toward target's hue (the short way). When the two hues
+ * are closer than deg or target is grey, the hue moves deg degrees anyway (positive), so the shift
+ * always reads. Saturation and lightness are kept, then lifted to the floor.
+ */
+export function shiftHueToward(rgb: number, target: number, deg: number): number {
+  const [h, s, l] = rgbToHsl(rgb);
+  const [th, ts] = rgbToHsl(target);
+  let d = ((th - h + 540) % 360) - 180;
+  if (ts < 0.05 || Math.abs(d) < 1e-3) d = 1;
+  return liftToFloor(hslToRgbInt(h + Math.sign(d) * deg, s, l));
+}
+
+/** Pure: an RGB colour with every channel multiplied by k (clamped), then lifted to the floor. */
+export function brighten(rgb: number, k: number): number {
+  const m = Math.max(0, fin(k, 1));
+  const r = clampNum(Math.round(((rgb >> 16) & 255) * m), 0, 255);
+  const g = clampNum(Math.round(((rgb >> 8) & 255) * m), 0, 255);
+  const b = clampNum(Math.round((rgb & 255) * m), 0, 255);
+  return liftToFloor((r << 16) | (g << 8) | b);
+}
+
+export interface DamageColours {
+  /** Outline beside a gap: hue shifted toward the accent. */
+  edge: number;
+  /** Torn end stubs: the primary at STUB_BRIGHT. */
+  stub: number;
+  /** Falling fragments: the primary (lifted to the floor). */
+  frag: number;
+}
+
+/** Pure: the damage colours of a boss from its primary and accent RGB. */
+export function damageColours(primary: number, accent: number, out: DamageColours): DamageColours {
+  out.edge = shiftHueToward(primary, accent, EDGE_HUE_SHIFT);
+  out.stub = brighten(primary, STUB_BRIGHT);
+  out.frag = liftToFloor(primary);
+  return out;
+}
+
+/** Edge flicker range: the shifted outline beside a gap pulses between these alphas. */
+export const EDGE_FLICKER: readonly [number, number] = [0.45, 1];
+/** Arc length (radians) of shifted outline drawn either side of a gap. */
+export const EDGE_SPAN = 0.22;
+/** Torn end stub length as a share of the body radius. */
+export const STUB_LEN = 0.12;
+
+/** Pure: uneven flicker of the edge beside gap end k at timeSec, within EDGE_FLICKER. */
+export function edgeFlicker(timeSec: number, k: number): number {
   const t = fin(timeSec, 0);
   const w = 0.5 + 0.5 * (Math.sin(t * 13.7 + k * 2.3) * 0.6 + Math.sin(t * 5.1 + k * 0.9) * 0.4);
-  return GAP_SHOULDER_MIN + (GAP_SHOULDER_MAX - GAP_SHOULDER_MIN) * w;
-}
-
-/** Most the whole outline dims in the stage 2 flicker. */
-export const FLICKER_MAX = 0.6;
-
-/**
- * Pure: stage 2 uneven flicker of the whole outline at timeSec, as an erase depth 0 to FLICKER_MAX
- * (0 before stage 2). Short dropouts on a noise driven clock, so no two beats match.
- */
-export function outlineFlicker(stage: number, timeSec: number): number {
-  if (stage < 2) return 0;
-  const t = fin(timeSec, 0);
-  const n = noiseAt(t * 6.3) * 0.65 + noiseAt(t * 17.1 + 11) * 0.35;
-  const d = n < 0.55 ? 0 : (n - 0.55) / 0.45;
-  return Math.min(FLICKER_MAX, FLICKER_MAX * d * 1.4);
-}
-
-/** Pure: an RGB colour scaled to brightness share k (0 to 1), keeping its hue. */
-export function dimRgb(rgb: number, k: number): number {
-  const s = Math.max(0, Math.min(1, fin(k, 1)));
-  const r = Math.round(((rgb >> 16) & 255) * s);
-  const g = Math.round(((rgb >> 8) & 255) * s);
-  const b = Math.round((rgb & 255) * s);
-  return (r << 16) | (g << 8) | b;
+  return EDGE_FLICKER[0] + (EDGE_FLICKER[1] - EDGE_FLICKER[0]) * w;
 }

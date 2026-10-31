@@ -255,6 +255,60 @@ const SPLIME_SPEC: ShapeSpec = {
   ],
 };
 
+/** Pure: an open arc polyline of radius r from a0 to a1 (radians), n segments. */
+function ringArc(r: number, a0: number, a1: number, n: number): ShapePrim {
+  const pts: number[] = [];
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + ((a1 - a0) * i) / n;
+    pts.push(Math.round(Math.cos(a) * r * 100) / 100, Math.round(Math.sin(a) * r * 100) / 100);
+  }
+  return { t: 'line', pts };
+}
+
+/** Drone: a ring with a cross, white (tinted per frame by the renderer for the decoy pulse). */
+export const DRONE_SPEC: ShapeSpec = {
+  tint: 'white',
+  radius: 8,
+  layers: [
+    layer([{ t: 'circle', r: 8 }], 2),
+    layer(
+      [
+        { t: 'line', pts: [-5, 0, 5, 0] },
+        { t: 'line', pts: [0, -5, 0, 5] },
+      ],
+      1.5,
+      { glow: false },
+    ),
+  ],
+};
+
+/** The double mode's second drone: the drone look with a cyan tint. */
+export const DRONE_TWIN_SPEC: ShapeSpec = { ...DRONE_SPEC, tint: 'cyan' };
+
+/**
+ * Drone pickup (look v33): a ring glyph, distinct from the weapon pickup's solid outline. A white
+ * outer ring broken into four arcs, an inner cyan ring broken into three, and a cyan centre dot with
+ * a white orbit tick, all baked, so it reads white and cyan. The renderer spins it.
+ */
+export const DRONE_PICKUP_SPEC: ShapeSpec = {
+  tint: null,
+  radius: 15,
+  layers: [
+    layer(
+      Array.from({ length: 4 }, (_, k) => ringArc(14, (k * Math.PI) / 2 + 0.18, ((k + 1) * Math.PI) / 2 - 0.18, 8)),
+      2,
+      { colour: 'white' },
+    ),
+    layer(
+      Array.from({ length: 3 }, (_, k) => ringArc(8.5, (k * Math.PI * 2) / 3 + 0.3, ((k + 1) * Math.PI * 2) / 3 - 0.3, 8)),
+      1.8,
+      { colour: 'cyan' },
+    ),
+    layer([{ t: 'circle', r: 2.6 }], 0, { colour: 'cyan', fill: 1, glow: false }),
+    layer([{ t: 'line', pts: [11, 0, 17, 0] }], 1.6, { colour: 'white' }),
+  ],
+};
+
 /** Mine: a small diamond crossed by an X of spikes that stick out past its edges. Hitbox 9. */
 const MINE_SPEC: ShapeSpec = {
   tint: 'sower',
@@ -450,21 +504,7 @@ export const SHAPE_SPECS: Readonly<Record<DrawnKind, ShapeSpec>> = {
     radius: 6,
     layers: [layer([{ t: 'poly', pts: [0, -6, 6, 0, 0, 6, -6, 0] }], 1.5, { fill: 0.35 })],
   },
-  [Kind.Drone]: {
-    tint: 'white',
-    radius: 8,
-    layers: [
-      layer([{ t: 'circle', r: 8 }], 2),
-      layer(
-        [
-          { t: 'line', pts: [-5, 0, 5, 0] },
-          { t: 'line', pts: [0, -5, 0, 5] },
-        ],
-        1.5,
-        { glow: false },
-      ),
-    ],
-  },
+  [Kind.Drone]: DRONE_SPEC,
   // Weapon pickup with no known weapon index: the outline and a centre dot. The renderer draws
   // the per weapon variants (PICKUP_SPECS) through pickupSlot.
   [Kind.WeaponPickup]: pickupSpec('white', [layer([{ t: 'circle', r: 2.5 }], 0, { fill: 1, glow: false })]),
@@ -484,9 +524,9 @@ export const SHAPE_SPECS: Readonly<Record<DrawnKind, ShapeSpec>> = {
   [Kind.Boss]: buildBossSpec(0, 0),
   [Kind.BossPart]: { ...buildPartSpec(0, 1), tint: 'bossGreen' },
   [Kind.BossHazard]: HAZARD_GLYPH,
-  // V3 contract stubs: placeholders until wave D draws the drone pickup and the twin drone.
-  [Kind.DronePickup]: { tint: 'dronePickup', radius: 14, layers: [layer([{ t: 'circle', r: 14 }], 2)] },
-  [Kind.DroneTwin]: { tint: 'white', radius: 8, layers: [layer([{ t: 'circle', r: 8 }], 2)] },
+  // Look v33 (GW1): the drone pickup ring glyph and the double mode's second drone.
+  [Kind.DronePickup]: DRONE_PICKUP_SPEC,
+  [Kind.DroneTwin]: DRONE_TWIN_SPEC,
 };
 
 /** Kind values the renderer checks per entity, as plain numbers (the enum is const). */
@@ -502,6 +542,13 @@ export const KIND_NUM = {
   boss: Kind.Boss as number,
   bossPart: Kind.BossPart as number,
   bossHazard: Kind.BossHazard as number,
+} as const;
+
+/** Look v33: drone kind values the renderer checks per entity (outside the contiguous KIND_NUM range). */
+export const DRONE_KIND_NUM = {
+  drone: Kind.Drone as number,
+  dronePickup: Kind.DronePickup as number,
+  droneTwin: Kind.DroneTwin as number,
 } as const;
 
 /** Drawn for any kind value outside the registry: a magenta circle. */

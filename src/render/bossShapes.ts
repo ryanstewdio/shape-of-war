@@ -569,10 +569,22 @@ export const PART_TWIN = 3;
  * nose along its heading (w.rot). Unlike the white parts it bakes both its colours (broodlingSpec).
  */
 export const PART_BROODLING = 4;
-/** Part types that have a part spec (pod, anchor, turret, Broodling). The twin body draws as a boss body. */
-export const PART_TYPES = 4;
+/**
+ * Look v33 (GW1): Warden's Hornet (sim PartType.Hornet, 10 u), a small amber dart along its heading
+ * (w.rot) that buzzes (a render jitter, partLooks.ts).
+ */
+export const PART_HORNET = 5;
+/** Gravitas's Gravitant (sim PartType.Gravitant, 28 u): a small violet well with the Gravitas rim. */
+export const PART_GRAVITANT = 6;
+/** Mirage's Mirror (sim PartType.Mirror): a translucent magenta ghost of Mirage, no fill, half alpha. */
+export const PART_MIRROR = 7;
+/** Part types that have a part spec (pod, anchor, turret, Broodling, Hornet, Gravitant, Mirror). The twin body draws as a boss body. */
+export const PART_TYPES = 7;
 /** The part type behind each spec index (a part spec is PART_SPECS[index x 4 + tier - 1]). */
-export const PART_SPEC_TYPES: readonly number[] = [PART_POD, PART_ANCHOR, PART_TURRET, PART_BROODLING];
+export const PART_SPEC_TYPES: readonly number[] = [PART_POD, PART_ANCHOR, PART_TURRET, PART_BROODLING, PART_HORNET, PART_GRAVITANT, PART_MIRROR];
+/** Radii the baked look parts are drawn at: the sim radii (HORNET.radius, GRAVITANT.radius), so the scale is 1. */
+export const HORNET_R = 10;
+export const GRAVITANT_R = 28;
 /** Radius each white part spec is drawn at (pod, anchor, turret); the renderer scales by w.radius over this. */
 export const PART_R: readonly number[] = [12, 14, 16];
 /** Radius the Broodling spec is drawn at: the sim radius (BROODLING.radius), so its scale is 1. */
@@ -588,9 +600,17 @@ export function isBroodlingPart(a: number): boolean {
   return a === PART_BROODLING;
 }
 
-/** Pure: index of a part in PART_SPEC_TYPES (0 pod, 1 anchor, 2 turret, 3 Broodling; pod for anything else). */
+/** Pure: index of a part in PART_SPEC_TYPES (0 pod, 1 anchor, 2 turret, 3 Broodling, 4 Hornet, 5 Gravitant, 6 Mirror; pod for anything else). */
 export function partSpecIndex(a: number): number {
+  if (a === PART_HORNET) return 4;
+  if (a === PART_GRAVITANT) return 5;
+  if (a === PART_MIRROR) return 6;
   return isBroodlingPart(a) ? 3 : partType(a);
+}
+
+/** Pure: true for a part whose spec bakes its own colours (the view tint stays white). */
+export function isBakedPart(a: number): boolean {
+  return a === PART_BROODLING || a === PART_HORNET || a === PART_GRAVITANT || a === PART_MIRROR;
 }
 
 /** Pure: true for the Twins second body (w.a is PART_TWIN). */
@@ -602,6 +622,9 @@ export function isTwinPart(a: number): boolean {
 export function partR(a: number): number {
   if (isTwinPart(a)) return bossBodyR(BOSS_TWINS);
   if (isBroodlingPart(a)) return BROODLING_R;
+  if (a === PART_HORNET) return HORNET_R;
+  if (a === PART_GRAVITANT) return GRAVITANT_R;
+  if (a === PART_MIRROR) return bossBodyR(BOSS_MIRAGE);
   return PART_R[partType(a)] ?? 12;
 }
 
@@ -636,9 +659,69 @@ export function broodlingSpec(tier: number): ShapeSpec {
   };
 }
 
+/** Pure: Hornet spec: a small amber dart pointing along +x (the heading), a hot tip and two wing ticks. */
+export function hornetSpec(tier: number): ShapeSpec {
+  const w = 1.4 * tierWeight(tier);
+  const R = HORNET_R;
+  return {
+    tint: null,
+    radius: R + 5,
+    layers: [
+      layer([{ t: 'poly', pts: [R, 0, r2(-0.7 * R), r2(0.55 * R), r2(-0.35 * R), 0, r2(-0.7 * R), r2(-0.55 * R)] }], w, { colour: 'bossOrange', fill: 0.35 }),
+      layer(
+        [
+          { t: 'line', pts: [r2(-0.1 * R), r2(0.3 * R), r2(-0.45 * R), r2(0.95 * R)] },
+          { t: 'line', pts: [r2(-0.1 * R), r2(-0.3 * R), r2(-0.45 * R), r2(-0.95 * R)] },
+        ],
+        w * 0.6,
+        { colour: 'bossYellow', alpha: 0.8 },
+      ),
+      layer([{ t: 'circle', r: r2(0.18 * R) }], 0, { colour: 'white', fill: 0.9, glow: false }),
+    ],
+  };
+}
+
+/** Pure: Gravitant spec: a small violet well (filled core, inner ring) inside the Gravitas rim of three arcs. */
+export function gravitantSpec(tier: number): ShapeSpec {
+  const w = 1.5 * tierWeight(tier);
+  const hm = tierHaloMul(tier);
+  const R = GRAVITANT_R;
+  const c = bossColourOf(BOSS_GRAVITAS);
+  const [r0, , r2i, rc] = GRAVITAS_RINGS;
+  return {
+    tint: null,
+    radius: r2(R * BOSS_RIM) + 4,
+    layers: [
+      layer([{ t: 'circle', r: r2(r0 * R) }], w, { colour: c, fill: 0.05, haloMul: hm }),
+      layer(gravitasMiddle(R), w * 0.8, { colour: c, alpha: 0.85, haloMul: hm }),
+      layer([{ t: 'circle', r: r2(r2i * R) }], w * 0.7, { colour: c, haloMul: hm }),
+      layer([{ t: 'circle', r: r2(rc * R) }], w * 0.6, { colour: c, fill: 0.7, haloMul: hm }),
+      rim(R, w, c, hm),
+    ],
+  };
+}
+
+/** Mirror alpha: the ghost draws at half the Mirage line alpha. */
+export const MIRROR_ALPHA = 0.5;
+
+/** Pure: Mirror spec: Mirage's shape (shield, lips, inner square, rim) in magenta, no fill, half alpha. */
+export function mirrorSpec(): ShapeSpec {
+  const src = mirageSpec(0);
+  return {
+    tint: null,
+    radius: src.radius,
+    layers: src.layers
+      .filter((l) => l.colour !== 'white')
+      .map((l) => ({ ...l, colour: 'bossMagenta' as const, fill: 0, alpha: l.alpha * MIRROR_ALPHA })),
+  };
+}
+
 /** Pure: the spec of a part type at a boss tier (the tier sets the line weight). */
 export function buildPartSpec(a: number, tier: number): ShapeSpec {
   if (isBroodlingPart(a)) return broodlingSpec(tier);
+  if (a === PART_HORNET) return hornetSpec(tier);
+  if (a === PART_GRAVITANT) return gravitantSpec(tier);
+  if (a === PART_MIRROR) return mirrorSpec();
   const type = partType(a);
   const w = 1.6 * tierWeight(tier);
   const hm = tierHaloMul(tier);
