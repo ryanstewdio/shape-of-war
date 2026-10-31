@@ -69,6 +69,24 @@ export interface Drums {
   readonly hat: readonly HatHit[];
 }
 
+/**
+ * A battle track's hook (battle polish): one bar the lead (arp) voice plays verbatim on the first
+ * bar of every 8, so the same line returns every 8 bars. Pentatonic degrees above the chord's arp
+ * anchor, fitted to the harmony like the arp. Each track has its own rhythm.
+ */
+export interface HookLine {
+  readonly steps: readonly number[];
+  readonly degs: readonly number[];
+}
+
+/** One stab of a battle track's intro hit: chord degrees (0 root, 1 third, 2 fifth, 3 octave) at a step. */
+export interface IntroHit {
+  readonly step: number;
+  readonly degs: readonly number[];
+  readonly dur: number;
+  readonly vel: number;
+}
+
 /** Oscillator waves of the bed. Pure data, read by the engine. */
 export interface BedTimbre {
   readonly bass: OscillatorType;
@@ -115,6 +133,12 @@ export interface Tune {
   readonly bed: BedTimbre;
   /** Set on a boss battle track (BATTLE_TUNES). Absent on the level tunes. */
   readonly battle?: true;
+  /** Battle tracks: the hook the lead plays on bar 0 of every 8 (battle polish). */
+  readonly hook?: HookLine;
+  /** Battle tracks: the bass line of bars 4 and 8 of each loop, with its octave jumps. */
+  readonly bassJump?: readonly BassHit[];
+  /** Battle tracks: the one bar signature hit played on the cross fade (join) bar. */
+  readonly intro?: readonly IntroHit[];
 }
 
 /** A level tune (TUNES): its id is one of TUNE_IDS. */
@@ -147,6 +171,8 @@ function voicings(list: readonly ChordVoicing[]): Record<string, ChordVoicing> {
   for (const v of list) out[v.harmony.name] = v;
   return out;
 }
+
+const ih = (step: number, degs: readonly number[], dur: number, vel: number): IntroHit => ({ step, degs, dur, vel });
 
 const STEPS16: readonly number[] = Array.from({ length: 16 }, (_, s) => s);
 const ODD_STEPS: readonly number[] = STEPS16.filter((s) => s % 2 === 1);
@@ -436,28 +462,35 @@ export const BOSS_KEYS: Readonly<Record<1 | 2 | 3 | 4, Key>> = {
 // ---------------------------------------------------------------------------------------
 // Boss battle tracks (G3C retest, Ryan: "unique battle boss music so users become accustomed to
 // the type of battle when they hear the change", minor keys, at least three tracks). A boss fight
-// leaves the level tune for one of these. All three keep the boss bed grid: tonic A (the boss
-// motifs are composed in A), 120 BPM, so a bar is 2 s and Prism's 4 s cycle sits on bar lines.
-// The 140 to 160 BPM drive comes from density, not tempo: hats on every sixteenth, a busy bass
-// and one chord a bar (the level tunes change chord every two bars). Each track has its own
-// progression, bass line, drum pattern, timbres and a signature hook: a fixed arp figure that
-// never rests at random (restP 0), so the same figure comes round every bar pair.
+// leaves the level tune for one of these. All three keep 120 BPM, so a bar is 2 s and Prism's
+// 4 s cycle sits on bar lines. Battle polish (Ryan rated them 3 of 5): each is in its own minor
+// key within a fourth of A (D harmonic minor, A phrygian, E natural minor) so the boss motifs
+// still fit, with a one bar intro hit on the cross fade, kick and clap at double the density of
+// the level tunes (12 hits a bar against 6), a bass that jumps octaves on bars 4 and 8, and a
+// hook the lead plays verbatim on bar 0 of every 8. The drive comes from density, not tempo:
+// hats on every sixteenth, a busy bass and one chord a bar. Arp figures never rest at random.
 // BOSS_KEYS above stays the key the boss motifs are composed in; at play time each motif note is
 // fitted to the battle track's chord and scale (battle.ts fitBattleNote).
 
 const T_EM = triad('Em', 'v', 4, 3);
+// Iron Verdict in D harmonic minor; Glass Requiem in E natural minor.
+const V_A = triad('A', 'V', 9, 4);
+const V_BB = triad('Bb', 'VI', 10, 4);
+const V_GM = triad('Gm', 'iv', 7, 3);
+const R_BM = triad('Bm', 'v', 11, 3);
+const R_D = triad('D', 'VII', 2, 4);
 
-/** Iron Verdict: A harmonic minor, four on the floor with a clap on two and four, saw over saw. */
+/** Iron Verdict: D harmonic minor, eighth note kicks under a clap on the off beats, saw over saw. */
 const VERDICT: Tune = {
   id: 'verdict',
   name: 'Iron Verdict',
-  mood: 'boss: A harmonic minor, Am Am F E Am Dm E E, four on the floor, rising square hook',
+  mood: 'boss: D harmonic minor, Dm Dm Bb A Dm Gm A A, driving eighth kicks, dotted rising hook',
   bpm: 120,
   stepSec: 60 / 120 / 4,
-  root: A4,
-  key: { tonic: 9, scale: [9, 11, 0, 2, 4, 5, 8], bars: [HARMONIES.Am, HARMONIES.Am, HARMONIES.F, B_E, HARMONIES.Am, B_DM, B_E, B_E] },
+  root: 74,
+  key: { tonic: 2, scale: [2, 4, 5, 7, 9, 10, 1], bars: [B_DM, B_DM, V_BB, V_A, B_DM, V_GM, V_A, V_A] },
   loopBars: 8,
-  voicings: voicings([voiced(HARMONIES.Am, 0), voiced(HARMONIES.F, 1), voiced(B_E, 3), voiced(B_DM, 2)]),
+  voicings: voicings([voiced(B_DM, 0), voiced(V_BB, 1), voiced(V_A, 3), voiced(V_GM, 2)]),
   bass: [bh(0, 0, 1, 1), bh(1, 0, 1, 0.6), bh(2, 3, 1, 0.8), bh(4, 0, 1, 0.9), bh(5, 0, 1, 0.6), bh(6, 3, 1, 0.8), bh(8, 0, 1, 0.95), bh(9, 0, 1, 0.6), bh(10, 3, 1, 0.8), bh(12, 2, 1, 0.85), bh(13, 2, 1, 0.6), bh(14, 1, 2, 0.8)],
   bassAlt: EIGHTHS.map((s) => bh(s, s === 6 || s === 14 ? 2 : 0, 2, s % 8 === 0 ? 1 : 0.8)),
   arp: {
@@ -473,14 +506,21 @@ const VERDICT: Tune = {
     restP: 0,
   },
   drums: {
-    kick: [hit(0, 1), hit(4, 0.9), hit(8, 0.95), hit(12, 0.9)],
-    kickTurn: [hit(13, 0.7)],
-    perc: [hit(4, 1), hit(12, 1)],
-    percOdd: [hit(10, 0.5)],
+    // Driving: four on the floor doubled to eighths after the downbeat's pad change (step 2 stays
+    // clear while the old pad releases), claps on the off beats (12 hits a bar).
+    kick: [hit(0, 1), hit(4, 0.9), hit(6, 0.75), hit(8, 0.95), hit(10, 0.75), hit(12, 0.9), hit(13, 0.7)],
+    kickTurn: [],
+    perc: [hit(4, 1), hit(6, 0.55), hit(10, 0.6), hit(12, 1), hit(14, 0.6)],
+    percOdd: [hit(9, 0.4)],
     hat: STEPS16.map((s) => (s % 2 === 1 ? hh(s, s % 4 === 3 ? 0.7 : 0.5, true) : hh(s, s % 4 === 2 ? 1 : 0.65, false))),
   },
   bed: { bass: 'sawtooth', pad: 'sawtooth', arp: 'square', padDetune: 14 },
   battle: true,
+  // Dotted rising hook: hits on 0, 3, 6, then three eighths climbing to the top.
+  hook: { steps: [0, 3, 6, 8, 10, 12], degs: [0, 1, 2, 3, 4, 5] },
+  bassJump: [bh(0, 0, 2, 1), bh(2, 3, 2, 0.85), bh(4, 0, 2, 0.9), bh(6, 3, 2, 0.85), bh(8, 0, 2, 0.95), bh(10, 3, 2, 0.85), bh(12, 0, 1, 0.9), bh(13, 3, 1, 0.8), bh(14, 0, 1, 0.85), bh(15, 3, 1, 0.8)],
+  // Three hammered root and fifth stabs, then a held chord.
+  intro: [ih(0, [0, 3], 1, 1), ih(2, [0, 3], 1, 0.9), ih(4, [0, 3], 1, 0.95), ih(8, [0, 1, 2], 6, 0.9)],
 };
 
 /** Black Meridian: A phrygian, a broken kick under a half time clap, stabbing saw hook. */
@@ -509,33 +549,39 @@ const MERIDIAN: Tune = {
     restP: 0,
   },
   drums: {
-    kick: [hit(0, 1), hit(3, 0.8), hit(6, 0.85), hit(10, 0.9)],
-    kickTurn: [hit(13, 0.7)],
-    perc: [hit(8, 1)],
-    percOdd: [hit(12, 0.5), hit(14, 0.4)],
+    // Broken: kicks on the dotted grid, claps pushing the back half (12 hits a bar).
+    kick: [hit(0, 1), hit(3, 0.8), hit(6, 0.85), hit(9, 0.8), hit(11, 0.75), hit(13, 0.8)],
+    kickTurn: [],
+    perc: [hit(4, 0.7), hit(7, 0.55), hit(8, 1), hit(10, 0.55), hit(12, 0.8), hit(14, 0.6)],
+    percOdd: [hit(5, 0.4)],
     hat: STEPS16.map((s) => (s % 2 === 1 ? hh(s, s % 4 === 3 ? 0.75 : 0.5, true) : hh(s, 0.8, false))),
   },
   bed: { bass: 'square', pad: 'sawtooth', arp: 'sawtooth', padDetune: 18 },
   battle: true,
+  // Repeated note stabs: three sixteenths, a gap, three more, then a fall.
+  hook: { steps: [0, 1, 2, 4, 8, 9, 10, 13], degs: [4, 4, 4, 3, 4, 4, 4, 2] },
+  bassJump: [bh(0, 0, 3, 1), bh(3, 3, 1, 0.85), bh(4, 0, 2, 0.85), bh(6, 3, 2, 0.85), bh(8, 0, 1, 0.95), bh(9, 3, 1, 0.8), bh(10, 0, 2, 0.85), bh(12, 3, 2, 0.9), bh(14, 0, 2, 0.85)],
+  // A low root hit, a flat second lean, then a rising root to octave slide of stabs.
+  intro: [ih(0, [0], 3, 1), ih(3, [0, 3], 1, 0.85), ih(6, [0, 3], 1, 0.85), ih(9, [0, 1, 2], 2, 0.9), ih(12, [0, 3], 3, 1)],
 };
 
-/** Glass Requiem: A natural minor, half time kick and clap, bell like leaping triangle hook. */
+/** Glass Requiem: E natural minor, galloping paired kicks, bell like leaping triangle hook. */
 const REQUIEM: Tune = {
   id: 'requiem',
   name: 'Glass Requiem',
-  mood: 'boss: A natural minor, Am Em F C Dm Am Em G, half time with double time hats, leaping hook',
+  mood: 'boss: E natural minor, Em Bm C G Am Em Bm D, galloping paired kicks, leaping long note hook',
   bpm: 120,
   stepSec: 60 / 120 / 4,
-  root: A4,
-  key: { tonic: 9, scale: [9, 11, 0, 2, 4, 5, 7], bars: [HARMONIES.Am, T_EM, HARMONIES.F, HARMONIES.C, B_DM, HARMONIES.Am, T_EM, HARMONIES.G] },
+  root: 64,
+  key: { tonic: 4, scale: [4, 6, 7, 9, 11, 0, 2], bars: [T_EM, R_BM, HARMONIES.C, HARMONIES.G, HARMONIES.Am, T_EM, R_BM, R_D] },
   loopBars: 8,
   voicings: voicings([
-    voiced(HARMONIES.Am, 0),
-    voiced(T_EM, 3),
-    voiced(HARMONIES.F, 1),
+    voiced(T_EM, 0),
+    voiced(R_BM, 3),
     voiced(HARMONIES.C, 1),
-    voiced(B_DM, 2),
-    voiced(HARMONIES.G, -1),
+    voiced(HARMONIES.G, 1),
+    voiced(HARMONIES.Am, 2),
+    voiced(R_D, -1),
   ]),
   bass: [bh(0, 0, 2, 1), bh(2, 0, 1, 0.7), bh(3, 1, 1, 0.7), bh(4, 2, 2, 0.85), bh(6, 0, 2, 0.75), bh(8, 0, 2, 0.95), bh(10, 2, 1, 0.75), bh(11, 1, 1, 0.7), bh(12, 0, 2, 0.85), bh(14, 3, 2, 0.8)],
   bassAlt: [bh(0, 0, 6, 1), bh(6, 2, 2, 0.75), bh(8, 0, 4, 0.9), bh(12, 3, 2, 0.8), bh(14, 2, 2, 0.75)],
@@ -552,14 +598,20 @@ const REQUIEM: Tune = {
     restP: 0,
   },
   drums: {
-    kick: [hit(0, 1), hit(7, 0.75), hit(10, 0.85)],
-    kickTurn: [hit(13, 0.65)],
-    perc: [hit(8, 1)],
-    percOdd: [hit(11, 0.45)],
+    // Galloping: kicks in pairs, claps on the ride between them (12 hits a bar).
+    kick: [hit(0, 1), hit(3, 0.7), hit(4, 0.9), hit(7, 0.7), hit(8, 0.95), hit(11, 0.7), hit(12, 0.9)],
+    kickTurn: [],
+    perc: [hit(6, 0.8), hit(9, 0.5), hit(10, 1), hit(13, 0.5), hit(14, 0.8)],
+    percOdd: [hit(5, 0.4)],
     hat: STEPS16.map((s) => (s % 2 === 1 ? hh(s, 0.5, true) : hh(s, s % 4 === 0 ? 0.9 : 0.6, false))),
   },
   bed: { bass: 'triangle', pad: 'square', arp: 'triangle', padDetune: 7 },
   battle: true,
+  // Long leaping hook: a high note, a fall, a leap back, a held top.
+  hook: { steps: [0, 4, 6, 10, 14], degs: [5, 2, 6, 3, 7] },
+  bassJump: [bh(0, 0, 4, 1), bh(4, 3, 2, 0.85), bh(6, 0, 2, 0.85), bh(8, 3, 4, 0.95), bh(12, 0, 2, 0.85), bh(14, 3, 2, 0.85)],
+  // A bell chord, a long pause, a falling fifth to root pair, a held octave.
+  intro: [ih(0, [0, 1, 2], 4, 1), ih(8, [2], 2, 0.85), ih(10, [0], 2, 0.9), ih(12, [0, 3], 4, 1)],
 };
 
 /** The boss battle tracks, in BATTLE_IDS order. */

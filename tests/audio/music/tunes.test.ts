@@ -192,7 +192,9 @@ describe('the tunes differ', () => {
 });
 
 describe('boss battle tracks', () => {
-  it('three battle tracks, minor, on the boss grid (A, 120 BPM, 8 bar loop), each its own', () => {
+  // Battle polish: the three tracks are in three different minor keys (was: all on A), each root
+  // within a fourth of A4 so the A based boss motifs still fit; still 120 BPM for Prism's 4 s.
+  it('three battle tracks, minor, on the boss grid (120 BPM, 8 bar loop), each its own key', () => {
     expect(BATTLE_TUNES.map((t) => t.id)).toEqual([...BATTLE_IDS]);
     expect(BATTLE_TUNES.length).toBeGreaterThanOrEqual(3);
     for (const t of BATTLE_TUNES) {
@@ -200,13 +202,13 @@ describe('boss battle tracks', () => {
       // 120 BPM: a bar is 2 s, so Prism's 4 s cycle stays on bar lines.
       expect(t.bpm).toBe(120);
       expect(t.stepSec * STEPS_PER_BAR * 2).toBeCloseTo(4, 9);
-      expect(t.root).toBe(69);
-      expect(t.key.tonic).toBe(9);
-      // Minor: the scale has the minor third and not the major third; the tonic chord is minor.
-      expect(t.key.scale).toContain(0);
-      expect(t.key.scale).not.toContain(1);
+      expect(Math.abs(t.root - 69)).toBeLessThanOrEqual(5);
+      expect(t.root % 12).toBe(t.key.tonic);
+      // Minor: the scale has the minor third over the tonic and not the major third; the tonic chord is minor.
+      expect(t.key.scale).toContain((t.key.tonic + 3) % 12);
+      expect(t.key.scale).not.toContain((t.key.tonic + 4) % 12);
       const tonic = t.key.bars[0];
-      expect(tonic?.root).toBe(9);
+      expect(tonic?.root).toBe(t.key.tonic);
       expect(tonic?.intervals[1]).toBe(3);
       // One chord a bar on average at least as often as every level tune changes.
       expect(new Set(t.key.bars.map((h) => h.name)).size).toBeGreaterThanOrEqual(3);
@@ -217,8 +219,9 @@ describe('boss battle tracks', () => {
     const sig = (t: Tune): string => JSON.stringify([t.key.bars.map((h) => h.name), t.bass, t.drums, t.arp, t.bed]);
     const all = [...BATTLE_TUNES, ...TUNES].map(sig);
     expect(new Set(all).size).toBe(all.length);
-    // Three different minor scales.
+    // Three different minor scales in three different keys.
     expect(new Set(BATTLE_TUNES.map((t) => t.key.scale.join(','))).size).toBe(3);
+    expect(new Set(BATTLE_TUNES.map((t) => t.key.tonic)).size).toBe(3);
   });
 
   it('every battle track chord is built from its key scale and has a voicing', () => {
