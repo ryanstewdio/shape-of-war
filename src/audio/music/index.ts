@@ -16,8 +16,9 @@
 // turning on or off) also earns a 2 bar fill, and every odd pass of the loop ends in one.
 //
 // Boss music (v3 wave B): 'sim:bossEnter', 'sim:bossPhase' and 'sim:bossDown' drive bossLife.ts.
-// The fight cross fades into a battle track (battle.ts, tunes.ts BATTLE_TUNES: A, 120 BPM) on the
-// join bar and returns to the level tune two bars after the motif stops; the boss motif (boss.ts,
+// The fight cross fades into a battle track (battle.ts, tunes.ts BATTLE_TUNES: three minor keys,
+// 120 BPM) on the join bar, opening with the track's intro hit (battlePolish.ts), and returns to
+// the level tune two bars after the motif stops; the boss motif (boss.ts,
 // fitted to the battle track's chords) plays as class 'boss' voices; the enemy
 // motifs duck and only the newest three keep a voice; the threat floor is 0.8 while the boss
 // lives. A boss death that ends the level ('game:over' in the same step) rings the defeat
@@ -143,6 +144,20 @@ import { endlessBlock, endlessTune, startTune, type RunMode } from './select';
 import { buildBar, STEPS_PER_BAR, structuralFill, type BarPattern, type FillBar, type Layer } from './track';
 import { BATTLE_TUNES, DEFAULT_TUNE, FILL_BARS, tuneById, type TrackId, type Tune, type TuneId } from './tunes';
 import { battleIndexFor, fitBattleNote, xfadeFor, xfadeGain, type Xfade } from './battle';
+// Battle polish: intro hit, phase intensity, window duck, defeat tonic, weapon and drone cues.
+import {
+  cueAllowed,
+  cueKindOf,
+  cueNotes,
+  CUE_KINDS,
+  defeatRoot,
+  INTRO_GAIN,
+  introNotes,
+  phaseCutoffMul,
+  phaseLayer,
+  windowGain,
+  type CueKind,
+} from './battlePolish';
 
 /** One scheduled note, reported to `onNote` (tests and debugging). */
 export interface NoteLog {
@@ -162,7 +177,12 @@ export interface NoteLog {
     | 'bossDefeat'
     | 'bossWindow'
     | 'bossCrack'
-    | 'bossTick';
+    | 'bossTick'
+    | 'battleIntro'
+    | 'battleLayer'
+    | 'cue';
+  /** Weapon and drone cue notes only: which cue (battlePolish.ts). */
+  readonly cueKind?: CueKind;
   /** Window cue notes only: which sound of the cue (bossCue.ts). */
   readonly cue?: 'rise' | 'land' | 'pad' | 'damp';
   /** Boss notes only: the boss, and the motif voice (0 main, 1 and 2 added by phases). */
@@ -292,6 +312,9 @@ interface Session {
   readonly cracks: number[];
   /** The bed cross fade into the battle track (battle.ts), or null. */
   xfade: Xfade | null;
+  /** Weapon and drone cues waiting for the next tick, and the audio time each kind last played. */
+  readonly cues: CueKind[];
+  readonly cueLast: Record<CueKind, number | null>;
 }
 
 interface Playing {
@@ -433,7 +456,8 @@ function onTick(s: Session, now: number, sched: Scheduler): void {
   if (lift !== s.lift) bookFill(s, sched, now);
   s.lift = lift;
   maybeRotate(s, sched, now);
-  const hz = masterCutoff(level, s.lift);
+  // Battle polish: each boss phase opens the lowpass a step while the battle track plays.
+  const hz = masterCutoff(level, s.lift) * battleCutoffMul(s, sched.nextStep);
   // Only meaningful changes reach the AudioParam: 40 setTargetAtTime calls a second grew the
   // automation list for nothing.
   if (cutoffChanged(s.lastCutoff, hz)) {
@@ -446,6 +470,7 @@ function onTick(s: Session, now: number, sched: Scheduler): void {
   drainAccents(s, now, sched);
   drainHits(s, now, sched);
   drainBossCues(s, now, sched);
+  drainCues(s, now, sched);
 }
 
 /**
@@ -766,10 +791,27 @@ function onStep(p: Session, step: number, time: number): void {
   const bossTotal = bossSpec === null ? 0 : bossSpec.gain * booked * bossMotifScale(bossSpec.gain, booked) * bossEnv;
   const lm = layerMix(sumGains(mix.gains), enemies, registry, step, live === null ? null : { duck, total: bossTotal });
   const arpYields = p.arpYield.delete(step);
-  for (const n of planStep(barFor(p, barIndex), inBar, scaleMix(mix, lm.bedScale * xfadeGain(p.xfade, step)), time, sec)) {
-    if (arpYields && n.layer === 'arp') continue;
+  const bedMix = scaleMix(mix, lm.bedScale * xfadeGain(p.xfade, step));
+  // Battle polish: while the boss lives on its battle track the window ducks the drums 6 dB and
+  // lifts the hook, and each phase adds a drum layer.
+  const fight = b !== null && b.downStep === null && w.tune.battle === true;
+  const open = fight && p.window.open;
+  for (const pn of planStep(barFor(p, barIndex), inBar, bedMix, time, sec)) {
+    if (arpYields && pn.layer === 'arp') continue;
+    const k = windowGain(pn.layer, open);
+    const n = k === 1 ? pn : { ...pn, gain: pn.gain * k };
     p.engine.play(n, w.tune.bed);
     if (noteHook) logNote(w.tune, { role: 'bed', layer: n.layer, kind: null, step, time, midi: n.midi, gain: n.gain });
+  }
+  if (fight && b !== null) {
+    for (const h of phaseLayer(phaseAt(b, step))) {
+      if (h.step !== inBar) continue;
+      const gain = bedMix.gains[h.layer] * h.vel * windowGain(h.layer, open);
+      if (!(gain > 0)) continue;
+      p.engine.play({ layer: h.layer, midi: null, time, dur: sec, gain }, w.tune.bed);
+      if (noteHook) logNote(w.tune, { role: 'battleLayer', layer: h.layer, kind: null, boss: b.id, step, time, midi: null, gain });
+    }
+    if (step >= b.joinStep && step < b.joinStep + STEPS_PER_BAR) playIntro(p, b, step, inBar, time);
   }
   for (const kind of take.due) {
     // The kind's entrance phrase, whole, from this step: the same shape every time, each note
@@ -832,6 +874,59 @@ function playEntrySting(p: Session, b: BossLife, step: number, time: number): vo
   }
 }
 
+/** Battle polish: the track's intro hit, one bar of chord stabs from the join (cross fade) bar line. */
+function playIntro(p: Session, b: BossLife, step: number, inBar: number, time: number): void {
+  const w = where(p, step);
+  if (w.tune.intro === undefined) return;
+  const h = harmonyAtStep(w.step, w.tune.key);
+  const sec = w.tune.stepSec;
+  for (const n of introNotes(w.tune, h)) {
+    if (n.step !== inBar) continue;
+    const gain = INTRO_GAIN * n.vel;
+    p.engine.playVoice({ time, dur: n.durSteps * sec, midi: n.midi, fromMidi: null, gain, timbre: BOSS_TIMBRES.bossSting });
+    if (noteHook) logNote(w.tune, { role: 'battleIntro', layer: null, kind: null, boss: b.id, step, time, midi: n.midi, gain });
+  }
+}
+
+/** Battle polish: the lowpass factor of the boss phase at `step`, 1 off the battle track or with no live boss. */
+function battleCutoffMul(s: Session, step: number): number {
+  const b = s.boss;
+  if (b === null || b.downStep !== null || where(s, step).tune.battle !== true) return 1;
+  return phaseCutoffMul(phaseAt(b, step));
+}
+
+/** Queue a weapon or drone cue for the next tick (dropped while nothing plays or paused). */
+function queueCue(kind: CueKind): void {
+  const p = playing;
+  if (!p || p.scheduler.paused) return;
+  const q = p.session.cues;
+  if (q.length < CUE_KINDS.length && !q.includes(kind)) q.push(kind);
+}
+
+/** Lead of a cue past the audio clock, seconds. */
+const CUE_LEAD_SEC = 0.03;
+
+/** Battle polish: play the queued cues in the key of the track playing, each kind rate limited. */
+function drainCues(s: Session, now: number, sched: Scheduler): void {
+  if (s.cues.length === 0) return;
+  if (volume === 0) {
+    s.cues.length = 0;
+    return;
+  }
+  const t = now + CUE_LEAD_SEC;
+  const step = Math.max(0, stepContaining(sched, t));
+  const w = where(s, step);
+  for (const kind of s.cues) {
+    if (!cueAllowed(s.cueLast[kind], t)) continue;
+    s.cueLast[kind] = t;
+    for (const n of cueNotes(kind, w.tune.key)) {
+      s.engine.playVoice({ time: t + n.at, dur: n.dur, midi: n.midi, fromMidi: null, gain: n.gain, timbre: BOSS_TIMBRES.bossSting }, 'accent');
+      if (noteHook) logNote(w.tune, { role: 'cue', cueKind: kind, layer: null, kind: null, step, time: t + n.at, midi: n.midi, gain: n.gain, at: now });
+    }
+  }
+  s.cues.length = 0;
+}
+
 /** The phase sting: the chord root then its fifth, one voice, ending by the bar line the new voice joins on. */
 function playPhaseSting(p: Session, b: BossLife, step: number, time: number): void {
   const w = where(p, step);
@@ -851,16 +946,14 @@ function playPhaseSting(p: Session, b: BossLife, step: number, time: number): vo
   }
 }
 
-/** Root of the defeat stinger: A4. */
-const DEFEAT_ROOT = 69;
-
 /** The defeat stinger: A, C sharp, E rising from A4 (an A major resolution), one voice. */
 function playDefeatSting(p: Session, b: BossLife, step: number, time: number): void {
   const w = where(p, step);
   const sec = w.tune.stepSec;
   for (const n of DEFEAT_STING) {
     const t = time + n.at * sec;
-    const midi = DEFEAT_ROOT + n.semis;
+    // Battle polish: the major chord of the track's own tonic (A on a level tune).
+    const midi = defeatRoot(w.tune.key.tonic) + n.semis;
     p.engine.playVoice({ time: t, dur: n.dur * sec, midi, fromMidi: null, gain: BOSS_STING_GAIN, timbre: BOSS_TIMBRES.bossSting }, 'boss');
     if (noteHook) logNote(w.tune, { role: 'bossDefeat', layer: null, kind: null, boss: b.id, step: step + n.at, time: t, midi, gain: BOSS_STING_GAIN });
   }
@@ -993,6 +1086,21 @@ function onBossDown(id: BossId): void {
   if (s.preBossTune !== null) bookTune(s, sched, Math.floor(stop / STEPS_PER_BAR) + RESTORE_BARS, s.preBossTune);
 }
 
+/** The four cue event names, subscribed to by name (battle polish). */
+const CUE_EVENTS: readonly string[] = ['fx:weaponCombine', 'fx:weaponExpire', 'fx:droneArm', 'fx:droneExpire'];
+
+/** The subscribe half of a bus for any event name (the cue events may not be declared yet). */
+interface CueBus {
+  on(k: string, h: (payload: unknown) => void): () => void;
+}
+
+/** A cue event: guarded, so a missing or malformed payload never throws. */
+function onCueEvent(name: string, payload: unknown): void {
+  if (payload !== undefined && payload !== null && typeof payload !== 'object') return;
+  const kind = cueKindOf(name);
+  if (kind !== null) queueCue(kind);
+}
+
 function onEnter(kind: EnemyKind): void {
   const p = playing;
   if (!p || !(kind in registry)) return;
@@ -1093,6 +1201,9 @@ export function initMusic(opts: MusicOptions = {}): () => void {
     // The window and crack events are not in core/events.ts yet (hand-off Requests): the bus takes any key at runtime.
     (b as unknown as BossCueBus).on('sim:bossWindow', (p) => onBossWindow(p.id, p.open, p.secondsLeft)),
     (b as unknown as BossCueBus).on('sim:bossCrack', (p) => onBossCrack(p.id, p.stage)),
+    // Battle polish: weapon and drone cues. These events come from a parallel session's sim work;
+    // subscribe by name and read nothing that might be missing, so an absent or odd payload is a no op.
+    ...CUE_EVENTS.map((name) => (b as unknown as CueBus).on(name, (p: unknown) => onCueEvent(name, p))),
     // The run mode picks the selection rule (a level's tune, or the Endless rotation). Next,
     // Retry and Restart keep the mode, so only 'game:start' carries it. Glue may start the music
     // inside this same emit, before this handler runs: a session still in its first bar with the
@@ -1229,6 +1340,8 @@ export function startMusic(seed: number): boolean {
     bossHit: false,
     cracks: [],
     xfade: null,
+    cues: [],
+    cueLast: { combine: null, expire: null, droneArm: null, droneExpire: null },
   };
   const scheduler: Scheduler = createScheduler({
     clock: { now: () => ctx.currentTime },

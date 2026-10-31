@@ -10,6 +10,8 @@
 //   consecutive passes never voice the arp the same way;
 // - a 2 bar fill (FILL_BARS) can replace the drums and the arp at a phase change (index.ts
 //   decides when; buildBar takes the fill bar).
+// Battle tracks (battle polish) add two fixed parts: the hook, played verbatim by the arp on bar
+// 0 of every 8 (it returns every 8 bars whatever the pass), and the jump bass on bars 4 and 8.
 import { hash01 } from '../../core/rng';
 import { chordToneMidi, fitPitch, STEPS_PER_BAR, type ChordName } from './harmony';
 import { pentatonicMidi } from './scale';
@@ -89,9 +91,19 @@ function note(layer: Layer, step: number, midi: number | null, durSteps: number,
 
 const drums = (layer: Layer, hits: readonly DrumHit[]): TrackNote[] => hits.map((h) => note(layer, h.step, null, 1, h.vel));
 
-/** Bass: the tune's line, each note a chord degree from the chord's bass root. */
-export function bassNotes(chord: Chord, tune: Tune = DEFAULT_TUNE, alt = false): TrackNote[] {
-  const line: readonly BassHit[] = alt ? tune.bassAlt : tune.bass;
+/** Pure: true on the bars a battle track's jump bass plays (bars 4 and 8 of each 8, 0 based 3 and 7). */
+export function isJumpBar(tune: Tune, bar: number): boolean {
+  return tune.bassJump !== undefined && tuneBar(tune, bar) % 4 === 3;
+}
+
+/** Pure: true on the bars a battle track's hook plays (bar 0 of every 8). */
+export function isHookBar(tune: Tune, bar: number): boolean {
+  return tune.hook !== undefined && tuneBar(tune, bar) % 8 === 0;
+}
+
+/** Bass: the tune's line (or its jump line), each note a chord degree from the chord's bass root. */
+export function bassNotes(chord: Chord, tune: Tune = DEFAULT_TUNE, alt = false, jump = false): TrackNote[] {
+  const line: readonly BassHit[] = jump && tune.bassJump !== undefined ? tune.bassJump : alt ? tune.bassAlt : tune.bass;
   return line.map((b) => note('bass', b.step, b.deg === 0 ? chord.bass : chordToneMidi(chord.harmony, b.deg, chord.bass), b.dur, b.vel));
 }
 
@@ -160,6 +172,7 @@ export function passVariant(seed: number, pass: number, tune: Tune = DEFAULT_TUN
 export function arpNotes(seed: number, bar: number, chord: Chord, tune: Tune = DEFAULT_TUNE, pass = 0, alt = false): TrackNote[] {
   const fig: ArpFigure = alt ? tune.arpAlt : tune.arp;
   const lb = tuneBar(tune, bar);
+  if (isHookBar(tune, bar)) return hookNotes(lb, chord, tune);
   const ren = ((Math.trunc(pass) % ARP_RENDERINGS) + ARP_RENDERINGS) % ARP_RENDERINGS;
   const contour = lb % 2 === 0 ? fig.a : fig.b;
   const rot = Math.floor(hash01(lane(seed, SALT_ROT), lb + ren * 64) * 4) * 4;
@@ -173,6 +186,22 @@ export function arpNotes(seed: number, bar: number, chord: Chord, tune: Tune = D
     const rel = contour[(s + rot) % STEPS_PER_BAR] ?? 0;
     const deg = Math.min(ARP_MAX, Math.max(ARP_MIN, chord.arpAnchor + rel + shift));
     out.push(note('arp', s, fitPitch(pentatonicMidi(deg, tune.root), abs, tune.key), 1, s % 4 === 0 ? 0.9 : 0.65));
+  }
+  return out;
+}
+
+/**
+ * Pure: a battle track's hook bar: its fixed steps and degrees above the chord's arp anchor, every
+ * pitch fitted to the harmony like the arp, at full velocity. No hash: the same line every time.
+ */
+export function hookNotes(loopBar: number, chord: Chord, tune: Tune): TrackNote[] {
+  const hook = tune.hook;
+  if (hook === undefined) return [];
+  const out: TrackNote[] = [];
+  for (let i = 0; i < hook.steps.length; i++) {
+    const s = hook.steps[i] ?? 0;
+    const deg = Math.min(ARP_MAX, Math.max(ARP_MIN, chord.arpAnchor + (hook.degs[i] ?? 0)));
+    out.push(note('arp', s, fitPitch(pentatonicMidi(deg, tune.root), loopBar * STEPS_PER_BAR + s, tune.key), 1, 1));
   }
   return out;
 }
@@ -213,7 +242,7 @@ export function buildBar(seed: number, bar: number, tune: Tune = DEFAULT_TUNE, f
   const perc = fill === 1 ? drums('perc', FILL_PERC) : percNotes(bar, tune);
   const hat = fill === null ? hatNotes(tune) : fillHats(fill);
   const arp = fill === 1 ? fillRun(chord, tune) : arpNotes(s, bar, chord, tune, pass, variant === 'arp');
-  const notes = [...bassNotes(chord, tune, variant === 'bass'), ...padNotes(chord), ...kick, ...perc, ...hat, ...arp].sort(
+  const notes = [...bassNotes(chord, tune, variant === 'bass', isJumpBar(tune, bar)), ...padNotes(chord), ...kick, ...perc, ...hat, ...arp].sort(
     (a, b) => a.step - b.step || LAYER_ORDER[a.layer] - LAYER_ORDER[b.layer],
   );
   return { bar: tuneBar(tune, bar), chord: chord.name, tune: tune.id, pass, variant, fill, notes };

@@ -23,7 +23,16 @@ import { LAYERS_FULL } from '../../../src/audio/music/layers';
 import { ACCENT_RESERVE, BOSS_STING_GAIN, GAIN_CEILING, HIT_RESERVE, STINGER_GAIN } from '../../../src/audio/music/lifecycle';
 import { TICK_MS } from '../../../src/audio/music/scheduler';
 import { BAR_SEC, STEPS_PER_BAR } from '../../../src/audio/music/track';
-import { BATTLE_TUNES, tuneById } from '../../../src/audio/music/tunes';
+import { defeatRoot } from '../../../src/audio/music/battlePolish';
+import { BATTLE_TUNES, tuneById, type TrackId } from '../../../src/audio/music/tunes';
+
+/** The defeat chord over a battle track: its tonic nearest A4, a major third and a fifth up. */
+function tonicMajor(id: TrackId | undefined): number[] {
+  const t = BATTLE_TUNES.find((x) => x.id === id);
+  expect(t, `defeat over a battle track, got ${String(id)}`).toBeDefined();
+  const r = defeatRoot(t?.key.tonic ?? 9);
+  return [r, r + 4, r + 7];
+}
 import { Bus } from '../../../src/core/events';
 import { Kind } from '../../../src/game/world';
 import type { BossId, BossTier, EnemyKind } from '../../../src/levelgen/leveldef';
@@ -237,7 +246,9 @@ describe('phase and defeat', () => {
     expect(log.some((n) => n.role === 'boss' && n.voice === 1 && n.step < barLineAfter(at))).toBe(false);
   });
 
-  it('the defeat stinger plays A, C sharp, E; phase voices stop at once, the motif at the next bar', () => {
+  // Battle polish: the defeat chord is the major chord of the battle track's own tonic (was always
+  // A, C sharp, E; Verdict now resolves on D major, Requiem on E major, Meridian on A major).
+  it('the defeat stinger plays the battle track tonic major; phase voices stop at once, the motif at the next bar', () => {
     startMusic(32);
     enter('mirage', 2);
     advance(BAR_SEC * 2);
@@ -247,7 +258,7 @@ describe('phase and defeat', () => {
     bus.emit('sim:bossDown', { id: 'mirage', x: 0, y: 0 });
     advance(BAR_SEC * 3);
     const d = role('bossDefeat');
-    expect(d.map((n) => n.midi)).toEqual([69, 73, 76]);
+    expect(d.map((n) => n.midi)).toEqual(tonicMajor(d[0]?.tune));
     expect(d[0]?.step ?? 0).toBeGreaterThanOrEqual(at);
     expect(d[0]?.step ?? 99).toBeLessThan(at + 4);
     expect(log.some((n) => n.role === 'boss' && (n.voice ?? 0) > 0 && n.step >= at)).toBe(false);
@@ -261,7 +272,8 @@ describe('phase and defeat', () => {
     // Boss rule 9: the down and game:over arrive in the same sim step.
     bus.emit('sim:bossDown', { id: 'warden', x: 0, y: 0 });
     bus.emit('game:over', { score: 1, stars: 1, levelIndex: 5, mode: 'adventure' });
-    expect(role('bossDefeat').map((n) => n.midi)).toEqual([69, 73, 76]);
+    const dn = role('bossDefeat');
+    expect(dn.map((n) => n.midi)).toEqual(tonicMajor(dn[0]?.tune));
     expect(musicState().playing).toBe(false);
     expect(musicState().ringing).toBe(true);
     const bedBefore = role('bed').length;
