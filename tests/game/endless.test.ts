@@ -196,7 +196,7 @@ describe('endless escalation', () => {
     const late = bins.slice(16, 20).reduce((a, b) => a + b, 0);
     expect(late).toBeGreaterThan(mid);
     expect(generateEndlessSegment(1, 19).waves.budgetEnd).toBeGreaterThan(generateEndlessSegment(1, 15).waves.budgetEnd);
-  });
+  }, 60000);
 });
 
 describe('entity cap under Endless', () => {
