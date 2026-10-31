@@ -8,9 +8,7 @@ Session: https://claude.ai/code/session_018Gwqi51KevzKtDahLjTxuF
   - Iron Verdict: D harmonic minor. Driving four on the floor doubled to eighths, claps on the off beats, dotted rising hook.
   - Black Meridian: A phrygian. Broken dotted kicks, pushed claps, repeated note stab hook.
   - Glass Requiem: E natural minor. Galloping paired kicks, leaping long note hook.
-- Drums: kick plus clap is 12 hits a bar on every track, against 6 on the busiest level tune.
-- Bass: an octave jumping line (`bassJump`) on bars 4 and 8 of each loop.
-- Hook: a fixed one bar line (`hook`) the lead (arp) plays verbatim on bar 0 of every 8 bars, whatever the pass.
+- Drums: 12 kick plus clap hits a bar on every track (6 on the busiest level tune). Bass: an octave jumping line (`bassJump`) on bars 4 and 8. Hook: a fixed one bar line (`hook`) the lead (arp) plays verbatim on bar 0 of every 8 bars.
 - Intro hit: each track has a one bar signature of chord stabs (`intro`), played on the cross fade (join) bar as the battle bed comes in.
 - Intensity, in battlePolish.ts:
   - Phase changes open the master lowpass (x1, 1.2, 1.45, 1.75) and add a drum layer (off beat hat accents from phase 2, clap ghosts from 3, one more at 4).
@@ -35,11 +33,8 @@ tests/audio/music: battlePolish.test.ts (new, 16), tunes.test.ts (key pin update
 - The intro hit plays as a stinger voice, and the cues as accents, so at the cap a cue can lose its voice to a motif (by design: the bed and boss keep theirs).
 - The phase layer and window duck apply only while the boss lives on its battle track.
 
-## Requests (outside my ownership)
+## Requests and dependencies
 None. The cue events are already declared in src/core/events.ts.
-
-## Dependencies requested
-None.
 
 ## Open questions
 - Should the defeat chord go back to A major on every track, or follow each track's key as now?
