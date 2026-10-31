@@ -37,7 +37,7 @@ tests/audio/music: battlePolish.test.ts (new, 16), tunes.test.ts (key pin update
 None. The cue events are already declared in src/core/events.ts.
 
 ## Open questions
-- Should the defeat chord go back to A major on every track, or follow each track's key as now?
+- None. Ryan ruled the defeat chord keeps following each track's key (D, A or E major).
 
 ## Device check for Ryan
 1. Start any boss fight: on the bar the music switches you should hear a punchy one bar chord hit, then a busier beat. Verdict hammers three stabs, Meridian leans low then climbs, Requiem rings a bell chord.
