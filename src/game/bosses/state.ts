@@ -64,6 +64,14 @@ export interface BossState {
   dir: number;
   /** Fairness recheck countdown: a hazard that would overlap the ship waits 0.3 s. */
   retry: number;
+  /** Ability scratch (boss abilities wave): Warden shield cycle, Mirage mirror history and clocks. */
+  abl: Float64Array;
+  /**
+   * Render contract (boss abilities wave): true while Warden's shield is up (core closed, Hornets
+   * releasing); shieldLeft is the seconds left in it, 0 when down.
+   */
+  shielded: boolean;
+  shieldLeft: number;
 
   // Boss shots (docs/13 "Boss projectiles"), shooters only. Set by armState and the def's reset.
   /** Attack clock toward the next volley (Spindle's pellet). */
@@ -123,6 +131,9 @@ export interface BossState {
   winTimer: number;
 }
 
+/** Length of BossState.abl. */
+export const ABL_SIZE = 8;
+
 const states = new WeakMap<World, BossState>();
 
 /** The boss state of a world, or null when no boss was ever armed (never creates one). */
@@ -168,6 +179,9 @@ function createState(w: World, spec: BossSpec, def: BossDef): BossState {
     angle: 0,
     dir: 1,
     retry: 0,
+    abl: new Float64Array(ABL_SIZE),
+    shielded: false,
+    shieldLeft: 0,
     shotT: 0,
     shotWait: 0,
     shotId: -1,
@@ -243,6 +257,9 @@ export function armState(w: World, spec: BossSpec, def: BossDef, atSec: number):
   s.angle = 0;
   s.dir = 1;
   s.retry = 0;
+  s.abl.fill(0);
+  s.shielded = false;
+  s.shieldLeft = 0;
   s.shotT = 0;
   s.shotWait = 0;
   s.shotId = -1;

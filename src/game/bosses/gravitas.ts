@@ -5,11 +5,19 @@
 // 3 s in phase 3) a ring collapses onto it from 480 u with a 60 deg gap facing the ship. Anchors
 // do not regrow and survive a ship death. Scratch: t0 ring clock, angle anchor orbit, n0 pull id,
 // retry the ring recheck.
+//
+// Split (boss abilities wave): at the stage 2 crack the body splits into two half mass wells
+// (Kind.BossPart, PartType.Gravitant, 28 u, 160 hits each, slots 0 and 1) that orbit each other
+// round a pair centre seeking the target, each with its own pull at half strength. The rings keep
+// collapsing onto the pair centre. Contact with a Gravitant kills. The fight ends with the second,
+// once; the bar is the sum of the two. Split scratch: t0 ring clock, t1 and t2 pair centre, t3
+// orbit radius (opens from 0), angle orbit angle, n0 and n1 the pull ids of slots 0 and 1, retry.
+import { bus } from '../../core/events';
 import { angleBetween, distBetween, moveHeading, moveTo, targetOf } from '../steer';
 import { Kind, type World } from '../world';
-import { countParts, HAZARD_OVERLAP, livePart, setPullStrength, spawnPart, spawnPull, spawnRing } from './core';
-import type { BossState } from './state';
-import { GRAVITAS, HAZARD_RECHECK_SEC } from './table';
+import { bossEnraged, clearHazards, countParts, crackBody, HAZARD_OVERLAP, livePart, setPullStrength, spawnPart, spawnPull, spawnRing } from './core';
+import { bossOf, type BossState } from './state';
+import { ENRAGE_RATE, GRAVITANT, GRAVITAS, HAZARD_RECHECK_SEC, MAX_PARTS } from './table';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
 import { removeEntity } from '../remove';
 
@@ -138,4 +146,140 @@ export function entryHome(d: number): number {
   return d * GRAVITAS.entryHome;
 }
 
-export const def: BossDef = { reset, step, onPhase, entryHome };
+// ---------------------------------------------------------------------------------------------
+// Split into Gravitants
+
+/** Pure: the orbit radius after dt, opening toward target at GRAVITANT.orbitGrow u/s (closing as fast). */
+export function orbitToward(r: number, target: number, dt: number): number {
+  const step = GRAVITANT.orbitGrow * (dt > 0 ? dt : 0);
+  if (r < target) return r + step > target ? target : r + step;
+  return r - step < target ? target : r - step;
+}
+
+/** A pull id kept in scratch, or -1. */
+function pullAt(w: World, id: number): number {
+  return id > 0 && w.alive[id] === 1 && w.kind[id] === Kind.BossHazard && w.a[id] === HazardType.Pull ? id : -1;
+}
+
+/** Split the body into two Gravitants. Called once, from the stage 2 crack. */
+function splitBody(w: World, id: number, bs: BossState): void {
+  const x = w.x[id] ?? 0;
+  const y = w.y[id] ?? 0;
+  clearHazards(w); // the body pull and any ring go with the body
+  for (let k = 0; k < MAX_PARTS; k++) {
+    const p = livePart(w, bs, k);
+    if (p > 0) removeEntity(w, p);
+    bs.parts[k] = -1;
+  }
+  const lead = angleBetween(w, id, targetOf(w, id)) + Math.PI / 2;
+  removeEntity(w, id);
+  bs.id = -1;
+  bs.split = true;
+  bs.open = false;
+  bs.openLeft = -1;
+  bs.mode = BossMode.Attacking;
+  bs.t0 = 0;
+  bs.t1 = x;
+  bs.t2 = y;
+  bs.t3 = 0;
+  bs.angle = lead;
+  bs.n0 = -1;
+  bs.n1 = -1;
+  bs.retry = 0;
+  let made = 0;
+  for (let k = 0; k < GRAVITANT.count; k++) {
+    const p = spawnPart(w, bs, k, PartType.Gravitant, x, y, GRAVITANT.hp, GRAVITANT.radius);
+    if (p < 0) continue;
+    w.rot[p] = lead + k * Math.PI;
+    made++;
+  }
+  bs.splitEv.parts = made;
+  bus.emit('sim:bossSplit', bs.splitEv);
+}
+
+/** Core hook after the body took damage and lived: report the cracks, split once at stage 2. */
+export function cracks(w: World, id: number, bs: BossState): void {
+  crackBody(bs, 0, w.hp[id] ?? 0, bs.maxHp, w.x[id] ?? 0, w.y[id] ?? 0);
+  if (!bs.split && (bs.crack[0] ?? 0) >= 2) splitBody(w, id, bs);
+}
+
+/** Keep slot k's pull on its Gravitant at half strength, or remove it with the Gravitant gone. */
+function syncSplitPull(w: World, bs: BossState, k: number): void {
+  const p = livePart(w, bs, k);
+  const cur = pullAt(w, k === 0 ? bs.n0 : bs.n1);
+  if (p < 0) {
+    if (cur > 0) removeEntity(w, cur);
+    if (k === 0) bs.n0 = -1;
+    else bs.n1 = -1;
+    return;
+  }
+  if (cur > 0) {
+    w.x[cur] = w.x[p] ?? 0;
+    w.y[cur] = w.y[p] ?? 0;
+    setPullStrength(w, bs, cur, GRAVITANT.pullMax);
+    return;
+  }
+  const made = spawnPull(w, bs, w.x[p] ?? 0, w.y[p] ?? 0, GRAVITANT.pullRadius, -1, false, GRAVITANT.pullMax);
+  if (k === 0) bs.n0 = made;
+  else bs.n1 = made;
+}
+
+/** The pair's ring: collapses onto the pair centre with its gap facing the ship. */
+function fireSplitRing(w: World, bs: BossState, every: number): void {
+  const toShip = Math.atan2((w.y[0] ?? 0) - bs.t2, (w.x[0] ?? 0) - bs.t1);
+  const h = spawnRing(w, bs, bs.t1, bs.t2, GRAVITAS.ringStart, toShip, (GRAVITAS.gapDeg * DEG) / 2, 1, -GRAVITAS.ringCollapse);
+  if (h === HAZARD_OVERLAP) {
+    bs.retry = HAZARD_RECHECK_SEC;
+    return;
+  }
+  bs.t0 -= every;
+  if (bs.t0 < 0) bs.t0 = 0;
+}
+
+/**
+ * One step of a Gravitant (Kind.BossPart, PartType.Gravitant). The first live slot leads: it moves
+ * the pair centre toward the target, turns the orbit, places both wells, keeps their pulls and runs
+ * the ring clock; the other returns at once. Paused while the ship is down or the boss is staggered.
+ */
+export function stepGravitant(w: World, id: number, dt: number): void {
+  const bs = bossOf(w);
+  if (bs === null || bs.status !== 'alive' || !bs.split || !w.ship.active || bs.stagger > 0) return;
+  let lead = -1;
+  let live = 0;
+  for (let k = 0; k < GRAVITANT.count; k++) {
+    const p = livePart(w, bs, k);
+    if (p < 0) continue;
+    live++;
+    if (lead < 0) lead = p;
+  }
+  if (lead !== id) return;
+  const adt = bossEnraged(w) ? dt * ENRAGE_RATE : dt;
+  const t = targetOf(w, id);
+  const tx = w.x[t] ?? 0;
+  const ty = w.y[t] ?? 0;
+  if (Math.hypot(tx - bs.t1, ty - bs.t2) > 1) {
+    const a = Math.atan2(ty - bs.t2, tx - bs.t1);
+    bs.t1 += Math.cos(a) * GRAVITANT.seekSpeed * dt;
+    bs.t2 += Math.sin(a) * GRAVITANT.seekSpeed * dt;
+  }
+  // Two wells orbit each other; the survivor of a pair closes onto the centre.
+  bs.t3 = orbitToward(bs.t3, live >= 2 ? GRAVITANT.orbit : 0, dt);
+  bs.angle = (bs.angle + GRAVITANT.spin * dt) % TAU;
+  for (let k = 0; k < GRAVITANT.count; k++) {
+    const p = livePart(w, bs, k);
+    if (p < 0) continue;
+    const a = bs.angle + k * Math.PI;
+    moveTo(w, p, bs.t1 + Math.cos(a) * bs.t3, bs.t2 + Math.sin(a) * bs.t3);
+    w.rot[p] = a;
+  }
+  for (let k = 0; k < GRAVITANT.count; k++) syncSplitPull(w, bs, k);
+  if (bs.retry > 0) {
+    bs.retry = bs.retry - dt > 0 ? bs.retry - dt : 0;
+  } else {
+    bs.t0 += adt;
+    const every = ringEveryFor(bs.phase);
+    if (bs.t0 >= every) fireSplitRing(w, bs, every);
+  }
+}
+
+export const def: BossDef = { reset, step, onPhase, entryHome, cracks };

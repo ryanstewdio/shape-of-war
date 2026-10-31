@@ -4,13 +4,29 @@
 // (below 50 percent): a ring every 3.5 s with two gaps, the second opposite the first.
 // Scratch: t0 ring clock, t1 seconds until the launched ring opens the core (-1 idle), t2 open
 // seconds left, retry the fairness recheck.
-import { angleBetween, distBetween, moveHeading, targetOf, turnToward } from '../steer';
+//
+// Shield and swarm (boss abilities wave, phase 2 on): every 14 s of attack time Warden stops, its
+// core closes for 4 s (BossState.shielded, shieldLeft) and it releases 8 to 12 Hornets in two
+// bursts, "like bees leaving a hive" (Kind.BossPart PartType.Hornet in the add slots, so the add
+// cap holds). When the shield drops the core is open for WARDEN.openSec: a guaranteed window.
+// Hornets fly straight out, then chase their target at 260 u/s and die on their own after 5 s.
+// Ability scratch (bs.abl): 0 shield cycle clock, 1 seconds into the shield, 2 bursts fired, 3
+// Hornets this shield, 4 shields so far (hash index).
+import { removeEntity } from '../remove';
+import { angleBetween, distBetween, entityHash, moveHeading, targetOf, turnToward } from '../steer';
 import type { World } from '../world';
-import { HAZARD_OVERLAP, spawnRing } from './core';
+import { bossEnraged, HAZARD_OVERLAP, spawnHornet, spawnRing } from './core';
 import { hazardTelegraph } from './kit';
-import type { BossState } from './state';
-import { HAZARD, HAZARD_RECHECK_SEC, WARDEN } from './table';
+import { bossOf, type BossState } from './state';
+import { ENRAGE_RATE, HAZARD, HAZARD_RECHECK_SEC, HORNET, WARDEN, WARDEN_SHIELD } from './table';
 import { BossMode, type BossDef } from './types';
+
+const TAU = Math.PI * 2;
+const CYCLE = 0;
+const INTO = 1;
+const BURSTS = 2;
+const COUNT = 3;
+const SHIELDS = 4;
 
 const DEG = Math.PI / 180;
 
@@ -24,6 +40,24 @@ export function ringGaps(phase: number): number {
   return phase >= 2 ? WARDEN.gapsP2 : 1;
 }
 
+/** Pure: the shield is part of Warden's cycle from phase 2 on. */
+export function shieldActive(phase: number): boolean {
+  return phase >= 2;
+}
+
+/** Pure: Hornets for shield number n of the boss, from a hash value h in [0, 1): 8 to 12. */
+export function hornetsFor(h: number): number {
+  const span = WARDEN_SHIELD.hornetsMax - WARDEN_SHIELD.hornetsMin + 1;
+  const k = Math.floor((Number.isFinite(h) ? h : 0) * span);
+  return WARDEN_SHIELD.hornetsMin + (k < 0 ? 0 : k >= span ? span - 1 : k);
+}
+
+/** Pure: Hornets in burst b (0 or 1) of a shield releasing total: the first burst takes the larger half. */
+export function burstSize(total: number, b: number): number {
+  const first = Math.ceil(total / 2);
+  return b === 0 ? first : total - first;
+}
+
 export function reset(w: World, id: number, bs: BossState, first: boolean): void {
   bs.t0 = WARDEN.ringEvery - WARDEN.firstRing;
   bs.t1 = -1;
@@ -32,6 +66,72 @@ export function reset(w: World, id: number, bs: BossState, first: boolean): void
   bs.open = false;
   bs.openLeft = -1;
   bs.mode = BossMode.Guarded;
+  // Boss rule 6: the cycle restarts, the shield clock too (Hornets are cleared with the adds).
+  bs.abl[CYCLE] = 0;
+  bs.abl[INTO] = 0;
+  bs.abl[BURSTS] = 0;
+  bs.shielded = false;
+  bs.shieldLeft = 0;
+  if (first) bs.abl[SHIELDS] = 0;
+}
+
+/** Release burst b: Hornets spread evenly round the body, flying straight out. */
+function releaseBurst(w: World, id: number, bs: BossState, b: number): void {
+  const n = burstSize(bs.abl[COUNT] ?? WARDEN_SHIELD.hornetsMin, b);
+  if (n <= 0) return;
+  const x = w.x[id] ?? 0;
+  const y = w.y[id] ?? 0;
+  const d = (w.radius[id] ?? 0) + HORNET.spawnPad + HORNET.radius;
+  // The second burst sits between the first burst's lanes.
+  const a0 = angleBetween(w, id, targetOf(w, id)) + (b === 0 ? 0 : Math.PI / n);
+  for (let k = 0; k < n; k++) {
+    const a = a0 + (k * TAU) / n;
+    if (spawnHornet(w, bs, x + Math.cos(a) * d, y + Math.sin(a) * d, a) < 0) return; // add cap or full world
+  }
+}
+
+function startShield(w: World, id: number, bs: BossState): void {
+  const n = bs.abl[SHIELDS] ?? 0;
+  bs.abl[SHIELDS] = n + 1;
+  bs.abl[COUNT] = hornetsFor(entityHash(w, id, 1000 + n));
+  bs.abl[INTO] = 0;
+  bs.abl[BURSTS] = 0;
+  bs.abl[CYCLE] = 0;
+  bs.shielded = true;
+  bs.shieldLeft = WARDEN_SHIELD.shieldSec;
+  // The core closes: any open window or pending ring window ends.
+  bs.t1 = -1;
+  bs.t2 = 0;
+}
+
+/** One shield step. Returns true while the shield is up (the rest of the cycle waits). */
+function stepShield(w: World, id: number, bs: BossState, dt: number, adt: number): boolean {
+  if (!shieldActive(bs.phase)) return false;
+  if (!bs.shielded) {
+    bs.abl[CYCLE] = (bs.abl[CYCLE] ?? 0) + adt;
+    if ((bs.abl[CYCLE] ?? 0) < WARDEN_SHIELD.everySec) return false;
+    startShield(w, id, bs);
+  }
+  const into = (bs.abl[INTO] ?? 0) + dt;
+  bs.abl[INTO] = into;
+  const burstAt = WARDEN_SHIELD.burstAt;
+  let b = bs.abl[BURSTS] ?? 0;
+  while (b < burstAt.length && into >= (burstAt[b] ?? Infinity)) {
+    releaseBurst(w, id, bs, b);
+    b++;
+  }
+  bs.abl[BURSTS] = b;
+  const left = WARDEN_SHIELD.shieldSec - into;
+  if (left > 0) {
+    bs.shieldLeft = left;
+    return true;
+  }
+  // The shield drops: a guaranteed window.
+  bs.shielded = false;
+  bs.shieldLeft = 0;
+  bs.abl[CYCLE] = 0;
+  bs.t2 = WARDEN.openSec;
+  return false;
 }
 
 function fireRing(w: World, id: number, bs: BossState, every: number): void {
@@ -57,6 +157,13 @@ function fireRing(w: World, id: number, bs: BossState, every: number): void {
 }
 
 export function step(w: World, id: number, bs: BossState, dt: number, adt: number): void {
+  if (stepShield(w, id, bs, dt, adt)) {
+    // Shielded: Warden stops, no rings, the core stays closed.
+    bs.open = false;
+    bs.openLeft = -1;
+    bs.mode = BossMode.Guarded;
+    return;
+  }
   const target = targetOf(w, id);
   const rot = turnToward(w.rot[id] ?? 0, angleBetween(w, id, target), WARDEN.turnRate * dt);
   w.rot[id] = rot;
@@ -83,7 +190,31 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
 }
 
 export function onPhase(w: World, id: number, bs: BossState, phase: number): void {
-  // The next ring uses the phase 2 interval and gaps; keep the clock where it is.
+  // The next ring uses the phase 2 interval and gaps; keep the clock where it is. The shield
+  // cycle starts now: the first shield comes a full interval after the phase change.
+  if (phase === 2) bs.abl[CYCLE] = 0;
+}
+
+/**
+ * One step of a Hornet (Kind.BossPart, PartType.Hornet): straight out of the hive for leaveSec,
+ * then turn limited chase of its target at full speed, gone on its own at lifeSec. Paused while the
+ * boss is staggered (a bomb clears them anyway). Its age is w.t (the part pulse clock).
+ */
+export function stepHornet(w: World, id: number, dt: number): void {
+  const bs = bossOf(w);
+  if (bs === null || bs.status !== 'alive' || !w.ship.active || bs.stagger > 0) return;
+  const age = w.t[id] ?? 0;
+  if (age >= HORNET.lifeSec) {
+    removeEntity(w, id);
+    return;
+  }
+  const rate = bossEnraged(w) ? ENRAGE_RATE : 1;
+  let rot = w.rot[id] ?? 0;
+  if (age >= HORNET.leaveSec) {
+    rot = turnToward(rot, angleBetween(w, id, targetOf(w, id)), HORNET.turnRate * rate * dt);
+    w.rot[id] = rot;
+  }
+  moveHeading(w, id, rot, HORNET.speed, dt);
 }
 
 export function entryHome(d: number): number {

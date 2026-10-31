@@ -32,6 +32,16 @@ export const enum PartType {
   Twin = 3,
   /** Brood after its stage 2 crack: one of three small spawns (slot 0 chases, 1 orbits and lays Slime, 2 flees and spawns Darts). */
   Broodling = 4,
+  /**
+   * Warden's shield swarm (phase 2 on): a small fast add released in bursts while the shield is up.
+   * Kept in the add slots (BossState.addIds, addKind Kind.BossPart), not the part slots. 1 HP, chases
+   * its target, dies on its own after HORNET.lifeSec. w.rot is its heading.
+   */
+  Hornet = 5,
+  /** Gravitas after its stage 2 crack: one of two half mass wells that orbit each other. w.rot is the orbit angle. */
+  Gravitant = 6,
+  /** Mirage after its stage 2 crack: a 1 HP decoy at one of its last two positions. w.rot copies the shield arc. */
+  Mirror = 7,
 }
 
 /** Where a boss is in its life on this level or Endless segment. */
