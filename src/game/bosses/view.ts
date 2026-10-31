@@ -35,6 +35,9 @@ export interface BossView {
   exposedLeft?: number;
   /** Seconds spent in the current exposed state (blink phase). */
   exposedT?: number;
+  /** Boss abilities wave: true while Warden's shield is up; shieldLeft the seconds left, 0 when down. */
+  shielded?: boolean;
+  shieldLeft?: number;
 }
 
 /** Fill out from the boss of the world and return it. No allocation: out is the caller's object. */
@@ -59,10 +62,12 @@ export function readBoss(w: World, out: BossView): BossView {
   out.exposed = bs.exposed;
   out.exposedLeft = bs.exposed ? bs.openLeft : -1;
   out.exposedT = bs.exposedT;
+  out.shielded = bs.shielded;
+  out.shieldLeft = bs.shieldLeft;
   return out;
 }
 
 /** A fresh BossView for a caller to keep and reuse (allocates once; call at setup, not per frame). */
 export function createBossView(): BossView {
-  return { active: false, id: 0, mode: 0, phase: 1, hp: 0, maxHp: 0, modeT: 0, x: 0, y: 0, rot: 0, radius: 0, exposed: false, exposedLeft: -1, exposedT: 0 };
+  return { active: false, id: 0, mode: 0, phase: 1, hp: 0, maxHp: 0, modeT: 0, x: 0, y: 0, rot: 0, radius: 0, exposed: false, exposedLeft: -1, exposedT: 0, shielded: false, shieldLeft: 0 };
 }

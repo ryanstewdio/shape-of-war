@@ -68,10 +68,14 @@ export function initLevelBoss(w: World): void {
   if (b !== undefined) armBossFromSpec(w, b, b.atSec);
 }
 
-/** Kind.BossPart step: the pulse clock (and orphan removal), then a Broodling's own behaviour. */
+/** Kind.BossPart step: the pulse clock (and orphan removal), then a Broodling's, Hornet's or Gravitant's own behaviour. */
 function stepBossPart(w: World, id: number, dt: number): void {
   stepPart(w, id, dt);
-  if (w.alive[id] === 1 && w.a[id] === PartType.Broodling) brood.stepBroodling(w, id, dt);
+  if (w.alive[id] !== 1) return;
+  const type = w.a[id];
+  if (type === PartType.Broodling) brood.stepBroodling(w, id, dt);
+  else if (type === PartType.Hornet) warden.stepHornet(w, id, dt);
+  else if (type === PartType.Gravitant) gravitas.stepGravitant(w, id, dt);
 }
 
 /** Register the boss, part and hazard steps with the world. Idempotent. */

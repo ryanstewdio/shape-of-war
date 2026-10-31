@@ -116,6 +116,67 @@ export const WARDEN = {
 } as const;
 
 /**
+ * Warden shield and swarm (boss abilities wave, phase 2 on): every everySec of attack time it stops,
+ * closes its core for shieldSec and releases Hornets in two bursts, then opens for WARDEN.openSec.
+ */
+export const WARDEN_SHIELD = {
+  everySec: 14,
+  shieldSec: 4,
+  /** Bursts fire this many seconds into the shield. */
+  burstAt: [0.5, 2.0] as readonly number[],
+  /** Hornets per shield, chosen per shield from the entity hash (the add cap still applies). */
+  hornetsMin: 8,
+  hornetsMax: 12,
+} as const;
+
+/** Hornet (Warden's swarm add, Kind.BossPart PartType.Hornet in an add slot). */
+export const HORNET = {
+  radius: 10,
+  /** 1 HP in tenths of a hit. */
+  hp: 10,
+  speed: 260,
+  turnRate: 240 * DEG,
+  /** Seconds it flies straight out of the hive before it turns to chase. */
+  leaveSec: 0.35,
+  /** Contact kills only from this age on (the add telegraph). */
+  armSec: 0.6,
+  /** It dies on its own at this age (chase 5 s after leaving). */
+  lifeSec: 5.35,
+  /** Spawn this far outside the Warden body. */
+  spawnPad: 14,
+} as const;
+
+/** Gravitas split (stage 2 crack): two half mass wells that orbit each other. */
+export const GRAVITANT = {
+  count: 2,
+  radius: 28,
+  /** 160 hits each, stored as tenths. */
+  hp: 1600,
+  /** Orbit radius around the pair centre, the speed the orbit opens at, and the spin, rad/s. */
+  orbit: 70,
+  orbitGrow: 60,
+  spin: 1.2,
+  /** The pair centre seeks the target at this speed. */
+  seekSpeed: 45,
+  /** Each well pulls at half the Gravitas strength over the same radius. */
+  pullRadius: 300,
+  pullMax: 50,
+} as const;
+
+/** Mirage split (stage 2 crack): two decoys trailing its last two positions. */
+export const MIRROR = {
+  count: 2,
+  /** 1 HP in tenths of a hit. */
+  hp: 10,
+  /** Mirrors copy the last two positions this long after each warp. */
+  delaySec: 0.6,
+  /** Missing mirrors come back every respawnSec while Mirage lives. */
+  respawnSec: 6,
+  /** With no history yet a mirror stands this far beside the body. */
+  fallbackOffset: 120,
+} as const;
+
+/**
  * Brood (tier 1, level 10). G3A rework (Ryan: "more like a level obstacle than a boss"): it hunts
  * the ship and charges across the arena instead of hugging the boundary, its adds are Darts
  * launched at the ship, and its open core is a flagged window (BossState.exposed).

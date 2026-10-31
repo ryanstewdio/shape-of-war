@@ -44,6 +44,7 @@ import {
   ENRAGE_RATE,
   ENTRANCE_SEC,
   HAZARD,
+  HORNET,
   MAX_ADDS,
   MAX_HAZARDS,
   MAX_PARTS,
@@ -408,13 +409,21 @@ export function bossContacts(w: World, dt: number): boolean {
     return true;
   }
   if (bs.split) {
-    // Broodlings are the body now: contact with any of them kills.
+    // Broodlings (and Gravitants) are the body now: contact with any of them kills.
     for (let k = 0; k < MAX_PARTS; k++) {
       const p = livePart(w, bs, k);
-      if (p > 0 && w.a[p] === PartType.Broodling && circlesOverlap(sx, sy, SHIP_RADIUS, w.x[p] ?? 0, w.y[p] ?? 0, w.radius[p] ?? 0)) {
+      if (p > 0 && isBodyPart(w.a[p] ?? -1) && circlesOverlap(sx, sy, SHIP_RADIUS, w.x[p] ?? 0, w.y[p] ?? 0, w.radius[p] ?? 0)) {
         killShip(w);
         return true;
       }
+    }
+  }
+  // Hornets kill on contact once past their add telegraph (Mirrors never do).
+  for (let k = 0; k < MAX_ADDS; k++) {
+    const p = liveHornet(w, bs, k);
+    if (p > 0 && (w.t[p] ?? 0) >= HORNET.armSec && circlesOverlap(sx, sy, SHIP_RADIUS, w.x[p] ?? 0, w.y[p] ?? 0, w.radius[p] ?? 0)) {
+      killShip(w);
+      return true;
     }
   }
   for (let h = 1; h < w.cap; h++) {
@@ -671,6 +680,7 @@ export function bossOnBomb(w: World): void {
   const bs = bossOf(w);
   if (bs === null) return;
   clearHazards(w);
+  clearHornets(w, bs); // the bomb clears the swarm like any add
   cancelVolley(bs); // the bomb clears the bullets too (player.ts)
   if (bossHittable(w) > 0 || (bs.split && bs.status === 'alive')) bs.stagger = STAGGER_SEC;
 }
@@ -683,6 +693,7 @@ export function bossOnShipDeath(w: World): void {
   const bs = bossOf(w);
   if (bs === null || bs.status !== 'alive') return;
   clearHazards(w);
+  clearHornets(w, bs); // killShip keeps boss parts; Hornets are adds and go like the others
   cancelVolley(bs); // killShip clears the bullets too
   bs.stagger = 0;
   bs.phaseT = 0;
@@ -707,6 +718,7 @@ function defeatBoss(w: World, bs: BossState, id: number, px = 0, py = 0): void {
   const y = id > 0 ? (w.y[id] ?? 0) : py;
   clearHazards(w);
   clearParts(w, bs);
+  clearHornets(w, bs);
   cancelVolley(bs);
   bs.viewMode = BossMode.Dying;
   emitBossHud(w, bs, 0, true);
@@ -961,4 +973,61 @@ export function spawnAdd(w: World, bs: BossState, def: EnemyDef, x: number, y: n
   bs.addIds[slot] = id;
   bs.addKind[slot] = def.kind;
   return id;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Ability parts (boss abilities wave)
+
+/** Pure: a part type that is the boss body after a split, so contact with it kills. */
+export function isBodyPart(type: number): boolean {
+  return type === PartType.Broodling || type === PartType.Gravitant;
+}
+
+/** Hornet id in add slot k, or -1. Hornets live in the add slots with addKind Kind.BossPart. */
+export function liveHornet(w: World, bs: BossState, k: number): number {
+  const id = bs.addIds[k] ?? -1;
+  if (id > 0 && w.alive[id] === 1 && bs.addKind[k] === Kind.BossPart && w.kind[id] === Kind.BossPart && w.a[id] === PartType.Hornet) return id;
+  return -1;
+}
+
+/** Live Hornets. */
+export function countHornets(w: World, bs: BossState): number {
+  let n = 0;
+  for (let k = 0; k < MAX_ADDS; k++) if (liveHornet(w, bs, k) > 0) n++;
+  return n;
+}
+
+/**
+ * Release a Hornet at (x, y) heading rot, in a free add slot. Returns the id, or -1 at the add cap
+ * (MAX_ADDS, shared with every other add) or in a full world. Scores 0 like every part.
+ */
+export function spawnHornet(w: World, bs: BossState, x: number, y: number, rot: number): number {
+  let slot = -1;
+  for (let i = 0; i < MAX_ADDS; i++) {
+    const id = bs.addIds[i] ?? -1;
+    if (!(id > 0 && w.alive[id] === 1 && w.kind[id] === bs.addKind[i])) {
+      slot = i;
+      break;
+    }
+  }
+  if (slot < 0) return -1;
+  const id = spawn(w, Kind.BossPart, x, y);
+  if (id < 0) return -1;
+  zeroExtras(w, id);
+  w.a[id] = PartType.Hornet;
+  w.hp[id] = HORNET.hp;
+  w.radius[id] = HORNET.radius;
+  w.rot[id] = rot;
+  moveTo(w, id, x, y);
+  bs.addIds[slot] = id;
+  bs.addKind[slot] = Kind.BossPart;
+  return id;
+}
+
+/** Remove every live Hornet (bomb, ship death, boss down). No score, no fx. */
+export function clearHornets(w: World, bs: BossState): void {
+  for (let k = 0; k < MAX_ADDS; k++) {
+    const id = liveHornet(w, bs, k);
+    if (id > 0) removeEntity(w, id);
+  }
 }

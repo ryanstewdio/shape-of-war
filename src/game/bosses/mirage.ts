@@ -7,16 +7,34 @@
 // (the gate below). Scratch: t0 warp clock, t1 and t2 landing point, t3 marker countdown, n0
 // marker id, n1 warp counter (hash index), n2 0 idle, 1 marked, 2 lanes waiting, angle arc centre,
 // retry the lane recheck.
+//
+// Mirrors (boss abilities wave): at the stage 2 crack Mirage leaves two mirror images (Kind.BossPart,
+// PartType.Mirror, 1 HP, body radius, slots 0 and 1, no contact kill) while the real body keeps
+// warping. Each warp records where Mirage left from; 0.6 s later mirror 0 moves to its last position
+// and mirror 1 to the one before. Shooting a mirror pops it (parts score 0). Missing mirrors come
+// back every 6 s while Mirage lives. 'sim:bossSplit' fires once, at the crack; the body stays (it is
+// not a body split: bs.split stays false). Ability scratch (bs.abl): 0 and 1 last position, 2 and 3
+// the one before, 4 copy countdown (0 idle), 5 respawn clock, 6 1 once split, 7 positions known.
+import { bus } from '../../core/events';
 import { isInside } from '../arena';
 import { removeEntity } from '../remove';
 import { SHIP_RADIUS } from '../ship';
 import { angleBetween, entityHash, inFrontArc, moveTo, targetOf } from '../steer';
 import { Kind, type World } from '../world';
-import { spawnLane, spawnRingMarker } from './core';
+import { crackBody, livePart, spawnLane, spawnPart, spawnRingMarker } from './core';
 import { hazardHits, pointDist, wrapPi } from './kit';
 import type { BossState } from './state';
-import { HAZARD_RECHECK_SEC, MIRAGE } from './table';
-import { BossMode, HazardType, type BossDef } from './types';
+import { HAZARD_RECHECK_SEC, MIRAGE, MIRROR } from './table';
+import { BossMode, HazardType, PartType, type BossDef } from './types';
+
+const H0X = 0;
+const H0Y = 1;
+const H1X = 2;
+const H1Y = 3;
+const COPY = 4;
+const RESPAWN = 5;
+const SPLIT = 6;
+const KNOWN = 7;
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
@@ -142,6 +160,11 @@ export function reset(w: World, id: number, bs: BossState, first: boolean): void
 }
 
 export function step(w: World, id: number, bs: BossState, dt: number, adt: number): void {
+  stepWarp(w, id, bs, dt, adt);
+  if ((bs.abl[SPLIT] ?? 0) === 1) stepMirrors(w, id, bs, dt);
+}
+
+function stepWarp(w: World, id: number, bs: BossState, dt: number, adt: number): void {
   bs.angle = wrapPi(bs.angle + MIRAGE.arcRate * dt);
   w.rot[id] = bs.angle;
   bs.open = true;
@@ -171,6 +194,7 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
       bs.t0 = every - MIRAGE.markSec - HAZARD_RECHECK_SEC;
       return;
     }
+    recordDeparture(bs, w.x[id] ?? 0, w.y[id] ?? 0);
     moveTo(w, id, bs.t1, bs.t2);
     bs.t0 = 0;
     burst(w, id, bs);
@@ -194,4 +218,89 @@ export function entryHome(d: number): number {
   return d * MIRAGE.entryHome;
 }
 
-export const def: BossDef = { reset, step, onPhase, entryHome, gate };
+// ---------------------------------------------------------------------------------------------
+// Mirrors
+
+/** Record the position Mirage warps away from: the last position becomes the one before. */
+export function recordDeparture(bs: BossState, x: number, y: number): void {
+  bs.abl[H1X] = bs.abl[H0X] ?? 0;
+  bs.abl[H1Y] = bs.abl[H0Y] ?? 0;
+  bs.abl[H0X] = x;
+  bs.abl[H0Y] = y;
+  const known = bs.abl[KNOWN] ?? 0;
+  bs.abl[KNOWN] = known >= 2 ? 2 : known + 1;
+  if ((bs.abl[SPLIT] ?? 0) === 1) bs.abl[COPY] = MIRROR.delaySec;
+}
+
+/** Where mirror k stands: its recorded position, or beside the body while too few are known. */
+function mirrorSpot(w: World, id: number, bs: BossState, k: number, out: { x: number; y: number }): void {
+  if ((bs.abl[KNOWN] ?? 0) > k) {
+    out.x = bs.abl[k === 0 ? H0X : H1X] ?? 0;
+    out.y = bs.abl[k === 0 ? H0Y : H1Y] ?? 0;
+    return;
+  }
+  const a = (w.rot[id] ?? 0) + Math.PI / 2 + k * Math.PI;
+  out.x = (w.x[id] ?? 0) + Math.cos(a) * MIRROR.fallbackOffset;
+  out.y = (w.y[id] ?? 0) + Math.sin(a) * MIRROR.fallbackOffset;
+}
+
+const spot = { x: 0, y: 0 };
+
+/** Spawn the missing mirrors at their spots. Returns how many were made. */
+function spawnMirrors(w: World, id: number, bs: BossState): number {
+  let made = 0;
+  for (let k = 0; k < MIRROR.count; k++) {
+    if (livePart(w, bs, k) > 0) continue;
+    mirrorSpot(w, id, bs, k, spot);
+    const p = spawnPart(w, bs, k, PartType.Mirror, spot.x, spot.y, MIRROR.hp, w.radius[id] ?? 0);
+    if (p < 0) continue;
+    w.rot[p] = w.rot[id] ?? 0;
+    made++;
+  }
+  return made;
+}
+
+/** Leave the two mirrors. Called once, from the stage 2 crack. */
+function splitMirrors(w: World, id: number, bs: BossState): void {
+  bs.abl[SPLIT] = 1;
+  bs.abl[COPY] = 0;
+  bs.abl[RESPAWN] = 0;
+  bs.splitEv.parts = spawnMirrors(w, id, bs);
+  bus.emit('sim:bossSplit', bs.splitEv);
+}
+
+/** Mirrors follow the delayed copy, take the arc facing, and come back every respawnSec. */
+function stepMirrors(w: World, id: number, bs: BossState, dt: number): void {
+  const copy = bs.abl[COPY] ?? 0;
+  if (copy > 0) {
+    const left = copy - dt;
+    bs.abl[COPY] = left > 0 ? left : 0;
+    if (left <= 0) {
+      for (let k = 0; k < MIRROR.count; k++) {
+        const p = livePart(w, bs, k);
+        if (p < 0) continue;
+        mirrorSpot(w, id, bs, k, spot);
+        moveTo(w, p, spot.x, spot.y);
+      }
+    }
+  }
+  const r = (bs.abl[RESPAWN] ?? 0) + dt;
+  if (r >= MIRROR.respawnSec) {
+    bs.abl[RESPAWN] = r - MIRROR.respawnSec;
+    spawnMirrors(w, id, bs);
+  } else {
+    bs.abl[RESPAWN] = r;
+  }
+  for (let k = 0; k < MIRROR.count; k++) {
+    const p = livePart(w, bs, k);
+    if (p > 0) w.rot[p] = w.rot[id] ?? 0;
+  }
+}
+
+/** Core hook after the body took damage and lived: report the cracks, leave the mirrors once at stage 2. */
+export function cracks(w: World, id: number, bs: BossState): void {
+  crackBody(bs, 0, w.hp[id] ?? 0, bs.maxHp, w.x[id] ?? 0, w.y[id] ?? 0);
+  if ((bs.abl[SPLIT] ?? 0) === 0 && (bs.crack[0] ?? 0) >= 2) splitMirrors(w, id, bs);
+}
+
+export const def: BossDef = { reset, step, onPhase, entryHome, gate, cracks };
