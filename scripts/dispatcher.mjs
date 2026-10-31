@@ -4,7 +4,7 @@
 // Ryan starts it once with `npm run dispatcher` in the Shape of War terminal.
 // Fable (Claude Desktop) queues jobs by writing .agents/queue/<seq>-<nickname>-<slug>.json.
 
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, execFile, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +30,12 @@ const SHELL_WALL_MS = intEnv('SHELL_WALL_MS', 30 * 60 * 1000);
 const POLL_MS = 2000;
 const SETTLE_MS = 1000; // ignore queue files modified in the last second (partial writes)
 const KILL_GRACE_MS = 10000;
+// cloud jobs: `claude --cloud` returns once the session exists; a run still attached after this is killed.
+const CLOUD_WALL_MS = intEnv('CLOUD_WALL_MS', 60 * 1000);
+// watch jobs: poll the remote branch this often, give up after timeoutMin (default below).
+const WATCH_POLL_MS = intEnv('WATCH_POLL_MS', 2 * 60 * 1000);
+const WATCH_TIMEOUT_MIN = 90;
+const CLOUD_MODELS = ['opus', 'sonnet'];
 const STDOUT_KEEP = 20 * 1024 * 1024;
 
 // Shell allowlist: a cmd matching any of these is rejected and never run.
@@ -74,11 +80,31 @@ function shellDenyReason(cmd) {
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
+const BRANCH_RE = /^[A-Za-z0-9._\/-]+$/;
+
+/** A repo relative path with no .. segment and no leading /. */
+function safeRelPath(p) {
+  return typeof p === 'string' && p.trim() !== '' && !p.startsWith('/') && !p.split('/').includes('..');
+}
+
 function validateJob(job) {
   if (!job || typeof job !== 'object') return 'job is not a JSON object';
-  if (job.type !== 'agent' && job.type !== 'shell') return 'type must be "agent" or "shell"';
+  if (!['agent', 'shell', 'cloud', 'watch'].includes(job.type)) return 'type must be "agent", "shell", "cloud" or "watch"';
   if (typeof job.nickname !== 'string' || !NAME_RE.test(job.nickname)) return 'nickname must match [a-z0-9-]';
   if (typeof job.slug !== 'string' || !NAME_RE.test(job.slug)) return 'slug must match [a-z0-9-]';
+  if (job.type === 'cloud') {
+    if (!CLOUD_MODELS.includes(job.model)) return 'cloud job model must be "opus" or "sonnet"';
+    if (typeof job.branch !== 'string' || !BRANCH_RE.test(job.branch) || job.branch === 'main') return 'branch invalid or main';
+    if (!safeRelPath(job.brief) || !/^docs\/briefs\/[A-Za-z0-9._-]+\.md$/.test(job.brief)) return 'cloud job brief must be docs/briefs/<name>.md';
+    if (!fs.existsSync(path.join(REPO, job.brief))) return `brief file missing: ${job.brief}`;
+    return null;
+  }
+  if (job.type === 'watch') {
+    if (typeof job.branch !== 'string' || !BRANCH_RE.test(job.branch) || job.branch === 'main') return 'branch invalid or main';
+    if (!safeRelPath(job.handoff) || !/^docs\/handoffs\/[A-Za-z0-9._-]+\.md$/.test(job.handoff)) return 'watch job handoff must be docs/handoffs/<name>.md';
+    if (job.timeoutMin !== undefined && !(typeof job.timeoutMin === 'number' && job.timeoutMin > 0)) return 'timeoutMin must be a positive number';
+    return null;
+  }
   if (job.type === 'agent') {
     for (const k of ['model', 'branch', 'worktree', 'brief']) {
       if (typeof job[k] !== 'string' || job[k].trim() === '') return `agent job needs string "${k}"`;
@@ -142,6 +168,48 @@ function ensureBranchAndWorktree(job, log) {
   return wt;
 }
 
+/** The launch line a cloud session gets: the brief path and the two rules. */
+function cloudPrompt(brief) {
+  return `Read ${brief} and carry it out exactly. Create the branch it names before any edit. Never push main.`;
+}
+
+/**
+ * argv of a cloud job. `env -u ANTHROPIC_API_KEY` drops the key so the session bills the logged in
+ * Max account; --model must come before --cloud.
+ */
+function cloudArgv(job) {
+  return ['env', '-u', 'ANTHROPIC_API_KEY', 'claude', '--model', job.model, '--cloud', cloudPrompt(job.brief)];
+}
+
+/**
+ * From `claude --cloud` stdout: the session URL (the View line's claude.ai URL, query string
+ * dropped) and the Resume line (the text after "Resume:"), or null for either when absent.
+ */
+function parseCloudOutput(stdout) {
+  const clean = String(stdout).replace(/\u001b\[[0-9;?]*[A-Za-z]/g, '');
+  let sessionUrl = null;
+  let resume = null;
+  const urlIn = (l) => {
+    const m = l.match(/https:\/\/claude\.ai\/[^\s'"<>)]+/);
+    return m ? m[0].split('?')[0].split('#')[0] : null;
+  };
+  for (const raw of clean.split(/\r?\n/)) {
+    const l = raw.trim();
+    if (sessionUrl === null && /^view\b/i.test(l)) sessionUrl = urlIn(l);
+    if (resume === null && /^resume\b/i.test(l)) {
+      const rest = l.replace(/^resume\b\s*:?\s*/i, '').trim();
+      resume = rest === '' ? null : rest;
+    }
+  }
+  if (sessionUrl === null) for (const raw of clean.split(/\r?\n/)) if ((sessionUrl = urlIn(raw)) !== null) break;
+  return { sessionUrl, resume };
+}
+
+/** Watch jobs run beside everything else: they never count against MAX_PARALLEL. */
+function countsTowardParallel(job) {
+  return job?.type !== 'watch';
+}
+
 function parseClaudeJson(stdout) {
   const t = stdout.trim();
   try { return JSON.parse(t); } catch { /* fall through */ }
@@ -153,6 +221,58 @@ function parseClaudeJson(stdout) {
   }
   return null;
 }
+
+// ---------- self test (no API key or claude needed) ----------
+
+function selftest() {
+  let failed = 0;
+  const check = (name, ok) => {
+    console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}`);
+    if (!ok) failed++;
+  };
+  const out = [
+    '\u001b[32mCreated cloud session\u001b[0m',
+    'View: https://claude.ai/code/session_01ABCdef?utm_source=cli&x=1',
+    'Resume: claude --resume session_01ABCdef',
+    '',
+  ].join('\n');
+  const p = parseCloudOutput(out);
+  check('parse: session URL from the View line, query string dropped', p.sessionUrl === 'https://claude.ai/code/session_01ABCdef');
+  check('parse: Resume line text', p.resume === 'claude --resume session_01ABCdef');
+  const none = parseCloudOutput('Error: not logged in\n');
+  check('parse: nothing printed gives nulls', none.sessionUrl === null && none.resume === null);
+  const bare = parseCloudOutput('Created cloud session\n  view at https://claude.ai/code/session_x#top\n');
+  check('parse: a URL on a lower case view line, fragment dropped', bare.sessionUrl === 'https://claude.ai/code/session_x');
+
+  const brief = 'docs/briefs/shipwright-cloud-dispatch.md';
+  const cloud = { type: 'cloud', nickname: 'shipwright', slug: 'cloud-dispatch', model: 'sonnet', brief, branch: 'chore/cloud-dispatch' };
+  check('cloud: a valid job passes', validateJob(cloud) === null);
+  check('cloud: main is refused', validateJob({ ...cloud, branch: 'main' }) !== null);
+  check('cloud: an unknown model is refused', validateJob({ ...cloud, model: 'claude-opus-5-5' }) !== null);
+  check('cloud: a missing brief file is refused', /brief file missing/.test(validateJob({ ...cloud, brief: 'docs/briefs/no-such-brief.md' }) ?? ''));
+  check('cloud: a brief outside docs/briefs is refused', validateJob({ ...cloud, brief: '../secrets.md' }) !== null);
+  const argv = cloudArgv(cloud);
+  check('cloud: argv drops the API key and puts --model before --cloud',
+    argv.slice(0, 4).join(' ') === 'env -u ANTHROPIC_API_KEY claude' && argv.indexOf('--model') < argv.indexOf('--cloud') && argv[argv.indexOf('--model') + 1] === 'sonnet');
+  check('cloud: the launch line names the brief and the rules',
+    argv[argv.length - 1] === `Read ${brief} and carry it out exactly. Create the branch it names before any edit. Never push main.`);
+
+  const watch = { type: 'watch', nickname: 'fable', slug: 'watch-cloud-dispatch', branch: 'chore/cloud-dispatch', handoff: 'docs/handoffs/shipwright-cloud-dispatch.md', timeoutMin: 90 };
+  check('watch: a valid job passes', validateJob(watch) === null);
+  check('watch: timeoutMin may be left out', validateJob({ ...watch, timeoutMin: undefined }) === null);
+  check('watch: main is refused', validateJob({ ...watch, branch: 'main' }) !== null);
+  check('watch: a bad timeout is refused', validateJob({ ...watch, timeoutMin: 0 }) !== null);
+  check('watch: a handoff outside docs/handoffs is refused', validateJob({ ...watch, handoff: 'docs/../x.md' }) !== null);
+  check('watch: never counts against MAX_PARALLEL', !countsTowardParallel(watch) && countsTowardParallel(cloud));
+
+  check('shell: an allowed job is unchanged', validateJob({ type: 'shell', nickname: 'fable', slug: 'diff', cmd: 'git status' }) === null);
+  check('shell: the allowlist is unchanged', /allowlist/.test(validateJob({ type: 'shell', nickname: 'fable', slug: 'x', cmd: 'git push --force' }) ?? ''));
+  check('type: anything else is refused', validateJob({ type: 'remote', nickname: 'a', slug: 'b' }) !== null);
+  console.log(failed === 0 ? 'selftest: all passed' : `selftest: ${failed} failed`);
+  process.exit(failed === 0 ? 0 : 1);
+}
+
+if (process.argv.includes('--selftest')) selftest();
 
 // ---------- startup checks ----------
 
@@ -197,9 +317,10 @@ function finish(id, job, base, res) {
     endedAt: res.endedAt,
     durationMs: Date.parse(res.endedAt) - Date.parse(base.startedAt),
     ...(res.costUsd !== undefined ? { costUsd: res.costUsd } : {}),
-    branch: job?.type === 'agent' ? job.branch : null,
+    branch: job && ['agent', 'cloud', 'watch'].includes(job.type) ? job.branch : null,
     headSha: res.headSha ?? null,
     error: res.error ?? null,
+    ...(res.extra ?? {}),
   };
   fs.mkdirSync(runDir, { recursive: true });
   writeAtomic(path.join(runDir, 'result.json'), JSON.stringify(result, null, 2) + '\n');
@@ -292,6 +413,72 @@ async function runAgent(id, job, base) {
   return { exitCode: res.exitCode, error, costUsd, headSha: headSha(wt), endedAt: ts() };
 }
 
+async function runCloud(id, job) {
+  const runDir = path.join(DIRS.runs, id);
+  fs.appendFileSync(path.join(runDir, 'log.txt'), `[dispatcher] ${ts()} env -u ANTHROPIC_API_KEY claude --model ${job.model} --cloud (brief ${job.brief}, branch ${job.branch})\n`);
+  let out = '';
+  const res = await runProcess(id, job, cloudArgv(job), REPO, CLOUD_WALL_MS, (b) => {
+    out += b.toString('utf8');
+    if (out.length > STDOUT_KEEP) out = out.slice(-STDOUT_KEEP);
+  });
+  const { sessionUrl, resume } = parseCloudOutput(out);
+  let { exitCode, error } = res;
+  // Still attached after CLOUD_WALL_MS: the session exists once its URL is printed, so the kill is fine.
+  const attached = typeof error === 'string' && error.startsWith('wall clock limit');
+  if (attached && sessionUrl !== null) {
+    exitCode = 0;
+    error = null;
+  } else if (!error && sessionUrl === null) {
+    error = 'no session URL in claude --cloud output';
+  }
+  return { exitCode, error, headSha: null, endedAt: ts(), extra: { sessionUrl, resume, killedAfterUrl: attached && sessionUrl !== null } };
+}
+
+const execFileAsync = (cmd, args) =>
+  new Promise((resolve, reject) => {
+    execFile(cmd, args, { cwd: REPO, encoding: 'utf8' }, (err, stdout) => (err ? reject(err) : resolve(String(stdout).trim())));
+  });
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function runWatch(id, job) {
+  const log = (s) => fs.appendFileSync(path.join(DIRS.runs, id, 'log.txt'), `[dispatcher] ${ts()} ${s}\n`);
+  const limitMin = job.timeoutMin ?? WATCH_TIMEOUT_MIN;
+  const limitMs = limitMin * 60 * 1000;
+  const until = Date.now() + limitMs;
+  let cancelled = false;
+  const entry = running.get(id);
+  if (entry) entry.interrupt = () => { cancelled = true; };
+  log(`watching origin ${job.branch} for ${job.handoff}, every ${Math.round(WATCH_POLL_MS / 1000)} s, up to ${limitMin} min`);
+  while (!cancelled && !stopping) {
+    try {
+      const heads = await execFileAsync('git', ['ls-remote', '--heads', 'origin', job.branch]);
+      if (heads !== '') {
+        await execFileAsync('git', ['fetch', 'origin', job.branch]);
+        let found = true;
+        try { await execFileAsync('git', ['cat-file', '-e', `origin/${job.branch}:${job.handoff}`]); } catch { found = false; }
+        if (found) {
+          const head = await execFileAsync('git', ['rev-parse', `origin/${job.branch}`]);
+          const mainLine = await execFileAsync('git', ['ls-remote', 'origin', 'refs/heads/main']);
+          const originMain = mainLine.split(/\s+/)[0] || null;
+          log(`landed: ${job.branch} at ${head}, origin/main ${originMain}`);
+          return { exitCode: 0, error: null, headSha: head, endedAt: ts(), extra: { landed: true, originMain } };
+        }
+        log(`branch is up, ${job.handoff} not there yet`);
+      } else {
+        log('branch not on origin yet');
+      }
+    } catch (e) {
+      log(`poll error (will retry): ${e.message.split('\n')[0]}`);
+    }
+    if (Date.now() + WATCH_POLL_MS > until) break;
+    const end = Date.now() + WATCH_POLL_MS;
+    while (Date.now() < end && !cancelled && !stopping) await sleep(Math.min(1000, end - Date.now()));
+  }
+  const why = cancelled || stopping ? 'interrupted: dispatcher stopped' : `watch timed out after ${limitMin} min`;
+  return { exitCode: 1, error: why, headSha: null, endedAt: ts(), extra: { landed: false, originMain: null } };
+}
+
 async function runShell(id, job) {
   const cwd = path.resolve(REPO, job.cwd ?? '.');
   fs.appendFileSync(path.join(DIRS.runs, id, 'log.txt'), `[dispatcher] ${ts()} bash -lc in ${job.cwd ?? '.'}: ${job.cmd}\n`);
@@ -324,8 +511,8 @@ function scan() {
   scanning = true;
   try {
     const files = fs.readdirSync(DIRS.queue).filter((f) => f.endsWith('.json')).sort();
+    const busy = () => [...running.values()].filter((r) => countsTowardParallel(r.job)).length;
     for (const f of files) {
-      if (running.size >= MAX_PARALLEL) break;
       const file = path.join(DIRS.queue, f);
       const id = f.slice(0, -5);
       let st;
@@ -338,6 +525,8 @@ function scan() {
       }
       const invalid = validateJob(job);
       if (invalid) { rejectInQueue(file, id, job, invalid); continue; }
+      // watch jobs never wait for a slot; everything else waits while MAX_PARALLEL are busy
+      if (countsTowardParallel(job) && busy() >= MAX_PARALLEL) continue;
       if (running.has(id) || fs.existsSync(path.join(DIRS.runs, id, 'result.json'))) {
         rejectInQueue(file, id, job, 'duplicate id: requeue with a new seq');
         continue;
@@ -358,8 +547,10 @@ function start(id, job, cwdKey) {
   fs.mkdirSync(runDir, { recursive: true });
   const base = { startedAt: ts() };
   running.set(id, { job, child: null, cwdKey });
-  say(`claimed ${id} (${job.type} ${job.nickname}${job.type === 'agent' ? ` ${job.model} ${job.branch}` : ''})`);
-  const p = job.type === 'agent' ? runAgent(id, job, base) : runShell(id, job);
+  const what = job.type === 'agent' || job.type === 'cloud' ? ` ${job.model} ${job.branch}` : job.type === 'watch' ? ` ${job.branch}` : '';
+  say(`claimed ${id} (${job.type} ${job.nickname}${what})`);
+  const p =
+    job.type === 'agent' ? runAgent(id, job, base) : job.type === 'cloud' ? runCloud(id, job) : job.type === 'watch' ? runWatch(id, job) : runShell(id, job);
   p.catch((e) => ({ exitCode: 1, error: `dispatcher: ${e.message}`, endedAt: ts() }))
     .then((res) => {
       finish(id, job, base, res);
