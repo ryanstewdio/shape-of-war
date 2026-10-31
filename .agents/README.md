@@ -64,6 +64,28 @@ Validation: `nickname` and `slug` match `[a-z0-9-]`; `.claude/agents/<nickname>.
 
 Runs `bash -lc "<cmd>"` in `cwd` (relative to the repo root, default `.`), 30 minute wall clock (`SHELL_WALL_MS`). Shell jobs that share a `cwd` run one at a time in file name order; shell jobs on different `cwd` values, and agent jobs, run in parallel.
 
+### cloud
+
+```json
+{ "type": "cloud", "nickname": "swarm", "slug": "boss-abilities", "model": "opus", "brief": "docs/briefs/swarm-boss-abilities.md", "branch": "feat/swarm-boss-abilities" }
+```
+
+Launches a Claude Code cloud session (runbook docs/10 section 8). Validation: `model` is `opus` or `sonnet`; `brief` is `docs/briefs/<name>.md` and exists; `branch` is not `main`. The dispatcher runs, from the repo root:
+
+`env -u ANTHROPIC_API_KEY claude --model <model> --cloud "Read <brief> and carry it out exactly. Create the branch it names before any edit. Never push main."`
+
+The terminal environment is inherited minus `ANTHROPIC_API_KEY`, so the session bills the logged in Max account (`--model` must come before `--cloud`). `claude --cloud` prints "Created cloud session", a View URL and a Resume line, then returns. The dispatcher parses them into `result.json` as `sessionUrl` (the View URL with its query string dropped) and `resume` (the text after `Resume:`). If the command is still attached after `CLOUD_WALL_MS` (60 s) it is killed; with a URL already printed the job still counts as passed and `killedAfterUrl` is true. No URL in the output is a failure. Cloud jobs count against `MAX_PARALLEL` while they run (a few seconds).
+
+### watch
+
+```json
+{ "type": "watch", "nickname": "fable", "slug": "watch-boss-abilities", "branch": "feat/swarm-boss-abilities", "handoff": "docs/handoffs/swarm-boss-abilities.md", "timeoutMin": 90 }
+```
+
+Waits for a branch to land its hand off. Every `WATCH_POLL_MS` (2 min) it runs `git ls-remote --heads origin <branch>`; once the branch is there, `git fetch origin <branch>` and `git cat-file -e origin/<branch>:<handoff>`. When the hand off exists it writes `result.json` with `landed: true`, `headSha` (the branch head) and `originMain` (origin's main sha at that moment) and exits 0. After `timeoutMin` minutes (default 90) it exits 1 with `landed: false`. A failed poll (network, a git lock) is logged and retried. Watch jobs run beside everything else and never count against `MAX_PARALLEL`. Validation: `branch` is not `main`; `handoff` is `docs/handoffs/<name>.md`; `timeoutMin`, if given, is a positive number.
+
+Queue a cloud job and its watch job together; read the watch job's `result.json` to know the session finished.
+
 ## result.json
 
 ```json
@@ -83,7 +105,7 @@ Runs `bash -lc "<cmd>"` in `cwd` (relative to the repo root, default `.`), 30 mi
 }
 ```
 
-`costUsd` is present only when claude's JSON output reports it. `branch` is null for shell jobs. A job counts as passed only when `exitCode` is 0 and `error` is null.
+`costUsd` is present only when claude's JSON output reports it. `branch` is null for shell jobs. Cloud jobs add `sessionUrl`, `resume` and `killedAfterUrl`; watch jobs add `landed` and `originMain` (and `headSha` is the remote branch head). A job counts as passed only when `exitCode` is 0 and `error` is null.
 
 ## Shell allowlist
 
@@ -119,6 +141,10 @@ A shell `cmd` matching any of these is rejected: a failed `result.json` is writt
 | `MAX_BUDGET_USD` | 25 | `--max-budget-usd` per agent run (claude 2.1.x has no `--max-turns`) |
 | `WALL_MS` | 5400000 (90 min) | Agent wall clock |
 | `SHELL_WALL_MS` | 1800000 (30 min) | Shell wall clock |
+| `CLOUD_WALL_MS` | 60000 (60 s) | A cloud launch still attached after this is killed |
+| `WATCH_POLL_MS` | 120000 (2 min) | Watch job poll interval |
+
+Self test of the cloud and watch parsing and validation (needs no API key or claude): `node scripts/dispatcher.mjs --selftest`.
 
 ## Startup output
 
