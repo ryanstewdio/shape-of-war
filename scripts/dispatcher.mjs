@@ -256,7 +256,7 @@ function selftest() {
   check('cloud: argv drops the API key and puts --model before --cloud',
     argv.slice(3, 7).join(' ') === 'env -u ANTHROPIC_API_KEY claude' && argv.indexOf('--model') < argv.indexOf('--cloud') && argv[argv.indexOf('--model') + 1] === 'sonnet');
   check('cloud: the launch line names the brief and the rules',
-    argv[argv.length - 1] === `Read ${brief} and carry it out exactly. Create the branch it names before any edit. Never push main.`);
+    argv[argv.length - 1].startsWith(`Read ${brief} and carry it out exactly. Create the branch it names before any edit. Never push main.`) && argv[argv.length - 1].includes('git remote add origin'));
 
   const watch = { type: 'watch', nickname: 'fable', slug: 'watch-cloud-dispatch', branch: 'chore/cloud-dispatch', handoff: 'docs/handoffs/shipwright-cloud-dispatch.md', timeoutMin: 90 };
   check('watch: a valid job passes', validateJob(watch) === null);
