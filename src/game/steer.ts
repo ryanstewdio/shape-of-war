@@ -17,8 +17,9 @@ export function moveTo(w: World, id: number, nx: number, ny: number): void {
 export function seekShip(w: World, id: number, speed: number, dt: number): number {
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
-  const dx = (w.x[0] ?? 0) - x;
-  const dy = (w.y[0] ?? 0) - y;
+  const t = targetOf(w, id); // the ship, or a live decoy in range (wave D)
+  const dx = (w.x[t] ?? 0) - x;
+  const dy = (w.y[t] ?? 0) - y;
   const d = Math.sqrt(dx * dx + dy * dy);
   if (d < 1e-6) return w.rot[id] ?? 0;
   const step = Math.min(d, speed * dt);
@@ -34,13 +35,29 @@ export function turnToward(cur: number, target: number, maxDelta: number): numbe
   return wrapAngle(target);
 }
 
+/** Live decoy per world (a detached drone, wave D), absent or -1 for none. Set only by drones.ts. */
+const decoys = new WeakMap<World, number>();
+
+/** Decoy lure range (docs/13 "Drone pickups" rule 5): an entity this close to a live decoy chases it. */
+export const DECOY_LURE_RANGE = 640;
+
+/** Set (id above 0) or clear (-1) the world's live decoy. drones.ts owns the calls. */
+export function setDecoy(w: World, id: number): void {
+  if (id > 0) decoys.set(w, id);
+  else decoys.delete(w);
+}
+
 /**
- * V3 contract stub (docs/12 V3-W0). The entity id that enemy and boss code chases or aims at.
- * Always the ship (id 0) until wave D gives it the decoy. Boss code calls it for every chase and
- * aim target from wave A on, so the decoy is one edit here. Behaviour unchanged.
+ * The entity id that enemy and boss code chases or aims at: the live decoy when there is one and
+ * entity id is within DECOY_LURE_RANGE of it, otherwise the ship (id 0). A pure function of
+ * positions. With no decoy live it returns 0 for every entity, so every v2 golden is unchanged.
  */
 export function targetOf(w: World, id: number): number {
-  return 0;
+  const d = decoys.get(w);
+  if (d === undefined || d <= 0 || w.alive[d] !== 1) return 0;
+  const dx = (w.x[d] ?? 0) - (w.x[id] ?? 0);
+  const dy = (w.y[d] ?? 0) - (w.y[id] ?? 0);
+  return dx * dx + dy * dy <= DECOY_LURE_RANGE * DECOY_LURE_RANGE ? d : 0;
 }
 
 /** Angle from entity a to entity b (boss code takes every vector between entities from here). */
@@ -70,7 +87,8 @@ export function stepToward(w: World, id: number, tx: number, ty: number, maxStep
 
 /** Angle from id to the ship. */
 export function angleToShip(w: World, id: number): number {
-  return Math.atan2((w.y[0] ?? 0) - (w.y[id] ?? 0), (w.x[0] ?? 0) - (w.x[id] ?? 0));
+  const t = targetOf(w, id); // the ship, or a live decoy in range (wave D)
+  return Math.atan2((w.y[t] ?? 0) - (w.y[id] ?? 0), (w.x[t] ?? 0) - (w.x[id] ?? 0));
 }
 
 /** Move along heading at speed, confined to the arena. */
@@ -90,8 +108,9 @@ export function moveToHit(w: World, id: number, nx: number, ny: number): boolean
 
 /** Distance from id to the ship. */
 export function distToShip(w: World, id: number): number {
-  const dx = (w.x[0] ?? 0) - (w.x[id] ?? 0);
-  const dy = (w.y[0] ?? 0) - (w.y[id] ?? 0);
+  const t = targetOf(w, id); // the ship, or a live decoy in range (wave D)
+  const dx = (w.x[t] ?? 0) - (w.x[id] ?? 0);
+  const dy = (w.y[t] ?? 0) - (w.y[id] ?? 0);
   return Math.sqrt(dx * dx + dy * dy);
 }
 

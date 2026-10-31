@@ -7,7 +7,7 @@ import * as grunt from '../../src/game/enemies/grunt';
 import * as pinwheel from '../../src/game/enemies/pinwheel';
 import * as snake from '../../src/game/enemies/snake';
 import { createGame, gameState, setInvulnerable, stepGame } from '../../src/game/game';
-import { collectPickup, livePickup, onScoringKill, PICKUP_LIFE, PICKUP_RADIUS } from '../../src/game/pickup';
+import { clearPickup, collectPickup, livePickup, onScoringKill, PICKUP_LIFE, PICKUP_RADIUS } from '../../src/game/pickup';
 import { killShip, triggerBomb } from '../../src/game/player';
 import { gs } from '../../src/game/state';
 import { stepShip } from '../../src/game/ship';
@@ -19,6 +19,7 @@ import {
   fireWeapon,
   ORBIT_RADIUS,
   setWeaponPickups,
+  SPIKE_OUT,
   WEAPON_DURATION,
   weaponPool,
   weaponState,
@@ -181,7 +182,9 @@ describe('pierce', () => {
 });
 
 describe('orbit', () => {
-  it('four blades follow a moving ship at 80 u', () => {
+  // V3 wave D (Ryan's orbit redesign): 4 blades at 80 u plus 4 spikes between them at 94 u, so 8
+  // style 3 bullets (was 4 at 80 u). With the stick idle nothing is pushed out.
+  it('four blades at 80 u and four spikes at 94 u follow a moving ship', () => {
     const { w } = makeGame();
     equipWeapon(w, 'orbit');
     const input = aimAt(0, 0, 1, 0.5);
@@ -189,14 +192,16 @@ describe('orbit', () => {
     for (let i = 0; i < 240; i++) {
       stepGame(w, DT, input);
       const p = w.bullets;
-      let n = 0;
+      let blades = 0;
+      let spikes = 0;
       for (let b = 0; b < p.cap; b++) {
         if (p.alive[b] !== 1 || p.style[b] !== STYLE_ORBIT) continue;
-        n++;
         const d = Math.hypot((p.x[b] ?? 0) - (w.x[0] ?? 0), (p.y[b] ?? 0) - (w.y[0] ?? 0));
-        expect(d).toBeCloseTo(ORBIT_RADIUS, 2);
+        if (Math.abs(d - ORBIT_RADIUS) < 0.01) blades++;
+        else if (Math.abs(d - (ORBIT_RADIUS + SPIKE_OUT)) < 0.01) spikes++;
       }
-      expect(n).toBe(4);
+      expect(blades).toBe(4);
+      expect(spikes).toBe(4);
     }
     expect(w.x[0]).toBeGreaterThan(300);
   });
@@ -220,17 +225,21 @@ describe('orbit', () => {
     }
   });
 
-  it('fires one forward bullet at 6 per second, blades are not consumed by hits', () => {
+  // V3 wave D: orbit no longer fires a forward bullet (was 6 per second).
+  it('fires no forward bullet; the shield is not consumed', () => {
     const { w } = makeGame();
     equipWeapon(w, 'orbit');
     for (let i = 0; i < 120; i++) stepShip(w, DT, aimAt(1, 0));
-    expect(liveStyle(w.bullets, 0)).toBe(6);
-    expect(liveStyle(w.bullets, STYLE_ORBIT)).toBe(4);
+    expect(liveStyle(w.bullets, 0)).toBe(0);
+    expect(liveStyle(w.bullets, STYLE_ORBIT)).toBe(8);
   });
 });
 
 describe('weapon timer and death', () => {
-  it('a weapon lasts 20 s, the same pickup refreshes, a different one replaces', () => {
+  // V3 wave D (docs/13 "Combining"): a different pickup combines instead of replacing (was: rapid
+  // then orbit gave orbit, then pierce gave pierce). Rapid then orbit is Whirl; pierce then replaces
+  // the older ingredient (rapid), giving Eclipse.
+  it('a weapon lasts 20 s, the same pickup refreshes, a different one combines', () => {
     const { w } = makeGame();
     equipWeapon(w, 'rapid');
     for (let i = 0; i < 600; i++) stepGame(w, DT, idle());
@@ -238,12 +247,14 @@ describe('weapon timer and death', () => {
     equipWeapon(w, 'rapid');
     expect(weaponTimeLeft(w)).toBe(WEAPON_DURATION);
     equipWeapon(w, 'orbit');
-    expect(currentWeapon(w)).toBe('orbit');
-    expect(liveStyle(w.bullets, STYLE_ORBIT)).toBe(4);
+    expect(currentWeapon(w)).toBe('rapid+orbit');
+    expect(liveStyle(w.bullets, STYLE_ORBIT)).toBe(8);
     equipWeapon(w, 'pierce');
-    expect(liveStyle(w.bullets, STYLE_ORBIT)).toBe(0);
+    expect(currentWeapon(w)).toBe('pierce+orbit');
+    expect(liveStyle(w.bullets, STYLE_ORBIT)).toBe(10);
     for (let i = 0; i < 20 * 120 + 2; i++) stepGame(w, DT, idle());
     expect(currentWeapon(w)).toBe('spread');
+    expect(liveStyle(w.bullets, STYLE_ORBIT)).toBe(0);
   });
 
   it('death resets to spread, removes blades and tells the HUD', () => {
@@ -332,7 +343,23 @@ describe('drop schedule', () => {
     expect(a).toEqual(b);
   });
 
-  it('first drop at kill 15, next at 40', () => {
+  it('first drop at kill 15, next at 40 while nothing is collected', () => {
+    const { w } = makeGame();
+    const at: number[] = [];
+    for (let i = 1; i <= 70; i++) {
+      const before = weaponState(w).dropIndex;
+      onScoringKill(w, 0, 0);
+      if (weaponState(w).dropIndex > before) {
+        at.push(i);
+        clearPickup(w);
+      }
+    }
+    expect(at).toEqual([15, 40, 65]);
+  });
+
+  // V3 wave D (docs/13 "Drop schedule"): collected drops keep a weapon active, so each next drop
+  // falls due within 12 kills (was [15, 40, 65] when collecting).
+  it('while a weapon is active the next drop comes within 12 kills', () => {
     const { w } = makeGame();
     const at: number[] = [];
     for (let i = 1; i <= 70; i++) {
@@ -343,7 +370,7 @@ describe('drop schedule', () => {
         collectPickup(w, livePickup(w));
       }
     }
-    expect(at).toEqual([15, 40, 65]);
+    expect(at).toEqual([15, 27, 39, 51, 63]);
   });
 
   it('a due drop waits while a pickup is live', () => {
@@ -416,7 +443,8 @@ describe('pool by band', () => {
         collectPickup(w, id);
       }
     }
-    expect([...got].sort()).toEqual([1, 2]);
+    // V3 wave D: spread (0) joins the pool while a collected weapon is active (was [1, 2]).
+    expect([...got].sort()).toEqual([0, 1, 2]);
   });
 });
 

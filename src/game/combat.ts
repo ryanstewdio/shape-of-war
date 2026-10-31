@@ -18,7 +18,7 @@ import { removeEntity } from './remove';
 import { gs, isDroppedHazard, isHostile, isV2Enemy, SNAKE_SEGMENTS, SNAKE_SLOTS, type GameState, type KillFx } from './state';
 import { SHIP_RADIUS } from './ship';
 import { moveTo } from './steer';
-import { BLADE_COOLDOWN, ORBIT_BLADES, WEAPONS, weaponState } from './weapons';
+import { bulletRadiusOf, SHIELD_PUSH, shieldOf, SPIKE_PIERCE, SPIKE_RADIUS, EXPAND_MAX, WEAPONS, weaponState } from './weapons';
 import { Kind, type World } from './world';
 
 const hits = new Int32Array(64);
@@ -160,7 +160,8 @@ export function bulletHits(w: World): void {
     if (p.alive[b] !== 1) continue;
     const style = p.style[b] ?? STYLE_SPREAD;
     if (style === STYLE_ORBIT) continue;
-    const r = style === STYLE_SPREAD ? BULLET_RADIUS : styleRadius(style);
+    const combo = p.combo[b] ?? 0;
+    const r = style === STYLE_SPREAD && combo === 0 ? BULLET_RADIUS : bulletRadiusOf(style, combo);
     const bx = p.x[b] ?? 0;
     const by = p.y[b] ?? 0;
     if (boss > 0 && bossBodyContact(w, boss, bx, by, r)) {
@@ -223,48 +224,69 @@ export function bulletHits(w: World): void {
 }
 
 /**
- * Orbit blades vs enemy. A blade damages the first targetable enemy it touches (wells included,
- * snake segments ignored) by 1, then rests BLADE_COOLDOWN seconds. Blades are never consumed.
+ * Shield hitters vs enemy (orbit and the orbit pairs). A blade or a spike damages the first
+ * targetable enemy it touches (wells included, snake segments ignored) by 1, then rests the shield's
+ * cooldown. Eclipse spikes pierce: they hit every enemy they touch, up to SPIKE_PIERCE. A hitter
+ * pushed out toward the aim shoves a surviving enemy outward from the ship. Never consumed.
  */
 export function orbitHits(w: World, dt: number): void {
   const s = weaponState(w);
-  if (s.kind !== 'orbit') return;
+  const sh = shieldOf(s.kind);
+  if (sh === null) return;
   const p = w.bullets;
-  const r = WEAPONS.orbit.radius;
   const boss = bossHittable(w);
-  for (let i = 0; i < ORBIT_BLADES; i++) {
+  for (let i = 0; i < s.hitters; i++) {
     const cool = (s.bladeCool[i] ?? 0) - dt;
     s.bladeCool[i] = cool > 0 ? cool : 0;
     if (cool > 1e-9) continue;
     const b = s.blades[i] ?? -1;
     if (b < 0 || p.alive[b] !== 1 || p.style[b] !== STYLE_ORBIT) continue;
+    const spike = i >= sh.blades;
+    const r = spike ? SPIKE_RADIUS : WEAPONS.orbit.radius;
     const bx = p.x[b] ?? 0;
     const by = p.y[b] ?? 0;
     if (boss > 0 && bossBodyContact(w, boss, bx, by, r)) {
-      // Against a boss body a blade rests 0.25 s (boss rule 8), 0.12 s against everything else.
+      // Against a boss body a hitter rests 0.25 s (boss rule 8), its shield cooldown otherwise.
       damageBoss(w, BOSS_DAMAGE.orbit, bx, by);
       s.bladeCool[i] = ORBIT_BOSS_COOLDOWN;
       continue;
     }
+    const push = ((s.reach[i] ?? 1) - 1) / (EXPAND_MAX - 1);
+    const most = spike && sh.piercing ? SPIKE_PIERCE : 1;
+    let struck = 0;
     const n = queryCircleInto(w.grid, w, bx, by, r, hits);
-    for (let j = 0; j < n; j++) {
+    for (let j = 0; j < n && struck < most; j++) {
       const id = hits[j] ?? 0;
       if (id === 0) continue;
       if (w.kind[id] === Kind.BossPart) {
         p.lastHit[b] = id;
         damageBossPart(w, id, BOSS_DAMAGE.orbit, bx, by);
-        s.bladeCool[i] = BLADE_COOLDOWN;
-        break;
+        struck++;
+        continue;
       }
       if (!isTargetable(w, id) || w.kind[id] === Kind.SnakeBody) continue;
       p.lastHit[b] = id;
-      // A blade on a Bulwark's front arc is absorbed: it rests without dealing damage.
+      // A hitter on a Bulwark's front arc is absorbed: it rests without dealing damage.
       if (shielded(w, id, bx, by)) emitHit(gs(w), bx, by, Kind.Bulwark, id, true);
-      else hurt(w, id, 1, bx, by);
-      s.bladeCool[i] = BLADE_COOLDOWN;
-      break;
+      else {
+        hurt(w, id, 1, bx, by);
+        if (push > 0.05 && w.alive[id] === 1) shove(w, id, SHIELD_PUSH * push);
+      }
+      struck++;
     }
+    if (struck > 0) s.bladeCool[i] = sh.cooldown;
   }
+}
+
+/** Push enemy id d u straight out from the ship (the shield's aim push), kept inside the arena. */
+function shove(w: World, id: number, d: number): void {
+  const k = w.kind[id] ?? 0;
+  if (k === Kind.GravityWell || k === Kind.Spawner) return;
+  const dx = (w.x[id] ?? 0) - (w.x[0] ?? 0);
+  const dy = (w.y[id] ?? 0) - (w.y[0] ?? 0);
+  const l = Math.sqrt(dx * dx + dy * dy);
+  if (l < 1e-6) return;
+  moveTo(w, id, (w.x[id] ?? 0) + (dx / l) * d, (w.y[id] ?? 0) + (dy / l) * d);
 }
 
 /** Ship vs enemy contact (wells excluded, see gravitywell.ts). Returns true if the ship died. */

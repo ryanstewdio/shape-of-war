@@ -53,6 +53,11 @@ export interface BulletPool {
   hitLog: Int32Array;
   /** Orbit blade angle in radians, written each step from the ship. */
   phase: Float32Array;
+  /**
+   * V3 combined weapons (docs/13 "Combining" rule 8, render contract for Glow): 0 none, 1 to 6 the
+   * pair in COMBO_TABLE order. Hit rules read style; this only says which pair fired the bullet.
+   */
+  combo: Uint8Array;
   free: Int32Array;
   freeTop: number;
   // Additive to 03 section 5.
@@ -83,6 +88,7 @@ export function createBulletPool(cap: number = BULLET_CAP): BulletPool {
     spawnExtra: 0,
     hitLog: new Int32Array(cap * PIERCE_HITS).fill(-1),
     phase: new Float32Array(cap),
+    combo: new Uint8Array(cap),
     free,
     freeTop: cap,
     prevX: new Float32Array(cap),
@@ -114,6 +120,7 @@ export function spawnBullet(p: BulletPool, x: number, y: number, vx: number, vy:
   p.lastHit[id] = -1;
   p.extra[id] = p.spawnExtra;
   p.phase[id] = 0;
+  p.combo[id] = 0;
   p.liveCount++;
   return id;
 }

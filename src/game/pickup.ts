@@ -1,12 +1,14 @@
 // Weapon pickup entity (docs/11 SPEC 3.5 rules 1 and 2). Dropped at a scoring kill position on
 // the drop schedule in weapons.ts, lives 8 s, collected within 28 u of the ship centre. One live at
 // a time. Bombs, wells, drones and ship death leave it alone; level end clears it.
-// Render contract (docs/10): w.a = weapon index (1 rapid, 2 pierce, 3 orbit), w.t = seconds of
-// life left, w.radius = 14.
+// Render contract (docs/10): w.a = weapon index (0 spread, 1 rapid, 2 pierce, 3 orbit), w.t =
+// seconds of life left, w.radius = 14. V3 wave D: spread drops only while a weapon is active, a
+// collection goes through the combining rules, and the drone pickup counts the same kills.
 import { bus } from '../core/events';
+import { onDroneKill } from './drones';
 import { removeEntity } from './remove';
 import { gs } from './state';
-import { chooseDrop, countKill, equipWeapon, weaponAt, weaponIndex, weaponPool, weaponState } from './weapons';
+import { chooseDrop, countKill, equipWeapon, weaponArmed, weaponAt, weaponIndex, weaponPool, weaponState } from './weapons';
 import { Kind, spawn, type World } from './world';
 
 export const PICKUP_LIFE = 8;
@@ -22,7 +24,7 @@ export function livePickup(w: World): number {
 /** Spawn the next scheduled drop at (x, y). Returns the id or -1 (world full). */
 export function spawnPickup(w: World, x: number, y: number): number {
   const s = weaponState(w);
-  const pool = weaponPool(w.level.band, gs(w).mode === 'endless');
+  const pool = weaponPool(w.level.band, gs(w).mode === 'endless', weaponArmed(w));
   const kind = chooseDrop(w.level.seed, s.dropIndex, pool, s.lastDrop);
   const id = spawn(w, Kind.WeaponPickup, x, y);
   if (id < 0) return -1;
@@ -43,20 +45,26 @@ export function spawnPickup(w: World, x: number, y: number): number {
 export function onScoringKill(w: World, x: number, y: number): void {
   const s = weaponState(w);
   if (!s.pickupsOn) return;
-  countKill(s);
+  countKill(s, weaponArmed(w));
   if (s.pending && livePickup(w) < 0) spawnPickup(w, x, y);
+  onDroneKill(w, x, y);
 }
 
-/** Collect the pickup: equip its weapon, emit 'fx:pickup', remove it. */
+/**
+ * Collect the pickup: equip or combine its weapon, emit 'fx:pickup', remove it. A spread pickup
+ * with no weapon active changes nothing: no timer, no event (docs/13 "Combining" rule 2).
+ */
 export function collectPickup(w: World, id: number): void {
   const s = weaponState(w);
   const kind = weaponAt(w.a[id] ?? 0);
-  s.pickupFx.x = w.x[id] ?? 0;
-  s.pickupFx.y = w.y[id] ?? 0;
-  s.pickupFx.weapon = kind;
+  const x = w.x[id] ?? 0;
+  const y = w.y[id] ?? 0;
   removeEntity(w, id);
   s.pickupId = -1;
-  equipWeapon(w, kind);
+  if (!equipWeapon(w, kind, x, y)) return;
+  s.pickupFx.x = x;
+  s.pickupFx.y = y;
+  s.pickupFx.weapon = kind;
   bus.emit('fx:pickup', s.pickupFx);
 }
 
