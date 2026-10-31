@@ -17,16 +17,25 @@
 // ship, enemy and bullet pull strengths are x1.3. The ship can still leave: the settled pull at
 // contact range is under 0.42 of ship speed, so the net escape speed stays above 0.55 x ship speed.
 // 'sim:wellNova' fires once per well. A bomb resets mass, radius and HP but not the nova.
+//
+// Nova snakes (GW1, "a time bomb"): NOVA_SNAKE_SEC after a well enters nova (hashed per well from
+// the level seed and its position, 3 to 4 s) a Snake emerges from the well centre, then one every
+// NOVA_SNAKE_EVERY seconds, at most NOVA_SNAKE_MAX live per well and within the snake slots, the
+// entity pool and maxLiveEnemies (a due emergence with no room is skipped). They are normal snakes
+// (scored, shot down normally); the well's explosion removes its snakes wherever they are.
+// 'sim:wellSpawn' fires once per emergence. Endless has no wells, so no nova snakes.
 import { bus } from '../../core/events';
 import { BULLET_RADIUS, killBullet, STYLE_ORBIT, STYLE_SPREAD, styleRadius } from '../bullets';
 import { emitHit, emitKill, killEnemy } from '../combat';
 import { killShip } from '../player';
 import { removeEntity } from '../remove';
-import { gs, isHostile, MAX_WELLS, spawnFromDef } from '../state';
+import { gs, isHostile, MAX_WELLS, SNAKE_SLOTS, spawnFromDef, type GameState } from '../state';
 import { SHIP_RADIUS } from '../ship';
+import { countWaveEnemies, TELEGRAPH_SEC } from '../spawner';
 import { moveTo } from '../steer';
 import { Kind, type World } from '../world';
 import { isDashing } from './charger';
+import { spawnSnake } from './snake';
 import type { EnemyDef } from './types';
 
 export const def: EnemyDef = { kind: Kind.GravityWell, radius: 24, speed: 0, value: 250, colour: 'red', hp: 40, geoms: 5 };
@@ -58,6 +67,78 @@ export const NOVA_RADIUS_MULT = 1.25;
 export const NOVA_PULL_MULT = 1.3;
 /** Pull radius of a well in nova, u. */
 export const NOVA_RADIUS = PULL_RADIUS * NOVA_RADIUS_MULT;
+
+/** Nova snakes: first emergence this long after the nova (middle of the 3 to 4 s window). */
+export const NOVA_SNAKE_SEC = 3.5;
+/** Per well spread around NOVA_SNAKE_SEC: the first emergence lands in NOVA_SNAKE_SEC +- this. */
+export const NOVA_SNAKE_SPREAD = 0.5;
+/** Seconds between emergences after the first. */
+export const NOVA_SNAKE_EVERY = 6;
+/** Live nova snakes per well. */
+export const NOVA_SNAKE_MAX = 2;
+
+/**
+ * Pure: seconds after the nova at which the well at (x, y) of the level with this seed releases its
+ * first snake, in [NOVA_SNAKE_SEC - NOVA_SNAKE_SPREAD, NOVA_SNAKE_SEC + NOVA_SNAKE_SPREAD). Keyed by
+ * the well's position (wells never move), a 32 bit integer mix, so no PRNG state.
+ */
+export function novaSnakeDelayFor(seed: number, x: number, y: number): number {
+  let h = Math.imul((seed >>> 0) ^ 0x5bd1e995, 0x27d4eb2d);
+  h ^= Math.imul(Math.round(x) | 0, 0x9e3779b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h ^= Math.imul(Math.round(y) | 0, 0xc2b2ae35);
+  h = Math.imul(h ^ (h >>> 13), 0x165667b1);
+  h ^= h >>> 16;
+  const u = (h >>> 0) / 4294967296;
+  return NOVA_SNAKE_SEC - NOVA_SNAKE_SPREAD + 2 * NOVA_SNAKE_SPREAD * u;
+}
+
+/** Pure: true when an emergence time first + k x every (k >= 0) falls in (prev, t]. */
+export function emergenceDue(prev: number, t: number, first: number, every: number): boolean {
+  if (t < first) return false;
+  const due = first + Math.floor((t - first) / every) * every;
+  return prev < due;
+}
+
+/** Live nova snakes that emerged from well id. */
+export function wellSnakeCount(g: GameState, well: number): number {
+  let n = 0;
+  for (let s = 0; s < SNAKE_SLOTS; s++) if (g.snakeWell[s] === well && g.snakeHead[s] !== -1) n++;
+  return n;
+}
+
+/** Release one snake from the well centre if the caps allow; 'sim:wellSpawn' on success. */
+function emergeSnake(w: World, well: number): void {
+  const g = gs(w);
+  if (wellSnakeCount(g, well) >= NOVA_SNAKE_MAX) return;
+  if (countWaveEnemies(w) >= w.level.waves.maxLiveEnemies) return;
+  const x = w.x[well] ?? 0;
+  const y = w.y[well] ?? 0;
+  const head = spawnSnake(w, x, y, TELEGRAPH_SEC);
+  if (head < 0) return;
+  const slot = w.a[head] ?? -1;
+  if (slot >= 0 && slot < SNAKE_SLOTS) g.snakeWell[slot] = well;
+  bus.emit('sim:wellSpawn', { id: well, x, y, kind: Kind.SnakeHead });
+}
+
+/** Age a well's nova clock by dt and release a snake when one falls due. */
+function tickNovaSnakes(w: World, well: number, dt: number): void {
+  const g = gs(w);
+  const prev = g.wellSnakeT[well] ?? 0;
+  const t = prev + dt;
+  g.wellSnakeT[well] = t;
+  const first = novaSnakeDelayFor(w.level.seed, w.x[well] ?? 0, w.y[well] ?? 0);
+  if (emergenceDue(prev, t, first, NOVA_SNAKE_EVERY)) emergeSnake(w, well);
+}
+
+/** Remove every live snake that emerged from well id (its explosion). */
+function removeWellSnakes(w: World, well: number): void {
+  const g = gs(w);
+  for (let s = 0; s < SNAKE_SLOTS; s++) {
+    const head = g.snakeHead[s] ?? -1;
+    if (g.snakeWell[s] === well && head > 0) removeEntity(w, head);
+  }
+}
 
 /**
  * Pure: seconds after which well number index (0 based) of the level with this seed erupts, in
@@ -119,6 +200,7 @@ export function spawnWells(w: World): void {
     const id = spawnFromDef(w, def, p.x, p.y, 0);
     if (id < 0) continue;
     g.wellIds[g.wellCount++] = id;
+    g.wellSnakeT[id] = 0;
   }
 }
 
@@ -146,6 +228,7 @@ export function explode(w: World, well: number): void {
   const x = w.x[well] ?? 0;
   const y = w.y[well] ?? 0;
   removeEntity(w, well);
+  removeWellSnakes(w, well);
   const r2 = EXPLODE_RADIUS * EXPLODE_RADIUS;
   for (let id = 1; id < w.cap; id++) {
     if (w.alive[id] !== 1) continue;
@@ -291,7 +374,9 @@ export function stepWells(w: World, dt: number): void {
     const id = g.wellIds[i] ?? -1;
     if (id > 0 && w.alive[id] === 1 && w.kind[id] === Kind.GravityWell) {
       tickNova(w, id, i, dt);
-      stepOneWell(w, id, dt, 1 - k, g.wellNova[i] === 1);
+      const nova = g.wellNova[i] === 1;
+      stepOneWell(w, id, dt, 1 - k, nova);
+      if (nova && w.alive[id] === 1 && w.kind[id] === Kind.GravityWell) tickNovaSnakes(w, id, dt);
     }
   }
 

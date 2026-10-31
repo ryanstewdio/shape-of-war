@@ -3,7 +3,7 @@
 // invariant). Arrays are allocated once per world; re-arming for a later Endless boss reuses them.
 import type { BossId, BossSpec, BossTier } from '../../levelgen/leveldef';
 import type { World } from '../world';
-import { BOSS_TABLE, MAX_ADDS, MAX_PARTS, type BossRow } from './table';
+import { BOSS_TABLE, MAX_ADDS, MAX_HORNETS, MAX_PARTS, type BossRow } from './table';
 import { BossMode, type BossDef, type BossStatus } from './types';
 
 export interface BossState {
@@ -87,6 +87,8 @@ export interface BossState {
   /** Add entity ids and their kinds, -1 for an empty slot. */
   addIds: Int32Array;
   addKind: Uint8Array;
+  /** Hornet entity ids (Warden's swarm), -1 for an empty slot. Its own pool, not the add slots. */
+  hornetIds: Int32Array;
 
   // Per entity hazard extras, length w.cap, read only for Kind.BossHazard ids.
   /** Telegraph seconds of the hazard (its tier value). */
@@ -189,6 +191,7 @@ function createState(w: World, spec: BossSpec, def: BossDef): BossState {
     parts: new Int32Array(MAX_PARTS).fill(-1),
     addIds: new Int32Array(MAX_ADDS).fill(-1),
     addKind: new Uint8Array(MAX_ADDS),
+    hornetIds: new Int32Array(MAX_HORNETS).fill(-1),
     hzTele: new Float32Array(cap),
     hzRate: new Float32Array(cap),
     hzLife: new Float32Array(cap),
@@ -267,6 +270,7 @@ export function armState(w: World, spec: BossSpec, def: BossDef, atSec: number):
   s.parts.fill(-1);
   s.addIds.fill(-1);
   s.addKind.fill(0);
+  s.hornetIds.fill(-1);
   s.budgetAcc = 0;
   s.bonus = 0;
   s.slain = false;

@@ -34,6 +34,7 @@ export function spawnSnake(w: World, x: number, y: number, tele: number): number
   if (head < 0) return -1;
   w.a[head] = slot;
   g.snakeHead[slot] = head;
+  g.snakeWell[slot] = -1;
   const base = slot * SNAKE_PATH;
   for (let i = 0; i < SNAKE_PATH; i++) {
     g.pathX[base + i] = x;

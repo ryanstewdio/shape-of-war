@@ -1,14 +1,16 @@
-// Boss abilities wave: Warden's shield and swarm (phase 2 on). Every 14 s of attack time it stops,
-// closes its core for 4 s (BossState.shielded) and releases Hornets in two bursts, never past the add
-// cap; when the shield drops the core is open for 2 s. Hornets chase at 260 u/s, die on their own
-// after 5 s of chase, kill on contact once armed, and go with a bomb or a ship death.
+// Warden's shield and swarm, GW1 rework: in every phase the first shield goes up 10 s into the fight
+// and then every 14 s (start to start). It stops, closes its core for 4 s (BossState.shielded) and
+// releases 8 Hornets in two bursts of 4 into their own pool (MAX_HORNETS, separate from the add
+// slots); when the shield drops the core is open for 2.5 s. Hornets chase at 260 u/s, die on their
+// own after 5 s of chase, kill on contact once armed, and go with a bomb or a ship death.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/core/events';
-import { bossOnBomb, countAdds, countHornets, damageBoss, damageBossPart, liveHornet, spawnHornet } from '../../src/game/bosses/core';
-import { HORNET, MAX_ADDS, WARDEN, WARDEN_SHIELD } from '../../src/game/bosses/table';
+import { bossOnBomb, countAdds, countHornets, damageBoss, damageBossPart, liveHornet, spawnAdd, spawnHornet } from '../../src/game/bosses/core';
+import { HORNET, MAX_ADDS, MAX_HORNETS, WARDEN_SHIELD } from '../../src/game/bosses/table';
 import { PartType } from '../../src/game/bosses/types';
 import { createBossView, readBoss } from '../../src/game/bosses/view';
-import { burstSize, hornetsFor, shieldActive } from '../../src/game/bosses/warden';
+import { burstSize, hornetsFor, shieldActive, shieldClockStart } from '../../src/game/bosses/warden';
+import { def as grunt } from '../../src/game/enemies/grunt';
 import { stepGame } from '../../src/game/game';
 import { gs } from '../../src/game/state';
 import { Kind, type World } from '../../src/game/world';
@@ -26,10 +28,41 @@ function phase2(shield = true): { w: World; id: number } {
   park(w, 600, 400);
   const id = enter(w);
   bs(w).open = true;
-  damageBoss(w, 1801, 0, 0); // just past 50 percent
+  damageBoss(w, Math.floor(bs(w).maxHp / 2) + 1, 0, 0); // just past 50 percent
   expect(bs(w).phase).toBe(2);
   run(w, 1); // the phase change pause
   return { w, id };
+}
+
+/** Fill every free add slot with a Grunt (add pressure); they are parked far from the ship. */
+function pressure(w: World, id: number): void {
+  for (let k = 0; k < MAX_ADDS; k++) {
+    if (countAdds(w, bs(w)) >= MAX_ADDS) return;
+    if (spawnAdd(w, bs(w), grunt, (w.x[id] ?? 0) - 150, (w.y[id] ?? 0) - 150 + k * 10) < 0) return;
+  }
+}
+
+/** Shield start times (s after the entrance) over secs of a phase 1 fight, with or without add pressure. */
+function shieldStarts(secs: number, adds: boolean): { starts: number[]; peakAdds: number; peakHornets: number } {
+  const w = bossGame('warden', { par: 1000 });
+  park(w, 600, 400);
+  const id = enter(w);
+  const starts: number[] = [];
+  let was = bs(w).shielded;
+  let peakAdds = 0;
+  let peakHornets = 0;
+  for (let i = 1; i <= secs * 120; i++) {
+    if (adds) pressure(w, id);
+    stepGame(w, DT, idle());
+    const up = bs(w).shielded;
+    if (up && !was) starts.push(i * DT);
+    was = up;
+    peakAdds = Math.max(peakAdds, countAdds(w, bs(w)));
+    peakHornets = Math.max(peakHornets, countHornets(w, bs(w)));
+    expect(bs(w).status).toBe('alive');
+  }
+  bus.clear();
+  return { starts, peakAdds, peakHornets };
 }
 
 /** Step until the shield goes up (at most secs). Returns the seconds it took. */
@@ -48,44 +81,46 @@ function hornets(w: World): number[] {
 }
 
 describe('warden shield timing', () => {
-  it('pure rules: phase 2 on, 8 to 12 Hornets per shield, two bursts that add up', () => {
-    expect(shieldActive(1)).toBe(false);
+  it('pure rules: every phase, 8 Hornets per shield in two bursts of 4, first shield at 10 s', () => {
+    expect(shieldActive(1)).toBe(true);
     expect(shieldActive(2)).toBe(true);
     for (let h = 0; h < 1; h += 0.01) {
       const n = hornetsFor(h);
-      expect(n).toBeGreaterThanOrEqual(8);
-      expect(n).toBeLessThanOrEqual(12);
-      expect(burstSize(n, 0) + burstSize(n, 1)).toBe(n);
-      expect(burstSize(n, 0)).toBeGreaterThanOrEqual(burstSize(n, 1));
+      expect(n).toBe(8);
+      expect(burstSize(n, 0)).toBe(4);
+      expect(burstSize(n, 1)).toBe(4);
     }
-    expect(hornetsFor(0)).toBe(8);
-    expect(hornetsFor(0.999)).toBe(12);
+    expect(MAX_HORNETS).toBe(8);
+    expect(WARDEN_SHIELD.firstSec).toBe(10);
+    expect(WARDEN_SHIELD.everySec).toBe(14);
+    expect(WARDEN_SHIELD.openSec).toBe(2.5);
+    expect(shieldClockStart()).toBe(4);
   });
 
-  it('never shields in phase 1', () => {
-    const w = bossGame('warden');
-    park(w, 600, 400);
-    enter(w);
-    for (let i = 0; i < 120 * 30; i++) {
-      stepGame(w, DT, idle());
-      expect(bs(w).shielded).toBe(false);
+  it('fires at 10 s and every 14 s in a 60 s fight, the same with every add slot full', () => {
+    const calm = shieldStarts(60, false);
+    const busy = shieldStarts(60, true);
+    expect(busy.peakAdds).toBe(MAX_ADDS);
+    for (const r of [calm, busy]) {
+      expect(r.starts.length).toBe(4);
+      [10, 24, 38, 52].forEach((t, k) => expect(Math.abs((r.starts[k] ?? 0) - t)).toBeLessThanOrEqual(DT * 1.5));
+      expect(r.peakHornets).toBe(8);
     }
-    expect(count(w, Kind.BossPart)).toBe(0);
+    expect(busy.starts).toEqual(calm.starts);
   });
 
-  it('the first shield comes 14 s into phase 2, lasts 4 s, then the next 14 s after it drops', () => {
+  it('shields in phase 2 too, lasting 4 s, the next one 14 s after the last one started', () => {
     const { w } = phase2();
     const first = untilShield(w);
-    expect(first).toBeGreaterThan(WARDEN_SHIELD.everySec - 0.1);
     expect(first).toBeLessThan(WARDEN_SHIELD.everySec + 0.1);
+    expect(bs(w).phase).toBe(2);
     let up = 0;
     while (bs(w).shielded) {
       stepGame(w, DT, idle());
       up += DT;
     }
     expect(up).toBeCloseTo(WARDEN_SHIELD.shieldSec, 1);
-    // The next shield counts a full interval from the drop.
-    expect(untilShield(w)).toBeCloseTo(WARDEN_SHIELD.everySec, 1);
+    expect(untilShield(w)).toBeCloseTo(WARDEN_SHIELD.everySec - WARDEN_SHIELD.shieldSec, 1);
   });
 
   it('while shielded the core is closed, Warden stops, no ring is fired, and the view shows it', () => {
@@ -115,7 +150,7 @@ describe('warden shield timing', () => {
     expect(exposedLog).not.toContain(true);
   });
 
-  it('when the shield drops the core is exposed for a guaranteed 2 s window', () => {
+  it('when the shield drops the core is exposed for a guaranteed 2.5 s window', () => {
     const { w, id } = phase2();
     untilShield(w);
     const log: { exposed: boolean; t: number }[] = [];
@@ -127,7 +162,7 @@ describe('warden shield timing', () => {
     }
     run(w, 0.05);
     expect(bs(w).exposed).toBe(true);
-    expect(bs(w).openLeft).toBeGreaterThan(WARDEN.openSec - 0.1);
+    expect(bs(w).openLeft).toBeGreaterThan(WARDEN_SHIELD.openSec - 0.1);
     const hp = w.hp[id] ?? 0;
     damageBoss(w, 10, 0, 0);
     expect(w.hp[id]).toBe(hp - 10);
@@ -139,31 +174,27 @@ describe('warden shield timing', () => {
     const closed = log.find((e) => !e.exposed && e.t > (opened?.t ?? 0));
     expect(opened).toBeDefined();
     expect(closed).toBeDefined();
-    // Open for 2 s unless the next ring window extends it.
-    expect((closed?.t ?? 0) - (opened?.t ?? 0)).toBeGreaterThanOrEqual(WARDEN.openSec - 0.05);
+    // Open for 2.5 s unless the next ring window extends it.
+    expect((closed?.t ?? 0) - (opened?.t ?? 0)).toBeGreaterThanOrEqual(WARDEN_SHIELD.openSec - 0.05);
   });
 });
 
 describe('warden hornets', () => {
-  it('two bursts during the shield: 1 HP, 10 u, spread round the body, never past the add cap', () => {
+  it('two bursts of 4 during the shield: 1 HP, 10 u, 8 live after the second burst', () => {
     const { w, id } = phase2();
     untilShield(w);
-    const want = bs(w).abl[3] ?? 0;
-    expect(want).toBeGreaterThanOrEqual(WARDEN_SHIELD.hornetsMin);
-    expect(want).toBeLessThanOrEqual(WARDEN_SHIELD.hornetsMax);
+    expect(bs(w).abl[3]).toBe(8);
     const seen: number[] = [];
     for (let i = 0; i < 120 * WARDEN_SHIELD.shieldSec; i++) {
       stepGame(w, DT, idle());
       seen.push(countHornets(w, bs(w)));
-      expect(countAdds(w, bs(w))).toBeLessThanOrEqual(MAX_ADDS);
     }
-    // First burst, then a second one: the count steps up twice.
     const first = seen.findIndex((n) => n > 0);
     expect(first * DT).toBeCloseTo(WARDEN_SHIELD.burstAt[0] ?? 0, 1);
-    expect(seen[first]).toBe(burstSize(want, 0));
-    const second = seen.findIndex((n) => n > burstSize(want, 0));
+    expect(seen[first]).toBe(4);
+    const second = seen.findIndex((n) => n > 4);
     expect(second * DT).toBeCloseTo(WARDEN_SHIELD.burstAt[1] ?? 0, 1);
-    expect(Math.max(...seen)).toBe(Math.min(want, MAX_ADDS));
+    expect(seen[second]).toBe(8);
     for (const h of hornets(w)) {
       expect(w.hp[h]).toBe(HORNET.hp);
       expect(w.radius[h]).toBe(HORNET.radius);
@@ -172,18 +203,18 @@ describe('warden hornets', () => {
     expect(w.alive[id]).toBe(1);
   });
 
-  it('respects the add cap shared with other adds', () => {
+  it('Hornets have their own cap of 8: full add slots never block them and they never take an add slot', () => {
     const { w, id } = phase2();
     const s = bs(w);
-    for (let k = 0; k < 5; k++) expect(spawnHornet(w, s, (w.x[id] ?? 0) + 200, (w.y[id] ?? 0) + k * 30, 0)).toBeGreaterThan(0);
-    // Keep those five alive through the shield by pausing their age.
+    pressure(w, id);
+    const adds = countAdds(w, s);
+    expect(adds).toBe(MAX_ADDS);
     untilShield(w);
-    for (let i = 0; i < 120 * WARDEN_SHIELD.shieldSec; i++) {
-      for (const h of hornets(w)) w.t[h] = 0;
-      stepGame(w, DT, idle());
-      expect(countAdds(w, s)).toBeLessThanOrEqual(MAX_ADDS);
-    }
-    expect(countHornets(w, s)).toBe(MAX_ADDS);
+    run(w, (WARDEN_SHIELD.burstAt[1] ?? 0) + 0.05);
+    expect(countHornets(w, s)).toBe(8);
+    expect(countAdds(w, s)).toBeLessThanOrEqual(adds);
+    // The pool is full: a ninth Hornet is refused.
+    expect(spawnHornet(w, s, (w.x[id] ?? 0) + 200, w.y[id] ?? 0, 0)).toBe(-1);
   });
 
   it('fly out, chase the ship at no more than 260 u/s, and die on their own after 5 s of chase', () => {
@@ -275,7 +306,7 @@ describe('warden shield determinism', () => {
     };
     const a = once();
     expect(a).toBe(once());
-    expect(a.startsWith('4|') || a.startsWith('3|')).toBe(true);
+    expect(a.startsWith('4|8|') || a.startsWith('5|8|')).toBe(true);
     spy.mockRestore();
   });
 });

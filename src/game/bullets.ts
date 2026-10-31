@@ -58,6 +58,12 @@ export interface BulletPool {
    * pair in COMBO_TABLE order. Hit rules read style; this only says which pair fired the bullet.
    */
   combo: Uint8Array;
+  /**
+   * GW1 orbit v2 render contract for Glow: length in u of a style 3 spike along its orbit tangent
+   * (the direction of vx, vy), centred on (x, y). SPIKE_LEN at rest, up to SPIKE_STRETCH x that while
+   * it saws on the aim side. 0 for every other style.
+   */
+  spikeLen: Float32Array;
   free: Int32Array;
   freeTop: number;
   // Additive to 03 section 5.
@@ -89,6 +95,7 @@ export function createBulletPool(cap: number = BULLET_CAP): BulletPool {
     hitLog: new Int32Array(cap * PIERCE_HITS).fill(-1),
     phase: new Float32Array(cap),
     combo: new Uint8Array(cap),
+    spikeLen: new Float32Array(cap),
     free,
     freeTop: cap,
     prevX: new Float32Array(cap),
@@ -121,6 +128,7 @@ export function spawnBullet(p: BulletPool, x: number, y: number, vx: number, vy:
   p.extra[id] = p.spawnExtra;
   p.phase[id] = 0;
   p.combo[id] = 0;
+  p.spikeLen[id] = 0;
   p.liveCount++;
   return id;
 }

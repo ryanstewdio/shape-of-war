@@ -7,9 +7,10 @@
 //
 // V3 wave D (docs/13 SPEC 3.5 "Combining"): a second weapon kind collected while one is active makes
 // the pair weapon for a fresh 20 s; a third replaces the older ingredient. Spread drops only while a
-// weapon is active, and a drop falls due within COMBINE_DROP_KILLS kills while one is. Orbit (Ryan)
-// fires no forward bullet: its shield of blades carries spikes and, while the right stick is held,
-// pushes out toward the aim (1.8x and back over 0.4 s) to shove and hit what is there.
+// weapon is active, and a drop falls due within COMBINE_DROP_KILLS kills while one is. Orbit v2
+// (GW1, Ryan): no forward bullet and no push. Two rings of 4 spikes circle the ship in opposite
+// directions at 80 u and 100 u; while the aim stick is held the spikes on the aim side stretch along
+// their orbit tangent to 2.5x over 0.25 s (and back), a chainsaw arc that hits all it touches.
 import { bus, type BaseWeaponKind, type ComboKind, type WeaponKind } from '../core/events';
 import { hash01 } from '../core/rng';
 import {
@@ -60,8 +61,10 @@ export const DROP_EVERY = 25;
 /** While a non spread weapon is active the next drop falls due within this many scoring kills. */
 export const COMBINE_DROP_KILLS = 12;
 export const RAPID_OFFSET = 5;
-export const ORBIT_BLADES = 4;
+/** Orbit v2: spikes per ring, inner ring radius (turns forward), outer ring radius (turns back). */
+export const ORBIT_PER_RING = 4;
 export const ORBIT_RADIUS = 80;
+export const ORBIT_OUTER = 100;
 export const ORBIT_REV_PER_SEC = 2.4;
 export const BLADE_COOLDOWN = 0.12;
 export const HUD_WEAPON_INTERVAL = 0.1;
@@ -224,33 +227,45 @@ export function hasShield(kind: WeaponKind): boolean {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The orbit shield (Ryan's redesign)
+// Orbit v2 (GW1): two counter rotating rings of spikes, chainsaw stretch on the aim side
 
 export interface ShieldSpec {
-  blades: number;
-  /** Spikes sit between the blades, fixed to the orbit (style 3 bullets that hit like a blade). */
-  spikes: number;
-  radius: number;
+  /** Spikes per ring. Hitters 0 to perRing - 1 are the inner ring, the rest the outer ring. */
+  perRing: number;
+  /** Inner ring radius (turns at +rev) and outer ring radius (turns at -rev), u. */
+  inner: number;
+  outer: number;
+  /** Revolutions per second of each ring. */
   rev: number;
+  /** Seconds a spike rests after it strikes. */
   cooldown: number;
-  /** Eclipse: a spike hits every enemy it touches (up to SPIKE_PIERCE), not just the first. */
+  /** Eclipse: a resting spike hits every enemy it touches (up to SPIKE_PIERCE), not just the first. */
   piercing: boolean;
 }
 
-export const ORBIT_SHIELD: ShieldSpec = { blades: ORBIT_BLADES, spikes: 4, radius: ORBIT_RADIUS, rev: ORBIT_REV_PER_SEC, cooldown: BLADE_COOLDOWN, piercing: false };
-export const WHIRL_SHIELD: ShieldSpec = { blades: 4, spikes: 4, radius: ORBIT_RADIUS, rev: 3.0, cooldown: BLADE_COOLDOWN, piercing: false };
-export const ECLIPSE_SHIELD: ShieldSpec = { blades: 5, spikes: 5, radius: 100, rev: 2.0, cooldown: 0.15, piercing: true };
-/** Most hitters (blades plus spikes) any shield has. */
-export const MAX_HITTERS = 10;
-/** Spikes stand this far outside the blade ring; their collision radius. */
-export const SPIKE_OUT = 14;
-export const SPIKE_RADIUS = 5;
+export const ORBIT_SHIELD: ShieldSpec = { perRing: ORBIT_PER_RING, inner: ORBIT_RADIUS, outer: ORBIT_OUTER, rev: ORBIT_REV_PER_SEC, cooldown: BLADE_COOLDOWN, piercing: false };
+export const WHIRL_SHIELD: ShieldSpec = { perRing: ORBIT_PER_RING, inner: ORBIT_RADIUS, outer: ORBIT_OUTER, rev: 3.0, cooldown: BLADE_COOLDOWN, piercing: false };
+export const ECLIPSE_SHIELD: ShieldSpec = { perRing: ORBIT_PER_RING, inner: ORBIT_RADIUS, outer: ORBIT_OUTER, rev: 2.0, cooldown: 0.15, piercing: true };
+/** Most hitters (both rings) any shield has. */
+export const MAX_HITTERS = 8;
+/** Spike length at rest along its orbit tangent, u, and the capsule radius of its hit test. */
+export const SPIKE_LEN = 24;
+export const SPIKE_RADIUS = 7;
+/** Eclipse resting spikes pierce up to this many enemies. */
 export const SPIKE_PIERCE = 3;
-/** Aim push: the blades facing the aim reach EXPAND_MAX x radius and come back over EXPAND_SEC. */
-export const EXPAND_MAX = 1.8;
-export const EXPAND_SEC = 0.4;
-/** An enemy a pushed hitter strikes is shoved outward by up to this many u (scaled by the push). */
-export const SHIELD_PUSH = 28;
+/**
+ * Chainsaw: while the aim stick is held the saw level rises 0 to 1 over STRETCH_SEC (and falls as
+ * fast on release); aim side spikes are SPIKE_LEN x (1 + (SPIKE_STRETCH - 1) x level x weight) long.
+ * A level, not a per spike ramp, because a spike crosses the cone in about 0.14 s at 2.4 rev/s.
+ */
+export const SPIKE_STRETCH = 2.5;
+export const STRETCH_SEC = 0.25;
+/** A spike within this angle of the aim (rad, 60 deg) saws while the aim stick is held. */
+export const SAW_CONE = Math.PI / 3;
+/** Full stretch inside this angle of the aim (rad, 50 deg); it fades to none at SAW_CONE. */
+export const SAW_FULL = (50 * Math.PI) / 180;
+/** A spike stretched past this multiplier is a chainsaw: it hits every enemy along its length. */
+export const SAW_AT = 1.05;
 
 /** Pure: the shield of a kind (orbit and Halo share the orbit numbers), or null. */
 export function shieldOf(kind: WeaponKind): ShieldSpec | null {
@@ -260,21 +275,65 @@ export function shieldOf(kind: WeaponKind): ShieldSpec | null {
   return null;
 }
 
-/** Pure: push level 0 to 1 at u (0 to 1) through one 0.4 s push: out and back. */
-export function expansionPulse(u: number): number {
-  const v = u < 0 ? 0 : u > 1 ? 1 : u;
-  return Math.sin(Math.PI * v);
+/** Pure: the ring (0 inner, 1 outer) of hitter i. */
+export function ringOf(sh: ShieldSpec, i: number): number {
+  return i < sh.perRing ? 0 : 1;
 }
 
-/** Pure: how much a hitter at angle rel from the aim joins the push (1 on the aim, 0 behind). */
-export function aimWeight(rel: number): number {
-  const c = Math.cos(rel);
-  return c > 0 ? c * c : 0;
+/** Pure: turn direction of a ring: the inner ring turns forward, the outer ring back. */
+export function ringDir(ring: number): number {
+  return ring === 0 ? 1 : -1;
 }
 
-/** Pure: radius multiplier of a hitter at angle rel from the aim at push level pulse (1 to EXPAND_MAX). */
-export function shieldReach(rel: number, pulse: number): number {
-  return 1 + (EXPAND_MAX - 1) * pulse * aimWeight(rel);
+/** Pure: angle of hitter i at orbit phase ph. The outer ring sits half a gap off the inner one. */
+export function spikeAngle(sh: ShieldSpec, i: number, ph: number): number {
+  const ring = ringOf(sh, i);
+  const k = ring === 0 ? i : i - sh.perRing;
+  return ringDir(ring) * ph + ((k + ring * 0.5) * 2 * Math.PI) / sh.perRing;
+}
+
+/** Pure: a wrapped to (-PI, PI]. */
+function wrapAngle(a: number): number {
+  let v = a % (2 * Math.PI);
+  if (v > Math.PI) v -= 2 * Math.PI;
+  else if (v <= -Math.PI) v += 2 * Math.PI;
+  return v;
+}
+
+/** Pure: how much a spike at angle a joins the saw: 1 within SAW_FULL of aim, 0 at SAW_CONE and beyond. */
+export function sawWeight(a: number, aim: number): number {
+  const rel = Math.abs(wrapAngle(a - aim));
+  if (rel <= SAW_FULL) return 1;
+  if (rel >= SAW_CONE) return 0;
+  return (SAW_CONE - rel) / (SAW_CONE - SAW_FULL);
+}
+
+/** Pure: the saw level one step later: toward 1 while held, toward 0 otherwise, over STRETCH_SEC. */
+export function stepSaw(level: number, held: boolean, dt: number): number {
+  const rate = dt / STRETCH_SEC;
+  if (held) return level + rate >= 1 - 1e-9 ? 1 : level + rate;
+  return level - rate <= 1e-9 ? 0 : level - rate;
+}
+
+/** Pure: length multiplier of a spike at saw level and weight (1 to SPIKE_STRETCH). */
+export function spikeStretch(level: number, weight: number): number {
+  return 1 + (SPIKE_STRETCH - 1) * level * weight;
+}
+
+/**
+ * Pure: true when a circle (px, py, pr) touches the capsule centred on (cx, cy) along unit tangent
+ * (tx, ty), half length half, radius r.
+ */
+export function capsuleHits(px: number, py: number, pr: number, cx: number, cy: number, tx: number, ty: number, half: number, r: number): boolean {
+  const dx = px - cx;
+  const dy = py - cy;
+  let u = dx * tx + dy * ty;
+  if (u > half) u = half;
+  else if (u < -half) u = -half;
+  const ex = dx - tx * u;
+  const ey = dy - ty * u;
+  const rr = r + pr;
+  return ex * ex + ey * ey <= rr * rr;
 }
 
 export interface WeaponState extends DropCounter {
@@ -293,17 +352,18 @@ export interface WeaponState extends DropCounter {
   lastDrop: BaseWeaponKind | null;
   /** Live pickup entity id, -1 for none (validate against w.kind before use). */
   pickupId: number;
-  /** Pool bullet id per shield hitter (blades first, then spikes), -1 for none. */
+  /** Pool bullet id per spike (inner ring first, then outer), -1 for none. */
   blades: Int32Array;
   /** Seconds until each hitter may damage again. */
   bladeCool: Float32Array;
-  /** Radius multiplier of each hitter this step (1 at rest, up to EXPAND_MAX on the aim side). */
-  reach: Float32Array;
-  /** Live hitters of the current shield (blades plus spikes), 0 without one. */
+  /** Length multiplier of each spike (1 at rest, up to SPIKE_STRETCH while it saws). */
+  stretch: Float32Array;
+  /** Live hitters of the current shield (both rings), 0 without one. */
   hitters: number;
+  /** Orbit phase, rad: the inner ring sits at +orbitPhase, the outer ring at -orbitPhase. */
   orbitPhase: number;
-  /** Seconds into the current aim push, 0 at rest. */
-  pushT: number;
+  /** Chainsaw level 0 to 1 (rises while the aim stick is held, falls on release). */
+  saw: number;
   hudTimer: number;
   hud: { kind: WeaponKind; remaining: number; total: number; title: string };
   pickupFx: { x: number; y: number; weapon: WeaponKind };
@@ -326,10 +386,10 @@ function createWeaponState(): WeaponState {
     pickupId: -1,
     blades: new Int32Array(MAX_HITTERS).fill(-1),
     bladeCool: new Float32Array(MAX_HITTERS),
-    reach: new Float32Array(MAX_HITTERS).fill(1),
+    stretch: new Float32Array(MAX_HITTERS).fill(1),
     hitters: 0,
     orbitPhase: 0,
-    pushT: 0,
+    saw: 0,
     hudTimer: 0,
     hud: { kind: 'spread', remaining: 0, total: WEAPON_DURATION, title: 'spread' },
     pickupFx: { x: 0, y: 0, weapon: 'spread' },
@@ -398,10 +458,10 @@ function removeBlades(w: World): void {
     if (b >= 0 && p.alive[b] === 1 && p.style[b] === STYLE_ORBIT) killBullet(p, b);
     s.blades[i] = -1;
     s.bladeCool[i] = 0;
-    s.reach[i] = 1;
+    s.stretch[i] = 1;
   }
   s.hitters = 0;
-  s.pushT = 0;
+  s.saw = 0;
 }
 
 /** Switch the active kind, swapping the shield when it changes. */
@@ -596,30 +656,32 @@ export function fireWeapon(w: World, x: number, y: number, aim: number): void {
 }
 
 /**
- * Place the shield's hitters around the ship at orbitPhase: blades evenly spaced, a spike between
- * each pair standing SPIKE_OUT further out, each pushed toward the aim by the current push. Spawns
- * any that are missing (pool full earlier). prevX and prevY keep the last spot for render.
+ * Place the spikes around the ship at orbitPhase: the inner ring turning forward, the outer ring
+ * back. Over dt the saw level moves toward 1 while the aim stick is held (0 otherwise) and each spike
+ * within SAW_CONE of the aim stretches with it. Writes the render contract: style 3,
+ * phase (angle round the ship), vx and vy along the orbit tangent, spikeLen. Spawns any spike that is
+ * missing (pool full earlier). prevX and prevY keep the last spot for render.
  */
-export function placeBlades(w: World): void {
+export function placeBlades(w: World, dt = 0): void {
   const s = weaponState(w);
   const sh = shieldOf(s.kind);
   if (sh === null) return;
   const p = w.bullets;
   const sx = w.x[0] ?? 0;
   const sy = w.y[0] ?? 0;
-  const omega = sh.rev * 2 * Math.PI;
-  const pulse = expansionPulse(s.pushT / EXPAND_SEC);
+  const held = w.ship.firing;
   const aim = w.ship.aimAngle;
   const combo = comboIndex(s.kind);
-  const n = sh.blades + sh.spikes;
+  const n = sh.perRing * 2;
   s.hitters = n;
+  s.saw = stepSaw(s.saw, held, dt);
   for (let i = 0; i < n; i++) {
-    const spike = i >= sh.blades;
-    const k = spike ? i - sh.blades : i;
-    const a = s.orbitPhase + ((k + (spike ? 0.5 : 0)) * 2 * Math.PI) / (spike ? sh.spikes : sh.blades);
-    const reach = shieldReach(a - aim, pulse);
-    s.reach[i] = reach;
-    const r = (sh.radius + (spike ? SPIKE_OUT : 0)) * reach;
+    const ring = ringOf(sh, i);
+    const a = spikeAngle(sh, i, s.orbitPhase);
+    const m = spikeStretch(s.saw, sawWeight(a, aim));
+    s.stretch[i] = m;
+    const r = ring === 0 ? sh.inner : sh.outer;
+    const omega = ringDir(ring) * sh.rev * 2 * Math.PI;
     const c = Math.cos(a);
     const sn = Math.sin(a);
     const x = sx + c * r;
@@ -642,19 +704,8 @@ export function placeBlades(w: World): void {
     p.vy[b] = c * omega * r;
     p.life[b] = s.timer;
     p.combo[b] = combo;
+    p.spikeLen[b] = SPIKE_LEN * m;
   }
-}
-
-/** Advance the aim push: cycles while the right stick is held, finishes its swing when released. */
-export function stepPush(s: WeaponState, held: boolean, dt: number): void {
-  if (held) {
-    s.pushT += dt;
-    if (s.pushT >= EXPAND_SEC) s.pushT -= EXPAND_SEC;
-    return;
-  }
-  if (s.pushT <= 0) return;
-  s.pushT += dt;
-  if (s.pushT >= EXPAND_SEC) s.pushT = 0;
 }
 
 /** Weapon timer, the shield and the throttled 'hud:weapon'. Call after stepWorld. */
@@ -668,9 +719,8 @@ export function stepWeapons(w: World, dt: number): void {
   }
   const sh = shieldOf(s.kind);
   if (sh !== null && w.ship.active) {
-    stepPush(s, w.ship.firing, dt);
     s.orbitPhase = (s.orbitPhase + sh.rev * 2 * Math.PI * dt) % (2 * Math.PI);
-    placeBlades(w);
+    placeBlades(w, dt);
   }
   s.hudTimer -= dt;
   if (s.hudTimer <= 0) emitWeaponHud(w);

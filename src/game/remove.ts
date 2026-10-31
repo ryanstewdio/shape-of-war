@@ -17,6 +17,7 @@ export function removeEntity(w: World, id: number): void {
         g.snakeSegs[slot * SNAKE_SEGMENTS + s] = -1;
       }
       g.snakeHead[slot] = -1;
+      g.snakeWell[slot] = -1;
     }
   } else if (k === Kind.GravityWell) {
     let n = 0;
@@ -26,6 +27,7 @@ export function removeEntity(w: World, id: number): void {
     }
     for (let i = n; i < g.wellIds.length; i++) g.wellIds[i] = -1;
     g.wellCount = n;
+    g.wellSnakeT[id] = 0;
   } else if (k === Kind.Drone) {
     if (g.droneId === id) g.droneId = -1;
   } else if (k === Kind.Sower || k === Kind.Splime) {

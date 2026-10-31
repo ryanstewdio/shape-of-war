@@ -100,6 +100,11 @@ export interface Events {
   'sim:bossSplit': { id: BossId; parts: number };
   /** Swarm to Glow and Chorus: a Gravity well erupted into a super nova (wider, stronger pull), once per well. */
   'sim:wellNova': { id: number; x: number; y: number };
+  /**
+   * Swarm to Glow and Chorus (GW1): an enemy of kind emerged from the Gravity well id at (x, y),
+   * the well centre. Once per emergence; today kind is always Kind.SnakeHead (nova snakes).
+   */
+  'sim:wellSpawn': { id: number; x: number; y: number; kind: Kind };
   /** Swarm to Glow and Chorus: Turbo started (active true, at the ship) or ended. */
   'fx:turbo': { active: boolean; x: number; y: number };
   /** Swarm (A) to Ledger: at most every 100 ms and on change. */
