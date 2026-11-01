@@ -1,7 +1,11 @@
 // Web Audio backend for the GW2 effects (gw2.ts). Native node graphs only: the wobble, pan
 // sweep and filter rise are scheduled once at voice start, so nothing runs per frame.
 import {
+  ARRIVE_GAIN,
+  ARRIVE_HI_HZ,
   ARRIVE_SEC,
+  ARRIVE_THUD_GAIN,
+  NOVA_PAN_DEPTH,
   NOVA_FILTER_HI,
   NOVA_FILTER_LO,
   NOVA_GAIN,
@@ -90,7 +94,7 @@ function buildSaw(c: AudioContext, dest: AudioNode): Built {
   return { out, sources, level: SAW_GAIN, rampIn: SAW_RAMP_IN };
 }
 
-function buildNova(c: AudioContext, deps: Gw2Deps, dest: AudioNode): Built {
+function buildNova(c: AudioContext, deps: Gw2Deps, dest: AudioNode, level: number): Built {
   const out = c.createGain();
   const t = c.currentTime;
   const n = noiseSrc(c, deps.noise(c));
@@ -104,7 +108,10 @@ function buildNova(c: AudioContext, deps: Gw2Deps, dest: AudioNode): Built {
   bodyGain.gain.value = 0.5;
   const pan = c.createStereoPanner();
   const panLfo = osc(c, 'sine', 1 / NOVA_PAN_PERIOD);
-  panLfo.connect(pan.pan);
+  const panAmt = c.createGain();
+  panAmt.gain.value = NOVA_PAN_DEPTH;
+  panLfo.connect(panAmt);
+  panAmt.connect(pan.pan);
   n.connect(lp);
   lp.connect(pan);
   body.connect(bodyGain);
@@ -113,7 +120,7 @@ function buildNova(c: AudioContext, deps: Gw2Deps, dest: AudioNode): Built {
   out.connect(dest);
   const sources: AudioScheduledSourceNode[] = [n, body, panLfo];
   for (const s of sources) s.start(t);
-  return { out, sources, level: NOVA_GAIN, rampIn: 0.5 };
+  return { out, sources, level, rampIn: 0.5 };
 }
 
 function buildHum(c: AudioContext, dest: AudioNode): Built {
@@ -209,11 +216,11 @@ export function createGw2Backend(deps: Gw2Deps): Gw2Backend & { activeLoops(): n
   let active = 0;
   return {
     activeLoops: () => active,
-    startLoop(kind: LoopKind): LoopHandle | null {
+    startLoop(kind: LoopKind, level?: number): LoopHandle | null {
       const g = deps.graph();
       if (!g) return null;
       const dest = g.master;
-      const built = kind === 'saw' ? buildSaw(g.ctx, dest) : kind === 'nova' ? buildNova(g.ctx, deps, dest) : buildHum(g.ctx, dest);
+      const built = kind === 'saw' ? buildSaw(g.ctx, dest) : kind === 'nova' ? buildNova(g.ctx, deps, dest, level ?? NOVA_GAIN) : buildHum(g.ctx, dest);
       active++;
       return makeHandle(g.ctx, built, () => {
         active--;
@@ -231,8 +238,8 @@ export function createGw2Backend(deps: Gw2Deps): Gw2Backend & { activeLoops(): n
       if (kind === 'arrive') {
         dur = ARRIVE_SEC;
         // Rising whoosh: noise through a band pass climbing, then a soft low thud at the end.
-        srcs.push(noiseBurst(c, deps, out, t, ARRIVE_SEC * 0.85, 0.14, 'bandpass', 180, 2400));
-        srcs.push(ping(c, out, 70, t + ARRIVE_SEC * 0.85, ARRIVE_SEC * 0.15 + 0.1, 0.2, 'sine'));
+        srcs.push(noiseBurst(c, deps, out, t, ARRIVE_SEC * 0.85, ARRIVE_GAIN, 'bandpass', 180, ARRIVE_HI_HZ));
+        srcs.push(ping(c, out, 70, t + ARRIVE_SEC * 0.85, ARRIVE_SEC * 0.15 + 0.1, ARRIVE_THUD_GAIN, 'sine'));
         dur = ARRIVE_SEC + 0.12;
       } else if (kind === 'slither') {
         dur = SLITHER_SEC;
