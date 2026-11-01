@@ -105,6 +105,12 @@ export interface Events {
    * the well centre. Once per emergence; today kind is always Kind.SnakeHead (nova snakes).
    */
   'sim:wellSpawn': { id: number; x: number; y: number; kind: Kind };
+  /** Forge to Glow and Chorus (GW2 contract stub): a new Gravity well will arrive at (x, y) in inSec seconds (telegraph start). */
+  'sim:wellArrive': { id: number; x: number; y: number; inSec: number };
+  /** Forge to Chorus and Glow (GW2 contract stub): the orbit saw started (on true) or fully stopped. */
+  'sim:saw': { on: boolean };
+  /** Swarm to Glow and Chorus (GW2 contract stub): a boss shield went up or down at (x, y). */
+  'sim:bossShield': { id: BossId; up: boolean; x: number; y: number };
   /** Swarm to Glow and Chorus: Turbo started (active true, at the ship) or ended. */
   'fx:turbo': { active: boolean; x: number; y: number };
   /** Swarm (A) to Ledger: at most every 100 ms and on change. */
