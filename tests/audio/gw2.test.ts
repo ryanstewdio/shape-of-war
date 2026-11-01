@@ -8,6 +8,7 @@ import {
   NOVA_MAX,
   NOVA_PAN_PERIOD,
   NOVA_RELEASE,
+  RESET_FADE,
   SAW_BASE_HZ,
   SAW_GAIN,
   SAW_RAMP_IN,
@@ -181,6 +182,58 @@ describe('gw2 wiring', () => {
     expect(r.ctl.loopCount()).toBe(3);
     r.bus.emit('game:quit');
     expect(r.live()).toHaveLength(0);
+    expect(r.ctl.loopCount()).toBe(0);
+  });
+
+  const startAll = (r: ReturnType<typeof rig>): void => {
+    r.bus.emit('sim:saw', { on: true });
+    r.bus.emit('sim:wellNova', { id: 5, x: 0, y: 0 });
+    r.bus.emit('sim:wellNova', { id: 6, x: 0, y: 0 });
+    r.bus.emit('sim:bossShield', { id: 'warden', up: true, x: 0, y: 0 });
+    expect(r.ctl.loopCount()).toBe(4);
+  };
+  const expectSilent = (r: ReturnType<typeof rig>): void => {
+    expect(r.live()).toHaveLength(0);
+    expect(r.ctl.loopCount()).toBe(0);
+    for (const l of r.loops) expect(l.stops).toEqual([RESET_FADE]);
+    // Bookkeeping is empty: the same ids can start again.
+    r.bus.emit('sim:saw', { on: true });
+    r.bus.emit('sim:wellNova', { id: 5, x: 0, y: 0 });
+    expect(r.live()).toHaveLength(2);
+  };
+
+  it('game:start stops every loop with a 100 ms fade and clears bookkeeping', () => {
+    const r = rig();
+    startAll(r);
+    r.bus.emit('game:start', { mode: 'adventure', levelIndex: 0 });
+    expectSilent(r);
+  });
+
+  it('game:quit stops every loop with a 100 ms fade and clears bookkeeping', () => {
+    const r = rig();
+    startAll(r);
+    r.bus.emit('game:quit');
+    expectSilent(r);
+  });
+
+  it('ui:screen to menu stops every loop; ui:screen play does not', () => {
+    const r = rig();
+    startAll(r);
+    r.bus.emit('ui:screen', { screen: 'play' });
+    expect(r.ctl.loopCount()).toBe(4);
+    r.bus.emit('ui:screen', { screen: 'menu' });
+    expectSilent(r);
+  });
+
+  it('pause and resume keep a live roar', () => {
+    const r = rig();
+    r.bus.emit('sim:wellNova', { id: 5, x: 0, y: 0 });
+    r.bus.emit('game:pause');
+    expect(r.live()).toHaveLength(1);
+    r.bus.emit('game:resume');
+    expect(r.live()).toHaveLength(1);
+    expect(r.ctl.loopCount()).toBe(1);
+    r.bus.emit('fx:kill', { x: 0, y: 0, colour: 'cyan', kind: Kind.GravityWell, id: 5 });
     expect(r.ctl.loopCount()).toBe(0);
   });
 
