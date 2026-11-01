@@ -32,6 +32,7 @@ const V2_KEYS: readonly string[] = [
   'sow.settings.weaponPickups',
   'sow.settings.effects',
   'sow.settings.music',
+  'sow.settings.menuTheme',
 ];
 /** The only key v3 may add, and only from wave V3-E. */
 const TILT_KEY = 'sow.settings.tilt';

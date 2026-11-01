@@ -14,12 +14,14 @@ import { freshSeed, hash01 } from './core/rng';
 import {
   ensureSchema,
   loadAdventureScores,
+  loadMenuTheme,
   loadRunSeed,
   loadSettings,
   loadUnlocked,
   recordAdventureScore,
   recordEndlessScore,
   resetProgress,
+  saveMenuTheme,
   saveSetting,
   unlockAfter,
   unlockLevel,
@@ -289,7 +291,7 @@ async function boot(): Promise<void> {
   // from the Music slider, so it must be safe to call repeatedly. Until then it is a no-op: the
   // volume itself already reaches the engine through setMusicVolume in the settings effects.
   const wireMusicPort = (volume: number): void => {
-    wireMusic(bus, { volume }); // idempotent: the same bus returns the same wiring
+    wireMusic(bus, { volume, menuStore: { load: loadMenuTheme, save: saveMenuTheme } }); // idempotent: the same bus returns the same wiring
   };
   renderer?.setArena(level);
   // Settings preview arena: grid plus one of each enemy drifting (docs/01 section 10).

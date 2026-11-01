@@ -221,6 +221,20 @@ export function saveTilt(level: TiltSetting, storage: StorageLike | null = defau
   writeRaw(storage, TILT_KEY, parseTilt(level));
 }
 
+// Menu theme (chorus menu-themes request): the raw index text "0" to "2" of the last title theme, so
+// the rotation continues across boots. Audio validates the value; this module stores it as is.
+// Kept out of Settings and DEFAULT_SETTINGS, like the other extra keys.
+
+export const MENU_THEME_KEY = `${SETTINGS_PREFIX}menuTheme`;
+
+export function loadMenuTheme(storage: StorageLike | null = defaultStorage()): string | null {
+  return readRaw(storage, MENU_THEME_KEY);
+}
+
+export function saveMenuTheme(raw: string, storage: StorageLike | null = defaultStorage()): void {
+  writeRaw(storage, MENU_THEME_KEY, raw);
+}
+
 // Music volume (v2 addendum 3.9, docs/10 wave D): an integer 0 to 100, default 50, where 0 is off.
 // Stored as plain decimal text. Kept out of Settings and DEFAULT_SETTINGS on purpose, like the
 // other v2 keys, so the v1 settings shape and the storage key audit stay as they are.

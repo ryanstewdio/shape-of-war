@@ -31,6 +31,8 @@ import {
   saveEffects,
   saveMusic,
   EFFECTS_KEY,
+  MENU_THEME_KEY,
+  saveMenuTheme,
   MUSIC_KEY,
   SPACE_PHYSICS_KEY,
   WEAPON_PICKUPS_KEY,
@@ -55,6 +57,7 @@ const IMPLEMENTED_KEYS: readonly string[] = [
   'sow.settings.spacePhysics',
   'sow.settings.weaponPickups',
   'sow.settings.effects',
+  'sow.settings.menuTheme',
   'sow.settings.music',
   'sow.settings.neon',
   'sow.settings.showFps',
@@ -147,6 +150,7 @@ describe('declared storage keys', () => {
     WEAPON_PICKUPS_KEY,
     EFFECTS_KEY,
     MUSIC_KEY,
+    MENU_THEME_KEY,
     RUN_SEED_KEY,
     UNLOCKED_KEY,
     ADVENTURE_SCORES_KEY,
@@ -190,6 +194,7 @@ describe('keys written at run time', () => {
     saveWeaponPickups(false, store);
     saveEffects('low', store);
     saveMusic(40, store);
+    saveMenuTheme('1', store);
     loadRunSeed(() => 123456, store);
     unlockLevel(4, store);
     recordAdventureScore(1, 2500, 1, store);

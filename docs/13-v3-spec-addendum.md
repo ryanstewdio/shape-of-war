@@ -465,6 +465,7 @@ Settings keys (docs/12 Appendix B). Every read and write is in try/catch with a 
 | Key | Values | Default | Control |
 |---|---|---|---|
 | `sow.settings.tilt` | `off`, `low`, `high` | `off` | "Perspective tilt" row, three buttons, saved on tap, in the menu and the pause screen. Added only after D12 |
+| `sow.settings.menuTheme` | `0`, `1`, `2` | none (first boot starts on theme 0) | No control. Audio saves the last title theme index through `menuStore` so the rotation continues across boots |
 
 No other key is added. `sow.settings.effects` keeps its key and values; its code default changes from `standard` to `high` only after D9 (SPEC 3.8 rule 5) (default confirmed, Q15). Buttons have a 44 CSS px minimum hit height. Reset progress does not reset settings.
 
