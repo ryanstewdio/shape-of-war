@@ -4,7 +4,7 @@ export type TiltLevel = 'off' | 'low' | 'high';
 
 let level: TiltLevel = 'off';
 
-/** Set the tilt level (off, low 12 deg, high 22 deg). */
+/** Set the tilt level (off, low 7 deg, high 13 deg). */
 export function setTilt(next: TiltLevel): void {
   level = next;
 }

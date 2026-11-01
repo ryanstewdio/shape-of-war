@@ -13,8 +13,8 @@
 import { fitArena, FIT_MARGIN, type Fit, type PlayRect } from './layout';
 import type { TiltLevel } from './tilt';
 
-/** Tilt per level in degrees (docs/12 design item 2: low 12, high 22). */
-export const TILT_DEG: Readonly<Record<TiltLevel, number>> = { off: 0, low: 12, high: 22 };
+/** Tilt per level in degrees (G6 rating: lowered from 12 and 22 to low 7, high 13). */
+export const TILT_DEG: Readonly<Record<TiltLevel, number>> = { off: 0, low: 7, high: 13 };
 /** Focal distance as a multiple of the arena height (docs/12 design item 3). */
 export const FOCAL_MUL = 2.5;
 /** Floor on D + d as a fraction of D: keeps f at or under 1 / MIN_DEN_FRAC. */

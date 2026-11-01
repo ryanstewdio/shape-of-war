@@ -38,11 +38,14 @@ export const MAX_RINGS = 4;
 export const MAX_FORCES = 5;
 /** Share of a ring's strength left at the end of its life (see ringFade). */
 export const RING_END_FRAC = 0.25;
-/** Z channel: lift per u/s of a kick, and per u/s^2 of a force (wells negative). */
-export const Z_KICK_GAIN = 1;
-export const Z_FORCE_GAIN = 0.5;
-/** Z clamp as a multiple of the in plane displacement clamp. */
-export const Z_DISP_MUL = 1.5;
+/**
+ * Z channel: lift per u/s of a kick, and per u/s^2 of a force (wells negative). Raised a little
+ * for the lower G6 tilt angles (7 and 13 deg show less of the lift), still bounded by maxZ.
+ */
+export const Z_KICK_GAIN = 1.3;
+export const Z_FORCE_GAIN = 0.65;
+/** Z clamp as a multiple of the in plane displacement clamp (bounded: at most 2). */
+export const Z_DISP_MUL = 1.8;
 /** Frame dt is clamped here before it enters the accumulator. */
 const MAX_FRAME_DT = 0.1;
 
