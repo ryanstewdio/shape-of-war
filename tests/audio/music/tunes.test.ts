@@ -174,8 +174,8 @@ describe.each(TUNES.map((t) => [t.id, t] as const))('tune %s validates', (_id, t
 });
 
 describe('the tunes differ', () => {
-  it('has six tunes with distinct keys, tempos, modes, chord plans, bed timbres, lead voices and drums', () => {
-    expect(TUNES.length).toBe(6);
+  it('has ten tunes with distinct keys, tempos, modes, chord plans, bed timbres, lead voices and drums', () => {
+    expect(TUNES.length).toBe(10);
     expect(TUNES.map((t) => t.id)).toEqual([...TUNE_IDS]);
     const distinct = <T>(f: (t: Tune) => T): number => new Set(TUNES.map((t) => JSON.stringify(f(t)))).size;
     expect(distinct((t) => t.key.tonic)).toBe(TUNES.length);
@@ -189,7 +189,7 @@ describe('the tunes differ', () => {
     expect(distinct((t) => t.form?.lead)).toBe(TUNES.length);
   });
 
-  it('every level tune keeps a 4 to 8 bar S block in its loop, now a 16th note arpeggio section with drums (v3.5); two space pieces carry wind on every bar', () => {
+  it('every level tune keeps a 4 to 8 bar S block in its loop, now a 16th note arpeggio section with drums (v3.5); three space pieces carry wind on every bar', () => {
     for (const t of TUNES) {
       const space = Array.from({ length: t.loopBars }, (_, b) => isSpaceBar(t, b));
       const runs: number[] = [];
@@ -217,10 +217,10 @@ describe('the tunes differ', () => {
       }
     }
     const spacey = TUNES.filter((t) => t.form?.space === true);
-    expect(spacey.map((t) => t.id).sort()).toEqual(['horizon', 'nebula']);
+    expect(spacey.map((t) => t.id).sort()).toEqual(['aurora', 'horizon', 'nebula']);
     for (const t of spacey) {
       expect(t.bpm).toBeLessThanOrEqual(110);
-      expect(['lydian', 'wholetone']).toContain(t.form?.mode);
+      expect(['lydian', 'wholetone', 'lydiandom']).toContain(t.form?.mode);
       expect(t.form?.lead.echo).toBe(2);
       for (let b = 0; b < t.loopBars; b++) expect(buildBar(1, b, t).notes.some((n) => n.fx?.wind === true)).toBe(true);
     }

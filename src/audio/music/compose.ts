@@ -88,7 +88,18 @@ export function fx(p: Partial<NoteFx>): NoteFx {
 export type PadStyle = 'held' | 'chip';
 
 /** Mode names, for the hand-off, the debug overlay and the variety test. */
-export type ModeName = 'aeolian' | 'dorian' | 'phrygian' | 'lydian' | 'mixolydian' | 'harmonic' | 'wholetone';
+export type ModeName =
+  | 'aeolian'
+  | 'dorian'
+  | 'phrygian'
+  | 'lydian'
+  | 'mixolydian'
+  | 'harmonic'
+  | 'wholetone'
+  | 'ionian'
+  | 'phrygdom'
+  | 'lydiandom'
+  | 'hexmajor';
 
 export interface Form {
   readonly mode: ModeName;
@@ -110,6 +121,12 @@ export const MODE_STEPS: Readonly<Record<ModeName, readonly number[]>> = {
   mixolydian: [0, 2, 4, 5, 7, 9, 10],
   harmonic: [0, 2, 3, 5, 7, 8, 11],
   wholetone: [0, 2, 4, 6, 8, 10],
+  // Music v3.6 (tunes and menu): major, phrygian dominant (a major third over a flat second),
+  // lydian dominant (raised fourth and flat seventh) and a six note major scale with no seventh.
+  ionian: [0, 2, 4, 5, 7, 9, 11],
+  phrygdom: [0, 1, 4, 5, 7, 8, 10],
+  lydiandom: [0, 2, 4, 6, 7, 9, 10],
+  hexmajor: [0, 2, 4, 5, 7, 9],
 };
 
 /** Pure: the scale pitch classes of a mode on a tonic, tonic first. */
