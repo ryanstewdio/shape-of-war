@@ -102,6 +102,18 @@ Touch only. No keyboard, mouse or gamepad handlers.
 | Gravity | Pulled by gravity wells (section 6.7) |
 | Cap | 512 live player bullets; a new shot at the cap is dropped (shipped behaviour, v1.0.0) |
 
+Weapon styles from v2 and v3 (full numbers in docs/11 and docs/13 SPEC 3.5):
+
+| Weapon | Behaviour |
+|---|---|
+| Orbit v2 | Two counter rotating spike rings at 80 u and 100 u, stretching toward the aim like a chainsaw. No forward bullet (101:20) |
+| Hail | spread + rapid pair |
+| Trident | spread + pierce pair |
+| Halo | spread + orbit pair, inherits orbit v2 |
+| Needle | rapid + pierce pair |
+| Whirl | rapid + orbit pair, inherits orbit v2 |
+| Eclipse | pierce + orbit pair, inherits orbit v2 |
+
 ### 4.3 Bombs
 
 | Property | Value |
@@ -244,6 +256,12 @@ Neither applies to the ship, bullets or wells.
 | Contact | Kills the ship |
 | Bomb | Resets mass to 0, does not destroy |
 | Pulse | Visual ring pulses at 1 Hz plus 0.1 Hz per mass |
+| Supernova | After 5 to 7 s the well goes supernova: pull radius x1.25, pull strength x1.3, escapable. Looks like a white tornado with a multicolour shimmer and no outer circle (88:00, 101:20) |
+| Nova snakes | After a further 3 to 4 s the supernova releases harmless drifting nova snakes (101:20) |
+
+### 6.8 Boss catalogue summary
+
+Bosses are a separate class of ten named enemies on every fifth Adventure level from 5 to 50, and every third minute in Endless. The full catalogue, tiers, hit points, damage rules, projectiles and post gate canon updates are in docs/13 (SPEC 3.4 and the section "Canon updates after the device gates"). docs/13 wins over this file for bosses.
 
 ## 7. Lives and respawn summary
 
