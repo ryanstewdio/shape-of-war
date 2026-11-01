@@ -1,5 +1,6 @@
 // Analytic arena confinement (docs/03 section 4). Keeps a circle of radius r inside the
 // LevelDef arena and outside its obstacles. Writes into a reused result object: no allocation.
+import { wrapCoord, wrapDelta, type Surface } from '../core/surface';
 import type { ArenaDef, Obstacle } from '../levelgen/leveldef';
 
 export interface ConfineResult {
@@ -64,6 +65,51 @@ export function confine(
   }
   finish(x, y, out);
   return out;
+}
+
+/**
+ * Surface aware confinement (V3-H C0). Flat calls confine unchanged (bit identical). On a surface
+ * that wraps u there is no u wall: only the rims at v = plus or minus H/2 confine (minus r), every
+ * arena shape is treated as that band, obstacles push with the shortest wrapped offset, and the
+ * result x is canonicalised into [-W/2, W/2). hit and the normal ignore the wrap itself.
+ */
+export function confineOn(
+  surface: Surface,
+  arena: ArenaDef,
+  x: number,
+  y: number,
+  r: number,
+  out: ConfineResult = shared,
+): ConfineResult {
+  if (!surface.topology.wrapU) return confine(arena, x, y, r, out);
+  const W = surface.width;
+  const hy = Math.max(0, surface.height / 2 - r);
+  out.x = x;
+  out.y = y > hy ? hy : y < -hy ? -hy : y;
+  if (arena.shape === 'rectObstacles') {
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < arena.obstacles.length; i++) {
+        const o = arena.obstacles[i];
+        if (o !== undefined) pushOutOfBoxWrapped(o, r, W, out);
+      }
+      if (out.y > hy) out.y = hy;
+      else if (out.y < -hy) out.y = -hy;
+    }
+  }
+  finish(x, y, out);
+  out.x = wrapCoord(out.x, W);
+  return out;
+}
+
+/** pushOutOfBox with the box seen at its nearest image across the u seam. */
+function pushOutOfBoxWrapped(o: Obstacle, r: number, W: number, out: ConfineResult): void {
+  const lx = wrapDelta(out.x - o.cx, W);
+  const base = out.x - lx; // the box centre image nearest out.x
+  const ox = out.x;
+  out.x = o.cx + lx;
+  pushOutOfBox(o, r, out);
+  out.x = base + (out.x - o.cx);
+  if (out.x === base + lx) out.x = ox; // untouched: keep the exact input
 }
 
 /** Sets hit and the push normal from the total displacement. */
@@ -198,3 +244,9 @@ export function isInside(arena: ArenaDef, x: number, y: number, r: number): bool
 }
 
 const scratch = createConfineResult();
+
+/** isInside on a surface: flat is isInside; a u wrapping surface checks the rims and obstacles only. */
+export function isInsideOn(surface: Surface, arena: ArenaDef, x: number, y: number, r: number): boolean {
+  if (!surface.topology.wrapU) return isInside(arena, x, y, r);
+  return !confineOn(surface, arena, x, y, r, scratch).hit;
+}

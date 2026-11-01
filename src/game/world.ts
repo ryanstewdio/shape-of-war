@@ -1,9 +1,10 @@
 // Entity store (docs/03 section 3). Struct of arrays, fixed capacity, ship is id 0, free list
 // stack. stepWorld allocates nothing.
 import { mulberry32, type Rng } from '../core/rng';
+import { makeSurface, type Surface } from '../core/surface';
 import type { InputState } from '../input/types';
 import type { LevelDef } from '../levelgen/leveldef';
-import { confine, createConfineResult } from './arena';
+import { confineOn, createConfineResult } from './arena';
 import { createBulletPool, stepBullets, type BulletPool } from './bullets';
 import { createGrid, rebuild, type Grid } from './collide';
 import { createShipState, respawnShip, SHIP_RADIUS, stepShip, type ShipState } from './ship';
@@ -75,6 +76,8 @@ export interface World {
   time: number;
   /** Sim steps since createWorld. */
   tick: number;
+  /** V3-H C0: the play surface from level.surface (default flat). Read it through surfaceOf. */
+  surface: Surface;
 }
 
 /** Per kind behaviour. Swarm registers one per enemy kind in W2. */
@@ -88,6 +91,7 @@ export function registerBehaviour(kind: Kind, fn: EntityStep | null): void {
 }
 
 export function createWorld(level: LevelDef, capacity: number = ENTITY_CAP): World {
+  const surface = makeSurface(level.surface ?? 'flat', level.arena.width, level.arena.height);
   const cap = Math.max(1, Math.floor(capacity));
   const free = new Int32Array(cap);
   // Id 0 is reserved for the ship. Stack top is the lowest free id.
@@ -115,9 +119,10 @@ export function createWorld(level: LevelDef, capacity: number = ENTITY_CAP): Wor
     simRng: mulberry32(level.seed),
     bullets: createBulletPool(),
     ship: createShipState(),
-    grid: createGrid(level.arena.width, level.arena.height, cap),
+    grid: createGrid(level.arena.width, level.arena.height, cap, surface.topology.wrapU),
     time: 0,
     tick: 0,
+    surface,
   };
   w.kind[0] = Kind.Ship;
   w.radius[0] = SHIP_RADIUS;
@@ -159,13 +164,61 @@ export function kill(w: World, id: number): void {
   w.liveCount--;
 }
 
+/** The world's play surface (C1 contract: every seek, aim and distance goes through it). */
+export function surfaceOf(w: World): Surface {
+  return w.surface;
+}
+
+/**
+ * Shortest (bx, by) minus (ax, ay) on the world's surface, written into out. Flat is plain b minus
+ * a (bit identical to the raw subtraction); cylinder wraps the u component. No allocation.
+ */
+export function deltaTo(
+  w: World,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  out: { x: number; y: number },
+): { x: number; y: number } {
+  return w.surface.delta(ax, ay, bx, by, out);
+}
+
+const wrapPos = { x: 0, y: 0 };
+
+/**
+ * Canonicalise every live entity and player bullet onto the surface (once per step, after
+ * integration). Does nothing on flat. No allocation.
+ */
+export function wrapWorld(w: World): void {
+  const s = w.surface;
+  if (!s.topology.wrapU) return;
+  for (let id = 0; id < w.cap; id++) {
+    if (w.alive[id] !== 1) continue;
+    wrapPos.x = w.x[id] ?? 0;
+    wrapPos.y = w.y[id] ?? 0;
+    s.wrap(wrapPos);
+    w.x[id] = wrapPos.x;
+    w.y[id] = wrapPos.y;
+  }
+  const p = w.bullets;
+  for (let i = 0; i < p.cap; i++) {
+    if (p.alive[i] !== 1) continue;
+    wrapPos.x = p.x[i] ?? 0;
+    wrapPos.y = p.y[i] ?? 0;
+    s.wrap(wrapPos);
+    p.x[i] = wrapPos.x;
+    p.y[i] = wrapPos.y;
+  }
+}
+
 const bounce = createConfineResult();
 
 /** Default behaviour for kinds with no registered step: integrate velocity, reflect off walls. */
 export function driftEntity(w: World, id: number, dt: number): void {
   let vx = w.vx[id] ?? 0;
   let vy = w.vy[id] ?? 0;
-  const res = confine(w.level.arena, (w.x[id] ?? 0) + vx * dt, (w.y[id] ?? 0) + vy * dt, w.radius[id] ?? 0, bounce);
+  const res = confineOn(w.surface, w.level.arena, (w.x[id] ?? 0) + vx * dt, (w.y[id] ?? 0) + vy * dt, w.radius[id] ?? 0, bounce);
   if (res.hit) {
     const into = vx * res.nx + vy * res.ny;
     if (into < 0) {
@@ -190,6 +243,7 @@ export function stepWorld(w: World, dt: number, input: InputState): void {
     else driftEntity(w, id, dt);
   }
   stepBullets(w, dt);
+  wrapWorld(w);
   rebuild(w.grid, w);
   w.time += dt;
   w.tick++;

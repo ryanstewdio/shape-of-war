@@ -68,6 +68,9 @@ export function collectPickup(w: World, id: number): void {
   bus.emit('fx:pickup', s.pickupFx);
 }
 
+/** Scratch for surface deltas. */
+const pd = { x: 0, y: 0 };
+
 /** Behaviour step: count life down, expire, or collect when the live ship is within 28 u. */
 export function step(w: World, id: number, dt: number): void {
   const t = (w.t[id] ?? 0) - dt;
@@ -77,8 +80,9 @@ export function step(w: World, id: number, dt: number): void {
   }
   w.t[id] = t;
   if (!w.ship.active) return;
-  const dx = (w.x[0] ?? 0) - (w.x[id] ?? 0);
-  const dy = (w.y[0] ?? 0) - (w.y[id] ?? 0);
+  w.surface.delta(w.x[id] ?? 0, w.y[id] ?? 0, w.x[0] ?? 0, w.y[0] ?? 0, pd);
+  const dx = pd.x;
+  const dy = pd.y;
   if (dx * dx + dy * dy <= PICKUP_COLLECT_RADIUS * PICKUP_COLLECT_RADIUS) collectPickup(w, id);
 }
 

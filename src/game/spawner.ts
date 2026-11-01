@@ -7,7 +7,7 @@
 // per enemy. The emits change no sim state.
 import { bus } from '../core/events';
 import type { EnemyKind, SpawnEntry } from '../levelgen/leveldef';
-import { isInside } from './arena';
+import { isInsideOn } from './arena';
 import { keepScheduledEntry, waveClockHeld } from './bosses/core';
 import { advanceSegments } from './endless';
 import { defOf, kindOf } from './defs';
@@ -106,6 +106,14 @@ export function countWaveEnemies(w: World): number {
 }
 
 const pos = { x: 0, y: 0 };
+/** Scratch for surface deltas. */
+const sd = { x: 0, y: 0 };
+
+/** Squared surface distance from (ax, ay) to (bx, by). */
+function dist2(w: World, ax: number, ay: number, bx: number, by: number): number {
+  w.surface.delta(ax, ay, bx, by, sd);
+  return sd.x * sd.x + sd.y * sd.y;
+}
 
 /**
  * Resolve where an entry spawns. Returns false if a fixed point and its mirror are both within
@@ -118,10 +126,10 @@ export function resolvePosition(w: World, e: SpawnEntry, radius: number, out: { 
   if (e.mode === 'fixed') {
     let x = e.x;
     let y = e.y;
-    if ((x - sx) * (x - sx) + (y - sy) * (y - sy) < r2) {
+    if (dist2(w, sx, sy, x, y) < r2) {
       x = -x;
       y = -y;
-      if ((x - sx) * (x - sx) + (y - sy) * (y - sy) < r2) return false;
+      if (dist2(w, sx, sy, x, y) < r2) return false;
     }
     out.x = x;
     out.y = y;
@@ -129,8 +137,15 @@ export function resolvePosition(w: World, e: SpawnEntry, radius: number, out: { 
   }
   let x = sx + Math.cos(e.angleDeg * DEG) * e.radius;
   let y = sy + Math.sin(e.angleDeg * DEG) * e.radius;
+  if (w.surface.topology.wrapU) {
+    // docs/09 section 2.3: ring points are placed with delta arithmetic, then wrapped (straddles the seam).
+    pos.x = x;
+    pos.y = y;
+    w.surface.wrap(pos);
+    x = pos.x;
+  }
   // Pull toward the arena centre along the ray until valid.
-  for (let i = 0; i < 32 && !isInside(w.level.arena, x, y, radius); i++) {
+  for (let i = 0; i < 32 && !isInsideOn(w.surface, w.level.arena, x, y, radius); i++) {
     x *= 0.88;
     y *= 0.88;
   }

@@ -17,7 +17,7 @@
 // is alive, during the respawn delay, after the level ends, or in Endless; a due arrival waits.
 import { bus } from '../core/events';
 import { hash01 } from '../core/rng';
-import { isInside } from './arena';
+import { isInsideOn } from './arena';
 import { bossAlive, countHazards } from './bosses/core';
 import { addWell, def as wellDef } from './enemies/gravitywell';
 import { removeEntity } from './remove';
@@ -84,20 +84,25 @@ export function candidateSpot(seed: number, index: number, attempt: number, widt
   out.y = Math.round((hash01((seed ^ SALT_Y) >>> 0, k) * 2 - 1) * hh);
 }
 
+/** Scratch for surface deltas. */
+const wd = { x: 0, y: 0 };
+
 /** True when (x, y) is a valid arrival spot: inside the margin, far from the ship and other wells. */
 function spotOk(w: World, x: number, y: number, self: number): boolean {
-  if (!isInside(w.level.arena, x, y, ARRIVE_MARGIN)) return false;
+  if (!isInsideOn(w.surface, w.level.arena, x, y, ARRIVE_MARGIN)) return false;
   if (w.ship.active) {
-    const dx = x - (w.x[0] ?? 0);
-    const dy = y - (w.y[0] ?? 0);
+    w.surface.delta(w.x[0] ?? 0, w.y[0] ?? 0, x, y, wd);
+    const dx = wd.x;
+    const dy = wd.y;
     if (dx * dx + dy * dy < ARRIVE_SHIP_DIST * ARRIVE_SHIP_DIST) return false;
   }
   const g = gs(w);
   for (let i = 0; i < g.wellCount; i++) {
     const id = g.wellIds[i] ?? -1;
     if (id <= 0 || id === self) continue;
-    const dx = x - (w.x[id] ?? 0);
-    const dy = y - (w.y[id] ?? 0);
+    w.surface.delta(w.x[id] ?? 0, w.y[id] ?? 0, x, y, wd);
+    const dx = wd.x;
+    const dy = wd.y;
     if (dx * dx + dy * dy < ARRIVE_WELL_DIST * ARRIVE_WELL_DIST) return false;
   }
   return true;
@@ -139,8 +144,9 @@ function settleArrival(w: World): void {
   g.wellArriving = -1;
   if (id <= 0 || w.alive[id] !== 1 || w.kind[id] !== Kind.GravityWell || !w.ship.active) return;
   const clear = wellDef.radius + SHIP_RADIUS + ARRIVE_CLEAR;
-  const dx = (w.x[id] ?? 0) - (w.x[0] ?? 0);
-  const dy = (w.y[id] ?? 0) - (w.y[0] ?? 0);
+  w.surface.delta(w.x[0] ?? 0, w.y[0] ?? 0, w.x[id] ?? 0, w.y[id] ?? 0, wd);
+  const dx = wd.x;
+  const dy = wd.y;
   if (dx * dx + dy * dy >= clear * clear) return;
   if (pickSpot(w, g.wellArrivals - 1, ARRIVE_TRIES, id)) {
     w.x[id] = spot.x;

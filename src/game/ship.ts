@@ -4,7 +4,7 @@
 import type { InputState } from '../input/types';
 import { bus } from '../core/events';
 import { createThrustOut, stepThrust, type SpaceLevel } from '../core/physics';
-import { confine, createConfineResult } from './arena';
+import { confineOn, createConfineResult } from './arena';
 import { fireWeapon, weaponRate } from './weapons';
 import type { World } from './world';
 
@@ -124,7 +124,7 @@ export function stepShip(w: World, dt: number, input: InputState): void {
     vx *= s.slowFactor;
     vy *= s.slowFactor;
   }
-  const res = confine(w.level.arena, (w.x[SHIP_ID] ?? 0) + vx * dt, (w.y[SHIP_ID] ?? 0) + vy * dt, SHIP_RADIUS, wall);
+  const res = confineOn(w.surface, w.level.arena, (w.x[SHIP_ID] ?? 0) + vx * dt, (w.y[SHIP_ID] ?? 0) + vy * dt, SHIP_RADIUS, wall);
   if (res.hit) {
     // Slide: drop the velocity component pointing into the wall.
     const into = vx * res.nx + vy * res.ny;
