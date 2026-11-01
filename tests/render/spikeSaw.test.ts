@@ -1,7 +1,7 @@
 // Look GW2: orbit chainsaw teeth follow BulletPool.spikeLen.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { SPIKE_LEN, SPIKE_STRETCH } from '../../src/game/weapons';
+import { SAW_SPIKE_MAX, SPIKE_LEN } from '../../src/game/weapons';
 import {
   SAW_CHAIN_MAX,
   sawChain,
@@ -29,7 +29,7 @@ function drawnLen(t: Float32Array): number {
 describe('spike saw', () => {
   it('rest and max lengths match the sim', () => {
     expect(SPIKE_REST).toBe(SPIKE_LEN);
-    expect(SPIKE_MAX).toBeCloseTo(SPIKE_LEN * SPIKE_STRETCH);
+    expect(SPIKE_MAX).toBe(SAW_SPIKE_MAX);
   });
 
   it('drawn length tracks spikeLen from rest to full stretch', () => {

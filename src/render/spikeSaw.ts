@@ -7,7 +7,7 @@
 // the track tangent). Each tooth lies along its tangent with length spikeLen; the ghost smear is no
 // longer drawn (it read as a white backdrop behind the ship). While the saw level is above 0 a faint
 // bright chain line runs through consecutive teeth of each ring, sorted by phase (sawChain).
-import { SPIKE_LEN, SPIKE_STRETCH } from '../game/weapons';
+import { SAW_SPIKE_MAX, SPIKE_LEN } from '../game/weapons';
 
 function fin(v: number, d: number): number {
   return Number.isFinite(v) ? v : d;
@@ -15,7 +15,7 @@ function fin(v: number, d: number): number {
 
 /** Spike length at rest and fully stretched (weapons SPIKE_LEN and SPIKE_LEN x SPIKE_STRETCH). */
 export const SPIKE_REST = SPIKE_LEN;
-export const SPIKE_MAX = SPIKE_LEN * SPIKE_STRETCH;
+export const SPIKE_MAX = SAW_SPIKE_MAX; // GW3 glue: bar teeth top out at 40 u
 /** Half width of the triangle base at rest; a stretched tooth narrows to SPIKE_THIN of that. */
 export const SPIKE_HALF = 5;
 export const SPIKE_THIN = 0.7;

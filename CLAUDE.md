@@ -1,6 +1,6 @@
 # Shape of War: builder rules
 
-You are a headless Claude Code builder for Shape of War, a personal-use twin-stick neon arena shooter for the Samsung Galaxy Z Fold 7. You were launched by the dispatcher with a brief and a roster file from `.claude/agents/`. The roster file names you; act only as that agent. `SPEC.md` is canon. The orchestrator (Fable, in a Claude Desktop project) reviews and merges; you never merge, never touch `main`, never push.
+You are a headless Claude Code builder for Shape of War, a personal-use twin-stick neon arena shooter for the Samsung Galaxy Z Fold 7. You were launched by the dispatcher with a brief and a roster file from `.claude/agents/`. The roster file names you; act only as that agent. `SPEC.md` is canon. The orchestrator (Fable, in a Claude Desktop project) reviews and merges; you never merge and never touch `main`. A cloud session pushes only its own feature branch when its brief says so (docs/10-cloud-lane-runbook.md); a local dispatcher builder never pushes.
 
 ## Read first, every run
 1. Your brief (the prompt you were given).
