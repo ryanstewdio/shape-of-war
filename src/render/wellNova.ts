@@ -1,14 +1,16 @@
-// Supernova well (v31, look v33 GW1 "time bomb"). On 'sim:wellNova' a gravity well erupts into a
-// white tornado: a dense spiral of NOVA_ARMS arms in near white (hsl 0 0 95 percent, the Bulwark
-// shield white) turning at NOVA_SPIN with a brightness pulse, a core that flares white, and a stream
-// of shimmer particles flung outward from the core in all neon hues (one hue ring stop per particle
-// in turn), fading over 2 s. The only ring is a thin faint white line at exactly the sim pull radius,
-// with no pulse. Pure maths and small fixed state only; the renderer owns the Graphics and the pool.
+// Supernova well (v31, look GW2 "whirlpool"). On 'sim:wellNova' a gravity well becomes a whirlpool
+// of white gas and dust (hsl 0 0 95 percent, the Bulwark shield white) spiralling inward and
+// clockwise on screen (y down), fast near the core and slow at the rim: WHIRL_BANDS layered
+// translucent log spiral bands with bright dashes flowing down them, WHIRL_MOTES dust motes on log
+// spiral paths that fall into the core and respawn at the rim, and WHIRL_SPARKS multicolour shimmer
+// sparks riding the same flow. The outer edge reaches the sim pull radius, so no ring is drawn. A
+// bright white core flare. Before the nova a calm small swirl turns at the well. Everything is a
+// pure function of the well id and the draw clock (hash01, never the PRNG); the renderer owns the
+// one shared Graphics.
 import type { Bus, EventKey } from '../core/events';
 import { hash01, hslToRgbInt } from './color';
 import { mixRgb } from './mapFx';
 import type { PaletteKey } from './neon';
-import type { TrailSpec } from './particlePool';
 
 function fin(v: number, d: number): number {
   return Number.isFinite(v) ? v : d;
@@ -16,35 +18,45 @@ function fin(v: number, d: number): number {
 
 /** Live novas at once (wells on screen are capped at 3; one spare). */
 export const NOVA_SLOTS = 4;
-/** Tornado arms, points per arm, the arm twist (radians from core to tip) and spin (rad/s). */
-export const NOVA_ARMS = 12;
-export const NOVA_ARM_PTS = 12;
-export const NOVA_TWIST = 4.4;
-export const NOVA_SPIN = 1.5;
-/** Tornado reach as a multiple of the well's drawn radius. */
-export const NOVA_REACH = 2.4;
-/** The tornado white: hsl 0 0 95 percent, like the Bulwark shield. */
+/** The whirlpool white: hsl 0 0 95 percent, like the Bulwark shield. */
 export const NOVA_WHITE: number = hslToRgbInt(0, 0, 0.95);
-/** Arm brightness pulse: rate (Hz) and range (alpha multiplier). */
-export const NOVA_PULSE_HZ = 1.6;
-export const NOVA_PULSE_RANGE: readonly [number, number] = [0.55, 1];
-/** Shimmer flecks riding the arms per nova and the seconds one takes from rim to core. */
-export const NOVA_ORBITERS = 12;
-export const NOVA_INFALL_SEC = 1.6;
-/** Outward shimmer stream: particles per second per nova, their life and speed range (u/s). */
-export const NOVA_EMIT_RATE = 40;
-export const NOVA_DRIFT_LIFE = 2;
-export const NOVA_DRIFT_SPEED: readonly [number, number] = [60, 120];
-/** Steady state stream particles per nova (rate x life): 60 to 90, never more than this. */
-export const NOVA_PARTICLE_BUDGET = 90;
-/** Eruption flare: the tornado grows in over this many seconds. */
+/** Eruption flare: the whirlpool grows in over this many seconds. */
 export const NOVA_GROW_SEC = 0.35;
-/** Particles a nova may add in all (flecks plus the steady stream), and its Graphics rebuilds per frame. */
+/** Particles a nova may add in all (dust motes plus shimmer sparks), and its Graphics rebuilds per frame. */
 export const NOVA_ADDED_PARTICLES_MAX = 96;
 export const NOVA_DRAWS_PER_WELL = 1;
-/** Pull ring: line width (u) and alpha. Drawn at exactly the sim pull radius, no multiplier. */
-export const NOVA_RING_WIDTH = 1.2;
-export const NOVA_RING_ALPHA = 0.22;
+
+// Whirlpool flow. A point at radius share u (0 core, 1 rim) sits at radius
+// reach * (WHIRL_CORE + (1 - WHIRL_CORE) * u) and angle
+// base + WHIRL_CW * (WHIRL_SPIN * t + WHIRL_TWIST * ln(1 / (WHIRL_CORE + (1 - WHIRL_CORE) * u))),
+// a log spiral. Matter falls from u = 1 to u = 0 at a steady radial speed over WHIRL_INFALL_SEC, so
+// its angular speed is WHIRL_SPIN + WHIRL_TWIST * (1 - WHIRL_CORE) / WHIRL_INFALL_SEC / share:
+// 1 rad/s at the rim, rising past 4 rad/s at the core.
+
+/** Clockwise on screen: with y pointing down, an increasing atan2 angle turns clockwise. */
+export const WHIRL_CW = 1;
+/** Core radius share: the flow ends at this share of the reach. */
+export const WHIRL_CORE = 0.12;
+/** Seconds a mote takes from the rim to the core. */
+export const WHIRL_INFALL_SEC = 2;
+/** Rigid turn of the whole pattern (rad/s). */
+export const WHIRL_SPIN = 0.5;
+/** Log spiral winding: chosen so the rim turns at 1 rad/s in all. */
+export const WHIRL_TWIST = ((1 - WHIRL_SPIN) * WHIRL_INFALL_SEC) / (1 - WHIRL_CORE);
+/** Layered translucent spiral bands, points per band, bright dashes flowing down each band. */
+export const WHIRL_BANDS = 4;
+export const WHIRL_BAND_PTS = 16;
+export const WHIRL_DASHES = 3;
+/** Dash length as a share of the rim to core path. */
+export const WHIRL_DASH_U = 0.14;
+/** Dust motes and multicolour shimmer sparks per nova. */
+export const WHIRL_MOTES = 72;
+export const WHIRL_SPARKS = 16;
+/** Calm pre nova swirl: bands, motes, reach (x the well radius) and flow rate (x the nova flow). */
+export const CALM_BANDS = 2;
+export const CALM_MOTES = 10;
+export const CALM_REACH = 2.2;
+export const CALM_RATE = 0.3;
 
 // Colour cycle
 
@@ -89,18 +101,6 @@ export function novaColour(stops: Uint32Array, base: number, u: number, timeSec:
   return mixRgb(base, novaCycleColour(stops, u, timeSec), shift);
 }
 
-/** Pure: the pull ring radius: exactly the sim pull radius (no multiplier, no pulse). */
-export function novaRingR(pullR: number): number {
-  return Math.max(0, fin(pullR, 0));
-}
-
-/** Pure: arm brightness pulse within NOVA_PULSE_RANGE at timeSec; arms ripple out of phase. */
-export function novaArmPulse(timeSec: number, arm: number): number {
-  const t = fin(timeSec, 0);
-  const w = 0.5 + 0.5 * Math.sin(t * NOVA_PULSE_HZ * Math.PI * 2 + arm * 0.9);
-  return NOVA_PULSE_RANGE[0] + (NOVA_PULSE_RANGE[1] - NOVA_PULSE_RANGE[0]) * w;
-}
-
 /** Pure: brightness pulse 0.35 to 1 of fleck k at timeSec (each fleck beats on its own). */
 export function novaPulse(timeSec: number, k: number): number {
   const t = fin(timeSec, 0);
@@ -133,9 +133,9 @@ export function novaStreamColour(stops: Uint32Array, base: number, seq: number, 
   return novaColour(stops, base, u - fin(timeSec, 0) / NOVA_CYCLE_SEC, timeSec, shift);
 }
 
-/** Pure: particles one nova adds at most: the swirl points plus the steady outward stream. */
+/** Pure: particles one nova adds at most: the dust motes plus the shimmer sparks. */
 export function novaAddedParticles(): number {
-  return NOVA_ORBITERS + novaSteadyParticles();
+  return WHIRL_MOTES + WHIRL_SPARKS;
 }
 
 export interface NovaState {
@@ -149,8 +149,6 @@ export interface NovaState {
   readonly wantId: Int32Array;
   /** 1 when the slot's well was drawn this frame. */
   readonly seen: Uint8Array;
-  /** Emitter accumulators for the outward stream. */
-  readonly acc: Float64Array;
 }
 
 export function createNovaState(): NovaState {
@@ -161,7 +159,6 @@ export function createNovaState(): NovaState {
     idx: new Int32Array(NOVA_SLOTS).fill(-1),
     wantId: new Int32Array(NOVA_SLOTS).fill(-1),
     seen: new Uint8Array(NOVA_SLOTS),
-    acc: new Float64Array(NOVA_SLOTS),
   };
 }
 
@@ -170,7 +167,6 @@ export function resetNovaState(s: NovaState): void {
   s.idx.fill(-1);
   s.wantId.fill(-1);
   s.seen.fill(0);
-  s.acc.fill(0);
 }
 
 /** Record an eruption. Reuses the oldest slot when all are live. Returns the slot. */
@@ -189,7 +185,6 @@ export function novaEvent(s: NovaState, id: number, x: number, y: number): numbe
   s.idx[k] = -1;
   s.wantId[k] = Number.isInteger(id) && id >= 0 ? id : -1;
   s.seen[k] = 0;
-  s.acc[k] = 0;
   return k;
 }
 
@@ -253,81 +248,94 @@ export function novaGrow(age: number): number {
   return u * (1 + 0.25 * Math.sin(u * Math.PI));
 }
 
+/** Pure: the radius share along the flow (0 core, 1 rim) as a fraction of the reach. */
+export function whirlShare(u: number): number {
+  const c = Math.max(0, Math.min(1, fin(u, 1)));
+  return WHIRL_CORE + (1 - WHIRL_CORE) * c;
+}
+
+/** Pure: radius of flow share u within reach. */
+export function whirlRadius(u: number, reach: number): number {
+  return Math.max(0, fin(reach, 0)) * whirlShare(u);
+}
+
+/** Pure: angle of flow share u at timeSec on the spiral that starts at base, flow rate rate. */
+export function whirlAngle(u: number, timeSec: number, base: number, rate = 1): number {
+  return fin(base, 0) + WHIRL_CW * (WHIRL_SPIN * fin(rate, 1) * fin(timeSec, 0) + WHIRL_TWIST * Math.log(1 / whirlShare(u)));
+}
+
+/** Pure: angular speed (rad/s, positive is clockwise on screen) of matter at flow share u. */
+export function whirlOmega(u: number, rate = 1): number {
+  const k = fin(rate, 1);
+  return WHIRL_CW * k * (WHIRL_SPIN + (WHIRL_TWIST * (1 - WHIRL_CORE)) / WHIRL_INFALL_SEC / whirlShare(u));
+}
+
 /**
- * Pure: one tornado arm around the origin written into out (NOVA_ARM_PTS x, y pairs, arena units).
- * Radius grows from the core to reach along the arm; the angle winds by NOVA_TWIST and the whole
- * spiral turns at NOVA_SPIN. Arms are spaced evenly. Writes in place; allocates nothing.
+ * Pure: the screen turn from vector a to vector b: positive when b is clockwise of a on a y down
+ * screen (the 2D cross product a x b).
  */
-export function novaSpiral(timeSec: number, arm: number, reach: number, out: Float32Array): Float32Array {
-  const spin = fin(timeSec, 0) * NOVA_SPIN + (arm * Math.PI * 2) / NOVA_ARMS;
-  const R = Math.max(0, fin(reach, 0));
-  for (let k = 0; k < NOVA_ARM_PTS; k++) {
-    const u = k / (NOVA_ARM_PTS - 1);
-    const r = R * (0.1 + 0.9 * u);
-    // The tornado tightens toward the core: the angle winds faster near the centre.
-    const a = spin + NOVA_TWIST * Math.sqrt(u);
+export function screenTurn(ax: number, ay: number, bx: number, by: number): number {
+  return ax * by - ay * bx;
+}
+
+/** Pure: true when moving from a to b (both about the same centre) turns clockwise on screen. */
+export function turnsClockwise(ax: number, ay: number, bx: number, by: number): boolean {
+  return screenTurn(ax, ay, bx, by) > 0;
+}
+
+/**
+ * Pure: spiral band `band` of `bands` around the origin written into out (WHIRL_BAND_PTS x, y
+ * pairs, rim first, core last). Bands are spaced evenly round the turn. Allocates nothing.
+ */
+export function whirlBand(timeSec: number, band: number, bands: number, reach: number, out: Float32Array, rate = 1): Float32Array {
+  const base = (band * Math.PI * 2) / Math.max(1, bands);
+  for (let k = 0; k < WHIRL_BAND_PTS; k++) {
+    const u = 1 - k / (WHIRL_BAND_PTS - 1);
+    const r = whirlRadius(u, reach);
+    const a = whirlAngle(u, timeSec, base, rate);
     out[k * 2] = Math.cos(a) * r;
     out[k * 2 + 1] = Math.sin(a) * r;
   }
   return out;
 }
 
-export interface Orbiter {
+/** Pure: flow share of dash d on a band at timeSec: it slides from the rim to the core and wraps. */
+export function whirlDashU(timeSec: number, band: number, d: number, rate = 1): number {
+  const ph = (fin(timeSec, 0) * fin(rate, 1)) / WHIRL_INFALL_SEC + d / WHIRL_DASHES + band * 0.137;
+  return 1 - (ph - Math.floor(ph));
+}
+
+export interface Mote {
   x: number;
   y: number;
-  /** Shimmer alpha 0.25 to 1. */
-  a: number;
-  /** Radius share 0 (core) to 1 (rim). */
+  /** Flow share 0 (core) to 1 (rim). */
   u: number;
+  /** Alpha 0 to 1: fades in at the rim, brightens toward the core, winks out at the core. */
+  a: number;
 }
 
 /**
- * Pure: shimmer point k of NOVA_ORBITERS spiralling inward around the origin at timeSec, within
- * reach. Each point falls from the rim to the core over NOVA_INFALL_SEC, turning faster as it nears
- * the centre, and twinkles.
+ * Pure: mote k of well id at timeSec within reach, about the origin. Each mote falls from the rim
+ * to the core over WHIRL_INFALL_SEC / rate on its own log spiral, then respawns at the rim. The
+ * phase and the spiral's start angle come from hash01 of the id and k (no PRNG).
  */
-export function novaOrbiter(timeSec: number, k: number, reach: number, out: Orbiter): Orbiter {
-  const t = fin(timeSec, 0);
-  const ph = t / NOVA_INFALL_SEC + k / NOVA_ORBITERS;
+export function whirlMote(timeSec: number, id: number, k: number, reach: number, out: Mote, rate = 1): Mote {
+  const seed = (id | 0) * 977 + (k | 0) * 131;
+  const ph = (fin(timeSec, 0) * fin(rate, 1)) / WHIRL_INFALL_SEC + hash01(seed + 1);
   const u = 1 - (ph - Math.floor(ph));
-  const r = Math.max(0, fin(reach, 0)) * (0.1 + 0.9 * u);
-  // Each fleck rides one arm of the tornado as it falls inward.
-  const a = t * NOVA_SPIN + ((k % NOVA_ARMS) * Math.PI * 2) / NOVA_ARMS + NOVA_TWIST * Math.sqrt(u);
+  const base = hash01(seed + 2) * Math.PI * 2;
+  const r = whirlRadius(u, reach) * (0.94 + 0.12 * hash01(seed + 3));
+  const a = whirlAngle(u, timeSec, base, rate);
   out.x = Math.cos(a) * r;
   out.y = Math.sin(a) * r;
   out.u = u;
-  out.a = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(t * 17 + k * 2.1));
+  const fadeIn = Math.min(1, (1 - u) * 8);
+  const fadeOut = Math.min(1, u * 14);
+  out.a = fadeIn * fadeOut * (0.35 + 0.65 * (1 - u));
   return out;
 }
 
-/** Pure: steady state live stream particles of one nova (rate x life). */
-export function novaSteadyParticles(rate: number = NOVA_EMIT_RATE, life: number = NOVA_DRIFT_LIFE): number {
-  return Math.ceil(Math.max(0, rate) * Math.max(0, life));
-}
-
-/**
- * Fill out with one outward shimmer particle from a nova at (x, y) whose core radius is r: it starts
- * near the core, is flung outward at NOVA_DRIFT_SPEED with a slight swirl and fades over 2 s. Even
- * and odd sequences take colour a and b. No damage: it is a render particle only.
- */
-export function novaDriftParticle(out: TrailSpec, x: number, y: number, r: number, seq: number, a: number, b: number): void {
-  const ang = hash01(seq * 5 + 1) * Math.PI * 2;
-  const r0 = Math.max(0, r) * (0.2 + 0.5 * hash01(seq * 5 + 2));
-  const sp = NOVA_DRIFT_SPEED[0] + (NOVA_DRIFT_SPEED[1] - NOVA_DRIFT_SPEED[0]) * hash01(seq * 5 + 3);
-  // A slight swirl: the velocity leans off radial so the stream curls with the tornado.
-  const va = ang + 0.35;
-  out.x = x + Math.cos(ang) * r0;
-  out.y = y + Math.sin(ang) * r0;
-  out.vx = Math.cos(va) * sp;
-  out.vy = Math.sin(va) * sp;
-  out.life = NOVA_DRIFT_LIFE * (0.9 + 0.1 * hash01(seq * 5 + 4));
-  out.drag = 0.05;
-  out.colour = (seq & 1) === 0 ? a : b;
-  out.size = 0.9;
-}
-
-// Bus (coded against the event name; until Swarm's change lands the key is not in Events and
-// nothing emits it, so the handler never runs)
+// Bus
 
 export const WELL_NOVA_EVENT = 'sim:wellNova';
 type NovaKey = Extract<EventKey, typeof WELL_NOVA_EVENT>;
