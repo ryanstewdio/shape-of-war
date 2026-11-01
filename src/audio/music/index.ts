@@ -30,6 +30,7 @@
 import { bus as coreBus, type Bus } from '../../core/events';
 import type { BossId, BossTier, EnemyKind } from '../../levelgen/leveldef';
 import { getAudioGraph } from '../synth';
+import { createMenuTheme, type MenuThemePlayer, type MenuThemeState } from './menuTheme';
 import { BOSS_MOTIFS, BOSS_TIMBRES, voicesForPhase, type BossMotifNote } from './boss';
 import {
   allowedEnemyKinds,
@@ -352,6 +353,8 @@ let installed: (() => void) | null = null;
 let installToken = 0;
 /** Battle track index of the last boss fight in this run (a new 'game:start' clears it). */
 let lastBattle: number | null = null;
+/** The title and menu theme (v3.6), made by initMusic. */
+let menuTheme: MenuThemePlayer | null = null;
 
 function defaultVisibility(): VisibilitySource | null {
   return typeof document === 'undefined' ? null : document;
@@ -1183,7 +1186,12 @@ export function initMusic(opts: MusicOptions = {}): () => void {
   if (opts.volume !== undefined) volume = clampMusicVolume(opts.volume);
   const vis = opts.visibility === undefined ? defaultVisibility() : opts.visibility;
   hidden = vis?.hidden ?? false;
+  const menu = createMenuTheme({ graph: () => graphSource(), timer, volume: () => volume });
+  menu.setHidden(hidden);
+  menuTheme = menu;
   const offs = [
+    // v3.6: title and menu play the menu theme, settings keeps it, play and results fade it out.
+    b.on('ui:screen', (p) => menu.screen(p.screen)),
     b.on('sim:threat', (p) => {
       target = clamp01(p.level);
     }),
@@ -1237,6 +1245,7 @@ export function initMusic(opts: MusicOptions = {}): () => void {
     // inside this same emit, before this handler runs: a session still in its first bar with the
     // other mode restarts with the right tune.
     b.on('game:start', (p) => {
+      menu.leave();
       runMode = p.mode;
       // A new run: the first boss may get any battle track.
       lastBattle = null;
@@ -1258,6 +1267,7 @@ export function initMusic(opts: MusicOptions = {}): () => void {
   ];
   const onVisibility = (): void => {
     hidden = vis?.hidden ?? false;
+    menu.setHidden(hidden);
     if (hidden) suspend();
     else maybeResume();
   };
@@ -1268,6 +1278,8 @@ export function initMusic(opts: MusicOptions = {}): () => void {
     done = true;
     for (const off of offs) off();
     vis?.removeEventListener('visibilitychange', onVisibility);
+    menu.stop();
+    if (menuTheme === menu) menuTheme = null;
     if (installToken === token) {
       installed = null;
       noteHook = null;
@@ -1324,6 +1336,8 @@ export function wireMusic(b: Bus = coreBus, opts: Omit<MusicOptions, 'bus'> = {}
  */
 export function startMusic(seed: number): boolean {
   stopMusic();
+  // A level's music never plays over the menu theme.
+  menuTheme?.leave();
   const g = graphSource();
   if (!g) return false;
   const ctx = g.ctx;
@@ -1448,12 +1462,19 @@ function endMusic(): void {
 /** Music volume 0 to 100 (clamped, default 50). 0 is silence. Returns the applied value. */
 export function setMusicVolume(v: number): number {
   volume = clampMusicVolume(v);
+  menuTheme?.volumeChanged();
   if (volume === 0) endRingOut();
   if (playing) {
     playing.engine.setMaster(musicMasterGain(volume));
     if (volume === 0) playing.engine.silence();
   }
   return volume;
+}
+
+/** The menu theme's state, for tests and the debug overlay. */
+export function menuThemeState(): { readonly state: MenuThemeState; readonly wanted: boolean; readonly engines: number; readonly starts: number } {
+  const m = menuTheme;
+  return m ? { state: m.state, wanted: m.wanted, engines: m.engines, starts: m.starts } : { state: 'off', wanted: false, engines: 0, starts: 0 };
 }
 
 export function getMusicVolume(): number {

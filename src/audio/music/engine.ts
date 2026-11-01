@@ -506,6 +506,8 @@ export interface MusicEngine {
   setStepSec(sec: number): void;
   /** Music master gain, clamped to 0 to 0.35, ramped from the current time. */
   setMaster(gain: number): void;
+  /** Linear ramp of the music master gain (clamped like setMaster) to `gain` over `sec` from now (the menu theme fades). */
+  fade(gain: number, sec: number): void;
   /** Master lowpass cutoff, Hz, ramped from the current time. */
   setCutoff(hz: number): void;
   /** Swell the long echo into (true) or out of (false) the space breakdown from audio time t. */
@@ -995,6 +997,14 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
       if (disposed) return;
       const g = Math.min(MUSIC_MASTER_MAX, Math.max(0, Number.isFinite(gain) ? gain : 0));
       out.gain.setTargetAtTime(g, ctx.currentTime, 0.02);
+    },
+    fade(gain: number, sec: number): void {
+      if (disposed) return;
+      const now = ctx.currentTime;
+      const g = Math.min(MUSIC_MASTER_MAX, Math.max(0, Number.isFinite(gain) ? gain : 0));
+      out.gain.cancelScheduledValues(now);
+      out.gain.setValueAtTime(out.gain.value, now);
+      out.gain.linearRampToValueAtTime(g, now + Math.max(0.01, Number.isFinite(sec) ? sec : 0));
     },
     setCutoff(hz: number): void {
       if (disposed || !(hz > 0)) return;

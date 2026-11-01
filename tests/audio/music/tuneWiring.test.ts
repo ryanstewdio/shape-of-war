@@ -139,7 +139,11 @@ describe('B20: selection over 1000 run seeds', () => {
     for (let m = 0; m < 500; m++) {
       expect(new Set([0, 1, 2, 3, 4, 5].map((p) => tuneIndexForKey(6 * m + p, 6))).size).toBe(6);
     }
-    expect(TUNES).toHaveLength(6);
+    // v3.6: ten level tunes rotate, a block of ten keys plays each once.
+    for (let m = 0; m < 500; m++) {
+      expect(new Set(Array.from({ length: 10 }, (_, p) => tuneIndexForKey(10 * m + p, 10))).size).toBe(10);
+    }
+    expect(TUNES).toHaveLength(10);
     // Across the 2^32 wrap too.
     expect(new Set([0xfffffffe, 0xffffffff, 0].map((k) => tuneIndexForKey(k, 4))).size).toBe(3);
   });
@@ -147,10 +151,10 @@ describe('B20: selection over 1000 run seeds', () => {
   it('every tune opens a run about equally often (no bias to one tune on level 1)', () => {
     const counts = new Array<number>(TUNES.length).fill(0);
     for (const r of RUN_SEEDS_1000) counts[tuneIndexForLevelSeed(levelSeed(r, 1))] = (counts[tuneIndexForLevelSeed(levelSeed(r, 1))] ?? 0) + 1;
-    // 1000 runs over six tunes: about 167 each.
+    // 1000 runs over ten tunes: about 100 each.
     for (const c of counts) {
-      expect(c).toBeGreaterThan(110);
-      expect(c).toBeLessThan(230);
+      expect(c).toBeGreaterThan(60);
+      expect(c).toBeLessThan(145);
     }
   });
 

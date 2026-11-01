@@ -76,8 +76,8 @@ describe('signature helpers', () => {
 });
 
 describe('the tunes are different songs', () => {
-  it('nine tunes, each with an A, a B and a bridge of 4 bars that differ from each other', () => {
-    expect(ALL).toHaveLength(9);
+  it('thirteen tunes (ten level, three battle), each with an A, a B and a bridge of 4 bars that differ from each other', () => {
+    expect(ALL).toHaveLength(13);
     for (const t of ALL) {
       const f = t.form;
       expect(f, t.id).toBeDefined();
@@ -136,5 +136,25 @@ describe('the tunes are different songs', () => {
     const battleModes = BATTLE_TUNES.map((t) => t.form?.mode);
     expect(new Set(battleModes).size).toBe(BATTLE_TUNES.length);
     for (const m of battleModes) expect(['aeolian', 'dorian', 'phrygian', 'harmonic']).toContain(m);
+  });
+
+  it('v3.6: ten level tunes, each with A, B, bridge and S (arpeggio section and space breakdown) phrases, among them a heroic, an industrial, a dreamy space and a bouncy chiptune tune', () => {
+    expect(TUNES).toHaveLength(10);
+    for (const t of TUNES) {
+      const f = t.form;
+      expect(f?.sections, t.id).toContain('S');
+      for (const sec of ['A', 'B', 'C', 'S'] as const) expect((f?.phrases[sec] ?? []).length, `${t.id} ${sec}`).toBeGreaterThan(0);
+    }
+    const byId = (id: string): Tune | undefined => TUNES.find((t) => t.id === id);
+    const charge = byId('charge');
+    expect(charge?.bpm).toBeGreaterThanOrEqual(140);
+    expect(charge?.form?.mode).toBe('ionian');
+    expect(byId('foundry')?.form?.mode).toBe('phrygdom');
+    const aurora = byId('aurora');
+    expect(aurora?.form?.space).toBe(true);
+    expect(aurora?.bpm).toBeLessThanOrEqual(110);
+    const pixel = byId('pixel');
+    expect(pixel?.form?.lead.wave).toBe('pulse');
+    expect(pixel?.form?.pad).toBe('chip');
   });
 });

@@ -10,8 +10,8 @@
 // Each tune has a form (compose.ts): 4 bar sections A, B, a bridge C and S, the sparse space
 // breakdown (held pads, long echo, filtered noise wind, no drums). Each has its own mode, tempo,
 // lead voice and chord plan, and no two tunes share a phrase contour, a phrase rhythm or a chord
-// progression (tests/audio/music/variety.test.ts). Six level tunes rotate (two of them, Nebula
-// Drift and Event Horizon, are slow space pieces), and three battle tracks stay minor.
+// progression (tests/audio/music/variety.test.ts). Ten level tunes rotate (three of them, Nebula
+// Drift, Event Horizon and Aurora Veil, are slow space pieces), and three battle tracks stay minor.
 //
 // Everything melodic (motifs, entrance phrases, kill notes, chord hits, hit ticks) reads the
 // active tune's key through harmony.ts, so every contribution transposes into the tune's chords.
@@ -26,7 +26,7 @@ import { DEFAULT_KEY, HARMONIES, triad, type ChordName, type Harmony, type Key }
 import { pentatonicMidi } from './scale';
 import type { Layer } from './track';
 
-export const TUNE_IDS = ['neon', 'tide', 'ember', 'orbit', 'nebula', 'horizon'] as const;
+export const TUNE_IDS = ['neon', 'tide', 'ember', 'orbit', 'nebula', 'horizon', 'charge', 'foundry', 'aurora', 'pixel'] as const;
 export type TuneId = (typeof TUNE_IDS)[number];
 
 /** The boss battle tracks (G3C retest: boss fights get their own music, at least three tracks). */
@@ -678,6 +678,273 @@ const HORIZON: LevelTune = level({
 });
 
 // ---------------------------------------------------------------------------------------
+// Music v3.6 (Ryan: "more tunes"): four more level tunes, ten in rotation. Each keeps the
+// A, B, S (arpeggio section and timed space breakdown) and bridge form, in a mode, key, tempo
+// and lead of its own.
+
+// Starfall Charge: G major, 148 BPM, the up tempo heroic tune. A brassy saw lead opens on a
+// fanfare leap of a fifth in dotted rhythm, an octave bouncing bass, a march kick.
+
+const SC = {
+  g: triad('G', 'I', 7, 4),
+  bm: triad('Bm', 'iii', 11, 3),
+  c: triad('C', 'IV', 0, 4),
+  d: triad('D', 'V', 2, 4),
+  em: triad('Em', 'vi', 4, 3),
+  am: triad('Am', 'ii', 9, 3),
+};
+
+const CHARGE: LevelTune = level({
+  id: 'charge',
+  name: 'Starfall Charge',
+  mood: 'up tempo and heroic, G major, brassy saw fanfare over an octave bass and a march kick',
+  bpm: 148,
+  root: 67,
+  mode: 'ionian',
+  sections: DRIVE_FORM,
+  chords: { A: [SC.g, SC.bm, SC.c, SC.d], B: [SC.em, SC.c, SC.am, SC.d], S: [SC.c, SC.c, SC.g, SC.d], C: [SC.am, SC.em, SC.c, SC.d] },
+  phrases: {
+    A: phrase(
+      [[0, 0, 3], [3, 4, 1], [4, 4, 4], [8, 5, 2], [10, 4, 2], [12, 7, 4]],
+      [[0, 6, 3], [3, 5, 1], [4, 4, 6], [10, 2, 2], [12, 4, 4]],
+      [[0, 5, 3], [3, 6, 1], [4, 7, 4], [8, 9, 4], [12, 8, 2], [14, 7, 2]],
+      [[0, 8, 6, 1], [6, 7, 2], [8, 9, 8]],
+    ),
+    B: phrase(
+      [[0, 7, 2], [2, 7, 1], [3, 7, 1], [4, 9, 4], [8, 7, 2], [10, 5, 2], [12, 4, 4]],
+      [[0, 3, 2], [2, 3, 1], [3, 3, 1], [4, 5, 4], [8, 7, 8, 1]],
+      [[0, 5, 2], [2, 5, 1], [3, 6, 1], [4, 7, 2], [6, 8, 2], [8, 9, 6], [14, 8, 2]],
+      [[0, 8, 4], [4, 6, 4], [8, 4, 8]],
+    ),
+    S: phrase([[0, 14, 8], [8, 11, 8]], [[4, 12, 12, 1]], [[0, 9, 10], [10, 10, 6]], [[8, 13, 8, 1]]),
+    C: phrase(
+      [[0, 9, 3], [3, 8, 3], [6, 7, 2], [8, 8, 3], [11, 7, 3], [14, 5, 2]],
+      [[0, 6, 3], [3, 5, 3], [6, 4, 2], [8, 5, 8]],
+      [[0, 7, 3], [3, 6, 3], [6, 5, 2], [8, 6, 3], [11, 5, 3], [14, 3, 2]],
+      [[0, 4, 4], [4, 6, 4], [8, 8, 8, 1]],
+    ),
+  },
+  lead: lead('sawtooth', 0.5, 0.5, 20, 2),
+  pad: 'held',
+  bass: [bh(0, 0, 2, 1), bh(2, 3, 2, 0.75), bh(4, 0, 2, 0.85), bh(6, 3, 2, 0.75), bh(8, 0, 2, 0.95), bh(10, 3, 2, 0.75), bh(12, 2, 2, 0.85), bh(14, 1, 2, 0.75)],
+  bassAlt: [bh(0, 0, 3, 1), bh(3, 0, 3, 0.8), bh(6, 2, 2, 0.8), bh(8, 0, 3, 0.95), bh(11, 0, 3, 0.8), bh(14, 3, 2, 0.8)],
+  arp: {
+    a: [0, 2, 4, 2, 0, 2, 4, 6, 1, 3, 5, 3, 1, 3, 5, 4],
+    b: [4, 3, 2, 0, -1, 0, 2, 3, 4, 5, 6, 5, 4, 2, 1, 0],
+    rests: [5, 13],
+    restP: 0.08,
+  },
+  arpAlt: {
+    a: [0, 4, 2, 4, 0, 4, 2, 4, 1, 5, 3, 5, 1, 5, 3, 5],
+    b: [5, 3, 5, 1, 5, 3, 5, 1, 4, 2, 4, 0, 4, 2, 4, 0],
+    rests: [3, 7, 11, 15],
+    restP: 0.05,
+  },
+  drums: {
+    kick: [hit(0, 1), hit(6, 0.75), hit(8, 0.95), hit(12, 0.85)],
+    kickTurn: [hit(10, 0.7)],
+    perc: [hit(4, 1), hit(12, 1)],
+    percOdd: [hit(10, 0.4)],
+    hat: STEPS16.map((s) => (s % 2 === 1 ? hh(s, 0.4, true) : hh(s, s % 4 === 0 ? 0.55 : 0.95, false))),
+  },
+  bed: { bass: 'triangle', pad: 'sawtooth', arp: 'sawtooth', padDetune: 11 },
+});
+
+// Rust Foundry: F# phrygian dominant, 118 BPM, the dark industrial tune. A thin nasal pulse
+// hammers repeated low notes, the flat second (G) grinding on the major tonic, a locomotive
+// sixteenth bass and a clanking clap on the off beats.
+
+const RF = {
+  fs: triad('F#', 'I', 6, 4),
+  g: triad('G', 'bII', 7, 4),
+  bm: triad('Bm', 'iv', 11, 3),
+  em: triad('Em', 'bvii', 4, 3),
+  d: aug('D+', 'bVI+', 2),
+};
+
+const FOUNDRY: LevelTune = level({
+  id: 'foundry',
+  name: 'Rust Foundry',
+  mood: 'dark and industrial, F# phrygian dominant, thin pulse hammering low notes over a locomotive bass',
+  bpm: 118,
+  root: 66,
+  mode: 'phrygdom',
+  sections: DRIVE_FORM,
+  chords: { A: [RF.fs, RF.g, RF.fs, RF.em], B: [RF.bm, RF.em, RF.g, RF.d], S: [RF.g, RF.g, RF.bm, RF.fs], C: [RF.em, RF.bm, RF.d, RF.g] },
+  phrases: {
+    A: phrase(
+      [[0, 0, 1], [2, 0, 1], [3, 1, 2], [6, 0, 1], [8, 0, 1], [10, 1, 1], [11, 2, 3], [14, 1, 2]],
+      [[0, 0, 4], [4, -1, 2], [6, 0, 2], [8, 4, 1], [10, 4, 1], [11, 5, 3], [14, 4, 2]],
+      [[0, 4, 1], [2, 4, 1], [3, 5, 2], [6, 4, 1], [8, 7, 4], [12, 6, 2], [14, 5, 2]],
+      [[0, 4, 8, 1], [8, 1, 4], [12, 0, 4]],
+    ),
+    B: phrase(
+      [[0, 3, 6], [6, 4, 2], [8, 5, 5, 1], [13, 4, 3]],
+      [[0, 6, 4], [4, 5, 4], [8, 4, 4], [12, 3, 4]],
+      [[0, 8, 6, 1], [6, 7, 2], [8, 8, 2], [10, 9, 2], [12, 10, 4]],
+      [[0, 8, 12, 1], [12, 7, 4]],
+    ),
+    S: phrase([[0, 7, 4], [4, 8, 4], [8, 7, 8]], [[0, 5, 4], [4, 4, 12, 1]], [[0, 3, 8], [8, 4, 8]], [[0, 1, 4], [4, 2, 4], [8, 0, 8, 1]]),
+    C: phrase(
+      [[0, 10, 2], [2, 8, 2], [4, 7, 1], [5, 8, 1], [6, 7, 2], [8, 5, 2], [10, 4, 2], [12, 1, 4]],
+      [[0, 2, 2], [2, 1, 1], [3, 2, 1], [4, 4, 4], [8, 2, 8]],
+      [[0, 9, 2], [2, 7, 2], [4, 6, 1], [5, 7, 1], [6, 6, 2], [8, 4, 2], [10, 3, 2], [12, 1, 4, 1]],
+      [[0, 0, 4], [4, 1, 4], [8, 0, 8, 1]],
+    ),
+  },
+  lead: lead('pulse', 0.125, 0.25, 8, 1),
+  pad: 'chip',
+  bass: [bh(0, 0, 1, 1), bh(1, 0, 1, 0.6), bh(3, 0, 1, 0.8), bh(4, 0, 1, 0.9), bh(6, 1, 1, 0.7), bh(7, 0, 1, 0.6), bh(8, 0, 1, 0.95), bh(9, 0, 1, 0.6), bh(11, 0, 1, 0.8), bh(12, 2, 1, 0.85), bh(14, 1, 1, 0.7), bh(15, 0, 1, 0.6)],
+  bassAlt: [bh(0, 0, 2, 1), bh(2, 0, 2, 0.7), bh(4, 3, 2, 0.8), bh(6, 0, 2, 0.7), bh(8, 0, 4, 0.95), bh(12, 1, 2, 0.75), bh(14, 0, 2, 0.7)],
+  arp: {
+    a: [0, 0, 1, 0, 2, 0, 1, 0, 0, 0, 1, 0, 3, 2, 1, 0],
+    b: [-1, -1, 0, -1, 1, -1, 0, -1, 0, 0, 2, 1, 0, -1, 0, 1],
+    rests: [7, 15],
+    restP: 0.1,
+  },
+  arpAlt: {
+    a: [0, 1, 0, -1, 0, 1, 2, 1, 0, 1, 0, -1, 0, 1, 3, 2],
+    b: [2, 1, 2, 3, 2, 1, 0, 1, 2, 1, 2, 3, 4, 3, 2, 1],
+    rests: [2, 6, 10, 14],
+    restP: 0.05,
+  },
+  drums: {
+    kick: [hit(0, 1), hit(6, 0.8), hit(8, 1), hit(11, 0.75)],
+    kickTurn: [hit(13, 0.6)],
+    perc: [hit(4, 1), hit(12, 1)],
+    percOdd: [hit(10, 0.55)],
+    hat: STEPS16.map((s) => hh(s, s % 4 === 2 ? 0.9 : s % 2 === 0 ? 0.5 : 0.65, s % 2 === 1)),
+  },
+  bed: { bass: 'sawtooth', pad: 'square', arp: 'square', padDetune: 5 },
+});
+
+// Aurora Veil: Bb lydian dominant, 104 BPM, the dreamy space tune. A soft FM bell with a touch
+// of vibrato floats in wide leaps over the raised fourth and the flat seventh, sine bass, slow
+// wide pads with wind on every bar and an 8 bar breakdown.
+
+const AV = {
+  bb: triad('Bb', 'I', 10, 4),
+  c: triad('C', 'II', 0, 4),
+  fm: triad('Fm', 'v', 5, 3),
+  gm: triad('Gm', 'vi', 7, 3),
+  ab: aug('Ab+', 'bVII+', 8),
+};
+
+const AURORA: LevelTune = level({
+  id: 'aurora',
+  name: 'Aurora Veil',
+  mood: 'space: Bb lydian dominant, soft bell lead in wide leaps, sine bass, wide pads and wind',
+  bpm: 104,
+  root: 70,
+  mode: 'lydiandom',
+  sections: SPACE_FORM,
+  space: true,
+  chords: { A: [AV.bb, AV.c, AV.gm, AV.c], B: [AV.fm, AV.gm, AV.ab, AV.c], S: [AV.bb, AV.bb, AV.c, AV.c], C: [AV.gm, AV.fm, AV.c, AV.ab] },
+  phrases: {
+    A: phrase([[0, 4, 4], [4, 7, 4], [8, 9, 8, 1]], [[0, 8, 2], [2, 7, 2], [4, 5, 12]], [[0, 3, 4], [4, 5, 4], [8, 10, 6], [14, 9, 2]], [[0, 8, 10, 1], [10, 6, 2], [12, 7, 4]]),
+    B: phrase([[0, 9, 3], [3, 11, 5], [8, 10, 8]], [[0, 7, 6, 1], [6, 6, 2], [8, 4, 8]], [[0, 5, 3], [3, 8, 5], [8, 12, 4], [12, 11, 4]], [[0, 10, 16, 1]]),
+    S: phrase([[0, 12, 8], [8, 14, 8, 1]], [[0, 13, 16]], [[0, 11, 6], [6, 9, 10]], [[0, 7, 16, 1]]),
+    C: phrase(
+      [[0, 1, 2], [2, 3, 2], [4, 5, 3], [7, 6, 3], [10, 5, 2], [12, 3, 4]],
+      [[0, 4, 2], [2, 6, 2], [4, 8, 4], [8, 9, 2], [10, 8, 2], [12, 6, 4]],
+      [[0, 7, 2], [2, 9, 2], [4, 11, 4], [8, 12, 8, 1]],
+      [[0, 10, 8], [8, 8, 8]],
+    ),
+  },
+  lead: lead('bell', 0.5, 0.5, 12, 2),
+  pad: 'held',
+  bass: [bh(0, 0, 10, 0.9), bh(10, 2, 6, 0.65)],
+  bassAlt: [bh(0, 0, 6, 0.9), bh(6, 2, 2, 0.6), bh(8, 3, 8, 0.7)],
+  arp: {
+    a: [0, 4, 2, 5, 4, 7, 5, 4, 0, 4, 2, 5, 4, 7, 6, 4],
+    b: [7, 4, 5, 2, 4, 0, 2, -1, 7, 4, 5, 2, 4, 1, 2, 0],
+    rests: ODD_STEPS,
+    restP: 0.25,
+  },
+  arpAlt: {
+    a: [0, 2, 0, 4, 0, 5, 0, 7, 0, 2, 0, 4, 0, 5, 0, 4],
+    b: [7, 5, 7, 4, 7, 2, 7, 0, 7, 5, 7, 4, 7, 2, 4, 2],
+    rests: [1, 3, 5, 6, 7, 9, 11, 13, 14, 15],
+    restP: 0,
+  },
+  drums: {
+    kick: [hit(0, 0.75), hit(10, 0.5)],
+    kickTurn: [hit(6, 0.5)],
+    perc: [hit(12, 0.6)],
+    percOdd: [hit(4, 0.3)],
+    hat: [hh(2, 0.35, false), hh(6, 0.45, false), hh(10, 0.35, false), hh(14, 0.45, false), hh(15, 0.25, true)],
+  },
+  bed: { bass: 'sine', pad: 'triangle', arp: 'sine', padDetune: 25 },
+});
+
+// Pixel Hop: C# six note major (no seventh), 132 BPM, the bouncy chiptune tune. A 25 percent
+// pulse that opens to a square in B hops in octave leaps and staccato off beats over an oom pah
+// bass and a chip arpeggio.
+
+const PH = {
+  cs: triad('C#', 'I', 1, 4),
+  dsm: triad('D#m', 'ii', 3, 3),
+  fs: triad('F#', 'IV', 6, 4),
+  asm: triad('A#m', 'vi', 10, 3),
+};
+
+const PIXEL: LevelTune = level({
+  id: 'pixel',
+  name: 'Pixel Hop',
+  mood: 'bouncy chiptune, C# six note major, hopping pulse lead in octave leaps over an oom pah bass',
+  bpm: 132,
+  root: 73,
+  mode: 'hexmajor',
+  sections: DRIVE_FORM,
+  chords: { A: [PH.cs, PH.asm, PH.dsm, PH.fs], B: [PH.fs, PH.cs, PH.dsm, PH.asm], S: [PH.fs, PH.fs, PH.cs, PH.cs], C: [PH.asm, PH.dsm, PH.fs, PH.fs] },
+  phrases: {
+    A: phrase(
+      [[0, 0, 1], [1, 6, 1], [4, 4, 1], [6, 5, 1], [8, 4, 2], [11, 2, 1], [12, 4, 3]],
+      [[0, 3, 1], [1, 8, 1], [4, 7, 1], [6, 5, 1], [8, 4, 2], [11, 5, 1], [12, 3, 3]],
+      [[0, 2, 1], [1, 7, 1], [4, 6, 1], [6, 7, 1], [8, 8, 2], [11, 9, 1], [12, 10, 3]],
+      [[0, 9, 2], [2, 8, 2], [4, 6, 4], [8, 5, 1], [10, 4, 1], [12, 6, 4, 1]],
+    ),
+    B: phrase(
+      [[0, 6, 2], [2, 4, 2], [4, 6, 1], [5, 7, 1], [6, 8, 2], [8, 9, 3], [11, 8, 1], [12, 6, 4]],
+      [[0, 7, 3], [3, 6, 1], [4, 4, 4], [8, 3, 2], [10, 4, 2], [12, 2, 4]],
+      [[0, 4, 1], [1, 5, 1], [2, 6, 1], [3, 7, 1], [4, 8, 3], [7, 9, 1], [8, 10, 4], [12, 12, 4, 1]],
+      [[0, 11, 6], [6, 9, 2], [8, 7, 8]],
+    ),
+    S: phrase([[0, 10, 4], [4, 12, 4], [8, 11, 8]], [[2, 9, 6], [8, 10, 8, 1]], [[0, 12, 12], [12, 13, 4]], [[0, 11, 16, 1]]),
+    C: phrase(
+      [[0, 5, 2], [2, 5, 2], [4, 6, 2], [6, 7, 6], [12, 6, 4]],
+      [[0, 4, 2], [2, 4, 2], [4, 5, 2], [6, 6, 6], [12, 4, 4]],
+      [[0, 3, 2], [2, 3, 2], [4, 4, 2], [6, 5, 6], [12, 7, 2], [14, 8, 2]],
+      [[0, 9, 4, 1], [4, 8, 4], [8, 6, 8]],
+    ),
+  },
+  lead: lead('pulse', 0.25, 0.5, 16, 1),
+  pad: 'chip',
+  bass: [bh(0, 0, 2, 1), bh(4, 2, 2, 0.75), bh(6, 3, 1, 0.6), bh(8, 0, 2, 0.95), bh(12, 2, 2, 0.75), bh(14, 3, 1, 0.6)],
+  bassAlt: [bh(0, 0, 1, 1), bh(2, 3, 1, 0.7), bh(4, 0, 1, 0.85), bh(6, 3, 1, 0.7), bh(8, 2, 1, 0.9), bh(10, 3, 1, 0.7), bh(12, 1, 1, 0.85), bh(14, 3, 1, 0.7)],
+  arp: {
+    a: [0, 2, 4, 5, 4, 2, 0, 2, 1, 3, 4, 6, 4, 3, 1, 3],
+    b: [5, 4, 2, 0, 2, 4, 5, 7, 6, 4, 2, 1, 2, 4, 6, 4],
+    rests: [3, 11],
+    restP: 0.05,
+  },
+  arpAlt: {
+    a: [0, 5, 0, 5, 2, 5, 2, 5, 1, 4, 1, 4, 3, 6, 3, 6],
+    b: [6, 3, 6, 3, 4, 1, 4, 1, 5, 2, 5, 2, 4, 0, 4, 0],
+    rests: [],
+    restP: 0.15,
+  },
+  drums: {
+    kick: [hit(0, 1), hit(5, 0.7), hit(8, 0.95), hit(12, 0.8)],
+    kickTurn: [hit(10, 0.65)],
+    perc: [hit(4, 1), hit(12, 1)],
+    percOdd: [hit(13, 0.4)],
+    hat: [hh(0, 0.4, false), hh(2, 1, false), hh(6, 1, false), hh(7, 0.4, true), hh(8, 0.4, false), hh(10, 1, false), hh(14, 1, false), hh(15, 0.4, true)],
+  },
+  bed: { bass: 'triangle', pad: 'triangle', arp: 'square', padDetune: 4 },
+});
+
+// ---------------------------------------------------------------------------------------
 // Bed loudness trim (B20). The layer gains were tuned on a triangle bass, a saw pad and a square
 // lead. On a phone speaker the sub bass fundamental is inaudible and only its harmonics come
 // through, so a saw or square bass at the same gain jumps far in front of the triangle and buries
@@ -706,7 +973,7 @@ export function bedWaveTrim(layer: Layer, bed: BedTimbre): number {
 }
 
 /** Every level tune, in selection order. */
-export const TUNES: readonly LevelTune[] = [NEON, TIDE, EMBER, ORBIT, NEBULA, HORIZON];
+export const TUNES: readonly LevelTune[] = [NEON, TIDE, EMBER, ORBIT, NEBULA, HORIZON, CHARGE, FOUNDRY, AURORA, PIXEL];
 
 export const DEFAULT_TUNE: LevelTune = NEON;
 
