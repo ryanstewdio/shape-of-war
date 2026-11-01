@@ -6,7 +6,12 @@ import {
   NOVA_FILTER_HI,
   NOVA_FILTER_LO,
   NOVA_MAX,
+  NOVA_PAN_DEPTH,
   NOVA_PAN_PERIOD,
+  NOVA_GAIN,
+  ARRIVE_GAIN,
+  ARRIVE_HI_HZ,
+  novaLevelFor,
   NOVA_RELEASE,
   RESET_FADE,
   SAW_BASE_HZ,
@@ -69,7 +74,7 @@ describe('gw2 pure helpers', () => {
 
   it('the nova pan sweeps a full cycle in one period and the filter rises then holds', () => {
     expect(novaPanAt(0)).toBeCloseTo(0, 9);
-    expect(novaPanAt(NOVA_PAN_PERIOD / 4)).toBeCloseTo(1, 9);
+    expect(novaPanAt(NOVA_PAN_PERIOD / 4)).toBeCloseTo(NOVA_PAN_DEPTH, 9);
     expect(novaPanAt(NOVA_PAN_PERIOD)).toBeCloseTo(0, 6);
     expect(novaFilterAt(0)).toBeCloseTo(NOVA_FILTER_LO, 6);
     expect(novaFilterAt(2)).toBeGreaterThan(novaFilterAt(1));
@@ -82,6 +87,18 @@ describe('gw2 pure helpers', () => {
     expect(arriveGainAt(ARRIVE_SEC + 0.1)).toBe(0);
     expect(arriveGainAt(0.9)).toBeGreaterThan(arriveGainAt(0.3));
     expect(arriveGainAt(ARRIVE_SEC)).toBeCloseTo(0, 9);
+  });
+
+  it('the roar and whoosh are quieter and darker than the retest build', () => {
+    expect(NOVA_GAIN).toBeCloseTo(0.16 * 0.55, 9);
+    expect(NOVA_FILTER_HI).toBe(1200);
+    expect(NOVA_PAN_DEPTH).toBe(0.5);
+    expect(novaFilterAt(100)).toBeLessThanOrEqual(1200);
+    expect(novaLevelFor(0)).toBe(NOVA_GAIN);
+    expect(20 * Math.log10(novaLevelFor(1) / novaLevelFor(0))).toBeCloseTo(-6, 6);
+    expect(ARRIVE_GAIN).toBeCloseTo(0.14 * 0.7, 9);
+    expect(ARRIVE_HI_HZ).toBe(2000);
+    expect(arriveGainAt(ARRIVE_SEC * 0.85)).toBeCloseTo(ARRIVE_GAIN, 9);
   });
 
   it('WELL_KIND mirrors the sim enum', () => {

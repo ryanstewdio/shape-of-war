@@ -18,13 +18,24 @@ export const SAW_GAIN = 0.1;
 export const NOVA_RELEASE = 0.4;
 /** Fade for every sustained voice when a level resets or the player leaves play, seconds. */
 export const RESET_FADE = 0.1;
-export const NOVA_GAIN = 0.16;
+/** Whirlpool roar level: 45 percent under the old 0.16. */
+export const NOVA_GAIN = 0.088;
+/** Each roar after the first sits 6 dB lower. */
+export const NOVA_EXTRA_DB = -6;
+/** Pan sweep depth, half of the old full width. */
+export const NOVA_PAN_DEPTH = 0.5;
 export const NOVA_PAN_PERIOD = 3.2;
 export const NOVA_FILTER_LO = 160;
-export const NOVA_FILTER_HI = 900;
+export const NOVA_FILTER_HI = 1200;
 export const NOVA_RISE_SEC = 8;
 
 export const ARRIVE_SEC = 1.5;
+/** Arrival whoosh noise level: 30 percent under the old 0.14. */
+export const ARRIVE_GAIN = 0.098;
+/** Arrival thud level, 30 percent under the old 0.2. */
+export const ARRIVE_THUD_GAIN = 0.14;
+/** Arrival band pass sweep top, Hz. */
+export const ARRIVE_HI_HZ = 2000;
 export const SLITHER_SEC = 0.22;
 
 export const SHIELD_HUM_HZ = 98;
@@ -62,9 +73,14 @@ export function sawSweepHz(t: number): number {
   return 300 + 600 * tri;
 }
 
-/** Pure: stereo pan -1 to 1 at age t seconds; one full sweep per NOVA_PAN_PERIOD. */
+/** Pure: stereo pan, within +/- NOVA_PAN_DEPTH, at age t seconds; one full sweep per NOVA_PAN_PERIOD. */
 export function novaPanAt(t: number): number {
-  return Math.sin((2 * Math.PI * t) / NOVA_PAN_PERIOD);
+  return NOVA_PAN_DEPTH * Math.sin((2 * Math.PI * t) / NOVA_PAN_PERIOD);
+}
+
+/** Pure: whirlpool output level for the roar with `index` already running (0 is the first). */
+export function novaLevelFor(index: number): number {
+  return index <= 0 ? NOVA_GAIN : NOVA_GAIN * Math.pow(10, NOVA_EXTRA_DB / 20);
 }
 
 /** Pure: whirlpool low pass cutoff at age t, rising and then holding at the top. */
@@ -77,8 +93,8 @@ export function novaFilterAt(t: number): number {
 export function arriveGainAt(t: number): number {
   if (t < 0 || t > ARRIVE_SEC) return 0;
   const rise = rampLevel(t, ARRIVE_SEC * 0.85);
-  if (t <= ARRIVE_SEC * 0.85) return 0.14 * rise * rise;
-  return 0.14 * (1 - rampLevel(t - ARRIVE_SEC * 0.85, ARRIVE_SEC * 0.15));
+  if (t <= ARRIVE_SEC * 0.85) return ARRIVE_GAIN * rise * rise;
+  return ARRIVE_GAIN * (1 - rampLevel(t - ARRIVE_SEC * 0.85, ARRIVE_SEC * 0.15));
 }
 
 /** A running sustained voice. stop is idempotent. */
@@ -88,7 +104,8 @@ export interface LoopHandle {
 
 /** What the controller needs from the sound side. Returns null when audio is not available. */
 export interface Gw2Backend {
-  startLoop(kind: LoopKind): LoopHandle | null;
+  /** `level` overrides the voice's default output level (used for the second whirlpool). */
+  startLoop(kind: LoopKind, level?: number): LoopHandle | null;
   playOnce(kind: OneShot): void;
 }
 
@@ -130,7 +147,7 @@ export function installGw2(b: Bus, backend: Gw2Backend): Gw2Controller {
     }),
     b.on('sim:wellNova', (p) => {
       if (novas.has(p.id) || novas.size >= NOVA_MAX) return;
-      const h = backend.startLoop('nova');
+      const h = backend.startLoop('nova', novaLevelFor(novas.size));
       if (h) novas.set(p.id, h);
     }),
     b.on('fx:kill', (p) => {
