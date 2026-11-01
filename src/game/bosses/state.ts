@@ -135,8 +135,8 @@ export interface BossState {
   winTimer: number;
 }
 
-/** Length of BossState.abl (GW2: 16, so each of two Tempest split parts keeps 8 slots). */
-export const ABL_SIZE = 16;
+/** Length of BossState.abl (GW6: 40, so each of two Tempest split parts keeps 20 slots; 16 before). */
+export const ABL_SIZE = 40;
 
 const states = new WeakMap<World, BossState>();
 
