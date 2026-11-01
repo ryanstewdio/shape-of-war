@@ -25,8 +25,8 @@ export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
   ember: { tier: 2, hp: 600, phases: 3, radius: 44, colour: 'bossOrange' },
   mirage: { tier: 2, hp: 640, phases: 3, radius: 50, colour: 'bossMagenta' },
   gravitas: { tier: 2, hp: 700, phases: 3, radius: 60, colour: 'bossViolet' },
-  bastion: { tier: 3, hp: 1080, phases: 3, radius: 70, colour: 'bossRed' },
-  tempest: { tier: 3, hp: 1035, phases: 3, radius: 46, colour: 'bossRed' },
+  bastion: { tier: 3, hp: 1242, phases: 3, radius: 70, colour: 'bossRed' },
+  tempest: { tier: 3, hp: 1138.5, phases: 3, radius: 46, colour: 'bossRed' },
   twins: { tier: 3, hp: 1000, phases: 2, radius: 44, colour: 'bossRed' },
   prism: { tier: 4, hp: 1000, phases: 4, radius: 90, colour: 'bossPrism' },
 };
@@ -374,7 +374,7 @@ export const GRAVITAS = {
 
 /**
  * Bastion (tier 3, red, level 35; roster row 7). Holds the centre and turns at 0.3 rad/s. Four
- * corner turrets (8 HP) take one turn every 1.5 s in order; a destroyed turret skips its turns. The
+ * corner turrets (8 HP) take one turn every 1.125 s in order (GW5); a destroyed turret skips its turns. The
  * core takes damage once two turrets are down. Phases follow the turrets: four, two, none.
  */
 export const BASTION = {
@@ -382,8 +382,8 @@ export const BASTION = {
   turrets: 4,
   /** 30 HP in tenths of a hit (GW4: 180 before, GW3: 8 before that). */
   turretHp: 300,
-  /** GW4: a fallen turret rebuilds this long after it fell (one at a time), at half hit points. */
-  regenSec: 18,
+  /** GW4: a fallen turret rebuilds this long after it fell (one at a time), at half hit points (GW5: 12, 18 before). */
+  regenSec: 12,
   /** GW4: rebuilds happen only while the core has more than this share of its hit points, before it wakes. */
   regenAboveShare: 0.33,
   /** GW3: the live turrets are shielded this long after each turret death (hits blocked). */
@@ -393,7 +393,8 @@ export const BASTION = {
   turretRadius: 16,
   /** Turret centres sit this far from the core centre, on the diagonals of its facing. */
   turretOffset: 100,
-  turnEvery: 1.5,
+  /** GW5: 1.125 s, 25 percent shorter (1.5 before). One turret fires per turn. */
+  turnEvery: 1.125,
   /** First turn this long after the entrance ends. */
   firstTurn: 1.0,
   /** The core opens with this many turrets or fewer left. */
@@ -409,7 +410,8 @@ export const BASTION = {
   wakeSpeed: 50,
   /** One sweep arm rides the body, turning at sweepRate rad/s. */
   sweepLength: 230,
-  sweepRate: 0.9,
+  /** GW5: 1.08 rad/s, 20 percent faster (0.9 before). */
+  sweepRate: 1.08,
   /** A charge every chargeEvery s (chargeEveryCracked after the stage 2 crack), the first firstCharge s after waking. */
   chargeEvery: 5,
   chargeEveryCracked: 3.5,
@@ -432,7 +434,8 @@ export const BASTION_SHIELD = {
   everySec: 10,
   shieldSec: 3,
   burstAt: [0.4, 1.6] as readonly number[],
-  hornets: 6,
+  /** GW5: 8 Hornets per shield, two bursts of 4 (6 before). Pool rules unchanged. */
+  hornets: 8,
   openSec: 2,
 } as const;
 
@@ -443,8 +446,8 @@ export const WINDOW_LEAD_INTERVAL = 0.1;
 
 /**
  * Tempest (tier 3, red, level 40; roster row 8). Laps the wall at 140 u/s, 90 u from it, dropping a
- * Slime every 1.0 s (8 of its own live at most, inside the 12 total Slime cap). Every 6 s (5, 4 in
- * later phases) it winds up for the tier telegraph with a lane marker, dashes across the arena at
+ * Slime every 1.0 s (8 of its own live at most, inside the 12 total Slime cap). Every 5 s (4.17,
+ * 3.33 in later phases since GW5) it winds up for the tier telegraph with a lane marker, dashes across the arena at
  * its target and rests 1.5 s at the far wall. Hittable on the lap and in the rest.
  */
 export const TEMPEST = {
@@ -454,9 +457,10 @@ export const TEMPEST = {
   catchUp: 1.6,
   slimeEvery: 1.0,
   slimeMax: 8,
-  dashEvery: 6,
-  dashEveryP2: 5,
-  dashEveryP3: 4,
+  /** GW5: attack cadence 20 percent faster (6, 5 and 4 s before). */
+  dashEvery: 6 / 1.2,
+  dashEveryP2: 5 / 1.2,
+  dashEveryP3: 4 / 1.2,
   /** First dash this long after the entrance ends. */
   firstDash: 4,
   dashSpeed: 600,
@@ -482,16 +486,21 @@ export const TEMPESTLING = {
   /**
    * GW4: chase seconds between pincers, counted from the end of the rest (GW3 used the body's
    * dashEvery, counted only in the chase, so a pincer came about every 9 s: "no dashing").
+   * GW5: 2.6 s (3 before).
    */
-  dashEvery: 3,
+  dashEvery: 2.6,
   /** A due pincer waits at most this long (attack seconds) for the two to reach opposite sides (GW4: 2.5 before). */
   flankWait: 1,
-  /** GW4: chase speed between dashes, u/s (GW3: 1.4x TEMPEST.lapSpeed, 196 u/s). */
+  /**
+   * GW5: chase speed between dashes, u/s, from chaseSpeed at full part hit points up to
+   * chaseSpeedMax as the part loses them (GW4: a flat 165, GW3: 196).
+   */
   chaseSpeed: 165,
+  chaseSpeedMax: 185,
   /** GW4: wind up seconds, the lane marker shown the whole time (the tier telegraph was 0.6 s). */
   windupSec: 0.7,
-  /** GW3: committed dash speed, u/s. */
-  dashSpeed: 420,
+  /** GW3: committed dash speed, u/s (GW5: 462, 420 before). */
+  dashSpeed: 462,
   /** GW3: a wind up starts only when the dash line runs at least this far before the wall. */
   dashMin: 200,
   /** GW3: between dashes the centre keeps at least this far from every wall. */
@@ -500,6 +509,15 @@ export const TEMPESTLING = {
   flankDist: 260,
   /** GW3: rest after a dash (the body's is TEMPEST.restSec). */
   restSec: 0.6,
+  /**
+   * GW5: after each dash a fan of fanCount bullets, fanSpreadDeg apart, at fanSpeed u/s, aimed back
+   * along the dash path (toward where the ship stood). Its own row: a volley of 6 is above
+   * SHOT_VOLLEY_MAX, which binds the shot rows only; the brief asks for 6. It fires in the rest once
+   * the ship is ENEMY_BULLET_MIN_RANGE from the muzzle, or not at all.
+   */
+  fanCount: 6,
+  fanSpreadDeg: 14,
+  fanSpeed: 200,
 } as const;
 
 /**
@@ -617,7 +635,7 @@ export interface ShotRow {
 export const BOSS_SHOTS: Readonly<Partial<Record<BossId, ShotRow>>> = {
   spindle: { pattern: 'pellet', speed: 180, every: 3.0, everyP2: 3.6, count: 1, armRate: 0.4 },
   ember: { pattern: 'fan', speed: 210, every: 0, everyP2: 0, count: 3, spreadDeg: 14, restSec: 1.8 },
-  bastion: { pattern: 'turret', speed: 200, every: 1.5, everyP2: 1.5, count: 1 },
+  bastion: { pattern: 'turret', speed: 200, every: 1.125, everyP2: 1.125, count: 1 },
 };
 
 /** A volley is at most this many bullets (docs/13 boss projectiles rule 2). */

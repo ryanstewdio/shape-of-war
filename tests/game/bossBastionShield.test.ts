@@ -32,11 +32,11 @@ function awake(): { w: World; id: number } {
 }
 
 describe('bastion phase 3 shield', () => {
-  it('pure rules: every 10 s (GW4), the first 10 s after waking, up 3 s, 6 Hornets, open 2 s, drift 50 u/s', () => {
+  it('pure rules: every 10 s (GW4), the first 10 s after waking, up 3 s, 8 Hornets (GW5), open 2 s, drift 50 u/s', () => {
     expect(BASTION_SHIELD.everySec).toBe(10);
     expect(BASTION_SHIELD.firstSec).toBe(10);
     expect(BASTION_SHIELD.shieldSec).toBe(3);
-    expect(BASTION_SHIELD.hornets).toBe(6);
+    expect(BASTION_SHIELD.hornets).toBe(8); // GW5: 6 before
     expect(BASTION_SHIELD.openSec).toBe(2);
     expect(BASTION.wakeSpeed).toBe(50);
     expect(shieldClockStart()).toBe(BASTION_SHIELD.everySec - BASTION_SHIELD.firstSec);

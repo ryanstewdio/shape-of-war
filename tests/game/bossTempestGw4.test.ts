@@ -121,7 +121,7 @@ function fight(seed: number): PartTrace[] {
 }
 
 describe('tempestling gw4 rules', () => {
-  it('chase 165 u/s, a 0.7 s wind up, 3 s of chase between pincers, the first 1.5 s after the split', () => {
+  it('chase 165 u/s, a 0.7 s wind up, dashEvery (2.6 s since GW5) of chase between pincers, the first 1.5 s after the split', () => {
     expect(tempestlingSpeed()).toBe(165);
     expect(TEMPESTLING.windupSec).toBe(0.7);
     expect(tempestlingDashEvery()).toBe(TEMPESTLING.dashEvery);

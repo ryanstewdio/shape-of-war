@@ -107,11 +107,11 @@ function trace(secs: number): Trace {
 }
 
 describe('tempest gw3 pure rules', () => {
-  it('big Tempest hit points plus 15 percent, speed ratio 1.4, full rate, opposite flanks', () => {
-    expect(BOSS_TABLE.tempest.hp).toBe(Math.round(900 * 1.15));
+  it('big Tempest hit points plus 15 then 10 percent (GW5), speed ratio 1.4, full rate, opposite flanks', () => {
+    expect(BOSS_TABLE.tempest.hp).toBe(Math.round(900 * 1.15) * 1.1); // GW5: plus 10 percent
     expect(tempestlingSpeed()).toBe(TEMPESTLING.chaseSpeed); // GW4: 165 u/s (1.4x the lap speed before)
     expect(TEMPESTLING.rate).toBe(1);
-    expect(TEMPESTLING.dashSpeed).toBe(420);
+    expect(TEMPESTLING.dashSpeed).toBe(462); // GW5: 420 before
     expect(TEMPESTLING.wallKeep).toBe(150);
     expect(flankBearing(0.5, 0)).toBe(0.5);
     expect(flankBearing(0.5, 1)).toBeCloseTo(0.5 - Math.PI, 9);

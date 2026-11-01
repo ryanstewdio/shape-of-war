@@ -1,4 +1,4 @@
-// Bastion's turret shots (docs/12 wave C item 5, BOSS_SHOTS.bastion): one turret turn every 1.5 s,
+// Bastion's turret shots (docs/12 wave C item 5, BOSS_SHOTS.bastion): one turret turn every 1.125 s (GW5, 1.5 before),
 // each turret alternating a lane and a 200 u/s bullet on its own turns; a destroyed turret skips its
 // turns (phase 2 half the bullets, phase 3 none); the core never fires; the 300 u wait and recheck;
 // the heading fixed at the charge start; fx:bossShot once per volley; the dodge at High; cut 5.
@@ -221,7 +221,7 @@ describe('bastion turret shots', () => {
     enter(w);
     const s = bs(w);
     let dodging = 0;
-    let dir = 1;
+    const dir = 1;
     let shots = 0;
     let dx = 0;
     let dy = 0;
@@ -234,7 +234,8 @@ describe('bastion turret shots', () => {
         dx = Math.cos(a + (dir * Math.PI) / 2);
         dy = Math.sin(a + (dir * Math.PI) / 2);
       }
-      dir = -dir;
+      // GW5: with 1.125 s turns two bullets overlap in flight, so a dodger that flips side each shot
+      // steps back into the earlier line; this one keeps one side (a circle strafe).
       dodging = dodgeSeconds(SPACE_TABLE.high, SHIP_RADIUS + ENEMY_BULLET_RADIUS + 8) + 0.05;
     });
     for (let i = 0; i < 120 * 60; i++) {

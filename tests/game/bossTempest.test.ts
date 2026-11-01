@@ -33,8 +33,8 @@ function until(w: World, state: TempestMove, maxSec = 12): void {
 }
 
 describe('tempest', () => {
-  it('dash every 6 s, 5 s, 4 s by phase', () => {
-    expect([1, 2, 3].map(dashEveryFor)).toEqual([6, 5, 4]);
+  it('dash every 6 s, 5 s, 4 s by phase, 20 percent faster since GW5', () => {
+    expect([1, 2, 3].map((p) => dashEveryFor(p) * 1.2)).toEqual([6, 5, 4]);
   });
 
   it('keeps its lap 90 u from the wall at 140 u/s', () => {
