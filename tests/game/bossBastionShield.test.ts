@@ -4,12 +4,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/core/events';
 import { shieldClockStart, Wake } from '../../src/game/bosses/bastion';
-import { countHornets, damageBoss, damageBossPart, livePart } from '../../src/game/bosses/core';
+import { countHornets, damageBoss, livePart } from '../../src/game/bosses/core';
 import { BASTION, BASTION_SHIELD, HORNET } from '../../src/game/bosses/table';
 import { BossMode } from '../../src/game/bosses/types';
 import { stepGame } from '../../src/game/game';
 import type { World } from '../../src/game/world';
-import { bs, bossGame, enter, park, run } from './bossHelpers';
+import { breakTurret, bs, bossGame, enter, park, run } from './bossHelpers';
 import { stateHash } from './bossGw2Helpers';
 import { DT, idle } from './helpers';
 
@@ -25,7 +25,7 @@ function awake(): { w: World; id: number } {
   const id = enter(w);
   for (let k = 0; k < BASTION.turrets; k++) {
     const p = livePart(w, bs(w), k);
-    if (p > 0) damageBossPart(w, p, BASTION.turretHp, w.x[p] ?? 0, w.y[p] ?? 0);
+    if (p > 0) breakTurret(w, p, BASTION.turretHp);
   }
   expect(bs(w).phase).toBe(3);
   return { w, id };

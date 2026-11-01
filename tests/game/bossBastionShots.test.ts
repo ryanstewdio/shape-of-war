@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { SPACE_TABLE } from '../../src/core/physics';
 import { bus } from '../../src/core/events';
 import { isShotTurn } from '../../src/game/bosses/bastion';
-import { damageBossPart, livePart } from '../../src/game/bosses/core';
+import { livePart } from '../../src/game/bosses/core';
 import { hazardTelegraph } from '../../src/game/bosses/kit';
 import { BASTION, BOSS_SHOTS, SHOT_RECHECK_SEC, type ShotRow } from '../../src/game/bosses/table';
 import { HazardType } from '../../src/game/bosses/types';
@@ -16,7 +16,7 @@ import { setShipSpace, SHIP_RADIUS } from '../../src/game/ship';
 import { gs } from '../../src/game/state';
 import { Kind, type World } from '../../src/game/world';
 import type { BossId } from '../../src/levelgen/leveldef';
-import { bs, bossGame, enter, park, run } from './bossHelpers';
+import { breakTurret, bs, bossGame, enter, park, run } from './bossHelpers';
 import { DT, idle } from './helpers';
 
 afterEach(() => bus.clear());
@@ -78,7 +78,7 @@ function logTurns(w: World, secs: number, out: Turn[], t0 = 0): void {
 
 function killSlot(w: World, k: number): void {
   const p = livePart(w, bs(w), k);
-  damageBossPart(w, p, BASTION.turretHp, 0, 0);
+  breakTurret(w, p, BASTION.turretHp);
 }
 
 describe('bastion turret shots', () => {

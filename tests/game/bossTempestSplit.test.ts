@@ -1,7 +1,8 @@
 // Tempest split (GW2): at the stage 2 crack (33 percent) the body splits once into two smaller
 // Tempests (60 percent size, the remaining hit points split evenly), following the Brood split
 // pattern: 'sim:bossSplit' once, the bar is the sum of the parts, contact kills and the level is won
-// when both die. Each keeps the storm attack (lap, Slime trail, marked dash) at 70 percent rate.
+// when both die. Each keeps the storm attack (Slime trail, marked dash) at full rate since GW3
+// (chase and flank rules in bossTempestGw3.test.ts).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/core/events';
 import { bossBonusAwarded, bossOnBomb, bossSlain, countParts, damageBoss, damageBossPart, livePart } from '../../src/game/bosses/core';
@@ -46,7 +47,7 @@ function markers(w: World): number {
 }
 
 describe('tempest split pure rules', () => {
-  it('splitHp shares evenly and keeps the total; 60 percent size; 70 percent rate', () => {
+  it('splitHp shares evenly and keeps the total; 60 percent size; full rate', () => {
     expect(splitHp(2965, 0, 2) + splitHp(2965, 1, 2)).toBe(2965);
     expect(splitHp(2965, 0, 2)).toBe(1483);
     expect(splitHp(2965, 1, 2)).toBe(1482);
@@ -54,9 +55,9 @@ describe('tempest split pure rules', () => {
     expect(splitHp(3000, 1, 2)).toBe(1500);
     expect(splitHp(-4, 0, 2)).toBe(0);
     expect(tempestlingRadius(BOSS_TABLE.tempest.radius)).toBeCloseTo(BOSS_TABLE.tempest.radius * 0.6, 9);
-    expect(TEMPESTLING.rate).toBe(0.7);
-    expect(tempestlingAdt(1, false)).toBeCloseTo(0.7, 9);
-    expect(tempestlingAdt(1, true)).toBeCloseTo(0.7 * 1.3, 9);
+    expect(TEMPESTLING.rate).toBe(1);
+    expect(tempestlingAdt(1, false)).toBeCloseTo(1, 9);
+    expect(tempestlingAdt(1, true)).toBeCloseTo(1.3, 9);
   });
 });
 
@@ -99,7 +100,7 @@ describe('tempest split', () => {
     expect(last).toBe((w.hp[a] ?? 0) + (w.hp[b] ?? 0));
   });
 
-  it('each part laps the wall, lays Slime and dashes behind a marker, at 70 percent rate', () => {
+  it('each part chases, lays Slime and dashes behind a marker, at full rate', () => {
     const { w, id } = started();
     crack(w, id);
     const [a, b] = parts(w);
@@ -118,7 +119,7 @@ describe('tempest split', () => {
         expect(w.alive[p]).toBe(1);
       });
     }
-    // Phase 3 lap between dashes is 4 s at full rate, so about 5.7 s at 70 percent plus the dash and rest.
+    // Phase 3 chase between dashes is 4 s at full rate, plus the wind up, dash and rest.
     const every = dashEveryFor(3) / TEMPESTLING.rate;
     for (const d of dashes) {
       expect(d).toBeGreaterThanOrEqual(3);
@@ -169,7 +170,7 @@ describe('tempest split', () => {
     expect(count(w, Kind.BossPart)).toBe(0);
   });
 
-  it('a bomb mid wind up sends the part back to its lap: no unmarked dash', () => {
+  it('a bomb mid wind up sends the part back to its chase: no unmarked dash', () => {
     const { w, id } = started();
     crack(w, id);
     for (let i = 0; i < 120 * 20 && markers(w) === 0; i++) stepGame(w, DT, idle());
@@ -179,7 +180,7 @@ describe('tempest split', () => {
     bossOnBomb(w); // clears every hazard (the markers too) and staggers the boss
     expect(markers(w)).toBe(0);
     run(w, STAGGER_SEC + DT * 2);
-    for (const k of winding) expect(bs(w).abl[k * 8]).toBe(0); // TempestMove.Lap
+    for (const k of winding) expect(bs(w).abl[k * 8]).toBe(0); // TempestMove.Lap (the chase for a part)
     expect(bs(w).status).toBe('alive');
   });
 

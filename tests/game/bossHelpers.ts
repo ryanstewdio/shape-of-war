@@ -1,5 +1,6 @@
 // Shared helpers for the boss tests (docs/12 wave V3-A).
-import { bossHittable } from '../../src/game/bosses/core';
+import { TURRET_SHIELD } from '../../src/game/bosses/bastion';
+import { bossHittable, damageBossPart } from '../../src/game/bosses/core';
 import { bossOf, type BossState } from '../../src/game/bosses/state';
 import { BOSS_TABLE } from '../../src/game/bosses/table';
 import { stepGame, type GameOptions } from '../../src/game/game';
@@ -8,6 +9,15 @@ import { Kind, type World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
 import type { BossId, LevelDef } from '../../src/levelgen/leveldef';
 import { DT, idle, makeGame, quietLevel } from './helpers';
+
+/**
+ * Destroy Bastion turret p at once, as if the 1.5 s turret shield after the last turret death had
+ * already run out (GW3), so a test can take turrets down back to back.
+ */
+export function breakTurret(w: World, p: number, amount: number): void {
+  bs(w).abl[TURRET_SHIELD] = 0;
+  damageBossPart(w, p, amount, w.x[p] ?? 0, w.y[p] ?? 0);
+}
 
 /** A quiet rect level (1400 x 900, no waves) carrying boss id with its entrance at atSec. */
 export function bossLevel(id: BossId, patch: Partial<LevelDef> = {}, atSec = 0.25): LevelDef {

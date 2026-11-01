@@ -26,7 +26,7 @@ export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
   mirage: { tier: 2, hp: 640, phases: 3, radius: 50, colour: 'bossMagenta' },
   gravitas: { tier: 2, hp: 700, phases: 3, radius: 60, colour: 'bossViolet' },
   bastion: { tier: 3, hp: 900, phases: 3, radius: 70, colour: 'bossRed' },
-  tempest: { tier: 3, hp: 900, phases: 3, radius: 46, colour: 'bossRed' },
+  tempest: { tier: 3, hp: 1035, phases: 3, radius: 46, colour: 'bossRed' },
   twins: { tier: 3, hp: 1000, phases: 2, radius: 44, colour: 'bossRed' },
   prism: { tier: 4, hp: 1000, phases: 4, radius: 90, colour: 'bossPrism' },
 };
@@ -380,8 +380,12 @@ export const GRAVITAS = {
 export const BASTION = {
   turnRate: 0.3,
   turrets: 4,
-  /** 8 HP in tenths of a hit. */
-  turretHp: 80,
+  /** 18 HP in tenths of a hit (GW3: 8 before, "turrets too easy to kill"). */
+  turretHp: 180,
+  /** GW3: the live turrets are shielded this long after each turret death (hits blocked). */
+  turretShieldSec: 1.5,
+  /** GW3: each turret death takes this share of maximum hit points off the bar (four: 20 percent at most). */
+  turretBarShare: 0.05,
   turretRadius: 16,
   /** Turret centres sit this far from the core centre, on the diagonals of its facing. */
   turretOffset: 100,
@@ -397,8 +401,6 @@ export const BASTION = {
   /** Bulwarks join this far outside the body edge, on the side facing the target. */
   addPad: 40,
   // Phase 3 (G3C): the core wakes once the last turret dies.
-  /** Phase 3 starts with at most this share of maximum hit points (the bar drops to it). */
-  wakeHpShare: 0.5,
   /** Drift speed of the woken core toward the ship between shields, u/s (GW2: 50, 110 before). */
   wakeSpeed: 50,
   /** One sweep arm rides the body, turning at sweepRate rad/s. */
@@ -462,15 +464,30 @@ export const TEMPEST = {
 /**
  * Tempest split (GW2): at the stage 2 crack the body splits once into count smaller Tempests
  * (Kind.BossPart, PartType.Tempestling, slot = index), each sizeShare of the body radius with the
- * remaining hit points split evenly. Each laps and dashes like the body, its Slime and dash clocks
- * running at rate of the body's.
+ * remaining hit points split evenly. GW3: each chases a flank point on its own side of the ship
+ * away from the walls and makes committed marked dashes through the ship, its clocks at rate.
  */
 export const TEMPESTLING = {
   count: 2,
   sizeShare: 0.6,
-  rate: 0.7,
-  /** First dash this long after the split (before the rate). */
+  /** GW3: the storm attack (Slime and dash clocks) at full rate (0.7 before). */
+  rate: 1,
+  /** First pincer this long after the split. */
   firstDash: 2,
+  /** GW3: a due pincer waits at most this long (attack seconds) for the two to reach opposite sides. */
+  flankWait: 2.5,
+  /** GW3: chase speed between dashes as a multiple of TEMPEST.lapSpeed (1.4: 196 u/s). */
+  speedRatio: 1.4,
+  /** GW3: committed dash speed, u/s. */
+  dashSpeed: 420,
+  /** GW3: a wind up starts only when the dash line runs at least this far before the wall. */
+  dashMin: 200,
+  /** GW3: between dashes the centre keeps at least this far from every wall. */
+  wallKeep: 150,
+  /** GW3: each chases a flank point this far from the ship, the two on opposite sides of it. */
+  flankDist: 260,
+  /** GW3: rest after a dash (the body's is TEMPEST.restSec). */
+  restSec: 0.6,
 } as const;
 
 /**

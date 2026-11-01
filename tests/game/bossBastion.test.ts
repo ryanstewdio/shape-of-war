@@ -1,13 +1,13 @@
-// Bastion (docs/12 roster row 7): four 8 HP turrets, the core gated on two turrets down, phases that
+// Bastion (docs/12 roster row 7): four 18 HP turrets (GW3), the core gated on two turrets down, phases that
 // follow the turret count (four, two, none), a Bulwark every 12 s, the centre held at 0.3 rad/s.
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
 import { isOpen, phaseForTurrets, turretAngle } from '../../src/game/bosses/bastion';
-import { countParts, damageBoss, damageBossPart, livePart } from '../../src/game/bosses/core';
+import { countParts, damageBoss, livePart } from '../../src/game/bosses/core';
 import { BASTION } from '../../src/game/bosses/table';
 import { PartType } from '../../src/game/bosses/types';
 import { Kind, type World } from '../../src/game/world';
-import { bs, bossGame, count, enter, park, run } from './bossHelpers';
+import { breakTurret, bs, bossGame, count, enter, park, run } from './bossHelpers';
 
 afterEach(() => bus.clear());
 
@@ -21,7 +21,7 @@ function game(): { w: World; boss: number } {
 function killTurret(w: World, slot: number): void {
   const p = livePart(w, bs(w), slot);
   expect(p).toBeGreaterThan(0);
-  damageBossPart(w, p, BASTION.turretHp, w.x[p] ?? 0, w.y[p] ?? 0);
+  breakTurret(w, p, BASTION.turretHp);
 }
 
 describe('bastion', () => {
@@ -33,7 +33,7 @@ describe('bastion', () => {
     expect(turretAngle(0, 2)).toBeCloseTo((-3 * Math.PI) / 4);
   });
 
-  it('holds the centre with four 8 HP turrets and turns at 0.3 rad/s', () => {
+  it('holds the centre with four 18 HP turrets and turns at 0.3 rad/s', () => {
     const { w, boss } = game();
     expect(Math.hypot(w.x[boss] ?? 0, w.y[boss] ?? 0)).toBeLessThan(1);
     const s = bs(w);
@@ -41,7 +41,7 @@ describe('bastion', () => {
     for (let k = 0; k < 4; k++) {
       const p = livePart(w, s, k);
       expect(w.a[p]).toBe(PartType.Turret);
-      expect(w.hp[p]).toBe(80);
+      expect(w.hp[p]).toBe(180);
     }
     const r0 = w.rot[boss] ?? 0;
     run(w, 1);
@@ -59,14 +59,15 @@ describe('bastion', () => {
     killTurret(w, 0);
     run(w, 0.1);
     damageBoss(w, 400, 0, 0);
-    expect(w.hp[boss]).toBe(hp0);
+    const cut = Math.round(s.maxHp * BASTION.turretBarShare); // GW3: each turret death takes 5 percent off the bar
+    expect(w.hp[boss]).toBe(hp0 - cut);
     expect(s.phase).toBe(1);
     killTurret(w, 1);
     expect(s.phase).toBe(2);
     run(w, 1.2); // the phase change pause, then the window opens
     expect(s.open).toBe(true);
     damageBoss(w, 400, 0, 0);
-    expect(w.hp[boss]).toBe(hp0 - 400);
+    expect(w.hp[boss]).toBe(hp0 - 2 * cut - 400);
     killTurret(w, 2);
     expect(s.phase).toBe(2);
     killTurret(w, 3);
@@ -74,8 +75,8 @@ describe('bastion', () => {
     expect(countParts(w, s)).toBe(0);
     run(w, 1.2);
     damageBoss(w, 400, 0, 0);
-    // G3C phase 3: the woken core keeps at most BASTION.wakeHpShare of its hit points.
-    expect(w.hp[boss]).toBe(Math.min(hp0 - 400, Math.round(s.maxHp * BASTION.wakeHpShare)) - 400);
+    // GW3: no drop to half at waking; four turret deaths took 4 cuts (20 percent) in all.
+    expect(w.hp[boss]).toBe(hp0 - 4 * cut - 800);
   });
 
   it('a Bulwark joins every 12 s', () => {

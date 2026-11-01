@@ -3,7 +3,7 @@
 // Tempest, and Bastion's woken phase 3 that attacks the ship once its turrets are gone.
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus, type Events } from '../../src/core/events';
-import { chargeEveryFor, wakeHp } from '../../src/game/bosses/bastion';
+import { chargeEveryFor, hpAfterTurret } from '../../src/game/bosses/bastion';
 import { bossBodyContact, crackStage, damageBoss, damageBossPart, hazardLethalAt, livePart } from '../../src/game/bosses/core';
 import { leadAt } from '../../src/game/bosses/prism';
 import { secondBody } from '../../src/game/bosses/twins';
@@ -11,7 +11,7 @@ import { BASTION, PRISM } from '../../src/game/bosses/table';
 import { stepGame } from '../../src/game/game';
 import { SHIP_RADIUS } from '../../src/game/ship';
 import { Kind, type World } from '../../src/game/world';
-import { bs, bossGame, enter, park, run } from './bossHelpers';
+import { breakTurret, bs, bossGame, enter, park, run } from './bossHelpers';
 import { DT, idle } from './helpers';
 
 afterEach(() => bus.clear());
@@ -34,18 +34,18 @@ function listenCrack(): Crack[] {
 function killTurrets(w: World): void {
   for (let k = 0; k < BASTION.turrets; k++) {
     const p = livePart(w, bs(w), k);
-    if (p > 0) damageBossPart(w, p, BASTION.turretHp, w.x[p] ?? 0, w.y[p] ?? 0);
+    if (p > 0) breakTurret(w, p, BASTION.turretHp);
   }
 }
 
 describe('pure rules', () => {
-  it('crack stages at 66 and 33 percent, Prism lead, Bastion wake hit points and charge interval', () => {
+  it('crack stages at 66 and 33 percent, Prism lead, Bastion turret bar cut and charge interval', () => {
     expect([100, 67, 65, 34, 32, 0].map((hp) => crackStage(hp, 100))).toEqual([0, 0, 1, 1, 2, 2]);
     expect(leadAt(1)).toBe(-1);
     expect(leadAt(PRISM.colourSec + 0.1)).toBeCloseTo(PRISM.whiteSec - 0.1);
     expect(leadAt(PRISM.colourSec + PRISM.whiteSec + 0.1)).toBe(-1);
-    expect(wakeHp(9000, 9000)).toBe(4500);
-    expect(wakeHp(3000, 9000)).toBe(3000);
+    expect(hpAfterTurret(9000, 9000)).toBe(8550);
+    expect(hpAfterTurret(300, 9000)).toBe(1);
     expect(chargeEveryFor(1)).toBe(5);
     expect(chargeEveryFor(2)).toBe(3.5);
   });
@@ -188,7 +188,7 @@ describe('per hit feedback', () => {
 });
 
 describe('bastion phase 3', () => {
-  it('the core wakes when the last turret dies: half hit points at most, a crack, and the ship attacked within 6 s', () => {
+  it('the core wakes when the last turret dies: the bar 20 percent down at most, and the ship attacked within 6 s', () => {
     const cracks = listenCrack();
     const w = bossGame('bastion', { lives: 9 });
     park(w, 600, 380);
@@ -196,9 +196,9 @@ describe('bastion phase 3', () => {
     killTurrets(w);
     const s = bs(w);
     expect(s.phase).toBe(3);
-    expect(w.hp[boss]).toBeLessThanOrEqual(Math.round(s.maxHp * BASTION.wakeHpShare));
+    expect(w.hp[boss]).toBe(s.maxHp - 4 * Math.round(s.maxHp * BASTION.turretBarShare));
     expect(s.open).toBe(true);
-    expect(cracks.map((e) => e.stage)).toEqual([1]);
+    expect(cracks.map((e) => e.stage)).toEqual([]); // GW3: turrets alone stay above the 66 percent crack
     let attackedAt = -1;
     for (let i = 0; i < 120 * 6 && attackedAt < 0; i++) {
       park(w, 600, 380);
@@ -223,7 +223,7 @@ describe('bastion phase 3', () => {
     enter(w);
     killTurrets(w);
     const s = bs(w);
-    damageBoss(w, Math.round(s.maxHp * 0.2), 0, 0);
+    damageBoss(w, Math.round(s.maxHp * 0.5), 0, 0);
     expect(s.crack[0]).toBe(2);
     expect(chargeEveryFor(s.crack[0] ?? 0)).toBe(BASTION.chargeEveryCracked);
     run(w, 1);
