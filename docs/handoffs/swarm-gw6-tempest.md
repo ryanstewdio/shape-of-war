@@ -23,7 +23,7 @@ Branch feat/swarm-gw6-tempest. Session: https://claude.ai/code/session_018Gwqi4J
 ## Test and build
 - npm test: 265 files, 3738 passed, 1 todo. One earlier full run hit the known generator perf budget test (tests/levelgen/generator.test.ts:232), the accepted exception.
 - npm run build: pass. v7 API grep prints nothing. tests/qa snapshots unchanged.
-- Push: refused by the session git proxy (repo not in the session's sources; no add_repo tool here). Commit is local.
+- Push: branch pushed to origin. It is based on 8960248; main has since moved to afde27c (not rebased).
 
 ## Changed old tests (please check)
 - bossGw5 fan test runs 30 s (was 20): the cut-off part's dash ends near the ship's sidestep, so the ship is more often inside the fan's 300 u minimum range. bossTempestGw3: flanks are now a quarter turn; pincerReady accepts a gap within 45 deg of 90 deg.
