@@ -22,7 +22,7 @@ import { bossAlive, countHazards } from './bosses/core';
 import { addWell, def as wellDef } from './enemies/gravitywell';
 import { removeEntity } from './remove';
 import { SHIP_RADIUS } from './ship';
-import { gs, MAX_WELLS } from './state';
+import { gs, MAX_WELLS, SNAKE_SLOTS } from './state';
 import { Kind, type World } from './world';
 
 export const ARRIVE_FIRST_MIN = 20;
@@ -168,6 +168,33 @@ function startArrival(w: World, specWells: number): void {
   fx.y = spot.y;
   fx.inSec = ARRIVE_TELE_SEC;
   bus.emit('sim:wellArrive', fx);
+}
+
+/**
+ * Level start, restart and retry (GW4, Ryan: "wells do not clear with level resets"): removes every
+ * well entity (arrival telegraphs included) and every nova snake, and resets all well and arrival
+ * bookkeeping: the well slots (ids, age, nova, ordinal), the per entity nova clocks, the snake to
+ * well links, the arrival index, schedule and pending telegraph. The arrival clock is the wave clock,
+ * which a new world starts at 0; the first arrival is rescheduled from it. createGame calls this
+ * before spawnWells, so every level start, Restart and Retry begins with only the spec wells.
+ */
+export function resetWellState(w: World): void {
+  const g = gs(w);
+  for (let s = 0; s < SNAKE_SLOTS; s++) {
+    const head = g.snakeHead[s] ?? -1;
+    if (g.snakeWell[s] !== -1 && head > 0) removeEntity(w, head);
+  }
+  for (let i = 1; i < w.cap; i++) if (w.alive[i] === 1 && w.kind[i] === Kind.GravityWell) removeEntity(w, i);
+  g.wellIds.fill(-1);
+  g.wellCount = 0;
+  g.wellAge.fill(0);
+  g.wellNova.fill(0);
+  for (let i = 0; i < g.wellOrd.length; i++) g.wellOrd[i] = i;
+  g.wellSnakeT.fill(0);
+  g.snakeWell.fill(-1);
+  g.wellArrivals = 0;
+  g.wellArriveAt = -1;
+  g.wellArriving = -1;
 }
 
 /** Per step, before stepWells. Allocates nothing. */

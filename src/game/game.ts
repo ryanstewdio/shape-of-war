@@ -20,7 +20,7 @@ import { stepSpawner } from './spawner';
 import { endlessLevel, startEndless, stepEndlessAwards } from './endless';
 import { currentMultiplier, gs, syncMultiplier, type GameMode, type GameState, type ScoringPort, type SegmentSource } from './state';
 import { stepSupers, triggerSuper } from './supers';
-import { stepWellArrivals } from './wellArrival';
+import { resetWellState, stepWellArrivals } from './wellArrival';
 import { createWorld, stepWorld, type World } from './world';
 
 export interface GameOptions {
@@ -54,6 +54,7 @@ export function createGame(level: LevelDef, opts: GameOptions = {}): World {
   if (opts.weaponPickups !== undefined) setWeaponPickups(w, opts.weaponPickups);
   if (opts.wellNova !== undefined) g.wellNovaOn = opts.wellNova;
   syncMultiplier(w);
+  resetWellState(w); // GW4: level start, Restart and Retry begin with no wells, arrivals or nova snakes
   spawnWells(w);
   initLevelBoss(w); // V3: arms LevelDef.boss when present; nothing otherwise
   watchPause(w);
@@ -61,13 +62,19 @@ export function createGame(level: LevelDef, opts: GameOptions = {}): World {
 }
 
 let unwatchPause: (() => void) | null = null;
+/** The newest game (level start, Restart, Retry and Next each build a new one). */
+let newest: World | null = null;
 
 /**
  * GW3 (Chorus): 'game:pause' silences a sounding chainsaw ('sim:saw' { on: false }) for the newest
  * game only. Resume needs no hook: the first step after 'game:resume' with the aim stick still held
  * and the saw level above 0 emits 'sim:saw' { on: true } (weapons.ts setSaw).
+ * GW4: a new game (level start, Restart, Retry, Next) first silences a saw the previous game left
+ * sounding (a Retry from the results screen has no pause before it), so no saw carries over.
  */
 function watchPause(w: World): void {
+  if (newest !== null && newest !== w) pauseSaw(newest);
+  newest = w;
   if (unwatchPause !== null) unwatchPause();
   unwatchPause = bus.on('game:pause', () => pauseGame(w));
 }
