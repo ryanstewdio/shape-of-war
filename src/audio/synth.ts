@@ -3,6 +3,8 @@
 // src/game or src/ui. The AudioContext is created lazily inside the first user gesture.
 import { bus, type Bus } from '../core/events';
 import { hash01 } from '../core/rng';
+import { installGw2, type Gw2Controller } from './gw2';
+import { createGw2Backend } from './gw2Synth';
 import {
   clampVolume,
   CUES,
@@ -11,6 +13,7 @@ import {
   cueForHit,
   cueForSfx,
   isBigKillColour,
+  MAX_VOICES,
   masterGain,
   RATE_LIMITS,
   VOLUME_DEFAULT,
@@ -30,8 +33,8 @@ const NOISE_SEC = 1;
 interface Voice {
   start: number;
   end: number;
-  sources: AudioScheduledSourceNode[];
-  out: GainNode;
+  sources: { stop(when?: number): void }[];
+  out?: GainNode;
 }
 
 let ctx: AudioContext | null = null;
@@ -112,11 +115,31 @@ export function getVolume(): number {
   return volume;
 }
 
-/** Sound effect cues sounding now (tests: the 24 voice cap holds). */
+/** Sound effect cues sounding now, sustained GW2 loops included (tests: the 24 voice cap holds). */
 export function sfxVoiceCount(): number {
   const now = ctx?.currentTime ?? 0;
-  return voices.filter((vc) => vc.end > now).length;
+  return voices.filter((vc) => vc.end > now).length + gw2Backend.activeLoops();
 }
+
+// GW2 effects share the master gain (so the volume setting applies) and the voice cap: a
+// sustained loop counts as a voice, and a one shot steals the oldest when the cap is reached.
+const GW2_LOOP_RESERVE = 4;
+const gw2Backend = createGw2Backend({
+  graph: () => (ctx && master && ctx.state === 'running' && volume > 0 ? { ctx, master } : null),
+  noise: noiseBuffer,
+  registerOneShot(start, end, stop): void {
+    const now = start;
+    voices = voices.filter((vc) => vc.end > now);
+    // Four slots stay reserved for the sustained loops (1 saw, 2 whirlpools, 1 shield hum), so
+    // loops that start later cannot push the total over the cap.
+    for (let steal = voiceToSteal(voices.map((vc) => vc.start), MAX_VOICES - GW2_LOOP_RESERVE); steal >= 0; steal = voiceToSteal(voices.map((vc) => vc.start), MAX_VOICES - GW2_LOOP_RESERVE)) {
+      const old = voices[steal];
+      if (old) stopVoice(old, now);
+      voices.splice(steal, 1);
+    }
+    voices.push({ start, end, sources: [{ stop }] });
+  },
+});
 
 function stopVoice(vc: Voice, at: number): void {
   for (const s of vc.sources) {
@@ -175,7 +198,7 @@ export function play(cue: CueName): void {
   const lim = limiterFor(cue);
   if (lim && !lim.allow(now)) return;
   voices = voices.filter((vc) => vc.end > now);
-  const steal = voiceToSteal(voices.map((vc) => vc.start));
+  const steal = voiceToSteal(voices.map((vc) => vc.start), MAX_VOICES - gw2Backend.activeLoops());
   if (steal >= 0) {
     const old = voices[steal];
     if (old) stopVoice(old, now);
@@ -213,7 +236,9 @@ export function installAudio(opts: AudioOptions): () => void {
   // A boss death emits 'sim:bossDown' then sfx explode in the same step: the boss death cue
   // replaces that explode, so the small kill sound never doubles it.
   let bossDown = false;
+  const gw2: Gw2Controller = installGw2(b, gw2Backend);
   const offs = [
+    gw2.dispose,
     // combat emits fx:kill then sfx explode, so the colour decides the explode sound.
     b.on('fx:kill', (p) => {
       bigKill = isBigKillColour(p.colour);
