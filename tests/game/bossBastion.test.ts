@@ -33,7 +33,7 @@ describe('bastion', () => {
     expect(turretAngle(0, 2)).toBeCloseTo((-3 * Math.PI) / 4);
   });
 
-  it('holds the centre with four 18 HP turrets and turns at 0.3 rad/s', () => {
+  it('holds the centre with four 30 HP turrets and turns at 0.3 rad/s', () => {
     const { w, boss } = game();
     expect(Math.hypot(w.x[boss] ?? 0, w.y[boss] ?? 0)).toBeLessThan(1);
     const s = bs(w);
@@ -41,7 +41,7 @@ describe('bastion', () => {
     for (let k = 0; k < 4; k++) {
       const p = livePart(w, s, k);
       expect(w.a[p]).toBe(PartType.Turret);
-      expect(w.hp[p]).toBe(180);
+      expect(w.hp[p]).toBe(300); // GW4: 30 HP (18 before)
     }
     const r0 = w.rot[boss] ?? 0;
     run(w, 1);

@@ -1,5 +1,5 @@
 // Bastion (tier 3, red, level 35; docs/12 roster row 7). Holds the arena centre and turns at
-// 0.3 rad/s. Four corner turrets (Kind.BossPart, 18 HP each since GW3) sit on the diagonals of its facing and
+// 0.3 rad/s. Four corner turrets (Kind.BossPart, 30 HP each since GW4) sit on the diagonals of its facing and
 // take one turn every 1.5 s in order (attack clock, so enrage shortens it); a destroyed turret skips
 // its turns, so the total turn rate never changes. A turn fires a lane straight out from the turret.
 // The core takes damage only once two turrets are down. Phases follow the turrets (phaseOf): four,
@@ -17,11 +17,17 @@
 // the lane or sweep recheck, shotWait the bullet recheck. Phase 3: t2 charge clock, t3 windup or
 // charge seconds left, dir the wake state, angle the charge heading, n2 the sweep id.
 // Phase 3 shield (GW2 "unthreatening after its turrets die"): the woken core drifts toward the ship
-// at 50 u/s. Every 12 s (start to start, the first 12 s after waking) it stops, raises a shield for
+// at 50 u/s. Every 10 s since GW4 (start to start, the first 10 s after waking) it stops, raises a shield for
 // 3 s (core closed, shots absorbed, 'sim:bossShield') and releases 6 Hornets in two bursts of 3 from
 // the shared Hornet pool, then holds still with its core open for 2 s (a timed window). A shield
 // that comes due during a wind up or charge waits for it to end. Ability scratch (bs.abl): 0 shield
 // cycle clock (step seconds), 1 seconds into the shield, 2 bursts fired, 3 open seconds left.
+// Turret regen (GW4 "not harder to kill", fairness 5, target 4): a fallen turret rebuilds at half hit
+// points BASTION.regenSec after it fell, one at a time (the next one down starts its own regenSec
+// once that rebuild lands), while the core has more than BASTION.regenAboveShare of its hit points
+// and has not woken. Only the first four turret deaths take a share off the bar, so a rebuilt turret
+// never makes the bar easier. Scratch: abl[5] regen clock (-1 idle), abl[6 + k] fall order of slot k
+// (-1 standing), abl[10] turret deaths, abl[11] fall counter.
 import * as bulwark from '../enemies/bulwark';
 import { angleBetween, moveTo, moveToHit, stepToward, targetOf } from '../steer';
 import { Kind, type World } from '../world';
@@ -68,6 +74,74 @@ const BURSTS = 2;
 const OPEN = 3;
 /** bs.abl slot of the turret shield clock (seconds left). */
 export const TURRET_SHIELD = 4;
+/** bs.abl slot of the turret regen clock (seconds, -1 idle). */
+export const REGEN = 5;
+/** bs.abl slot of slot 0's fall order (slots 0 to 3 follow); -1 while the turret stands. */
+export const FELL = 6;
+/** bs.abl slot of the turret death count. */
+export const DEATHS = 10;
+const FALLS = 11;
+
+/** Pure: hit points of a rebuilt turret, half of a fresh one. */
+export function regenHp(): number {
+  return Math.round(BASTION.turretHp / 2);
+}
+
+/** Pure: a turret may rebuild: the core has not woken (phase under 3) and holds more than regenAboveShare. */
+export function regenAllowed(hp: number, maxHp: number, phase: number): boolean {
+  return phase < 3 && hp > maxHp * BASTION.regenAboveShare;
+}
+
+/** Pure: a turret death takes its share off the bar: only the first `turrets` deaths do. */
+export function deathCutsBar(deaths: number): boolean {
+  return deaths <= BASTION.turrets;
+}
+
+/** The fallen slot that fell first, or -1 when every turret stands. */
+function firstFallen(bs: BossState): number {
+  let best = -1;
+  let order = Infinity;
+  for (let k = 0; k < BASTION.turrets; k++) {
+    const f = bs.abl[FELL + k] ?? -1;
+    if (f >= 0 && f < order) {
+      order = f;
+      best = k;
+    }
+  }
+  return best;
+}
+
+function regenReset(bs: BossState): void {
+  bs.abl[REGEN] = -1;
+  for (let k = 0; k < BASTION.turrets; k++) bs.abl[FELL + k] = -1;
+  bs.abl[DEATHS] = 0;
+  bs.abl[FALLS] = 0;
+}
+
+/** Rebuild turret slot k at half hit points in its place on the core. */
+function rebuildTurret(w: World, id: number, bs: BossState, k: number): void {
+  const a = turretAngle(w.rot[id] ?? 0, k);
+  const tx = (w.x[id] ?? 0) + Math.cos(a) * BASTION.turretOffset;
+  const ty = (w.y[id] ?? 0) + Math.sin(a) * BASTION.turretOffset;
+  const p = spawnPart(w, bs, k, PartType.Turret, tx, ty, regenHp(), BASTION.turretRadius);
+  if (p < 0) return;
+  w.rot[p] = a;
+  bs.abl[FELL + k] = -1;
+}
+
+/** The regen clock: one fallen turret rebuilds regenSec after its clock started, then the next starts. */
+function stepRegen(w: World, id: number, bs: BossState, dt: number): void {
+  const clock = bs.abl[REGEN] ?? -1;
+  if (clock < 0) return;
+  const t = clock + dt;
+  if (t < BASTION.regenSec - 1e-9) {
+    bs.abl[REGEN] = t;
+    return;
+  }
+  const k = firstFallen(bs);
+  if (k >= 0 && regenAllowed(w.hp[id] ?? 0, bs.maxHp, bs.phase)) rebuildTurret(w, id, bs, k);
+  bs.abl[REGEN] = k >= 0 && firstFallen(bs) >= 0 && regenAllowed(w.hp[id] ?? 0, bs.maxHp, bs.phase) ? 0 : -1;
+}
 
 /** Pure: the phase 3 shield cycle clock at waking, so the first shield comes firstSec after it. */
 export function shieldClockStart(): number {
@@ -305,6 +379,7 @@ export function reset(w: World, id: number, bs: BossState, first: boolean): void
   if (first) {
     bs.t1 = 0;
     bs.n1 = 0;
+    regenReset(bs);
     placeTurrets(w, id, bs, true);
   }
   wakeReset(w, id, bs); // phase 3 restarts its cycle too (the core clears the sweep)
@@ -315,6 +390,7 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
   bs.abl[TURRET_SHIELD] = turretShieldAfter(bs.abl[TURRET_SHIELD] ?? 0, dt);
   w.rot[id] = wrapPi((w.rot[id] ?? 0) + BASTION.turnRate * dt);
   placeTurrets(w, id, bs, false);
+  if (countParts(w, bs) > 0) stepRegen(w, id, bs, dt); // the woken core never rebuilds
   const n = countParts(w, bs);
   setWindow(bs, n);
   if (n > 0) stepTurns(w, bs, dt, adt);
@@ -348,7 +424,19 @@ export function entryHome(d: number): number {
 export function onPartDamage(w: World, bs: BossState, part: number, applied: number, broke: boolean): void {
   if (!broke) return;
   const id = bs.id;
-  if (id > 0 && w.alive[id] === 1) w.hp[id] = hpAfterTurret(w.hp[id] ?? 0, bs.maxHp);
+  let fell = false;
+  for (let k = 0; k < BASTION.turrets; k++) {
+    if ((bs.abl[FELL + k] ?? -1) >= 0 || livePart(w, bs, k) > 0) continue;
+    fell = true;
+    bs.abl[FALLS] = (bs.abl[FALLS] ?? 0) + 1;
+    bs.abl[FELL + k] = bs.abl[FALLS] ?? 0;
+  }
+  if (fell) {
+    bs.abl[DEATHS] = (bs.abl[DEATHS] ?? 0) + 1;
+    if ((bs.abl[REGEN] ?? -1) < 0) bs.abl[REGEN] = 0;
+  }
+  const cuts = !fell || deathCutsBar(bs.abl[DEATHS] ?? 0);
+  if (cuts && id > 0 && w.alive[id] === 1) w.hp[id] = hpAfterTurret(w.hp[id] ?? 0, bs.maxHp);
   const n = countParts(w, bs);
   if (n > 0) bs.abl[TURRET_SHIELD] = BASTION.turretShieldSec;
   setWindow(bs, n);

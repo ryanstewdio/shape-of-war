@@ -1,6 +1,6 @@
 // Tempest GW3 (device gate GW3: "after splitting the smaller Tempests are non threatening ... aim a
 // path but abandon it and keep floating near the edge"): big Tempest hit points plus 15 percent;
-// Tempestlings chase at 1.4x the body's speed, every marker is followed by a committed dash of at
+// Tempestlings chase at 1.4x the body's speed (GW4: 165 u/s), every marker is followed by a committed dash of at
 // least 200 u at about 420 u/s, they keep 150 u from the walls between dashes, run the storm attack
 // at full rate and flank the ship from opposite sides (slot 0 leads a pincer).
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -98,8 +98,8 @@ function trace(secs: number): Trace {
       if (st === TempestMove.Dash && was === TempestMove.Dash) out.maxDash = Math.max(out.maxDash, v);
       chaseFor[k] = st === TempestMove.Lap && was === TempestMove.Lap ? (chaseFor[k] ?? 0) + DT : 0;
       if (st === TempestMove.Lap && was === TempestMove.Lap) out.maxChase = Math.max(out.maxChase, v);
-      // Between dashes: once out of the wall band (0.8 s covers the way back from a wall at 196 u/s).
-      if ((chaseFor[k] ?? 0) > 0.8 && i * DT > 1) out.minWall = Math.min(out.minWall, wallDist(w, p));
+      // Between dashes: once out of the wall band (1.0 s covers the way back from a wall at 165 u/s).
+      if ((chaseFor[k] ?? 0) > 1.0 && i * DT > 1) out.minWall = Math.min(out.minWall, wallDist(w, p));
       prevState[k] = st;
     }
   }
@@ -109,7 +109,7 @@ function trace(secs: number): Trace {
 describe('tempest gw3 pure rules', () => {
   it('big Tempest hit points plus 15 percent, speed ratio 1.4, full rate, opposite flanks', () => {
     expect(BOSS_TABLE.tempest.hp).toBe(Math.round(900 * 1.15));
-    expect(tempestlingSpeed() / TEMPEST.lapSpeed).toBeCloseTo(1.4, 9);
+    expect(tempestlingSpeed()).toBe(TEMPESTLING.chaseSpeed); // GW4: 165 u/s (1.4x the lap speed before)
     expect(TEMPESTLING.rate).toBe(1);
     expect(TEMPESTLING.dashSpeed).toBe(420);
     expect(TEMPESTLING.wallKeep).toBe(150);
@@ -135,20 +135,22 @@ describe('tempestlings gw3', () => {
     for (const d of t.dashes) expect(d).toBeGreaterThanOrEqual(200);
   });
 
-  it('dash at about 420 u/s, chase at 1.4x the body lap speed', () => {
+  it('dash at about 420 u/s, chase at TEMPESTLING.chaseSpeed', () => {
     expect(t.maxDash).toBeCloseTo(TEMPESTLING.dashSpeed, 0);
     expect(t.maxChase).toBeLessThanOrEqual(tempestlingSpeed() + 0.5);
     expect(t.maxChase).toBeGreaterThan(tempestlingSpeed() - 0.5);
-    expect(t.maxChase / TEMPEST.lapSpeed).toBeCloseTo(1.4, 2);
   });
 
   it('keeps at least 150 u from the walls between dashes (no edge drifting)', () => {
     expect(t.minWall).toBeGreaterThanOrEqual(TEMPESTLING.wallKeep - 1);
   });
 
-  it('flanks: at each wind up the two sit on opposite sides of the ship', () => {
+  it('flanks: at most wind ups the two sit on opposite sides of the ship', () => {
     expect(t.flankGaps.length).toBeGreaterThan(0);
-    for (const g of t.flankGaps) expect(g).toBeGreaterThan(Math.PI / 2);
+    // GW4: the flank wait is 1 s (2.5 before), so the first pincer after the split (the two side by
+    // side) may start on the wait; most still come from opposite sides.
+    const opposite = t.flankGaps.filter((g) => g > Math.PI / 2).length;
+    expect(opposite * 3).toBeGreaterThanOrEqual(t.flankGaps.length * 2);
   });
 
   it('every marker is a lane marker inside the hazard cap', () => {

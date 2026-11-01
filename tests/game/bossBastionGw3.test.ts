@@ -31,8 +31,8 @@ function hit(w: World, k: number, amount: number): number {
 }
 
 describe('bastion gw3 pure rules', () => {
-  it('18 HP turrets, a 5 percent bar cut per turret, 20 percent for all four, a 1.5 s shield', () => {
-    expect(BASTION.turretHp).toBe(180);
+  it('30 HP turrets (GW4), a 5 percent bar cut per turret, 20 percent for all four, a 1.5 s shield', () => {
+    expect(BASTION.turretHp).toBe(300);
     expect(BASTION.turretShieldSec).toBe(1.5);
     expect(turretBarCut(9000)).toBe(450);
     expect(BASTION.turrets * turretBarCut(9000)).toBeLessThanOrEqual(9000 * 0.2);
@@ -47,9 +47,9 @@ describe('bastion gw3 pure rules', () => {
 });
 
 describe('bastion gw3', () => {
-  it('a turret takes 18 HP: 17.9 leaves it standing', () => {
+  it('a turret takes 30 HP (GW4): 29.9 leaves it standing', () => {
     const { w } = game();
-    const p = hit(w, 0, 179);
+    const p = hit(w, 0, BASTION.turretHp - 1);
     expect(w.alive[p]).toBe(1);
     expect(w.hp[p]).toBe(1);
     hit(w, 0, 1);
