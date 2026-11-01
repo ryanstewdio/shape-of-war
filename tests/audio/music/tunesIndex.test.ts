@@ -80,9 +80,13 @@ describe('a level plays its tune', () => {
       const v = t.voicings[t.key.bars[Math.floor(n.step / STEPS_PER_BAR) % t.loopBars]?.name ?? ''];
       expect(v?.pad).toContain(n.midi);
     }
-    // No enemies, so every oscillator is the bed's (kick and LFO are sines).
+    // No enemies, so every oscillator is the bed's (kick and LFO are sines). v3.5 adds a pulse
+    // (a square without periodic waves) for the held pad's C section arpeggio and the second loop
+    // lead, and the second loop's triangle.
     const waves = new Set(ctx.oscs.map((o) => o.type));
-    expect(waves).toEqual(new Set<OscillatorType>(['sine', t.bed.bass, t.bed.pad, t.bed.arp]));
+    for (const w of ['sine', t.bed.bass, t.bed.pad, t.bed.arp] as const) expect(waves.has(w), w).toBe(true);
+    const allowed = new Set<OscillatorType>(['sine', t.bed.bass, t.bed.pad, t.bed.arp, 'square', 'triangle']);
+    for (const w of waves) expect(allowed.has(w), w).toBe(true);
     for (const n of log) if (n.midi !== null) expect(inScale(n.midi, t.key)).toBe(true);
   });
 });

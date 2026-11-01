@@ -21,6 +21,7 @@ import {
   type LoopKind,
   type OneShot,
 } from './gw2';
+import { attackSec, noiseBandHz, NOISE_LP_HZ } from './tone';
 
 const FLOOR = 0.0001;
 
@@ -160,7 +161,7 @@ function makeHandle(c: AudioContext, built: Built, onStop: () => void): LoopHand
 function ping(c: AudioContext, dest: AudioNode, hz: number, t: number, dur: number, gain: number, type: OscillatorType): AudioScheduledSourceNode {
   const g = c.createGain();
   g.gain.setValueAtTime(FLOOR, t);
-  g.gain.linearRampToValueAtTime(gain, t + 0.005);
+  g.gain.linearRampToValueAtTime(gain, t + attackSec(0.005));
   g.gain.exponentialRampToValueAtTime(FLOOR, t + dur);
   const o = osc(c, type, hz);
   o.connect(g);
@@ -185,14 +186,19 @@ function noiseBurst(
   const f = c.createBiquadFilter();
   f.type = type;
   f.Q.value = type === 'bandpass' ? 4 : 0.7;
-  f.frequency.setValueAtTime(f0, t);
-  f.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+  f.frequency.setValueAtTime(noiseBandHz(f0), t);
+  f.frequency.exponentialRampToValueAtTime(noiseBandHz(f1), t + dur);
   const g = c.createGain();
   g.gain.setValueAtTime(FLOOR, t);
-  g.gain.linearRampToValueAtTime(gain, t + Math.min(0.02, dur / 4));
+  g.gain.linearRampToValueAtTime(gain, t + attackSec(Math.min(0.02, dur / 4)));
   g.gain.exponentialRampToValueAtTime(FLOOR, t + dur);
   n.connect(f);
-  f.connect(g);
+  // v3.5 tone: every noise hit is band limited below 7 kHz, whatever its own filter does.
+  const band = c.createBiquadFilter();
+  band.type = 'lowpass';
+  band.frequency.value = NOISE_LP_HZ;
+  f.connect(band);
+  band.connect(g);
   g.connect(dest);
   n.start(t);
   n.stop(t + dur + 0.02);

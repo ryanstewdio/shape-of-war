@@ -54,6 +54,8 @@ export class FakeFilter extends FakeNode implements FilterLike {
   type: BiquadFilterType = 'lowpass';
   readonly frequency = new FakeParam();
   readonly Q = new FakeParam();
+  /** Shelf and peaking gain, dB (the v3.5 master tone stage's high shelf). */
+  readonly gain = new FakeParam();
 }
 
 export class FakeSource extends FakeNode implements SourceLike {

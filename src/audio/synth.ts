@@ -23,10 +23,11 @@ import {
   type RateLimiter,
   type VoiceDef,
 } from './cues';
+import { attackSec, buildToneStage, leadCutoffHz, LEAD_LP_Q, needsLeadFilter, noiseBandHz, NOISE_LP_HZ } from './tone';
 
 export type { CueName } from './cues';
 
-const ATTACK = 0.005;
+const ATTACK = attackSec(0.005);
 const FLOOR = 0.0001;
 const NOISE_SEC = 1;
 
@@ -74,7 +75,8 @@ export async function unlockAudio(): Promise<void> {
     ctx = new AudioContext({ latencyHint: 'interactive' });
     master = ctx.createGain();
     master.gain.value = masterGain(volume);
-    master.connect(ctx.destination);
+    // v3.5: sfx and music (which feeds this master) pass the master tone stage.
+    master.connect(buildToneStage(ctx, ctx.destination).input);
   }
   if (ctx.state !== 'running') {
     try {
@@ -174,16 +176,39 @@ function buildVoice(c: AudioContext, out: AudioNode, d: VoiceDef, t: number): Au
     }
     src = o;
   }
+  // v3.5 tone: a noise hit is band limited below 7 kHz; a square or saw without its own filter
+  // gets a low pass that tracks its sweep (6x the pitch, capped at 5 kHz).
+  let head: AudioNode = env;
+  if (d.wave === 'noise' && !(d.filter?.type === 'lowpass' && d.filter.f0 <= NOISE_LP_HZ)) {
+    const band = c.createBiquadFilter();
+    band.type = 'lowpass';
+    band.frequency.value = NOISE_LP_HZ;
+    band.connect(head);
+    head = band;
+  }
   if (d.filter) {
     const f = c.createBiquadFilter();
     f.type = d.filter.type;
-    f.frequency.setValueAtTime(d.filter.f0, t);
-    f.frequency.exponentialRampToValueAtTime(Math.max(1, d.filter.f1), t + d.dur);
-    src.connect(f);
-    f.connect(env);
-  } else {
-    src.connect(env);
+    const noisy = d.wave === 'noise';
+    f.frequency.setValueAtTime(noisy ? noiseBandHz(d.filter.f0) : d.filter.f0, t);
+    f.frequency.exponentialRampToValueAtTime(Math.max(1, noisy ? noiseBandHz(d.filter.f1) : d.filter.f1), t + d.dur);
+    f.connect(head);
+    head = f;
+  } else if (needsLeadFilter(d.wave)) {
+    const f = c.createBiquadFilter();
+    f.type = 'lowpass';
+    f.Q.value = LEAD_LP_Q;
+    f.frequency.setValueAtTime(leadCutoffHz(d.f0), t);
+    if (d.steps && d.stepSec) {
+      const sec = d.stepSec;
+      d.steps.forEach((hz, i) => f.frequency.setValueAtTime(leadCutoffHz(hz), t + i * sec));
+    } else if (d.f1 !== d.f0) {
+      f.frequency.exponentialRampToValueAtTime(leadCutoffHz(d.f1), t + d.dur);
+    }
+    f.connect(head);
+    head = f;
   }
+  src.connect(head);
   src.start(t);
   src.stop(t + d.dur + 0.02);
   return src;

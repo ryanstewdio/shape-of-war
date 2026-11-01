@@ -148,6 +148,7 @@ import {
 import { createScheduler, LOOKAHEAD_SEC, planStep, realTimer, TICK_MS, type Scheduler, type Timer } from './scheduler';
 import { endlessBlock, endlessTune, startTune, type RunMode } from './select';
 import { buildBar, STEPS_PER_BAR, structuralFill, type BarPattern, type FillBar, type Layer } from './track';
+import { isBreakdownBar } from './breakdown';
 import { BATTLE_TUNES, DEFAULT_TUNE, FILL_BARS, tuneById, type TrackId, type Tune, type TuneId } from './tunes';
 import { battleIndexFor, fitBattleNote, xfadeFor, xfadeGain, type Xfade } from './battle';
 // Battle polish: intro hit, phase intensity, window duck, defeat tonic, weapon and drone cues.
@@ -398,6 +399,17 @@ function fillAt(s: Session, bar: number): FillBar {
   return structuralFill(tuneAt(s, bar), localBar(s, bar));
 }
 
+/** Lowest master cutoff in the space breakdown (v3.5), so the risen pad and its echo are heard. */
+export const BREAK_CUTOFF_HZ = 2200;
+
+/** True when an absolute step is inside a space breakdown of its tune (breakdown.ts). */
+function breakdownAt(s: Session, step: number): boolean {
+  // Called every tick: no allocation (spanAt returns a stored span).
+  const bar = Math.floor(step / STEPS_PER_BAR);
+  const span = spanAt(s, bar);
+  return isBreakdownBar(s.seed, span.tune, bar - span.fromBar);
+}
+
 function makeBar(s: Session, index: number): BarPattern {
   return buildBar(s.seed, localBar(s, index), tuneAt(s, index), fillAt(s, index));
 }
@@ -463,7 +475,9 @@ function onTick(s: Session, now: number, sched: Scheduler): void {
   s.lift = lift;
   maybeRotate(s, sched, now);
   // Battle polish: each boss phase opens the lowpass a step while the battle track plays.
-  const hz = masterCutoff(level, s.lift) * battleCutoffMul(s, sched.nextStep);
+  const base = masterCutoff(level, s.lift) * battleCutoffMul(s, sched.nextStep);
+  // v3.5: the breakdown opens the lowpass to at least BREAK_CUTOFF_HZ while it sounds.
+  const hz = breakdownAt(s, Math.max(0, sched.stepAtOrAfter(now) - 1)) ? Math.max(base, BREAK_CUTOFF_HZ) : base;
   // Only meaningful changes reach the AudioParam: 40 setTargetAtTime calls a second grew the
   // automation list for nothing.
   if (cutoffChanged(s.lastCutoff, hz)) {
@@ -783,6 +797,8 @@ function onStep(p: Session, step: number, time: number): void {
   p.playSec += sec;
   // The long echo follows the tune's tempo (a no op unless the tempo changed).
   p.engine.setStepSec(sec);
+  // v3.5: the long echo swells into the breakdown on its first bar line and back out after it.
+  if (step % STEPS_PER_BAR === 0) p.engine.setSpace(isBreakdownBar(p.seed, w.tune, w.bar), time);
   if (volume === 0) return;
   const barIndex = Math.floor(step / STEPS_PER_BAR);
   const inBar = step % STEPS_PER_BAR;
