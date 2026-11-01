@@ -220,8 +220,9 @@ describe('generator with enableBosses', () => {
   });
 
   it('a non boss level is identical with the flag on or off, and keeps its version', () => {
+    // D13: the cylinder draw is its own flag, held off here so only the boss flag differs.
     for (const n of [1, 4, 6, 9, 11, 16, 31, 49, 51, 99]) {
-      const on = generateLevel(42, n, ON);
+      const on = generateLevel(42, n, { ...ON, enableCylinder: false });
       const off = generateLevel(42, n, OFF);
       expect(JSON.stringify(on), `level ${n}`).toBe(JSON.stringify(off));
       expect(levelHash(on)).toBe(levelHash(off));
@@ -417,10 +418,11 @@ describe('validator: B1 to B4 and J7', () => {
     expect(ids(validateSegment(copySeg(good), OFF).errors)).toEqual(['J7']);
   });
 
-  it('J3 accepts version 3 and still rejects 4', () => {
+  it('J3 accepts version 3 and still rejects 5', () => {
     const d = boss5();
     expect(validateLevel(d).errors).toEqual([]);
-    d.generatorVersion = 4;
+    // D13: 4 (GENERATOR_VERSION_V4, cylinder levels) is now known, so 5 is the first unknown version.
+    d.generatorVersion = 5;
     expect(ids(validateLevel(d).errors)).toContain('J3');
   });
 

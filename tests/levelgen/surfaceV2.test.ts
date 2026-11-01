@@ -1,21 +1,23 @@
 // V2-C flat hook (docs/11 SPEC 3.4 item 4, Q15): with the v2 enemies on, every generated level is
 // still 'flat', and the validator still rejects every other surface value. surface.test.ts holds
-// the v1 checks and stays unmodified.
+// the v1 checks and stays unmodified. D13 C0: 'cylinder' is now valid under C1 (cylinder.test.ts),
+// so these checks run with the cylinder flag off and leave 'cylinder' out of the reject list.
 import { describe, expect, it } from 'vitest';
 import { generateEndless, generateLevel } from '../../src/levelgen/generator';
-import { DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V2, V2_GEN_CONFIG } from '../../src/levelgen/leveldef';
+import { DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V2, V2_GEN_CONFIG, V3_GEN_CONFIG } from '../../src/levelgen/leveldef';
 import type { LevelDef } from '../../src/levelgen/leveldef';
 import { validateEndless, validateLevel } from '../../src/levelgen/validate';
 
-/** Every SurfaceKind docs/09 section 2.6 names, plus junk: none but 'flat' is valid. */
-const NOT_FLAT: readonly unknown[] = ['cylinder', 'torus', 'sphere', 'capsule', 'twistedBand', 'Flat', '', null, 0, undefined];
+/** Every SurfaceKind docs/09 section 2.6 names but cylinder, plus junk: never valid on a level. */
+const NOT_FLAT: readonly unknown[] = ['torus', 'sphere', 'capsule', 'twistedBand', 'Flat', '', null, 0, undefined];
 
 describe('flat hook with the v2 enemies on', () => {
-  it('every generated level is flat, in every band', () => {
+  it('every generated level is flat, in every band, with the cylinder flag off', () => {
     expect(DEFAULT_GEN_CONFIG.enableV2Enemies).toBe(true);
+    expect(V3_GEN_CONFIG.enableV2Enemies).toBe(true);
     for (let s = 0; s < 100; s++) {
       for (let n = 1; n <= 60; n += 3) {
-        const d = generateLevel((1 + s * 2654435761) >>> 0, n);
+        const d = generateLevel((1 + s * 2654435761) >>> 0, n, V3_GEN_CONFIG);
         expect(d.surface, `seed ${d.runSeed} level ${n}`).toBe('flat');
       }
     }
@@ -38,7 +40,7 @@ describe('flat hook with the v2 enemies on', () => {
 
   it('any other surface value fails V1 on a flag on EndlessDef', () => {
     const base = generateEndless(5);
-    for (const v of NOT_FLAT) {
+    for (const v of ['cylinder', ...NOT_FLAT]) {
       const bad: unknown = { ...structuredClone(base), surface: v };
       expect(validateEndless(bad as typeof base).errors.some((e) => e.startsWith('V1:')), `surface ${String(v)}`).toBe(true);
     }
