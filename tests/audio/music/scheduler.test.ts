@@ -10,6 +10,7 @@ import {
   TICK_MS,
 } from '../../../src/audio/music/scheduler';
 import { buildBar, STEP_SEC, STEPS_PER_BAR } from '../../../src/audio/music/track';
+import { PLAIN_TUNE } from './plainTune';
 import { FakeTimer } from './fakeAudio';
 
 interface Rec {
@@ -194,7 +195,8 @@ describe('lookahead scheduler', () => {
 });
 
 describe('planStep', () => {
-  const bar = buildBar(5, 0);
+  // The formless test tune: its hashed arp takes the lift (a written lead keeps its register).
+  const bar = buildBar(5, 0, PLAIN_TUNE);
 
   it('plays only the pad at threat 0', () => {
     const layers = new Set<string>();

@@ -24,7 +24,8 @@ import { harmonyForBar, inChord, inScale } from '../../../src/audio/music/harmon
 import { initMusic, musicState, setMusicVolume, startMusic, type MusicGraph, type NoteLog } from '../../../src/audio/music/index';
 import { LAYERS_FULL } from '../../../src/audio/music/layers';
 import { TICK_MS } from '../../../src/audio/music/scheduler';
-import { BAR_SEC, buildBar, isHookBar, isJumpBar, STEPS_PER_BAR } from '../../../src/audio/music/track';
+import { BAR_SEC, buildBar, isHookBar, isJumpBar, leadNotes, STEPS_PER_BAR } from '../../../src/audio/music/track';
+import { rhythmCell } from '../../../src/audio/music/compose';
 import { BATTLE_TUNES, TUNES, type Tune } from '../../../src/audio/music/tunes';
 import { Bus } from '../../../src/core/events';
 import type { BossId, EnemyKind } from '../../../src/levelgen/leveldef';
@@ -47,21 +48,22 @@ describe('battle tracks (pure)', () => {
     expect(new Set(BATTLE_TUNES.map((t) => t.key.tonic)).size).toBe(3);
   });
 
-  it('the hook plays verbatim on bar 0 of every 8, whatever the pass, and fits the harmony', () => {
+  it('the A phrase (the hook) plays verbatim on bar 0 of every 8, whatever the pass, and fits the harmony', () => {
     for (const t of BATTLE_TUNES) {
-      expect(t.hook).toBeDefined();
+      // v3.4: the written A phrase is the hook; the A B A C form brings it back every 8 bars.
+      expect(t.hook).toBeUndefined();
+      expect(t.form?.sections).toEqual(['A', 'B', 'A', 'C']);
       const hook = arpOf(t, 0);
-      for (const bar of [8, 16, 24, 40]) {
-        expect(isHookBar(t, bar)).toBe(true);
+      for (const bar of [8, 16, 24, 40, 56]) {
+        expect(isHookBar(t, bar)).toBe(false);
         expect(arpOf(t, bar), `${t.id} bar ${bar}`).toBe(hook);
       }
-      expect(isHookBar(t, 4)).toBe(false);
       const steps = buildBar(5, 0, t, null).notes.filter((n) => n.layer === 'arp');
-      expect(steps.map((n) => n.step)).toEqual([...(t.hook?.steps ?? [])]);
+      expect(steps.map((n) => n.step)).toEqual(rhythmCell(t.form?.phrases.A ?? [], 0).split(' ').map((c) => Number(c.split(':')[0])));
       for (const n of steps) expect(inScale(n.midi ?? 0, t.key)).toBe(true);
     }
     // Three different hook rhythms.
-    expect(new Set(BATTLE_TUNES.map((t) => t.hook?.steps.join(','))).size).toBe(3);
+    expect(new Set(BATTLE_TUNES.map((t) => rhythmCell(t.form?.phrases.A ?? [], 0))).size).toBe(3);
   });
 
   it('kick and clap run at double the density of the level tunes, each with its own feel', () => {
@@ -213,10 +215,10 @@ describe('battle polish through the entry points', () => {
     }
     // The battle bed starts on that same bar.
     expect(Math.min(...log.filter((n) => n.role === 'bed' && n.tune === name).map((n) => n.step))).toBe(join);
-    // The hook (verbatim arp bar) comes on the join bar too: bar 0 of the battle loop.
+    // The hook (the A phrase's first bar) comes on the join bar too: bar 0 of the battle loop.
     const t = BATTLE_TUNES[idx];
     const arpSteps = log.filter((n) => n.role === 'bed' && n.layer === 'arp' && n.step >= join && n.step < join + STEPS_PER_BAR).map((n) => n.step - join);
-    expect(arpSteps).toEqual([...(t?.hook?.steps ?? [])]);
+    expect(arpSteps).toEqual(t === undefined ? [] : leadNotes(t, 0).map((n) => n.step));
   });
 
   it('the window ducks the drums 6 dB and lifts the hook; phases add the drum layer', () => {
@@ -225,7 +227,7 @@ describe('battle polish through the entry points', () => {
     advance(BAR_SEC * 2);
     bus.emit('sim:bossEnter', { id: 'prism', tier: 4 });
     advance(BAR_SEC * 4);
-    const kicksIn = (from: number, to: number): number[] => log.filter((n) => n.role === 'bed' && n.layer === 'kick' && n.now >= from && n.now < to).map((n) => n.gain);
+    const kicksIn = (from: number, to: number): NoteLog[] => log.filter((n) => n.role === 'bed' && n.layer === 'kick' && n.now >= from && n.now < to);
     const shutFrom = ctx.currentTime;
     advance(BAR_SEC * 2);
     const shut = kicksIn(shutFrom, ctx.currentTime);
@@ -236,7 +238,11 @@ describe('battle polish through the entry points', () => {
     bus.emit('sim:bossWindow', { id: 'prism', open: false, secondsLeft: 0 });
     expect(shut.length).toBeGreaterThan(0);
     expect(open.length).toBeGreaterThan(0);
-    expect(Math.max(...open) / Math.max(...shut)).toBeCloseTo(WINDOW_DRUM_DUCK, 2);
+    // Kick for kick on the same step of the bar.
+    const shutAt = new Map(shut.map((n) => [n.step % STEPS_PER_BAR, n.gain]));
+    const ratios = open.filter((n) => shutAt.has(n.step % STEPS_PER_BAR)).map((n) => n.gain / (shutAt.get(n.step % STEPS_PER_BAR) ?? 1));
+    expect(ratios.length).toBeGreaterThan(0);
+    for (const r of ratios) expect(r).toBeCloseTo(WINDOW_DRUM_DUCK, 2);
     // Phase 2 on: the added layer appears; phase 1 had none.
     expect(log.some((n) => n.role === 'battleLayer')).toBe(false);
     bus.emit('sim:bossPhase', { id: 'prism', phase: 2, phases: 4 });

@@ -7,7 +7,7 @@ import { harmonyForBar, inChord } from '../../../src/audio/music/harmony';
 import { CHORD_GAIN, CHORD_TIMBRE, isKillSlot, KILL_LEAD_SEC, KILL_SPECS, killNoteMidi, resolveMidi } from '../../../src/audio/music/kills';
 import { pitchClass } from '../../../src/audio/music/scale';
 import { START_LEAD_SEC, TICK_MS } from '../../../src/audio/music/scheduler';
-import { BAR_SEC, buildBar, STEP_SEC, STEPS_PER_BAR, type FillBar } from '../../../src/audio/music/track';
+import { buildBar, STEPS_PER_BAR, type FillBar } from '../../../src/audio/music/track';
 import { DEFAULT_TUNE } from '../../../src/audio/music/tunes';
 import { Bus, type Events } from '../../../src/core/events';
 import { FakeContext, FakeNode, FakeTimer } from './fakeAudio';
@@ -20,7 +20,11 @@ let log: (NoteLog & { now: number })[];
 let uninstall: () => void;
 
 const T0 = START_LEAD_SEC;
+/** The default tune's grid (Neon Drive, 138 BPM). */
+const STEP_SEC = DEFAULT_TUNE.stepSec;
+const BAR_SEC = STEP_SEC * STEPS_PER_BAR;
 const BEAT_SEC = STEP_SEC * 4;
+const K = DEFAULT_TUNE.key;
 
 function advance(sec: number): void {
   const n = Math.round(sec / (TICK_MS / 1000));
@@ -109,7 +113,7 @@ describe('kill accents in the music loop', () => {
     expect(sources.size).toBeGreaterThanOrEqual(5);
     for (const n of role('kill')) {
       expect(n.midi).toBe(killNoteMidi(barOf(n), 0));
-      expect(pitchClass(n.midi ?? 0)).toBe(harmonyForBar(barOf(n)).root);
+      expect(pitchClass(n.midi ?? 0)).toBe(harmonyForBar(barOf(n), K).root);
     }
     // The well is a big kill: a chord hit on a bar line rather than a note.
     expect(role('kill').some((n) => n.source === 'well')).toBe(false);
@@ -138,8 +142,22 @@ describe('kill accents in the music loop', () => {
     expect(r).toHaveLength(1);
     expect(r[0]?.step).toBe((bar + 1) * STEPS_PER_BAR);
     expect(r[0]?.midi).toBe(resolveMidi(bar + 1));
-    expect(pitchClass(r[0]?.midi ?? 0)).toBe(harmonyForBar(bar + 1).root);
+    expect(pitchClass(r[0]?.midi ?? 0)).toBe(harmonyForBar(bar + 1, K).root);
     expect(r[0]?.time ?? 0).toBeGreaterThanOrEqual(r[0]?.now ?? Infinity);
+  });
+
+  it('v3.4: kill notes take varied loudness through the loop, and stay in the chord', () => {
+    startMusic(9);
+    advance(0.5);
+    for (let i = 0; i < 24; i++) {
+      kill(Kind.Grunt);
+      advance(BAR_SEC);
+    }
+    const k = role('kill');
+    expect(k.length).toBeGreaterThan(12);
+    // The threat is steady, so different gains are different loudness levels.
+    expect(new Set(k.map((n) => n.gain.toFixed(6))).size).toBeGreaterThanOrEqual(2);
+    for (const n of k) expect(inChord(n.midi ?? 0, harmonyForBar(barOf(n), K))).toBe(true);
   });
 
   it('a snake segment burst climbs in its own voice, and the head lands a big chord hit under the resolution', () => {
@@ -208,7 +226,7 @@ describe('kill accents in the music loop', () => {
     for (const n of c) {
       expect(n.step).toBe(step);
       expect(n.time).toBeGreaterThanOrEqual(n.now);
-      expect(inChord(n.midi ?? 0, harmonyForBar(barOf(n)))).toBe(true);
+      expect(inChord(n.midi ?? 0, harmonyForBar(barOf(n), K))).toBe(true);
     }
     expect(c.reduce((a, n) => a + n.gain, 0)).toBeLessThanOrEqual(CHORD_GAIN + 1e-12);
     expect(CHORD_TIMBRE.id).toBe('chime');
@@ -264,17 +282,23 @@ describe('intensity lift through the loop', () => {
     const loud = log.filter((n) => n.role === 'bed' && n.step >= 2 * STEPS_PER_BAR + STEPS_PER_BAR);
     const layers = new Set(loud.map((n) => n.layer));
     for (const l of ['bass', 'pad', 'kick', 'perc', 'hat', 'arp']) expect(layers.has(l as never)).toBe(true);
-    // Arp an octave above the composed line (or above the fill run: the lift turning on is a
-    // phase change, so a 2 bar fill follows it).
+    // The hashed arp and the fill run an octave above the composed line (the lift turning on is
+    // a phase change, so a 2 bar fill follows it); the written lead keeps its register.
     const arp = loud.filter((n) => n.layer === 'arp');
     expect(arp.length).toBeGreaterThan(0);
+    let lifted = 0;
     for (const n of arp) {
       const b = Math.floor(n.step / STEPS_PER_BAR);
-      const at = (fill: FillBar): number | null =>
-        buildBar(seed, b, DEFAULT_TUNE, fill).notes.find((x) => x.layer === 'arp' && x.step === n.step % STEPS_PER_BAR)?.midi ?? null;
-      const options = [at(null), at(1)].filter((m): m is number => m !== null).map((m) => m + 12);
+      const at = (fill: FillBar): number | null => {
+        const x = buildBar(seed, b, DEFAULT_TUNE, fill).notes.find((y) => y.layer === 'arp' && y.step === n.step % STEPS_PER_BAR);
+        if (x === undefined || x.midi === null) return null;
+        return x.fx === undefined ? x.midi + 12 : x.midi;
+      };
+      const options = [at(null), at(1)].filter((m): m is number => m !== null);
       expect(options).toContain(n.midi);
+      if (n.midi === at(1)) lifted++;
     }
+    expect(lifted).toBeGreaterThan(0);
     // Perc on the backbeat (the fill's roll adds 8 and 13).
     for (const n of loud.filter((x) => x.layer === 'perc')) expect([4, 8, 12, 13, 14]).toContain(n.step % STEPS_PER_BAR);
     // The lowpass ends up opened past the plain threat curve.

@@ -258,7 +258,8 @@ describe.each(TUNES.map((t) => [t.id, t] as const))('60 s of a 400 entity wave u
     // Chord hits and resolutions sit on bar lines; kill notes on the off beat slots.
     for (const c of notes.filter((n) => n.role === 'chord' || n.role === 'resolve')) expect(c.step % STEPS_PER_BAR).toBe(0);
     for (const k of kills) expect(isKillSlot(k.step)).toBe(true);
-    expect(notes.filter((n) => n.role === 'resolve').length).toBeGreaterThan(3);
+    // v3.4: the written lead holds notes, so a resolution finds a free voice a little less often.
+    expect(notes.filter((n) => n.role === 'resolve').length).toBeGreaterThanOrEqual(2);
     const s = musicState().kills;
     expect(s.notes).toBeGreaterThan(20);
     // Chord hits only take free voices (they never steal), so how many land with six motifs live

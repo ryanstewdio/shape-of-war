@@ -7,6 +7,7 @@
 // bomb) left steps in the past, and the scheduler skipped them: an audible hole in the beat.
 // 250 ms rides out stalls up to 225 ms. Threat follows a 0.5 s attack anyway, so the extra
 // latency is not heard; kill accents are placed on the 16th grid independently (see index.ts).
+import type { NoteFx } from './compose';
 import type { Mix } from './intensity';
 import { STEP_SEC, STEPS_PER_BAR, type BarPattern, type Layer } from './track';
 
@@ -236,6 +237,8 @@ export interface PlannedNote {
   readonly time: number;
   readonly dur: number;
   readonly gain: number;
+  /** Lead, chip pad and space colour, passed through from the track note. */
+  readonly fx?: NoteFx;
 }
 
 /**
@@ -248,11 +251,13 @@ export function planStep(bar: BarPattern, stepInBar: number, mix: Mix, time: num
   for (const n of bar.notes) {
     if (n.step !== stepInBar) continue;
     if (n.sub && !mix.hat16) continue;
-    const up = mix.lift && n.layer === 'arp';
+    // The lift's octave is for the hashed arp; a written lead keeps its register.
+    const up = mix.lift && n.layer === 'arp' && n.fx === undefined;
     const g = mix.gains[n.layer] * n.vel * (up ? ARP_LIFT_VEL : 1);
     if (!(g > 0)) continue;
     const midi = up && n.midi !== null ? n.midi + ARP_LIFT_SEMITONES : n.midi;
-    out.push({ layer: n.layer, midi, time, dur: n.durSteps * stepSec, gain: g });
+    const dur = n.durSteps * stepSec;
+    out.push(n.fx === undefined ? { layer: n.layer, midi, time, dur, gain: g } : { layer: n.layer, midi, time, dur, gain: g, fx: n.fx });
   }
   return out;
 }

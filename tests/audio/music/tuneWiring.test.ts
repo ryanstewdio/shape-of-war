@@ -9,7 +9,7 @@ import { createMusicEngine } from '../../../src/audio/music/engine';
 import { initMusic, musicState, startMusic, stopMusic, type MusicGraph, type NoteLog } from '../../../src/audio/music/index';
 import { TICK_MS } from '../../../src/audio/music/scheduler';
 import { startTune, tuneIndexForKey, tuneIndexForLevelSeed } from '../../../src/audio/music/select';
-import { bedWaveTrim, DEFAULT_TUNE, tuneById, TUNES, WAVE_WEIGHT, type TrackId, type TuneId } from '../../../src/audio/music/tunes';
+import { BATTLE_TUNES, bedWaveTrim, DEFAULT_TUNE, REFERENCE_BED, tuneById, TUNES, WAVE_WEIGHT, type TrackId, type TuneId } from '../../../src/audio/music/tunes';
 import { Bus } from '../../../src/core/events';
 import { hash01 } from '../../../src/core/rng';
 import { levelSeed } from '../../../src/levelgen/leveldef';
@@ -135,6 +135,11 @@ describe('B20: selection over 1000 run seeds', () => {
     for (let m = 0; m < 500; m++) {
       expect(new Set([0, 1, 2, 3].map((p) => tuneIndexForKey(4 * m + p, 4))).size).toBe(4);
     }
+    // A block of six keys is a permutation of the six tunes (v3.4: six level tunes rotate).
+    for (let m = 0; m < 500; m++) {
+      expect(new Set([0, 1, 2, 3, 4, 5].map((p) => tuneIndexForKey(6 * m + p, 6))).size).toBe(6);
+    }
+    expect(TUNES).toHaveLength(6);
     // Across the 2^32 wrap too.
     expect(new Set([0xfffffffe, 0xffffffff, 0].map((k) => tuneIndexForKey(k, 4))).size).toBe(3);
   });
@@ -142,9 +147,10 @@ describe('B20: selection over 1000 run seeds', () => {
   it('every tune opens a run about equally often (no bias to one tune on level 1)', () => {
     const counts = new Array<number>(TUNES.length).fill(0);
     for (const r of RUN_SEEDS_1000) counts[tuneIndexForLevelSeed(levelSeed(r, 1))] = (counts[tuneIndexForLevelSeed(levelSeed(r, 1))] ?? 0) + 1;
+    // 1000 runs over six tunes: about 167 each.
     for (const c of counts) {
-      expect(c).toBeGreaterThan(180);
-      expect(c).toBeLessThan(320);
+      expect(c).toBeGreaterThan(110);
+      expect(c).toBeLessThan(230);
     }
   });
 
@@ -159,19 +165,22 @@ describe('B20: selection over 1000 run seeds', () => {
 });
 
 describe('B20: bed loudness trim', () => {
-  it('never boosts, leaves the original track and the drums alone, and pulls back saw and square basses', () => {
+  it('never boosts, leaves reference waves and the drums alone, and pulls back saw and square basses', () => {
     for (const t of TUNES) {
       for (const layer of ['bass', 'pad', 'arp', 'kick', 'hat', 'perc'] as const) {
         const k = bedWaveTrim(layer, t.bed);
         expect(k).toBeGreaterThan(0);
         expect(k).toBeLessThanOrEqual(1);
-        if (layer === 'kick' || layer === 'hat' || layer === 'perc' || t.id === DEFAULT_TUNE.id) expect(k).toBe(1);
+        if (layer === 'kick' || layer === 'hat' || layer === 'perc') expect(k).toBe(1);
+        else if (WAVE_WEIGHT[t.bed[layer]] <= WAVE_WEIGHT[REFERENCE_BED[layer]]) expect(k).toBe(1);
+        else expect(k).toBeLessThan(1);
       }
     }
     expect(bedWaveTrim('bass', tuneById('ember').bed)).toBeCloseTo(WAVE_WEIGHT.triangle / WAVE_WEIGHT.sawtooth, 9);
-    expect(bedWaveTrim('bass', tuneById('orbit').bed)).toBeCloseTo(WAVE_WEIGHT.triangle / WAVE_WEIGHT.square, 9);
+    const squareBass = BATTLE_TUNES.find((t) => t.bed.bass === 'square');
+    expect(squareBass).toBeDefined();
+    if (squareBass) expect(bedWaveTrim('bass', squareBass.bed)).toBeCloseTo(WAVE_WEIGHT.triangle / WAVE_WEIGHT.square, 9);
     expect(bedWaveTrim('bass', tuneById('ember').bed)).toBeLessThan(0.8);
-    expect(bedWaveTrim('bass', tuneById('orbit').bed)).toBeLessThan(0.8);
   });
 
   it('the engine applies it: an Ember bass note peaks lower than the same note on Neon', () => {
@@ -197,7 +206,9 @@ describe('B20: the tune is heard at early level threat', () => {
     startMusic(11);
     advance(8, 0.25);
     const arps = log.filter((n) => n.role === 'bed' && n.layer === 'arp');
-    expect(arps.length).toBeGreaterThan(16);
+    // At least one and a half lead notes a bar, even for the sparse space pieces.
+    const bars = 8 / (tuneById(id).stepSec * 16);
+    expect(arps.length).toBeGreaterThan(bars * 1.5);
     for (const n of arps) expect(n.tune).toBe(id);
   });
 

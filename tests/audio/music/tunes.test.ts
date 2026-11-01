@@ -1,11 +1,12 @@
-// The tune library (v2.1 tunes): every tune validates (tempo, loop, chords present, every bed
-// pitch in the tune's scale and chord), the tunes really differ, and every bar of every tune,
-// varied passes and fills included, keeps the bed inside BED_VOICE_MAX at full threat.
+// The tune library (v2.1 tunes, v3.4 forms): every tune validates (tempo, loop, chords present,
+// every bed pitch in the tune's scale and chord), the tunes really differ, and every bar of every
+// tune, varied passes and fills included, keeps the bed inside BED_VOICE_MAX at full threat.
 import { describe, expect, it } from 'vitest';
 import { BED_VOICE_MAX, voiceLength } from '../../../src/audio/music/engine';
 import { fitsHarmony, harmonyForBar, inChord, inScale, STEPS_PER_BAR, type Harmony } from '../../../src/audio/music/harmony';
 import { pentatonicMidi, pitchClass } from '../../../src/audio/music/scale';
-import { buildBar, structuralFill, type FillBar, type Layer } from '../../../src/audio/music/track';
+import { buildBar, leadNotes, structuralFill, type FillBar, type Layer } from '../../../src/audio/music/track';
+import { formBars, isSpaceBar, MODE_STEPS, SECTION_BARS } from '../../../src/audio/music/compose';
 import {
   BOSS_KEYS,
   BATTLE_IDS,
@@ -24,26 +25,32 @@ import {
 const SEEDS = [0, 1, 7, 0x5eed, 0xdeadbeef];
 const PASSES = 6;
 
+/** Modes with a minor third over the tonic hold the minor pentatonic of their root. */
+const MINOR_MODES = new Set(['aeolian', 'dorian', 'phrygian', 'harmonic']);
+
 /** The pitch classes of a minor pentatonic on the tune root. */
 function pentaPcs(t: Tune): number[] {
   return [0, 1, 2, 3, 4].map((d) => pitchClass(pentatonicMidi(d, t.root)));
 }
 
 describe.each(TUNES.map((t) => [t.id, t] as const))('tune %s validates', (_id, t) => {
-  it('has a tempo in range, an 8 or 16 bar loop and a step length that matches the tempo', () => {
+  it('has a tempo in range, a loop of 4 bar sections and a step length that matches the tempo', () => {
     expect(t.bpm).toBeGreaterThanOrEqual(BPM_MIN);
     expect(t.bpm).toBeLessThanOrEqual(BPM_MAX);
-    expect([8, 16]).toContain(t.loopBars);
+    expect(t.form).toBeDefined();
+    if (t.form) expect(t.loopBars).toBe(formBars(t.form));
+    expect(t.loopBars % SECTION_BARS).toBe(0);
     expect(t.key.bars).toHaveLength(t.loopBars);
     expect(t.stepSec).toBeCloseTo(60 / t.bpm / 4, 12);
     expect(Math.abs(t.root - 69)).toBeLessThanOrEqual(5);
   });
 
-  it('has a seven note scale on its tonic that holds the minor pentatonic of its root', () => {
-    expect(new Set(t.key.scale).size).toBe(7);
+  it('has its mode on its tonic; a minor mode holds the minor pentatonic of its root', () => {
+    const mode = t.form?.mode ?? 'aeolian';
+    expect(new Set(t.key.scale).size).toBe(MODE_STEPS[mode].length);
     expect(t.key.scale[0]).toBe(t.key.tonic);
     expect(pitchClass(t.root)).toBe(t.key.tonic);
-    for (const pc of pentaPcs(t)) expect(t.key.scale).toContain(pc);
+    if (MINOR_MODES.has(mode)) for (const pc of pentaPcs(t)) expect(t.key.scale).toContain(pc);
   });
 
   it('every chord of the plan is a triad of scale tones, voiced, and the loop starts on the tonic', () => {
@@ -87,22 +94,27 @@ describe.each(TUNES.map((t) => [t.id, t] as const))('tune %s validates', (_id, t
     }
   });
 
-  it('rests never fall on steps 0 and 8, and the arp and bass stay in a playable range', () => {
+  it('arp figure rests never fall on steps 0 and 8; the lead is monophonic; lead and bass stay in a playable range', () => {
     for (const f of [t.arp, t.arpAlt]) {
       expect(f.rests).not.toContain(0);
       expect(f.rests).not.toContain(8);
       expect(f.a).toHaveLength(16);
       expect(f.b).toHaveLength(16);
     }
-    for (let bar = 0; bar < t.loopBars * 2; bar++) {
+    // The written lead over 4 passes: one note at a time, every note ends before the next starts.
+    const ends: { start: number; end: number }[] = [];
+    for (let bar = 0; bar < t.loopBars * 4; bar++) {
+      for (const n of leadNotes(t, bar, Math.floor(bar / t.loopBars))) ends.push({ start: bar * STEPS_PER_BAR + n.step, end: bar * STEPS_PER_BAR + n.step + n.durSteps });
+    }
+    expect(ends.length).toBeGreaterThan(t.loopBars * 2);
+    for (let i = 1; i < ends.length; i++) expect(ends[i - 1]?.end ?? 0, `${t.id} note ${i}`).toBeLessThanOrEqual(ends[i]?.start ?? 0);
+    for (let bar = 0; bar < t.loopBars * 4; bar++) {
       const p = buildBar(3, bar, t);
-      const steps = p.notes.filter((n) => n.layer === 'arp').map((n) => n.step);
-      expect(steps).toContain(0);
-      expect(steps).toContain(8);
       for (const n of p.notes) {
         if (n.layer === 'bass') expect(n.midi ?? 0).toBeGreaterThanOrEqual(36);
         if (n.layer === 'bass') expect(n.midi ?? 0).toBeLessThanOrEqual(64);
-        if (n.layer === 'arp') expect(n.midi ?? 0).toBeLessThanOrEqual(96);
+        if (n.layer === 'arp') expect(n.midi ?? 0).toBeGreaterThanOrEqual(55);
+        if (n.layer === 'arp') expect(n.midi ?? 0).toBeLessThanOrEqual(100);
       }
       // Monophonic bass: each note ends at or before the next starts.
       const bass = p.notes.filter((n) => n.layer === 'bass');
@@ -110,7 +122,7 @@ describe.each(TUNES.map((t) => [t.id, t] as const))('tune %s validates', (_id, t
     }
   });
 
-  it('every second pass varies the arp or the bass line, and a 3 minute level never repeats a pass verbatim before the fourth', () => {
+  it('every second pass varies the arp or the bass line, and four consecutive passes never repeat verbatim', () => {
     for (const seed of SEEDS) {
       const passNotes = (pass: number): string =>
         JSON.stringify(Array.from({ length: t.loopBars }, (_, b) => buildBar(seed, pass * t.loopBars + b, t, structuralFill(t, pass * t.loopBars + b)).notes));
@@ -161,8 +173,8 @@ describe.each(TUNES.map((t) => [t.id, t] as const))('tune %s validates', (_id, t
 });
 
 describe('the tunes differ', () => {
-  it('has at least four tunes with distinct keys, tempos, chord plans, bed timbres and drums', () => {
-    expect(TUNES.length).toBeGreaterThanOrEqual(4);
+  it('has six tunes with distinct keys, tempos, modes, chord plans, bed timbres, lead voices and drums', () => {
+    expect(TUNES.length).toBe(6);
     expect(TUNES.map((t) => t.id)).toEqual([...TUNE_IDS]);
     const distinct = <T>(f: (t: Tune) => T): number => new Set(TUNES.map((t) => JSON.stringify(f(t)))).size;
     expect(distinct((t) => t.key.tonic)).toBe(TUNES.length);
@@ -172,12 +184,54 @@ describe('the tunes differ', () => {
     expect(distinct((t) => t.drums.kick)).toBe(TUNES.length);
     expect(distinct((t) => t.bass)).toBe(TUNES.length);
     expect(distinct((t) => t.arp)).toBe(TUNES.length);
+    expect(distinct((t) => t.form?.mode)).toBe(TUNES.length);
+    expect(distinct((t) => t.form?.lead)).toBe(TUNES.length);
   });
 
-  it('the default tune is the original track: A minor, 120 BPM, Am F C G', () => {
+  it('every level tune drops into a 4 to 8 bar space breakdown once a loop; two space pieces carry wind on every bar', () => {
+    for (const t of TUNES) {
+      const space = Array.from({ length: t.loopBars }, (_, b) => isSpaceBar(t, b));
+      const runs: number[] = [];
+      let run = 0;
+      for (const s of [...space, false]) {
+        if (s) run++;
+        else if (run > 0) {
+          runs.push(run);
+          run = 0;
+        }
+      }
+      expect(runs.length, t.id).toBeGreaterThanOrEqual(1);
+      for (const r of runs) {
+        expect(r).toBeGreaterThanOrEqual(4);
+        expect(r).toBeLessThanOrEqual(8);
+      }
+      // No drums in the breakdown, a held bass, pads on the long echo.
+      for (let b = 0; b < t.loopBars; b++) {
+        if (!isSpaceBar(t, b)) continue;
+        expect(structuralFill(t, b + t.loopBars)).toBeNull();
+        const p = buildBar(1, b, t, null);
+        expect(p.notes.filter((n) => n.layer === 'kick' || n.layer === 'perc' || n.layer === 'hat')).toEqual([]);
+        expect(p.notes.filter((n) => n.layer === 'bass')).toHaveLength(1);
+        for (const n of p.notes.filter((n) => n.layer === 'pad')) expect(n.fx?.echo).toBe(2);
+        expect(p.notes.some((n) => n.fx?.wind === true)).toBe(true);
+      }
+    }
+    const spacey = TUNES.filter((t) => t.form?.space === true);
+    expect(spacey.map((t) => t.id).sort()).toEqual(['horizon', 'nebula']);
+    for (const t of spacey) {
+      expect(t.bpm).toBeLessThanOrEqual(110);
+      expect(['lydian', 'wholetone']).toContain(t.form?.mode);
+      expect(t.form?.lead.echo).toBe(2);
+      for (let b = 0; b < t.loopBars; b++) expect(buildBar(1, b, t).notes.some((n) => n.fx?.wind === true)).toBe(true);
+    }
+    expect(spacey.some((t) => t.form?.lead.wave === 'bell')).toBe(true);
+  });
+
+  it('the default tune is Neon Drive: A aeolian, 138 BPM, its A section Am F G Em', () => {
     expect(DEFAULT_TUNE.id).toBe('neon');
-    expect(DEFAULT_TUNE.bpm).toBe(120);
-    expect(Array.from({ length: 8 }, (_, b) => voicingForBar(DEFAULT_TUNE, b).name)).toEqual(['Am', 'Am', 'F', 'F', 'C', 'C', 'G', 'G']);
+    expect(DEFAULT_TUNE.bpm).toBe(138);
+    expect(DEFAULT_TUNE.key.tonic).toBe(9);
+    expect(Array.from({ length: 4 }, (_, b) => voicingForBar(DEFAULT_TUNE, b).name)).toEqual(['Am', 'F', 'G', 'Em']);
     expect(buildBar(9, 2)).toEqual(buildBar(9, 2, DEFAULT_TUNE, null));
   });
 
@@ -193,15 +247,18 @@ describe('the tunes differ', () => {
 
 describe('boss battle tracks', () => {
   // Battle polish: the three tracks are in three different minor keys (was: all on A), each root
-  // within a fourth of A4 so the A based boss motifs still fit; still 120 BPM for Prism's 4 s.
-  it('three battle tracks, minor, on the boss grid (120 BPM, 8 bar loop), each its own key', () => {
+  // within a fourth of A4 so the A based boss motifs still fit. v3.4: each has its own tempo and
+  // an A B A C form of 16 bars, so the A phrase returns every 8 bars.
+  it('three battle tracks, minor, each its own key, tempo and A B A C form', () => {
     expect(BATTLE_TUNES.map((t) => t.id)).toEqual([...BATTLE_IDS]);
     expect(BATTLE_TUNES.length).toBeGreaterThanOrEqual(3);
     for (const t of BATTLE_TUNES) {
       expect(t.battle).toBe(true);
-      // 120 BPM: a bar is 2 s, so Prism's 4 s cycle stays on bar lines.
-      expect(t.bpm).toBe(120);
-      expect(t.stepSec * STEPS_PER_BAR * 2).toBeCloseTo(4, 9);
+      expect(t.bpm).toBeGreaterThanOrEqual(BPM_MIN);
+      expect(t.bpm).toBeLessThanOrEqual(BPM_MAX);
+      expect(t.form?.sections).toEqual(['A', 'B', 'A', 'C']);
+      expect(t.loopBars).toBe(16);
+      expect(t.form?.sections.includes('S')).toBe(false);
       expect(Math.abs(t.root - 69)).toBeLessThanOrEqual(5);
       expect(t.root % 12).toBe(t.key.tonic);
       // Minor: the scale has the minor third over the tonic and not the major third; the tonic chord is minor.
@@ -212,7 +269,7 @@ describe('boss battle tracks', () => {
       expect(tonic?.intervals[1]).toBe(3);
       // One chord a bar on average at least as often as every level tune changes.
       expect(new Set(t.key.bars.map((h) => h.name)).size).toBeGreaterThanOrEqual(3);
-      // The hook: a fixed arp figure, never a random rest; hats on every sixteenth (double time).
+      // The varied pass arp figure never rests at random; hats on every sixteenth (double time).
       expect(t.arp.restP).toBe(0);
       expect(t.drums.hat).toHaveLength(16);
     }
@@ -222,6 +279,7 @@ describe('boss battle tracks', () => {
     // Three different minor scales in three different keys.
     expect(new Set(BATTLE_TUNES.map((t) => t.key.scale.join(','))).size).toBe(3);
     expect(new Set(BATTLE_TUNES.map((t) => t.key.tonic)).size).toBe(3);
+    expect(new Set(BATTLE_TUNES.map((t) => t.bpm)).size).toBe(3);
   });
 
   it('every battle track chord is built from its key scale and has a voicing', () => {

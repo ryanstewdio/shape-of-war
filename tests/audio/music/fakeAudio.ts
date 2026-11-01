@@ -3,12 +3,14 @@ import type {
   BufferLike,
   BufferSourceLike,
   CompressorLike,
+  DelayLike,
   FilterLike,
   GainLike,
   MusicContext,
   NodeLike,
   OscLike,
   ParamLike,
+  PeriodicWaveLike,
   SourceLike,
 } from '../../../src/audio/music/engine';
 import type { Timer } from '../../../src/audio/music/scheduler';
@@ -146,6 +148,45 @@ export class FakeContext implements MusicContext {
   createBuffer(_channels: number, length: number): BufferLike {
     const data = new Float32Array(length);
     return { getChannelData: () => data };
+  }
+}
+
+export class FakeDelay extends FakeNode implements DelayLike {
+  readonly delayTime = new FakeParam();
+}
+
+/** A fake periodic wave: the cosine terms it was made from. */
+export class FakeWave {
+  constructor(readonly real: Float32Array) {}
+}
+
+/** An oscillator that records the periodic wave it was given. */
+export class FakeWaveOsc extends FakeOsc {
+  wave: PeriodicWaveLike | null = null;
+  setPeriodicWave(w: PeriodicWaveLike): void {
+    this.wave = w;
+    this.type = 'custom';
+  }
+}
+
+/** A context with delay lines and periodic waves (v3.4 echo and pulse leads), like a browser. */
+export class FakeContextFx extends FakeContext {
+  delays: FakeDelay[] = [];
+  waves: FakeWave[] = [];
+  createDelay(): FakeDelay {
+    const d = new FakeDelay();
+    this.delays.push(d);
+    return d;
+  }
+  createPeriodicWave(real: Float32Array): FakeWave {
+    const w = new FakeWave(real);
+    this.waves.push(w);
+    return w;
+  }
+  override createOscillator(): FakeOsc {
+    const o = new FakeWaveOsc();
+    this.oscs.push(o);
+    return o;
   }
 }
 

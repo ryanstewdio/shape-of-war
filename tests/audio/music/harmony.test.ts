@@ -24,6 +24,7 @@ import {
 } from '../../../src/audio/music/harmony';
 import { inNaturalMinor, pitchClass } from '../../../src/audio/music/scale';
 import { buildBar, chordForBar } from '../../../src/audio/music/track';
+import { DEFAULT_TUNE } from '../../../src/audio/music/tunes';
 
 describe('chord per bar', () => {
   it('the 8 bar loop is i, VI, III, VII in A minor, two bars each', () => {
@@ -54,7 +55,7 @@ describe('chord per bar', () => {
   it('the track exposes the current chord per bar, and the bed voices it', () => {
     for (let bar = 0; bar < LOOP_BARS * 2; bar++) {
       const c = chordForBar(bar);
-      const h = harmonyForBar(bar);
+      const h = harmonyForBar(bar, DEFAULT_TUNE.key);
       expect(c.name).toBe(h.name);
       expect(c.harmony).toBe(h);
       expect(pitchClass(c.bass)).toBe(h.root);

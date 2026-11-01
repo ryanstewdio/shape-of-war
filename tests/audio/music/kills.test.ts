@@ -44,6 +44,7 @@ import { LAYER_KINDS, LAYERS_FULL } from '../../../src/audio/music/layers';
 import { ACCENT_RESERVE } from '../../../src/audio/music/lifecycle';
 import { inPentatonic, pitchClass } from '../../../src/audio/music/scale';
 import { chordForBar, LOOP_BARS } from '../../../src/audio/music/track';
+import { DEFAULT_TUNE } from '../../../src/audio/music/tunes';
 
 const SOURCES = Object.keys(KILL_SPECS) as KillSource[];
 
@@ -168,7 +169,7 @@ describe('kill sounds per kind', () => {
 describe('chord hits, kill note pitches and scale helpers', () => {
   it('a chord hit is the full triad of its bar plus the root up; a big one adds the root down', () => {
     for (let bar = 0; bar < LOOP_BARS; bar++) {
-      const h = harmonyForBar(bar);
+      const h = harmonyForBar(bar, DEFAULT_TUNE.key);
       const c = chordMidis(bar, false);
       expect(c).toHaveLength(4);
       for (const m of c) expect(inChord(m, h)).toBe(true);
@@ -197,7 +198,7 @@ describe('chord hits, kill note pitches and scale helpers', () => {
 
   it('kill notes climb the arpeggio of their bar from the root nearest A4', () => {
     for (let bar = 0; bar < LOOP_BARS; bar++) {
-      const h = harmonyForBar(bar);
+      const h = harmonyForBar(bar, DEFAULT_TUNE.key);
       const run = [0, 1, 2, 3, 4, 5].map((i) => killNoteMidi(bar, i));
       for (let i = 1; i < run.length; i++) expect(run[i] ?? 0).toBeGreaterThan(run[i - 1] ?? 0);
       for (const m of run) expect(inChord(m, h)).toBe(true);
@@ -207,7 +208,8 @@ describe('chord hits, kill note pitches and scale helpers', () => {
       expect(resolveMidi(bar)).toBe((run[0] ?? 0) + 12);
     }
     expect([0, 1, 2, 3].map((i) => killNoteMidi(0, i))).toEqual([69, 72, 76, 81]);
-    expect([0, 1, 2].map((i) => killNoteMidi(2, i))).toEqual([65, 69, 72]);
+    // Bar 2 of the default tune is G: G4, B4, D5.
+    expect([0, 1, 2].map((i) => killNoteMidi(2, i))).toEqual([67, 71, 74]);
   });
 
   it('kill slots are the off beat sixteenths', () => {
