@@ -19,7 +19,7 @@ export interface BossRow {
 
 /** All ten rows of the docs/13 roster. Wave A builds the first three behaviours. */
 export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
-  warden: { tier: 1, hp: 432, phases: 2, radius: 56, colour: 'bossBlue' },
+  warden: { tier: 1, hp: 520, phases: 2, radius: 56, colour: 'bossBlue' },
   brood: { tier: 1, hp: 400, phases: 2, radius: 52, colour: 'bossGreen' },
   spindle: { tier: 1, hp: 500, phases: 2, radius: 48, colour: 'bossYellow' },
   ember: { tier: 2, hp: 600, phases: 3, radius: 44, colour: 'bossOrange' },
@@ -72,8 +72,8 @@ export const HAZARD_RECHECK_SEC = 0.3;
  */
 export const MAX_HAZARDS = 8;
 export const MAX_ADDS = 8;
-/** Hornet pool (GW1): its own cap, separate from the add slots and the part slots. */
-export const MAX_HORNETS = 8;
+/** Hornet pool (GW1): its own cap, separate from the add slots and the part slots. GW2: 10. */
+export const MAX_HORNETS = 10;
 export const MAX_PARTS = 4;
 /** hud:boss throttle, s. */
 export const BOSS_HUD_INTERVAL = 0.1;
@@ -101,9 +101,9 @@ export const HAZARD = {
 export const WARDEN = {
   seekSpeed: 55,
   turnRate: 60 * DEG,
-  /** GW1: 10 percent faster than 4.5 and 3.5 s. */
-  ringEvery: 4.05,
-  ringEveryP2: 3.15,
+  /** GW2: 3.7 s and 2.8 s (4.05 and 3.15 at GW1, 4.5 and 3.5 before). */
+  ringEvery: 3.7,
+  ringEveryP2: 2.8,
   /** First ring this long after the entrance ends. */
   firstRing: 1.5,
   /** Full gap angle facing the ship. */
@@ -131,11 +131,15 @@ export const WARDEN_SHIELD = {
   shieldSec: 4,
   /** Bursts fire this many seconds into the shield. */
   burstAt: [0.5, 2.0] as readonly number[],
-  /** Hornets per shield (GW1: a fixed 8, two bursts of 4, in their own pool of MAX_HORNETS). */
-  hornetsMin: 8,
-  hornetsMax: 8,
-  /** Core open window when the shield drops. */
-  openSec: 2.5,
+  /** Hornets per shield (GW2: a fixed 10, two bursts of 5, in their own pool of MAX_HORNETS). */
+  hornetsMin: 10,
+  hornetsMax: 10,
+  /** Core open window when the shield drops (GW2: 2.0 s, 2.5 s at GW1). */
+  openSec: 2.0,
+  /** Phase 2 (GW2): the shield fires one ring of this many enemy bullets as it drops. */
+  dropRingBullets: 12,
+  /** Speed of the drop ring bullets, u/s (under ENEMY_BULLET_SPEED_MAX). */
+  dropRingSpeed: 180,
 } as const;
 
 /** Hornet (Warden's swarm add, Kind.BossPart PartType.Hornet in a Hornet slot). */
@@ -143,7 +147,8 @@ export const HORNET = {
   radius: 10,
   /** 1 HP in tenths of a hit. */
   hp: 10,
-  speed: 260,
+  /** GW2: 300 u/s (260 at GW1). */
+  speed: 300,
   turnRate: 240 * DEG,
   /** Seconds it flies straight out of the hive before it turns to chase. */
   leaveSec: 0.35,
@@ -394,8 +399,8 @@ export const BASTION = {
   // Phase 3 (G3C): the core wakes once the last turret dies.
   /** Phase 3 starts with at most this share of maximum hit points (the bar drops to it). */
   wakeHpShare: 0.5,
-  /** Pursuit speed of the woken core, u/s. */
-  wakeSpeed: 110,
+  /** Drift speed of the woken core toward the ship between shields, u/s (GW2: 50, 110 before). */
+  wakeSpeed: 50,
   /** One sweep arm rides the body, turning at sweepRate rad/s. */
   sweepLength: 230,
   sweepRate: 0.9,
@@ -408,6 +413,20 @@ export const BASTION = {
   chargeSec: 0.7,
   /** The charge marker lane: half width. */
   chargeMarkerHalf: 30,
+} as const;
+
+/**
+ * Bastion phase 3 shield (GW2): every everySec (start to start, the first firstSec after waking) it
+ * raises a shield for shieldSec (shots absorbed) and releases hornets Hornets in bursts at burstAt
+ * from the shared Hornet pool, then opens for openSec. It drifts toward the ship between shields.
+ */
+export const BASTION_SHIELD = {
+  firstSec: 12,
+  everySec: 12,
+  shieldSec: 3,
+  burstAt: [0.4, 1.6] as readonly number[],
+  hornets: 6,
+  openSec: 2,
 } as const;
 
 /** A boss body cracks when it first drops below these shares of its hit points (stage 1, stage 2). */
@@ -438,6 +457,20 @@ export const TEMPEST = {
   dashSecMax: 3,
   restSec: 1.5,
   markerHalfWidth: 30,
+} as const;
+
+/**
+ * Tempest split (GW2): at the stage 2 crack the body splits once into count smaller Tempests
+ * (Kind.BossPart, PartType.Tempestling, slot = index), each sizeShare of the body radius with the
+ * remaining hit points split evenly. Each laps and dashes like the body, its Slime and dash clocks
+ * running at rate of the body's.
+ */
+export const TEMPESTLING = {
+  count: 2,
+  sizeShare: 0.6,
+  rate: 0.7,
+  /** First dash this long after the split (before the rate). */
+  firstDash: 2,
 } as const;
 
 /**

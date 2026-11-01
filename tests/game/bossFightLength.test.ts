@@ -87,8 +87,8 @@ describe('fight length at open fire', () => {
     expect(spindle / SPINDLE_G3A_SEC).toBeLessThanOrEqual(1.32);
   });
 
-  it('warden, "about right" at G3A, is unchanged in the same band as brood', () => {
-    expect(warden).toBeGreaterThanOrEqual(35);
-    expect(warden).toBeLessThanOrEqual(55);
+  it('warden, harder since GW2 (520 hits, fairness target 4 of 5), lasts 50 to 75 s', () => {
+    expect(warden).toBeGreaterThanOrEqual(50);
+    expect(warden).toBeLessThanOrEqual(75);
   });
 });

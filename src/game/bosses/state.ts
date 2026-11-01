@@ -72,6 +72,8 @@ export interface BossState {
    */
   shielded: boolean;
   shieldLeft: number;
+  /** 'sim:bossShield' payload (GW2), reused: emitted when any boss shield goes up and when it drops. */
+  shieldEv: { id: BossId; up: boolean; x: number; y: number };
 
   // Boss shots (docs/13 "Boss projectiles"), shooters only. Set by armState and the def's reset.
   /** Attack clock toward the next volley (Spindle's pellet). */
@@ -133,8 +135,8 @@ export interface BossState {
   winTimer: number;
 }
 
-/** Length of BossState.abl. */
-export const ABL_SIZE = 8;
+/** Length of BossState.abl (GW2: 16, so each of two Tempest split parts keeps 8 slots). */
+export const ABL_SIZE = 16;
 
 const states = new WeakMap<World, BossState>();
 
@@ -184,6 +186,7 @@ function createState(w: World, spec: BossSpec, def: BossDef): BossState {
     abl: new Float64Array(ABL_SIZE),
     shielded: false,
     shieldLeft: 0,
+    shieldEv: { id: spec.id, up: false, x: 0, y: 0 },
     shotT: 0,
     shotWait: 0,
     shotId: -1,
@@ -263,6 +266,8 @@ export function armState(w: World, spec: BossSpec, def: BossDef, atSec: number):
   s.abl.fill(0);
   s.shielded = false;
   s.shieldLeft = 0;
+  s.shieldEv.id = spec.id;
+  s.shieldEv.up = false;
   s.shotT = 0;
   s.shotWait = 0;
   s.shotId = -1;

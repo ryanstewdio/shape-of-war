@@ -6,17 +6,28 @@
 // A bomb clears the Slime trail (player.ts removes every Slime). Scratch: n0 move state, t3 its
 // timer, t0 dash clock, t1 Slime clock, angle lap angle, dir lap direction, t2 dash heading, n2
 // the marker id.
+//
+// Split (GW2): at the stage 2 crack (below 33 percent) the body splits once into two smaller
+// Tempests (Kind.BossPart, PartType.Tempestling, slots 0 and 1, TEMPESTLING.sizeShare of the body
+// radius) that share the remaining hit points evenly, following the Brood split pattern:
+// 'sim:bossSplit' fires once, the bar is the sum of the two, contact with either kills and the fight
+// ends with the second. Each laps the wall (the second the other way round), lays Slime and dashes
+// at its target like the body, its Slime and dash clocks at TEMPESTLING.rate of the body's. A wind
+// up whose marker was cleared (bomb, ship death) goes back to the lap, so no dash is unmarked. Split
+// scratch per slot k in bs.abl from k * SLOT: move state, its timer, dash clock, Slime clock, lap
+// angle, lap direction, dash heading, marker id.
+import { bus } from '../../core/events';
 import { isInside } from '../arena';
 import * as slime from '../enemies/slime';
 import { removeEntity } from '../remove';
 import { spawnFromDef } from '../state';
 import { angleBetween, moveToHit, stepToward, targetOf } from '../steer';
 import { Kind, type World } from '../world';
-import { spawnLaneMarker, wallDistance } from './core';
+import { bossEnraged, clearHazards, crackBody, spawnLaneMarker, spawnPart, wallDistance } from './core';
 import { hazardTelegraph, wrapPi } from './kit';
-import type { BossState } from './state';
-import { BOSS_TABLE, TEMPEST } from './table';
-import { BossMode, type BossDef } from './types';
+import { bossOf, type BossState } from './state';
+import { BOSS_TABLE, ENRAGE_RATE, MAX_PARTS, TEMPEST, TEMPESTLING } from './table';
+import { BossMode, PartType, type BossDef } from './types';
 
 export const enum TempestMove {
   Lap = 0,
@@ -64,10 +75,31 @@ export function dropTrail(w: World, id: number): number {
   return s;
 }
 
+function markerAlive(w: World, bs: BossState, m: number): boolean {
+  return m > 0 && w.alive[m] === 1 && w.kind[m] === Kind.BossHazard && bs.hzMarker[m] === 1;
+}
+
 function dropMarker(w: World, bs: BossState): void {
-  const m = bs.n2;
-  if (m > 0 && w.alive[m] === 1 && w.kind[m] === Kind.BossHazard && bs.hzMarker[m] === 1) removeEntity(w, m);
+  if (markerAlive(w, bs, bs.n2)) removeEntity(w, bs.n2);
   bs.n2 = -1;
+}
+
+/**
+ * Move body id one lap step from lap angle a0 in direction dir, at lapSpeed along the path (one
+ * secant correction, so the corners of a rect floor are not taken faster). Returns the new angle.
+ */
+function lapStep(w: World, id: number, a0: number, dir: number, dt: number): number {
+  const v = TEMPEST.lapSpeed * dt;
+  const r0 = lapRadius(w, a0);
+  let da = (dir * v) / (r0 > 60 ? r0 : 60);
+  const r1 = lapRadius(w, a0 + da);
+  const d = Math.hypot(Math.cos(a0 + da) * r1 - Math.cos(a0) * r0, Math.sin(a0 + da) * r1 - Math.sin(a0) * r0);
+  if (d > 1e-6) da *= v / d;
+  const a = wrapPi(a0 + da);
+  const rr = lapRadius(w, a);
+  stepToward(w, id, Math.cos(a) * rr, Math.sin(a) * rr, TEMPEST.lapSpeed * TEMPEST.catchUp * dt);
+  w.rot[id] = wrapPi(a + (dir * Math.PI) / 2);
+  return a;
 }
 
 function setMove(bs: BossState, state: TempestMove, t: number): void {
@@ -80,19 +112,7 @@ function setMove(bs: BossState, state: TempestMove, t: number): void {
 }
 
 function lap(w: World, id: number, bs: BossState, dt: number, adt: number): void {
-  // Advance the lap angle so the lap point moves lapSpeed * dt along the path (one secant correction,
-  // so the corners of a rect floor are not taken faster).
-  const v = TEMPEST.lapSpeed * dt;
-  const a0 = bs.angle;
-  const r0 = lapRadius(w, a0);
-  let da = (bs.dir * v) / (r0 > 60 ? r0 : 60);
-  const r1 = lapRadius(w, a0 + da);
-  const d = Math.hypot(Math.cos(a0 + da) * r1 - Math.cos(a0) * r0, Math.sin(a0 + da) * r1 - Math.sin(a0) * r0);
-  if (d > 1e-6) da *= v / d;
-  bs.angle = wrapPi(a0 + da);
-  const rr = lapRadius(w, bs.angle);
-  stepToward(w, id, Math.cos(bs.angle) * rr, Math.sin(bs.angle) * rr, TEMPEST.lapSpeed * TEMPEST.catchUp * dt);
-  w.rot[id] = wrapPi(bs.angle + (bs.dir * Math.PI) / 2);
+  bs.angle = lapStep(w, id, bs.angle, bs.dir, dt);
   bs.t0 += adt;
   if (bs.t0 < dashEveryFor(bs.phase)) return;
   bs.t0 = 0;
@@ -158,4 +178,161 @@ export function entryHome(d: number): number {
   return home > 0 ? home : 0;
 }
 
-export const def: BossDef = { reset, step, onPhase, entryHome };
+// ---------------------------------------------------------------------------------------------
+// Split into Tempestlings (GW2)
+
+/** Scratch slots per Tempestling in bs.abl, and their offsets. */
+export const SLOT = 8;
+const MOVE = 0;
+const TIMER = 1;
+const DASH = 2;
+const SLIME = 3;
+const ANGLE = 4;
+const DIR = 5;
+const HEADING = 6;
+const MARK = 7;
+
+/** Pure: hit points of part k of count after a split of hp: even shares, part 0 takes the remainder. */
+export function splitHp(hp: number, k: number, count: number): number {
+  const n = count > 0 ? count : 1;
+  const h = hp > 0 ? Math.floor(hp) : 0;
+  const each = Math.floor(h / n);
+  return k === 0 ? h - each * (n - 1) : each;
+}
+
+/** Pure: radius of a Tempestling for a body radius r. */
+export function tempestlingRadius(r: number): number {
+  return r * TEMPESTLING.sizeShare;
+}
+
+/** Pure: attack time of a Tempestling for step time dt (enraged or not): TEMPESTLING.rate of the body's. */
+export function tempestlingAdt(dt: number, enraged: boolean): number {
+  return (enraged ? dt * ENRAGE_RATE : dt) * TEMPESTLING.rate;
+}
+
+/** Split the body into two Tempestlings. Called once, from the stage 2 crack. */
+function splitBody(w: World, id: number, bs: BossState): void {
+  const x = w.x[id] ?? 0;
+  const y = w.y[id] ?? 0;
+  const hp = w.hp[id] ?? 0;
+  const r = tempestlingRadius(w.radius[id] ?? BOSS_TABLE.tempest.radius);
+  dropMarker(w, bs);
+  clearHazards(w); // the marker goes with the body
+  for (let k = 0; k < MAX_PARTS; k++) bs.parts[k] = -1;
+  removeEntity(w, id);
+  bs.id = -1;
+  bs.split = true;
+  bs.open = false;
+  bs.openLeft = -1;
+  bs.mode = BossMode.Attacking;
+  // The two spawn either side of the body along its lap, one ahead and one behind.
+  const tan = bs.angle + Math.PI / 2;
+  const off = r + 4;
+  let made = 0;
+  for (let k = 0; k < TEMPESTLING.count; k++) {
+    const side = k === 0 ? 1 : -1;
+    const px = x + Math.cos(tan) * off * side * bs.dir;
+    const py = y + Math.sin(tan) * off * side * bs.dir;
+    const p = spawnPart(w, bs, k, PartType.Tempestling, px, py, splitHp(hp, k, TEMPESTLING.count), r);
+    if (p < 0) continue;
+    made++;
+    const o = k * SLOT;
+    const ab = bs.abl;
+    ab[o + MOVE] = TempestMove.Lap;
+    ab[o + TIMER] = 0;
+    ab[o + DASH] = dashEveryFor(bs.phase) - TEMPESTLING.firstDash;
+    ab[o + SLIME] = 0;
+    ab[o + ANGLE] = Math.atan2(w.y[p] ?? 0, w.x[p] ?? 0);
+    ab[o + DIR] = k === 0 ? bs.dir : -bs.dir;
+    ab[o + HEADING] = 0;
+    ab[o + MARK] = -1;
+    w.rot[p] = wrapPi((ab[o + ANGLE] ?? 0) + ((ab[o + DIR] ?? 1) * Math.PI) / 2);
+  }
+  bs.splitEv.parts = made;
+  bus.emit('sim:bossSplit', bs.splitEv);
+}
+
+/** Core hook after the body took damage and lived: report the cracks, split once at stage 2. */
+export function cracks(w: World, id: number, bs: BossState): void {
+  crackBody(bs, 0, w.hp[id] ?? 0, bs.maxHp, w.x[id] ?? 0, w.y[id] ?? 0);
+  if (!bs.split && (bs.crack[0] ?? 0) >= 2) splitBody(w, id, bs);
+}
+
+function slotOf(bs: BossState, id: number): number {
+  for (let k = 0; k < TEMPESTLING.count; k++) if (bs.parts[k] === id) return k;
+  return -1;
+}
+
+/**
+ * One step of a Tempestling (Kind.BossPart, PartType.Tempestling): the body's lap, Slime trail,
+ * marked wind up, dash and rest, on its own scratch slot, with its clocks at TEMPESTLING.rate.
+ * Paused while the ship is down or the boss is staggered.
+ */
+export function stepTempestling(w: World, id: number, dt: number): void {
+  const bs = bossOf(w);
+  if (bs === null || bs.status !== 'alive' || !bs.split || !w.ship.active || bs.stagger > 0) return;
+  const k = slotOf(bs, id);
+  if (k < 0) return;
+  const o = k * SLOT;
+  const ab = bs.abl;
+  const adt = tempestlingAdt(dt, bossEnraged(w));
+  let state = (ab[o + MOVE] ?? 0) as TempestMove;
+  if (state === TempestMove.Windup && !markerAlive(w, bs, ab[o + MARK] ?? -1)) {
+    // The marker was cleared (bomb, ship death): no unmarked dash, back to the lap.
+    state = TempestMove.Lap;
+    ab[o + MOVE] = state;
+    ab[o + MARK] = -1;
+    ab[o + ANGLE] = Math.atan2(w.y[id] ?? 0, w.x[id] ?? 0);
+  }
+  if (state !== TempestMove.Rest && state !== TempestMove.Windup) {
+    ab[o + SLIME] = (ab[o + SLIME] ?? 0) + adt;
+    if ((ab[o + SLIME] ?? 0) >= TEMPEST.slimeEvery) {
+      ab[o + SLIME] = (ab[o + SLIME] ?? 0) - TEMPEST.slimeEvery;
+      dropTrail(w, id);
+    }
+  }
+  if (state === TempestMove.Lap) {
+    ab[o + ANGLE] = lapStep(w, id, ab[o + ANGLE] ?? 0, ab[o + DIR] ?? 1, dt);
+    ab[o + DASH] = (ab[o + DASH] ?? 0) + adt;
+    if ((ab[o + DASH] ?? 0) < dashEveryFor(bs.phase)) return;
+    const heading = angleBetween(w, id, targetOf(w, id));
+    const x = w.x[id] ?? 0;
+    const y = w.y[id] ?? 0;
+    const m = spawnLaneMarker(w, bs, x, y, heading, rayToWall(w, x, y, heading, w.radius[id] ?? 0), TEMPEST.markerHalfWidth);
+    if (m < 0) return; // no marker (hazard cap): keep lapping and try next step
+    ab[o + DASH] = 0;
+    ab[o + HEADING] = heading;
+    ab[o + MARK] = m;
+    w.rot[id] = heading;
+    ab[o + MOVE] = TempestMove.Windup;
+    ab[o + TIMER] = hazardTelegraph(bs.row.tier);
+    return;
+  }
+  const t = (ab[o + TIMER] ?? 0) - dt; // sim time: enrage never shortens the telegraph or the rest
+  ab[o + TIMER] = t;
+  if (state === TempestMove.Windup) {
+    if (t > 0) return;
+    const m = ab[o + MARK] ?? -1;
+    if (markerAlive(w, bs, m)) removeEntity(w, m);
+    ab[o + MARK] = -1;
+    ab[o + MOVE] = TempestMove.Dash;
+    ab[o + TIMER] = TEMPEST.dashSecMax;
+    return;
+  }
+  if (state === TempestMove.Dash) {
+    const v = TEMPEST.dashSpeed * dt;
+    const h = ab[o + HEADING] ?? 0;
+    const hit = moveToHit(w, id, (w.x[id] ?? 0) + Math.cos(h) * v, (w.y[id] ?? 0) + Math.sin(h) * v);
+    if (hit || t <= 0) {
+      ab[o + MOVE] = TempestMove.Rest;
+      ab[o + TIMER] = TEMPEST.restSec;
+    }
+    return;
+  }
+  if (t > 0) return;
+  ab[o + ANGLE] = Math.atan2(w.y[id] ?? 0, w.x[id] ?? 0);
+  ab[o + MOVE] = TempestMove.Lap;
+  ab[o + TIMER] = 0;
+}
+
+export const def: BossDef = { reset, step, onPhase, entryHome, cracks };
