@@ -13,7 +13,7 @@
 // 'sim:bossSplit' fires once, the bar is the sum of the two, contact with either kills and the fight
 // ends with the second. GW3 ("smaller Tempests non threatening, abandon their dash, drift at the
 // edge"): between dashes each chases a flank point TEMPESTLING.flankDist from the ship at
-// TEMPESTLING.speedRatio of the body's lap speed, slot 0 on its own side of the ship and slot 1 on
+// TEMPESTLING.chaseSpeed, slot 0 on its own side of the ship and slot 1 on
 // the opposite side, the point kept TEMPESTLING.wallKeep from every wall. Slot 0 leads a pincer:
 // when its dash clock is due and the two are on opposite sides of the ship (or flankWait has run
 // out) both wind up together, so their dash lines come from opposite sides. Every marker is followed
@@ -21,6 +21,11 @@
 // the old code dropped the dash when the marker expired a hair before the wind up ended). Only a
 // marker cleared early (bomb, ship death) sends the part back to its chase, so no dash is unmarked.
 // Lays Slime, clocks at TEMPESTLING.rate. Move state TempestMove.Lap means the chase for a part.
+// GW4 ("no dashing, just pursuing the ship"): the pincer came about every 9 s (the body's phase 3
+// dashEvery of chase, then a 2.5 s flank wait that always ran out against a circling ship), and on an
+// obstacle floor rayToWall's bisection could jump past an obstacle, so a marked dash stopped short.
+// Now TEMPESTLING.dashEvery of chase, a 1 s flank wait, slot 0 waits for slot 1 to be back in its
+// chase, rayToWall marches, and the wind up is TEMPESTLING.windupSec with its marker throughout.
 // Split scratch per slot k in bs.abl from k * SLOT: move state, its timer, dash clock, Slime clock,
 // spare, spare, dash heading, marker id.
 import { bus } from '../../core/events';
@@ -30,7 +35,7 @@ import { removeEntity } from '../remove';
 import { spawnFromDef } from '../state';
 import { angleBetween, moveToHit, stepToward, targetOf } from '../steer';
 import { Kind, type World } from '../world';
-import { bossEnraged, clearHazards, crackBody, livePart, spawnLaneMarker, spawnPart, wallDistance } from './core';
+import { bossEnraged, clearHazards, crackBody, livePart, markerLife, spawnLaneMarker, spawnPart, wallDistance } from './core';
 import { hazardTelegraph, wrapPi } from './kit';
 import { bossOf, type BossState } from './state';
 import { BOSS_TABLE, ENRAGE_RATE, MAX_PARTS, TEMPEST, TEMPESTLING } from './table';
@@ -55,14 +60,29 @@ export function lapRadius(w: World, a: number): number {
   return wallDistance(w, a, TEMPEST.wallGap);
 }
 
-/** Distance from (x, y) along heading a to where a body of radius r meets the wall. */
+/** March step for rayToWall, u: thinner than any obstacle, so none is stepped over. */
+export const RAY_STEP = 8;
+
+/**
+ * Distance from (x, y) along heading a to where a body of radius r first meets a wall or an
+ * obstacle. GW4: it marches in RAY_STEP steps before refining, since a plain bisection could land
+ * beyond an obstacle and promise a dash line the dash then stopped short of.
+ */
 export function rayToWall(w: World, x: number, y: number, a: number, r: number): number {
   const arena = w.level.arena;
   const c = Math.cos(a);
   const s = Math.sin(a);
+  const far = Math.hypot(arena.width, arena.height);
   let lo = 0;
-  let hi = Math.hypot(arena.width, arena.height);
-  for (let i = 0; i < 24; i++) {
+  let hi = far;
+  for (let d = RAY_STEP; d < far; d += RAY_STEP) {
+    if (!isInside(arena, x + c * d, y + s * d, r)) {
+      hi = d;
+      break;
+    }
+    lo = d;
+  }
+  for (let i = 0; i < 12; i++) {
     const mid = (lo + hi) / 2;
     if (isInside(arena, x + c * mid, y + s * mid, r)) lo = mid;
     else hi = mid;
@@ -202,7 +222,7 @@ export const MARKER_SLACK = 0.05;
 
 /** Pure: a Tempestling's chase speed, u/s. */
 export function tempestlingSpeed(): number {
-  return TEMPEST.lapSpeed * TEMPESTLING.speedRatio;
+  return TEMPESTLING.chaseSpeed;
 }
 
 /** Pure: the flank bearing from the ship for slot k, given slot 0's bearing: the two are opposite. */
@@ -213,6 +233,11 @@ export function flankBearing(bearing0: number, k: number): number {
 /** Pure: true when a wind up with t seconds left lost its marker early (cleared, not expired). */
 export function markerClearedEarly(t: number): boolean {
   return t > MARKER_SLACK;
+}
+
+/** Pure: chase seconds between a Tempestling's dashes (GW4: one value in every phase). */
+export function tempestlingDashEvery(): number {
+  return TEMPESTLING.dashEvery;
 }
 
 /** Pure: the dash clock at the split (both slots: slot 0 leads a pincer). */
@@ -278,7 +303,7 @@ function splitBody(w: World, id: number, bs: BossState): void {
     const ab = bs.abl;
     ab[o + MOVE] = TempestMove.Lap;
     ab[o + TIMER] = 0;
-    ab[o + DASH] = firstDashClock(dashEveryFor(bs.phase));
+    ab[o + DASH] = firstDashClock(tempestlingDashEvery());
     ab[o + SLIME] = 0;
     ab[o + HEADING] = 0;
     ab[o + MARK] = -1;
@@ -375,12 +400,15 @@ function windup(w: World, bs: BossState, id: number, k: number, t: number): bool
   if (len < TEMPESTLING.dashMin) return false; // too short a line: keep chasing
   const m = spawnLaneMarker(w, bs, x, y, heading, len, TEMPEST.markerHalfWidth);
   if (m < 0) return false; // no marker (hazard cap): keep chasing
+  // GW4: the marker shows for the whole wind up (TEMPESTLING.windupSec, longer than the tier telegraph).
+  bs.hzTele[m] = TEMPESTLING.windupSec;
+  bs.hzLife[m] = markerLife(TEMPESTLING.windupSec);
   ab[o + DASH] = 0;
   ab[o + HEADING] = heading;
   ab[o + MARK] = m;
   w.rot[id] = heading;
   ab[o + MOVE] = TempestMove.Windup;
-  ab[o + TIMER] = hazardTelegraph(bs.row.tier);
+  ab[o + TIMER] = TEMPESTLING.windupSec;
   return true;
 }
 
@@ -420,12 +448,19 @@ export function stepTempestling(w: World, id: number, dt: number): void {
     const tgt = targetOf(w, id);
     chase(w, bs, id, k, tgt, dt);
     ab[o + DASH] = (ab[o + DASH] ?? 0) + adt;
-    const due = (ab[o + DASH] ?? 0) - dashEveryFor(bs.phase);
+    const due = (ab[o + DASH] ?? 0) - tempestlingDashEvery();
     if (due < 0) return;
     const other = livePart(w, bs, 1 - k);
-    if (other > 0 && k === 1) return; // slot 0 leads the pincer while it lives
+    if (other > 0 && k === 1) {
+      // Slot 0 leads the pincer while it lives; slot 1 goes alone only when it missed one (a short
+      // line) and slot 0 is busy with its own dash.
+      if ((ab[MOVE] ?? 0) !== TempestMove.Lap) windup(w, bs, id, 1, tgt);
+      return;
+    }
     if (other > 0) {
-      // The pincer: both wind up together from opposite sides of the ship, once in position.
+      // The pincer: both wind up together from opposite sides of the ship, once in position. GW4:
+      // slot 0 waits for slot 1 to finish its own dash and rest first, so neither misses a pincer.
+      if ((ab[SLOT + MOVE] ?? 0) !== TempestMove.Lap) return;
       const gap = bearingGap(bearingFrom(w, tgt, id), bearingFrom(w, tgt, other));
       if (!pincerReady(gap, due)) return;
       if (!windup(w, bs, id, 0, tgt)) return;

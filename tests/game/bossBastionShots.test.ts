@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { SPACE_TABLE } from '../../src/core/physics';
 import { bus } from '../../src/core/events';
-import { isShotTurn } from '../../src/game/bosses/bastion';
+import { isShotTurn, REGEN } from '../../src/game/bosses/bastion';
 import { livePart } from '../../src/game/bosses/core';
 import { hazardTelegraph } from '../../src/game/bosses/kit';
 import { BASTION, BOSS_SHOTS, SHOT_RECHECK_SEC, type ShotRow } from '../../src/game/bosses/table';
@@ -79,6 +79,7 @@ function logTurns(w: World, secs: number, out: Turn[], t0 = 0): void {
 function killSlot(w: World, k: number): void {
   const p = livePart(w, bs(w), k);
   breakTurret(w, p, BASTION.turretHp);
+  bs(w).abl[REGEN] = -1; // GW4 regen off: this file logs turns over 24 s, longer than the 18 s rebuild
 }
 
 describe('bastion turret shots', () => {

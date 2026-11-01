@@ -32,8 +32,9 @@ function awake(): { w: World; id: number } {
 }
 
 describe('bastion phase 3 shield', () => {
-  it('pure rules: every 12 s, the first 12 s after waking, up 3 s, 6 Hornets, open 2 s, drift 50 u/s', () => {
-    expect(BASTION_SHIELD.everySec).toBe(12);
+  it('pure rules: every 10 s (GW4), the first 10 s after waking, up 3 s, 6 Hornets, open 2 s, drift 50 u/s', () => {
+    expect(BASTION_SHIELD.everySec).toBe(10);
+    expect(BASTION_SHIELD.firstSec).toBe(10);
     expect(BASTION_SHIELD.shieldSec).toBe(3);
     expect(BASTION_SHIELD.hornets).toBe(6);
     expect(BASTION_SHIELD.openSec).toBe(2);
@@ -41,7 +42,7 @@ describe('bastion phase 3 shield', () => {
     expect(shieldClockStart()).toBe(BASTION_SHIELD.everySec - BASTION_SHIELD.firstSec);
   });
 
-  it('shield timing: up about every 12 s for 3 s, then a 2 s open window, with sim:bossShield edges', () => {
+  it('shield timing: up about every 10 s for 3 s, then a 2 s open window, with sim:bossShield edges', () => {
     const { w } = awake();
     const log: { up: boolean; t: number; id: string }[] = [];
     let t = 0;
@@ -49,7 +50,7 @@ describe('bastion phase 3 shield', () => {
     const opens: number[] = [];
     let openRun = 0;
     let wasShielded = false;
-    for (let i = 0; i < 120 * 42; i++) {
+    for (let i = 0; i < 120 * 35; i++) {
       stepGame(w, DT, idle());
       t += DT;
       const s = bs(w);
@@ -66,7 +67,7 @@ describe('bastion phase 3 shield', () => {
     for (const e of log) expect(e.id).toBe('bastion');
     const ups = log.filter((e) => e.up).map((e) => e.t);
     const downs = log.filter((e) => !e.up).map((e) => e.t);
-    // The first comes 12 s after waking (plus the phase change pause, at most the charge it waited for).
+    // The first comes 10 s after waking (plus the phase change pause, at most the charge it waited for).
     expect(ups[0] ?? 0).toBeGreaterThanOrEqual(BASTION_SHIELD.firstSec - 0.05);
     expect(ups[0] ?? 0).toBeLessThanOrEqual(BASTION_SHIELD.firstSec + 2.5);
     for (let k = 0; k < ups.length; k++) expect((downs[k] ?? 0) - (ups[k] ?? 0)).toBeCloseTo(BASTION_SHIELD.shieldSec, 1);

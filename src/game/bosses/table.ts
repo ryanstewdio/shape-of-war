@@ -25,7 +25,7 @@ export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
   ember: { tier: 2, hp: 600, phases: 3, radius: 44, colour: 'bossOrange' },
   mirage: { tier: 2, hp: 640, phases: 3, radius: 50, colour: 'bossMagenta' },
   gravitas: { tier: 2, hp: 700, phases: 3, radius: 60, colour: 'bossViolet' },
-  bastion: { tier: 3, hp: 900, phases: 3, radius: 70, colour: 'bossRed' },
+  bastion: { tier: 3, hp: 1080, phases: 3, radius: 70, colour: 'bossRed' },
   tempest: { tier: 3, hp: 1035, phases: 3, radius: 46, colour: 'bossRed' },
   twins: { tier: 3, hp: 1000, phases: 2, radius: 44, colour: 'bossRed' },
   prism: { tier: 4, hp: 1000, phases: 4, radius: 90, colour: 'bossPrism' },
@@ -380,8 +380,12 @@ export const GRAVITAS = {
 export const BASTION = {
   turnRate: 0.3,
   turrets: 4,
-  /** 18 HP in tenths of a hit (GW3: 8 before, "turrets too easy to kill"). */
-  turretHp: 180,
+  /** 30 HP in tenths of a hit (GW4: 180 before, GW3: 8 before that). */
+  turretHp: 300,
+  /** GW4: a fallen turret rebuilds this long after it fell (one at a time), at half hit points. */
+  regenSec: 18,
+  /** GW4: rebuilds happen only while the core has more than this share of its hit points, before it wakes. */
+  regenAboveShare: 0.33,
   /** GW3: the live turrets are shielded this long after each turret death (hits blocked). */
   turretShieldSec: 1.5,
   /** GW3: each turret death takes this share of maximum hit points off the bar (four: 20 percent at most). */
@@ -423,8 +427,9 @@ export const BASTION = {
  * from the shared Hornet pool, then opens for openSec. It drifts toward the ship between shields.
  */
 export const BASTION_SHIELD = {
-  firstSec: 12,
-  everySec: 12,
+  firstSec: 10,
+  /** GW4: 10 s start to start (12 before). */
+  everySec: 10,
   shieldSec: 3,
   burstAt: [0.4, 1.6] as readonly number[],
   hornets: 6,
@@ -472,12 +477,19 @@ export const TEMPESTLING = {
   sizeShare: 0.6,
   /** GW3: the storm attack (Slime and dash clocks) at full rate (0.7 before). */
   rate: 1,
-  /** First pincer this long after the split. */
-  firstDash: 2,
-  /** GW3: a due pincer waits at most this long (attack seconds) for the two to reach opposite sides. */
-  flankWait: 2.5,
-  /** GW3: chase speed between dashes as a multiple of TEMPEST.lapSpeed (1.4: 196 u/s). */
-  speedRatio: 1.4,
+  /** First pincer this long after the split (GW4: 2 before). */
+  firstDash: 1.5,
+  /**
+   * GW4: chase seconds between pincers, counted from the end of the rest (GW3 used the body's
+   * dashEvery, counted only in the chase, so a pincer came about every 9 s: "no dashing").
+   */
+  dashEvery: 3,
+  /** A due pincer waits at most this long (attack seconds) for the two to reach opposite sides (GW4: 2.5 before). */
+  flankWait: 1,
+  /** GW4: chase speed between dashes, u/s (GW3: 1.4x TEMPEST.lapSpeed, 196 u/s). */
+  chaseSpeed: 165,
+  /** GW4: wind up seconds, the lane marker shown the whole time (the tier telegraph was 0.6 s). */
+  windupSec: 0.7,
   /** GW3: committed dash speed, u/s. */
   dashSpeed: 420,
   /** GW3: a wind up starts only when the dash line runs at least this far before the wall. */
