@@ -24,7 +24,6 @@ project.test.ts 21 (identity, known points at 12 and 22 deg, far and near, monot
 - Free form Graphics are exact at their bounds centre. When one Graphics holds effects far apart (two charger lanes, wall flashes on opposite walls), each piece can be off by up to tens of units at high.
 - Bullets, trails and dust are moved but not depth scaled (static vertex upload). The low tier grid loses its ripple bend while tilted.
 - Lattice line alpha is not scaled by depth (allowed, not needed). applyNeon is untouched.
-- The cloud session had no `add_repo` tool, so the push may fail.
 
 ## Contracts for other roles
 - Ledger: call `setTilt(level)` from `sow.settings.tilt` at boot and on change. The renderer picks it up on the next draw. A boot `setTilt('off')` overrides the `?tilt` knob. hudFrame's `fitArena` safe rect still holds: the projected fit stays inside the same rect.
