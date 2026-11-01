@@ -10,6 +10,7 @@ import {
   PART_HORNET,
   PART_MIRROR,
   PART_POD,
+  PART_TEMPESTLING,
   PART_TURRET,
   PART_TWIN,
   partSpecIndex,
@@ -43,7 +44,29 @@ export const PART_LOOKS: readonly PartLook[] = [
   { name: 'hornet', spec: partSpecIndex(PART_HORNET), tint: 'baked', jitter: 1.6 },
   { name: 'gravitant', spec: partSpecIndex(PART_GRAVITANT), tint: 'baked', jitter: 0 },
   { name: 'mirror', spec: partSpecIndex(PART_MIRROR), tint: 'baked', jitter: 0 },
+  { name: 'tempestling', spec: partSpecIndex(PART_TEMPESTLING), tint: 'baked', jitter: 0 },
 ];
+
+// Tempestling (GW3)
+
+/** Swirl arcs round a Tempestling, and their turn rate (rev/s): fast, so the small storm spins. */
+export const TEMPESTLING_SWIRL_ARCS = 3;
+export const TEMPESTLING_SWIRL_HZ = 1.6;
+/** Swirl arc radius and leading edge reach as multiples of the drawn radius, and the arc length (rad). */
+export const TEMPESTLING_SWIRL_R = 1.3;
+export const TEMPESTLING_SWIRL_LEN = 1.1;
+
+/** Pure: swirl angle (rad) of arc k round a Tempestling at timeSec for its hash h: turns fast, clockwise. */
+export function tempestlingSwirl(timeSec: number, h: number, k: number): number {
+  return fin(timeSec, 0) * TEMPESTLING_SWIRL_HZ * Math.PI * 2 + fin(h, 0) * Math.PI * 2 + (k * Math.PI * 2) / TEMPESTLING_SWIRL_ARCS;
+}
+
+/** Pure: the move direction (rad) of a Tempestling: its velocity when moving, else its heading rot. */
+export function tempestlingLead(vx: number, vy: number, rot: number): number {
+  const x = fin(vx, 0);
+  const y = fin(vy, 0);
+  return x * x + y * y > 1 ? Math.atan2(y, x) : fin(rot, 0);
+}
 
 /** Pure: the look of a part type (w.a); unknown values look like a pod. */
 export function partLook(a: number): PartLook {

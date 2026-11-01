@@ -6,7 +6,9 @@
 // sparks riding the same flow. The outer edge reaches the sim pull radius, so no ring is drawn. A
 // bright white core flare. Before the nova a calm small swirl turns at the well. Everything is a
 // pure function of the well id and the draw clock (hash01, never the PRNG); the renderer owns the
-// one shared Graphics.
+// one shared Graphics. GW3 fluid: soft white gas fills the space between the bands (layered filled
+// spiral sectors, denser toward the core), the bands shear and wobble with low frequency noise,
+// wisps peel off the band edges and stretch along the flow, and motes carry slight turbulence.
 import type { Bus, EventKey } from '../core/events';
 import { hash01, hslToRgbInt } from './color';
 import { mixRgb } from './mapFx';
@@ -49,9 +51,42 @@ export const WHIRL_BAND_PTS = 16;
 export const WHIRL_DASHES = 3;
 /** Dash length as a share of the rim to core path. */
 export const WHIRL_DASH_U = 0.14;
-/** Dust motes and multicolour shimmer sparks per nova. */
+/** Dust motes, multicolour shimmer sparks and peeling gas wisps per nova. */
 export const WHIRL_MOTES = 72;
 export const WHIRL_SPARKS = 16;
+export const WHIRL_WISPS = 8;
+
+// GW3 fluid flow. The bands and motes ride one shear field per well: a phase offset that grows from
+// zero at the rim to WHIRL_SHEAR at the core and drifts with low frequency noise, so the inner flow
+// leads and lags the outer flow like a real eddy instead of a rigid wheel. Each band also wobbles
+// in radius (zero at the rim and the core, so the reach and the core stay exact), and each mote
+// carries a little turbulence. Every amplitude is bounded below the base flow, so matter still turns
+// clockwise and falls inward from frame to frame.
+
+/** Peak shear phase offset at the core (rad). */
+export const WHIRL_SHEAR = 0.35;
+/** Shear noise clock (x rate) and its spread along the flow share. */
+export const WHIRL_SHEAR_HZ = 0.3;
+export const WHIRL_SHEAR_SPREAD = 0.9;
+/** Peak band radius wobble (share of the radius), its clock (x rate) and its spread along the flow. */
+export const WHIRL_WOBBLE = 0.05;
+export const WHIRL_WOBBLE_HZ = 0.45;
+export const WHIRL_WOBBLE_SPREAD = 0.8;
+/** Mote turbulence: angle (rad) and radius share amplitudes and their clocks (x rate). */
+export const WHIRL_TURB_A = 0.12;
+export const WHIRL_TURB_R = 0.035;
+export const WHIRL_TURB_HZ = 0.9;
+/** Gas fill: layers per nova, points per sector edge, and per layer width (share of the band gap), inner reach (flow share) and alpha. */
+export const WHIRL_GAS_LAYERS = 3;
+export const WHIRL_GAS_PTS = 10;
+export const WHIRL_GAS_WIDTH: readonly number[] = [0.92, 0.62, 0.34];
+export const WHIRL_GAS_REACH: readonly number[] = [1, 0.78, 0.52];
+export const WHIRL_GAS_ALPHA: readonly number[] = [0.1, 0.13, 0.17];
+/** Wisps: life (s at rate 1), points per wisp, inward drag over a life (flow share) and peak stretch. */
+export const WHIRL_WISP_SEC = 1.4;
+export const WHIRL_WISP_PTS = 4;
+export const WHIRL_WISP_DRAG = 0.3;
+export const WHIRL_WISP_STRETCH = 0.2;
 /** Calm pre nova swirl: bands, motes, reach (x the well radius) and flow rate (x the nova flow). */
 export const CALM_BANDS = 2;
 export const CALM_MOTES = 10;
@@ -133,9 +168,9 @@ export function novaStreamColour(stops: Uint32Array, base: number, seq: number, 
   return novaColour(stops, base, u - fin(timeSec, 0) / NOVA_CYCLE_SEC, timeSec, shift);
 }
 
-/** Pure: particles one nova adds at most: the dust motes plus the shimmer sparks. */
+/** Pure: particles one nova adds at most: the dust motes, the shimmer sparks and the wisps. */
 export function novaAddedParticles(): number {
-  return WHIRL_MOTES + WHIRL_SPARKS;
+  return WHIRL_MOTES + WHIRL_SPARKS + WHIRL_WISPS;
 }
 
 export interface NovaState {
@@ -284,19 +319,134 @@ export function turnsClockwise(ax: number, ay: number, bx: number, by: number): 
 }
 
 /**
- * Pure: spiral band `band` of `bands` around the origin written into out (WHIRL_BAND_PTS x, y
- * pairs, rim first, core last). Bands are spaced evenly round the turn. Allocates nothing.
+ * Pure: low frequency noise in [-1, 1] at x for a seed: two incommensurate sines whose phases come
+ * from hash01 of the seed (never the PRNG). Its slope is at most FLOW_NOISE_SLOPE.
  */
-export function whirlBand(timeSec: number, band: number, bands: number, reach: number, out: Float32Array, rate = 1): Float32Array {
+export function flowNoise(seed: number, x: number): number {
+  const v = fin(x, 0);
+  const p0 = hash01(seed | 0) * Math.PI * 2;
+  const p1 = hash01((seed | 0) + 1) * Math.PI * 2;
+  return 0.6 * Math.sin(v + p0) + 0.4 * Math.sin(2.13 * v + p1);
+}
+
+/** The largest slope of flowNoise (d noise / d x). */
+export const FLOW_NOISE_SLOPE = 0.6 + 0.4 * 2.13;
+
+/**
+ * Pure: the shear phase offset (rad, positive is clockwise) of well id at flow share u and timeSec:
+ * zero at the rim, up to WHIRL_SHEAR at the core, drifting with the noise clock.
+ */
+export function whirlShear(id: number, u: number, timeSec: number, rate = 1): number {
+  const c = Math.max(0, Math.min(1, fin(u, 1)));
+  const x = WHIRL_SHEAR_HZ * fin(rate, 1) * fin(timeSec, 0) + WHIRL_SHEAR_SPREAD * c;
+  return WHIRL_CW * WHIRL_SHEAR * (1 - c) * flowNoise((id | 0) * 7919 + 101, x);
+}
+
+/**
+ * Pure: band radius wobble of well id, band b at flow share u and timeSec, as a share of the radius:
+ * zero at the rim and the core, at most WHIRL_WOBBLE between.
+ */
+export function whirlWobble(id: number, band: number, u: number, timeSec: number, rate = 1): number {
+  const c = Math.max(0, Math.min(1, fin(u, 1)));
+  const x = WHIRL_WOBBLE_HZ * fin(rate, 1) * fin(timeSec, 0) + WHIRL_WOBBLE_SPREAD * c;
+  return WHIRL_WOBBLE * Math.sin(Math.PI * c) * flowNoise((id | 0) * 7919 + (band | 0) * 37 + 211, x);
+}
+
+/** Pure: the fluid angle of flow share u: the log spiral plus the well's shear. */
+export function whirlFlowAngle(u: number, timeSec: number, base: number, id: number, rate = 1): number {
+  return whirlAngle(u, timeSec, base, rate) + whirlShear(id, u, timeSec, rate);
+}
+
+/** Pure: the fluid radius of flow share u on band b: the log spiral radius with the band wobble. */
+export function whirlFlowRadius(u: number, reach: number, timeSec: number, id: number, band: number, rate = 1): number {
+  return whirlRadius(u, reach) * (1 + whirlWobble(id, band, u, timeSec, rate));
+}
+
+/**
+ * Pure: spiral band `band` of `bands` around the origin written into out (WHIRL_BAND_PTS x, y
+ * pairs, rim first, core last). Bands are spaced evenly round the turn and ride the shear and
+ * wobble of well id. Allocates nothing.
+ */
+export function whirlBand(timeSec: number, band: number, bands: number, reach: number, out: Float32Array, rate = 1, id = 0): Float32Array {
   const base = (band * Math.PI * 2) / Math.max(1, bands);
   for (let k = 0; k < WHIRL_BAND_PTS; k++) {
     const u = 1 - k / (WHIRL_BAND_PTS - 1);
-    const r = whirlRadius(u, reach);
-    const a = whirlAngle(u, timeSec, base, rate);
+    const r = whirlFlowRadius(u, reach, timeSec, id, band, rate);
+    const a = whirlFlowAngle(u, timeSec, base, id, rate);
     out[k * 2] = Math.cos(a) * r;
     out[k * 2 + 1] = Math.sin(a) * r;
   }
   return out;
+}
+
+/** Pure: alpha of gas layer L (0 outer and widest, last inner and densest), within 0.10 to 0.25. */
+export function whirlGasAlpha(layer: number): number {
+  const L = Math.max(0, Math.min(WHIRL_GAS_LAYERS - 1, layer | 0));
+  return WHIRL_GAS_ALPHA[L] ?? 0.1;
+}
+
+/** Pure: width of gas layer L at flow share u as a share of the band gap: tapered to a soft rim. */
+export function whirlGasWidth(layer: number, u: number): number {
+  const L = Math.max(0, Math.min(WHIRL_GAS_LAYERS - 1, layer | 0));
+  const c = Math.max(0, Math.min(1, fin(u, 1)));
+  return (WHIRL_GAS_WIDTH[L] ?? 0.5) * Math.min(1, 0.25 + (1 - c) * 3);
+}
+
+/**
+ * Pure: the filled gas sector trailing band `band` of `bands` for layer L, around the origin,
+ * written into out (WHIRL_GAS_PTS x 2 points as x, y pairs): the band edge from the layer's reach
+ * to the core, then back out along the trailing edge, whirlGasWidth of the band gap behind it (the
+ * gas fills the space between the bands). Inner layers reach less far, so the gas thickens toward
+ * the core. Allocates nothing.
+ */
+export function whirlGasSector(timeSec: number, band: number, bands: number, layer: number, reach: number, id: number, out: Float32Array, rate = 1): Float32Array {
+  const L = Math.max(0, Math.min(WHIRL_GAS_LAYERS - 1, layer | 0));
+  const top = WHIRL_GAS_REACH[L] ?? 1;
+  const base = (band * Math.PI * 2) / Math.max(1, bands);
+  const gap = (Math.PI * 2) / Math.max(1, bands);
+  const n = WHIRL_GAS_PTS;
+  for (let k = 0; k < n; k++) {
+    const u = top * (1 - k / (n - 1));
+    const r = whirlFlowRadius(u, reach, timeSec, id, band, rate);
+    const a = whirlFlowAngle(u, timeSec, base, id, rate);
+    out[k * 2] = Math.cos(a) * r;
+    out[k * 2 + 1] = Math.sin(a) * r;
+    // Trailing edge, written in reverse so the outline runs core to rim on the way back.
+    const j = 2 * n - 1 - k;
+    const at = a - WHIRL_CW * gap * whirlGasWidth(L, u);
+    out[j * 2] = Math.cos(at) * r;
+    out[j * 2 + 1] = Math.sin(at) * r;
+  }
+  return out;
+}
+
+/**
+ * Pure: wisp k of well id at timeSec within reach, written into out (WHIRL_WISP_PTS x, y pairs, tail
+ * first, head last). A wisp peels off a band edge at a hashed flow share, is dragged inward along
+ * the flow over its life, drifts off the band, and stretches as it goes. Returns its alpha (0 to
+ * 0.6): it fades in and out over the life. Allocates nothing.
+ */
+export function whirlWisp(timeSec: number, id: number, k: number, reach: number, out: Float32Array, rate = 1, bands = WHIRL_BANDS): number {
+  const seed = (id | 0) * 613 + (k | 0) * 389 + 17;
+  const ph = (fin(timeSec, 0) * fin(rate, 1)) / WHIRL_WISP_SEC + hash01(seed);
+  const p = ph - Math.floor(ph);
+  const nb = Math.max(1, bands | 0);
+  const band = Math.min(nb - 1, Math.floor(hash01(seed + 1) * nb));
+  const base = (band * Math.PI * 2) / nb;
+  const gap = (Math.PI * 2) / nb;
+  const u0 = 0.35 + 0.55 * hash01(seed + 2);
+  const head = Math.max(0, u0 - WHIRL_WISP_DRAG * p);
+  const tail = Math.min(1, head + 0.04 + WHIRL_WISP_STRETCH * p);
+  const side = hash01(seed + 3) < 0.5 ? -1 : 1;
+  const off = side * gap * (0.04 + 0.22 * p);
+  for (let q = 0; q < WHIRL_WISP_PTS; q++) {
+    const u = tail + ((head - tail) * q) / (WHIRL_WISP_PTS - 1);
+    const r = whirlFlowRadius(u, reach, timeSec, id, band, rate);
+    const a = whirlFlowAngle(u, timeSec, base, id, rate) + off;
+    out[q * 2] = Math.cos(a) * r;
+    out[q * 2 + 1] = Math.sin(a) * r;
+  }
+  return 0.6 * Math.sin(Math.PI * p);
 }
 
 /** Pure: flow share of dash d on a band at timeSec: it slides from the rim to the core and wraps. */
@@ -316,16 +466,20 @@ export interface Mote {
 
 /**
  * Pure: mote k of well id at timeSec within reach, about the origin. Each mote falls from the rim
- * to the core over WHIRL_INFALL_SEC / rate on its own log spiral, then respawns at the rim. The
- * phase and the spiral's start angle come from hash01 of the id and k (no PRNG).
+ * to the core over WHIRL_INFALL_SEC / rate on its own log spiral (a streamline of the sheared flow)
+ * with a little turbulence, then respawns at the rim. The phase and the spiral's start angle come
+ * from hash01 of the id and k (no PRNG).
  */
 export function whirlMote(timeSec: number, id: number, k: number, reach: number, out: Mote, rate = 1): Mote {
   const seed = (id | 0) * 977 + (k | 0) * 131;
-  const ph = (fin(timeSec, 0) * fin(rate, 1)) / WHIRL_INFALL_SEC + hash01(seed + 1);
+  const t = fin(timeSec, 0);
+  const rt = fin(rate, 1);
+  const ph = (t * rt) / WHIRL_INFALL_SEC + hash01(seed + 1);
   const u = 1 - (ph - Math.floor(ph));
   const base = hash01(seed + 2) * Math.PI * 2;
-  const r = whirlRadius(u, reach) * (0.94 + 0.12 * hash01(seed + 3));
-  const a = whirlAngle(u, timeSec, base, rate);
+  const tc = WHIRL_TURB_HZ * rt * t;
+  const r = whirlRadius(u, reach) * (0.94 + 0.08 * hash01(seed + 3)) * (1 + WHIRL_TURB_R * flowNoise(seed + 5, tc * 1.2));
+  const a = whirlFlowAngle(u, t, base, id, rt) + WHIRL_TURB_A * flowNoise(seed + 7, tc);
   out.x = Math.cos(a) * r;
   out.y = Math.sin(a) * r;
   out.u = u;

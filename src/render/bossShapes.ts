@@ -578,10 +578,18 @@ export const PART_HORNET = 5;
 export const PART_GRAVITANT = 6;
 /** Mirage's Mirror (sim PartType.Mirror): a translucent magenta ghost of Mirage, no fill, half alpha. */
 export const PART_MIRROR = 7;
-/** Part types that have a part spec (pod, anchor, turret, Broodling, Hornet, Gravitant, Mirror). The twin body draws as a boss body. */
-export const PART_TYPES = 7;
+/**
+ * GW3: Tempest's Tempestling (sim PartType.Tempestling): a smaller Tempest (TEMPESTLING_SHARE of the
+ * body) in the same storm colours, nose along its heading (w.rot). The renderer adds a fast swirl
+ * and a bright leading edge in its move direction (partLooks.ts tempestling helpers).
+ */
+export const PART_TEMPESTLING = 8;
+/** Tempestling size as a share of the Tempest body (the sim TEMPESTLING.sizeShare). */
+export const TEMPESTLING_SHARE = 0.6;
+/** Part types that have a part spec (pod, anchor, turret, Broodling, Hornet, Gravitant, Mirror, Tempestling). The twin body draws as a boss body. */
+export const PART_TYPES = 8;
 /** The part type behind each spec index (a part spec is PART_SPECS[index x 4 + tier - 1]). */
-export const PART_SPEC_TYPES: readonly number[] = [PART_POD, PART_ANCHOR, PART_TURRET, PART_BROODLING, PART_HORNET, PART_GRAVITANT, PART_MIRROR];
+export const PART_SPEC_TYPES: readonly number[] = [PART_POD, PART_ANCHOR, PART_TURRET, PART_BROODLING, PART_HORNET, PART_GRAVITANT, PART_MIRROR, PART_TEMPESTLING];
 /** Radii the baked look parts are drawn at: the sim radii (HORNET.radius, GRAVITANT.radius), so the scale is 1. */
 export const HORNET_R = 10;
 export const GRAVITANT_R = 28;
@@ -600,8 +608,9 @@ export function isBroodlingPart(a: number): boolean {
   return a === PART_BROODLING;
 }
 
-/** Pure: index of a part in PART_SPEC_TYPES (0 pod, 1 anchor, 2 turret, 3 Broodling, 4 Hornet, 5 Gravitant, 6 Mirror; pod for anything else). */
+/** Pure: index of a part in PART_SPEC_TYPES (0 pod, 1 anchor, 2 turret, 3 Broodling, 4 Hornet, 5 Gravitant, 6 Mirror, 7 Tempestling; pod for anything else). */
 export function partSpecIndex(a: number): number {
+  if (a === PART_TEMPESTLING) return 7;
   if (a === PART_HORNET) return 4;
   if (a === PART_GRAVITANT) return 5;
   if (a === PART_MIRROR) return 6;
@@ -610,7 +619,7 @@ export function partSpecIndex(a: number): number {
 
 /** Pure: true for a part whose spec bakes its own colours (the view tint stays white). */
 export function isBakedPart(a: number): boolean {
-  return a === PART_BROODLING || a === PART_HORNET || a === PART_GRAVITANT || a === PART_MIRROR;
+  return a === PART_BROODLING || a === PART_HORNET || a === PART_GRAVITANT || a === PART_MIRROR || a === PART_TEMPESTLING;
 }
 
 /** Pure: true for the Twins second body (w.a is PART_TWIN). */
@@ -625,6 +634,7 @@ export function partR(a: number): number {
   if (a === PART_HORNET) return HORNET_R;
   if (a === PART_GRAVITANT) return GRAVITANT_R;
   if (a === PART_MIRROR) return bossBodyR(BOSS_MIRAGE);
+  if (a === PART_TEMPESTLING) return tempestlingR();
   return PART_R[partType(a)] ?? 12;
 }
 
@@ -716,8 +726,41 @@ export function mirrorSpec(): ShapeSpec {
   };
 }
 
+/** Pure: the radius the Tempestling spec is drawn at: TEMPESTLING_SHARE of the Tempest body. */
+export function tempestlingR(): number {
+  return bossBodyR(BOSS_TEMPEST) * TEMPESTLING_SHARE;
+}
+
+/**
+ * Pure: Tempestling spec: the Tempest kite, streamers, inner kite and Slime sac in the Tempest storm
+ * colours at TEMPESTLING_SHARE of the body size, with a small white core. Baked colours, nose on +x.
+ */
+export function tempestlingSpec(tier: number): ShapeSpec {
+  const R = tempestlingR();
+  const w = 1.6 * tierWeight(tier);
+  const hm = tierHaloMul(tier);
+  const c = bossColourOf(BOSS_TEMPEST);
+  const streamers: ShapePrim[] = [1, -1].map((s) => ({
+    t: 'line' as const,
+    pts: [r2(0.15 * R), r2(s * TEMPEST_WING * R), r2(-1.05 * R), r2(s * 0.5 * R)],
+  }));
+  const sac: ShapePrim = { t: 'poly', pts: [r2(-0.2 * R), 0, r2(-0.42 * R), r2(0.2 * R), r2(-0.64 * R), 0, r2(-0.42 * R), r2(-0.2 * R)] };
+  return {
+    tint: null,
+    radius: r2(TEMPEST_NOSE * R) + 4,
+    layers: [
+      layer([tempestKite(R, 1)], w, { colour: c, fill: 0.14, haloMul: hm }),
+      layer(streamers, w * 0.5, { colour: c, alpha: 0.85, haloMul: hm }),
+      layer([tempestKite(R, 0.5)], w * 0.7, { colour: c, fill: 0.3, haloMul: hm }),
+      layer([sac], w * 0.4, { colour: 'slime', fill: 0.7, alpha: 0.9, glow: false }),
+      layer([{ t: 'circle', r: r2(0.16 * R) }], 0, { colour: 'white', fill: 0.9, glow: false }),
+    ],
+  };
+}
+
 /** Pure: the spec of a part type at a boss tier (the tier sets the line weight). */
 export function buildPartSpec(a: number, tier: number): ShapeSpec {
+  if (a === PART_TEMPESTLING) return tempestlingSpec(tier);
   if (isBroodlingPart(a)) return broodlingSpec(tier);
   if (a === PART_HORNET) return hornetSpec(tier);
   if (a === PART_GRAVITANT) return gravitantSpec(tier);

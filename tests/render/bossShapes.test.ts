@@ -78,11 +78,11 @@ describe('V3 registry entries', () => {
 describe('boss slots', () => {
   it('one slot per boss index and openness step, then one per part type and tier', () => {
     expect(BOSS_SPECS).toHaveLength(10 * BOSS_OPEN_STEPS);
-    expect(PART_SPECS).toHaveLength(28);
+    expect(PART_SPECS).toHaveLength(32);
     expect(bossSlot(0, 0)).toBe(BOSS_SLOT_BASE);
     expect(bossSlot(9, BOSS_OPEN_STEPS - 1)).toBe(PART_SLOT_BASE - 1);
-    expect(partSlot(PART_BROODLING, 4)).toBe(EXPOSED_SLOT_BASE - 13);
-    expect(partSlot(PART_TURRET, 4)).toBe(EXPOSED_SLOT_BASE - 17);
+    expect(partSlot(PART_BROODLING, 4)).toBe(EXPOSED_SLOT_BASE - 17);
+    expect(partSlot(PART_TURRET, 4)).toBe(EXPOSED_SLOT_BASE - 21);
     expect(exposedBossSlot(9, BOSS_OPEN_STEPS - 1)).toBe(MAX_SLOT);
     for (let id = 0; id < 10; id++) {
       for (let s = 0; s < BOSS_OPEN_STEPS; s++) {
@@ -115,7 +115,7 @@ describe('boss slots', () => {
 
   it('exposed slots (ED1): one per boss and step after the parts, coreless, white, same geometry', () => {
     expect(EXPOSED_BOSS_SPECS).toHaveLength(BOSS_SPECS.length);
-    expect(EXPOSED_SLOT_BASE).toBe(PART_SLOT_BASE + 28);
+    expect(EXPOSED_SLOT_BASE).toBe(PART_SLOT_BASE + 32);
     for (let id = 0; id < 10; id++) {
       for (let s = 0; s < BOSS_OPEN_STEPS; s++) {
         const slot = exposedBossSlot(id, s);
