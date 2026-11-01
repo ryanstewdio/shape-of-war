@@ -9,7 +9,7 @@
 // State: w.a spawn index (-1 until its first step), the roam arrays below. Nothing allocates per step.
 // Render contract: position and rotation only.
 import { hash01 } from '../../core/rng';
-import { confine, createConfineResult } from '../arena';
+import { confineOn, createConfineResult } from '../arena';
 import { enemySpeedScale } from '../state';
 import { moveTo, turnToward } from '../steer';
 import { Kind, type World } from '../world';
@@ -109,6 +109,8 @@ export function spawnIndex(w: World, id: number): number {
 
 const probe = createConfineResult();
 const dir = { x: 0, y: 0 };
+/** Scratch for the offset to the arena centre (u 0, v 0), reached the short way across the seam. */
+const cd = { x: 0, y: 0 };
 const inward: InwardResult = { heading: 0, side: 0 };
 
 /**
@@ -117,7 +119,7 @@ const inward: InwardResult = { heading: 0, side: 0 };
  */
 export function sowerDirection(w: World, x: number, y: number, r: number, out: { x: number; y: number }): boolean {
   const arena = w.level.arena;
-  const p = confine(arena, x, y, r + HUG_MARGIN, probe);
+  const p = confineOn(w.surface, arena, x, y, r + HUG_MARGIN, probe);
   let dx: number;
   let dy: number;
   let hugging = false;
@@ -126,6 +128,10 @@ export function sowerDirection(w: World, x: number, y: number, r: number, out: {
     dx = p.ny - p.nx * HUG_PULL;
     dy = -p.nx - p.ny * HUG_PULL;
     hugging = true;
+  } else if (w.surface.topology.wrapU) {
+    // Cylinder: no u wall, the only boundaries are the rims, so head for the nearer rim.
+    dx = 0;
+    dy = y >= 0 ? 1 : -1;
   } else if (arena.shape === 'circle' || arena.shape === 'hexagon') {
     dx = x;
     dy = y;
@@ -164,8 +170,9 @@ const SLIDE_STEPS = 10;
 /** True when a Sower of radius r at (px, py) is clear of every boundary and can head along (dx, dy). */
 function clearAt(w: World, px: number, py: number, r: number, dx: number, dy: number): boolean {
   const arena = w.level.arena;
-  if (confine(arena, px, py, r, probe).hit) return false;
-  return !confine(arena, px + dx * (r + HUG_MARGIN), py + dy * (r + HUG_MARGIN), r + HUG_MARGIN, probe).hit;
+  const sf = w.surface;
+  if (confineOn(sf, arena, px, py, r, probe).hit) return false;
+  return !confineOn(sf, arena, px + dx * (r + HUG_MARGIN), py + dy * (r + HUG_MARGIN), r + HUG_MARGIN, probe).hit;
 }
 
 /**
@@ -194,15 +201,16 @@ export function slideSide(w: World, x: number, y: number, r: number, nx: number,
  * contact lasts (side in), so it never flips; out.side is 0 once the way to the centre is clear.
  */
 export function inwardHeading(w: World, x: number, y: number, r: number, side: number, out: InwardResult): InwardResult {
-  const d = Math.sqrt(x * x + y * y);
+  w.surface.delta(x, y, 0, 0, cd);
+  const d = Math.sqrt(cd.x * cd.x + cd.y * cd.y);
   out.side = 0;
   if (d < 1e-9) {
     out.heading = 0;
     return out;
   }
-  let dx = -x / d;
-  let dy = -y / d;
-  const p = confine(w.level.arena, x, y, r + HUG_MARGIN, probe);
+  let dx = cd.x / d;
+  let dy = cd.y / d;
+  const p = confineOn(w.surface, w.level.arena, x, y, r + HUG_MARGIN, probe);
   if (p.hit && dx * p.nx + dy * p.ny < 0) {
     const nx = p.nx;
     const ny = p.ny;
@@ -213,6 +221,12 @@ export function inwardHeading(w: World, x: number, y: number, r: number, side: n
   }
   out.heading = Math.atan2(dy, dx);
   return out;
+}
+
+/** Distance from (x, y) to the arena centre, the short way across the seam. */
+function centreDist(w: World, x: number, y: number): number {
+  w.surface.delta(x, y, 0, 0, cd);
+  return Math.sqrt(cd.x * cd.x + cd.y * cd.y);
 }
 
 export function step(w: World, id: number, dt: number): void {
@@ -233,7 +247,7 @@ export function step(w: World, id: number, dt: number): void {
   const hugging = sowerDirection(w, x, y, w.radius[id] ?? def.radius, dir);
   const loop = st.loops[id] ?? 0;
   const gap = diveGapSeconds(w.level.seed, w.a[id] ?? 0, loop);
-  const next = nextRoamPhase(phase, leg, since, gap, loop === 0 ? 0 : EDGE_MIN_SEC, hugging, Math.sqrt(x * x + y * y));
+  const next = nextRoamPhase(phase, leg, since, gap, loop === 0 ? 0 : EDGE_MIN_SEC, hugging, centreDist(w, x, y));
   st.leg[id] = next === phase ? leg : 0;
   const dive = next === ROAM_IN && phase === ROAM_EDGE;
   st.sinceTurn[id] = dive ? 0 : since;

@@ -92,6 +92,9 @@ function endTimed(w: World): void {
   g.superTimer = 0;
 }
 
+/** Scratch for surface deltas; read both fields before the next call. */
+const sd = { x: 0, y: 0 };
+
 /** Detonate: scored kills inside DETONATE_RADIUS of the drone, then remove it for 3 s. Returns kills. */
 export function detonate(w: World): number {
   const g = gs(w);
@@ -109,9 +112,8 @@ export function detonate(w: World): number {
     if (!isTargetable(w, id)) continue;
     const k = w.kind[id] ?? 0;
     if (k === Kind.GravityWell || k === Kind.SnakeBody) continue;
-    const dx = (w.x[id] ?? 0) - x;
-    const dy = (w.y[id] ?? 0) - y;
-    if (dx * dx + dy * dy > r2) continue;
+    w.surface.delta(x, y, w.x[id] ?? 0, w.y[id] ?? 0, sd);
+    if (sd.x * sd.x + sd.y * sd.y > r2) continue;
     killEnemy(w, id, true);
     n++;
   }
@@ -163,9 +165,8 @@ export function steerHoming(w: World, dt: number): void {
     let bestD = r2;
     for (let i = 0; i < g.targetCount; i++) {
       const id = g.targets[i] ?? 0;
-      const dx = (w.x[id] ?? 0) - bx;
-      const dy = (w.y[id] ?? 0) - by;
-      const d2 = dx * dx + dy * dy;
+      w.surface.delta(bx, by, w.x[id] ?? 0, w.y[id] ?? 0, sd);
+      const d2 = sd.x * sd.x + sd.y * sd.y;
       if (d2 <= bestD) {
         bestD = d2;
         best = id;
@@ -177,7 +178,8 @@ export function steerHoming(w: World, dt: number): void {
     const speed = Math.sqrt(vx * vx + vy * vy);
     if (speed < 1e-6) continue;
     const cur = Math.atan2(vy, vx);
-    let diff = Math.atan2((w.y[best] ?? 0) - by, (w.x[best] ?? 0) - bx) - cur;
+    w.surface.delta(bx, by, w.x[best] ?? 0, w.y[best] ?? 0, sd);
+    let diff = Math.atan2(sd.y, sd.x) - cur;
     if (diff > Math.PI) diff -= 2 * Math.PI;
     else if (diff < -Math.PI) diff += 2 * Math.PI;
     if (diff > maxTurn) diff = maxTurn;
