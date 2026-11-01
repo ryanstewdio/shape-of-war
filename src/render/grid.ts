@@ -111,3 +111,53 @@ export function drawWallsProjected(g: Graphics, arena: ArenaDef, colour: number,
 export function drawGridProjected(g: Graphics, segs: readonly number[], colour: number, scale: number, cam: Camera): void {
   drawGrid(g, projectFlat(segs, cam), colour, scale);
 }
+
+/** D13 phase C1: a drum ring split into its front and back arcs (drum.ts ringArcs), screen units. */
+export interface DrumArcs {
+  readonly front: readonly number[];
+  readonly back: readonly number[];
+}
+
+function strokeArc(g: Graphics, pts: readonly number[], width: number, colour: number, alpha: number): void {
+  if (pts.length < 4) return;
+  g.moveTo(pts[0] ?? 0, pts[1] ?? 0);
+  for (let i = 2; i + 1 < pts.length; i += 2) g.lineTo(pts[i] ?? 0, pts[i + 1] ?? 0);
+  g.stroke({ width, color: colour, alpha, join: 'round', cap: 'round' });
+}
+
+/**
+ * Cylinder levels: the two rims as glowing ellipses, front arcs at the pass alpha and back arcs
+ * through the glass at backAlpha of it. A rim does not depend on the camera angle, so this is
+ * drawn on tilt, arena, resize or neon change only. Obstacles go in their own layers (renderer).
+ */
+export function drawDrumWalls(g: Graphics, rims: readonly DrumArcs[], colour: number, passes: readonly WallPass[], backAlpha: number): void {
+  g.clear();
+  for (const pass of passes) {
+    for (const r of rims) strokeArc(g, r.back, pass.width, colour, pass.alpha * backAlpha);
+    for (const r of rims) strokeArc(g, r.front, pass.width, colour, pass.alpha);
+  }
+}
+
+/**
+ * Cylinder levels on the low tier: v rings (static arcs) and the u lines for the current camera
+ * angle (flat segment lists [x0, y0, x1, y1, ...]), back first at backAlpha. Redrawn per frame
+ * while the camera turns (low tier only).
+ */
+export function drawDrumGrid(
+  g: Graphics,
+  rings: readonly DrumArcs[],
+  uFront: readonly number[],
+  uBack: readonly number[],
+  colour: number,
+  scale: number,
+  backAlpha: number,
+): void {
+  g.clear();
+  const w = gridLineWidth(scale);
+  for (const r of rings) strokeArc(g, r.back, w, colour, backAlpha);
+  for (let i = 0; i + 3 < uBack.length; i += 4) g.moveTo(uBack[i] ?? 0, uBack[i + 1] ?? 0).lineTo(uBack[i + 2] ?? 0, uBack[i + 3] ?? 0);
+  if (uBack.length > 0) g.stroke({ width: w, color: colour, alpha: backAlpha });
+  for (const r of rings) strokeArc(g, r.front, w, colour, 1);
+  for (let i = 0; i + 3 < uFront.length; i += 4) g.moveTo(uFront[i] ?? 0, uFront[i + 1] ?? 0).lineTo(uFront[i + 2] ?? 0, uFront[i + 3] ?? 0);
+  if (uFront.length > 0) g.stroke({ width: w, color: colour, alpha: 1 });
+}

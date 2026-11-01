@@ -54,17 +54,24 @@ import {
   drawGrid,
   drawGridProjected,
   drawWalls,
+  drawDrumGrid,
+  drawDrumWalls,
   drawWallsProjected,
   gridLineWidth,
   WALL_GLOW_PX,
   WALL_LINE_PX,
   wallPasses,
+  type DrumArcs,
   type WallPass,
 } from './grid';
+import { wrapCoord } from '../core/surface';
+import { GRID_SPACING } from './gridGeom';
 // Wave V3-G: render only tilt (project.ts, tiltScene.ts). Off takes the v3 path untouched.
-import { cameraFor, fitProjected, parseTiltKnob, projectNodes, type Camera } from './project';
+import { cameraFor, fitProjected, parseTiltKnob, projectNodes, TILT_DEG, type Camera } from './project';
 import { getTilt, setTilt, type TiltLevel } from './tilt';
 import { createTiltScene } from './tiltScene';
+// D13 phase C1: cylinder levels draw as a neon drum (drum.ts). Flat levels never touch it.
+import { BACK_ALPHA, drumCamera, drumProjectNodes, drumRectSegs, drumULines, fitDrum, followCamU, interpWrap, makeDrum, ringArcs, unwrapNear, type Drum } from './drum';
 import {
   backingSize,
   bloomResolution,
@@ -1095,6 +1102,13 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const lines = new Container({ label: 'lines' });
   const walls = new Graphics({ label: 'walls' });
   const wallGlow = new Graphics({ label: 'wallGlow' });
+  // D13 phase C1: cylinder obstacles (the rims replace the walls). Obstacles are wide, so they are
+  // projected as sampled outlines (drumRectSegs) and redrawn per frame while the camera turns, on
+  // cylinder levels with obstacles only: one crisp and one bloom Graphics.
+  const drumObs = new Graphics({ label: 'drumObs' });
+  const drumObsGlow = new Graphics({ label: 'drumObsGlow' });
+  drumObs.visible = false;
+  drumObsGlow.visible = false;
   const glowSprites = new Container({ label: 'glowSprites' });
   const entities = new Container({ label: 'entities' });
   const atlas = makeBulletAtlas(app);
@@ -1190,8 +1204,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const cueLayer = createFxSpriteLayer('bossCue', bossAtlas.texture, bossAtlas.frames, EXPOSE_SPRITE_CAP);
   const cueBuf = createSpriteBuf(EXPOSE_SPRITE_CAP);
 
-  bloomLayer.addChild(lattice.glow, wallGlow, wallPulse, wallFlash, comets, glowSprites, particles, trails, pulseLayer, enemyFxGlow, ringGlow);
-  lines.addChild(walls, floor, hazardLayer.container, enemyFx, entities, cueLayer.container, bullets, enemyBulletLayer.layer.container, rings);
+  bloomLayer.addChild(lattice.glow, wallGlow, drumObsGlow, wallPulse, wallFlash, comets, glowSprites, particles, trails, pulseLayer, enemyFxGlow, ringGlow);
+  lines.addChild(walls, drumObs, floor, hazardLayer.container, enemyFx, entities, cueLayer.container, bullets, enemyBulletLayer.layer.container, rings);
   gridLayer.addChild(lattice.dust, grid, lattice.lines);
   world.addChild(gridLayer, bloomLayer, lines);
   app.stage.addChild(world, sticks);
@@ -1217,6 +1231,24 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   // Tilt: the level last applied and its camera for the current arena (off: cam.on is false).
   let tiltLevel: TiltLevel = 'off';
   let cam: Camera = cameraFor(tiltLevel, arena.height);
+  // D13 phase C1: the drum of a cylinder level (null on flat levels), the u period for render
+  // interpolation (0 flat), the static rim and ring arcs, the low tier u lines and the comet's
+  // unwrapped u (its history never jumps across the seam).
+  let drum: Drum | null = null;
+  let wrapW = 0;
+  let drumSnap = true;
+  let drumRims: DrumArcs[] = [];
+  let drumRings: DrumArcs[] = [];
+  const drumUFront: number[] = [];
+  const drumUBack: number[] = [];
+  const drumObsFront: number[] = [];
+  const drumObsBack: number[] = [];
+  let drumObsCrisp: WallPass[] = [];
+  let drumObsSoft: WallPass[] = [];
+  let cometU = 0;
+  let cometUPrimed = false;
+  /** Render interpolation of an x (u) coordinate: the short way across the seam on a cylinder. */
+  const ix = (prev: number, cur: number, a: number): number => (wrapW > 0 ? interpWrap(prev, cur, a, wrapW) : interp(prev, cur, a));
   let fit: Fit = fitArena(arena.width, arena.height, { x: 0, y: 0, w: cssW, h: cssH });
   let bloomOn = true;
   let explicitBullets: BulletPoolLike | null = null;
@@ -1704,6 +1736,13 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   function redrawGrid(): void {
     // Standard and high draw the lattice instead; the v1 grid stays empty and hidden.
     if (latticeActive) return;
+    if (drum) {
+      // Cylinder on the low tier: static rings plus the u lines for the current camera angle.
+      drumULines(drum, GRID_SPACING, drumUFront, drumUBack);
+      drawDrumGrid(grid, drumRings, drumUFront, drumUBack, palette.grid, fit.scale, BACK_ALPHA);
+      gridRippling = false;
+      return;
+    }
     if (cam.on) {
       // Tilt on the low tier: the projected v1 grid, without the ripple bend (known gap).
       drawGridProjected(grid, gridSegs, palette.grid, fit.scale, cam);
@@ -1723,7 +1762,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
 
   /** Walls flat (off) or projected on the CPU (tilt), so they meet the projected lattice ends. */
   function wallsTo(g: Graphics, colour: number, passes: readonly WallPass[]): void {
-    if (cam.on) drawWallsProjected(g, arena, colour, passes, cam);
+    if (drum) drawDrumWalls(g, drumRims, colour, passes, BACK_ALPHA);
+    else if (cam.on) drawWallsProjected(g, arena, colour, passes, cam);
     else drawWalls(g, arena, colour, passes);
   }
 
@@ -1737,6 +1777,71 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       { width: (WALL_GLOW_PX * r.wallWidthMul * 1.6) / s, alpha: 0.35 },
       { width: (WALL_LINE_PX * r.wallWidthMul * 1.8) / s, alpha: 1 },
     ]);
+    redrawDrumObstacles(r);
+  }
+
+  /** Cylinder obstacle passes for the current neon and fit; the outlines follow in drawDrumObstacles. */
+  function redrawDrumObstacles(r: Readonly<NeonRender>): void {
+    drumObsCrisp = wallPasses(r.innerAlpha, r.wallWidthMul, fit.scale, 'crisp');
+    drumObsSoft = wallPasses(r.innerAlpha, r.wallWidthMul, fit.scale, 'bloom');
+    const on = drum !== null && arena.obstacles.length > 0;
+    if (!on && drumObs.visible) {
+      drumObs.clear();
+      drumObsGlow.clear();
+    }
+    drumObs.visible = on;
+    drumObsGlow.visible = on;
+  }
+
+  function strokeSegs(g: Graphics, segs: readonly number[], width: number, alpha: number): void {
+    if (segs.length < 4) return;
+    for (let i = 0; i + 3 < segs.length; i += 4) g.moveTo(segs[i] ?? 0, segs[i + 1] ?? 0).lineTo(segs[i + 2] ?? 0, segs[i + 3] ?? 0);
+    g.stroke({ width, color: palette.grid, alpha, cap: 'round', join: 'round' });
+  }
+
+  /** Cylinder with obstacles, per frame: every obstacle outline through the drum, back half dimmed. */
+  function drawDrumObstacles(d: Drum): void {
+    if (!drumObs.visible) return;
+    drumObs.clear();
+    drumObsGlow.clear();
+    for (const o of arena.obstacles) {
+      drumRectSegs(d, o.cx - o.w / 2, o.cy - o.h / 2, o.w, o.h, drumObsFront, drumObsBack);
+      for (const pass of drumObsCrisp) {
+        strokeSegs(drumObs, drumObsBack, pass.width, pass.alpha * BACK_ALPHA);
+        strokeSegs(drumObs, drumObsFront, pass.width, pass.alpha);
+      }
+      for (const pass of drumObsSoft) {
+        strokeSegs(drumObsGlow, drumObsBack, pass.width, pass.alpha * BACK_ALPHA);
+        strokeSegs(drumObsGlow, drumObsFront, pass.width, pass.alpha);
+      }
+    }
+  }
+
+  /** Cylinder: the rim arcs and the low tier v rings (camera angle invariant; tilt, arena or fit change only). */
+  function rebuildDrumArcs(d: Drum): void {
+    const hh = d.height / 2;
+    drumRims = [ringArcs(d, -hh), ringArcs(d, hh)];
+    drumRings = [];
+    for (let k = -Math.floor(hh / GRID_SPACING); k * GRID_SPACING < hh; k++) {
+      const v = k * GRID_SPACING;
+      if (v > -hh && v < hh) drumRings.push(ringArcs(d, v));
+    }
+  }
+
+  /** Level surface: a drum for a cylinder, nothing for flat. The camera snaps to the ship on the next frame. */
+  function applySurface(def: LevelDef): void {
+    if (def.surface === 'cylinder') {
+      drum = makeDrum(arena.width, arena.height, TILT_DEG[tiltLevel]);
+      drum.camU = wrapCoord(arena.spawnPoint.x, drum.width);
+      wrapW = drum.width;
+      drumSnap = true;
+    } else {
+      drum = null;
+      wrapW = 0;
+    }
+    cometUPrimed = false;
+    lattice.setDrum(drum);
+    lattice.setCamera(drum || !cam.on ? null : cam);
   }
 
   function redrawArena(): void {
@@ -1800,7 +1905,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
 
   function applyFit(): void {
     const rect = playRect ?? { x: 0, y: 0, w: cssW, h: cssH };
-    fit = cam.on ? fitProjected(arena.width, arena.height, rect, cam) : fitArena(arena.width, arena.height, rect);
+    if (drum) rebuildDrumArcs(drum);
+    fit = drum ? fitDrum(drum, rect) : cam.on ? fitProjected(arena.width, arena.height, rect, cam) : fitArena(arena.width, arena.height, rect);
     world.position.set(fit.x + shakeOff.x, fit.y + shakeOff.y);
     world.scale.set(fit.scale);
     const r = screenRectInWorld(cssW, cssH, fit);
@@ -2319,7 +2425,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   function planHazardAt(w: World, i: number, alpha: number, timeSec: number): void {
     const h = hazardIn;
     h.type = w.a[i] ?? 0;
-    h.x = interp(w.prevX[i] ?? 0, w.x[i] ?? 0, alpha);
+    h.x = ix(w.prevX[i] ?? 0, w.x[i] ?? 0, alpha);
     h.y = interp(w.prevY[i] ?? 0, w.y[i] ?? 0, alpha);
     h.rot = w.rot[i] ?? 0;
     h.radius = w.radius[i] ?? 0;
@@ -2651,6 +2757,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
 
   function hideComet(): void {
     resetComet(comet);
+    cometUPrimed = false;
     cometHalo.visible = false;
     cometCore.visible = false;
   }
@@ -3597,13 +3704,14 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       if (head < 0) continue;
       const slot = w.a[head] ?? -1;
       if (slot < 0 || slot >= SNAKE_SLOTS) continue;
-      snakePts[0] = interp(w.prevX[head] ?? 0, w.x[head] ?? 0, alpha);
+      snakePts[0] = ix(w.prevX[head] ?? 0, w.x[head] ?? 0, alpha);
       snakePts[1] = interp(w.prevY[head] ?? 0, w.y[head] ?? 0, alpha);
       let n = 1;
       for (let sgi = 0; sgi < SNAKE_SEGMENTS; sgi++) {
         const sid = st.snakeSegs[slot * SNAKE_SEGMENTS + sgi] ?? -1;
         if (sid < 0 || w.alive[sid] !== 1 || w.a[sid] !== head) continue;
-        snakePts[n * 2] = interp(w.prevX[sid] ?? 0, w.x[sid] ?? 0, alpha);
+        // Cylinder: each segment at its image nearest the one before, so the body never spans the seam.
+        snakePts[n * 2] = unwrapNear(snakePts[n * 2 - 2] ?? 0, ix(w.prevX[sid] ?? 0, w.x[sid] ?? 0, alpha), wrapW);
         snakePts[n * 2 + 1] = interp(w.prevY[sid] ?? 0, w.y[sid] ?? 0, alpha);
         n++;
       }
@@ -3629,7 +3737,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       // GW5: near its well a stream of glints flows from the whirlpool to the head.
       const well = st.snakeWell[slot] ?? -1;
       if (well >= 0 && w.alive[well] === 1 && w.kind[well] === KIND_GRAVITY_WELL) {
-        const wx = interp(w.prevX[well] ?? 0, w.x[well] ?? 0, alpha);
+        const wx = unwrapNear(snakePts[0] ?? 0, ix(w.prevX[well] ?? 0, w.x[well] ?? 0, alpha), wrapW);
         const wy = interp(w.prevY[well] ?? 0, w.y[well] ?? 0, alpha);
         const hx = snakePts[0] ?? 0;
         const hy = snakePts[1] ?? 0;
@@ -4074,7 +4182,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         v.tint = tint;
         viewTint[i] = tint;
       }
-      let x = interp(w.prevX[i] ?? 0, w.x[i] ?? 0, alpha);
+      let x = ix(w.prevX[i] ?? 0, w.x[i] ?? 0, alpha);
       let y = interp(w.prevY[i] ?? 0, w.y[i] ?? 0, alpha);
       if (kind === KIND_NUM.blink || isBoss) {
         // A Blink jump (and a Mirage warp) is one sim step: never draw it sliding across the arena.
@@ -4449,7 +4557,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         let y: number;
         if (vis.orient === 'radial' && prevX !== undefined && prevY !== undefined) {
           // Orbit blades are placed by the sim each step: interpolate, do not extrapolate.
-          x = interp(prevX[i] ?? 0, pool.x[i] ?? 0, alpha);
+          x = ix(prevX[i] ?? 0, pool.x[i] ?? 0, alpha);
           y = interp(prevY[i] ?? 0, pool.y[i] ?? 0, alpha);
         } else {
           x = bulletRenderPos(pool.x[i] ?? 0, vx, alpha, SIM_DT);
@@ -4540,14 +4648,18 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     drawGhost();
     drawDashGhosts();
     drawBossCue();
-    const shipX = interp(w.prevX[0] ?? 0, w.x[0] ?? 0, a);
+    const shipX = ix(w.prevX[0] ?? 0, w.x[0] ?? 0, a);
     const shipY = interp(w.prevY[0] ?? 0, w.y[0] ?? 0, a);
+    if (drum && w.alive[0] === 1) {
+      drum.camU = followCamU(drum.camU, shipX, drumSnap ? Number.POSITIVE_INFINITY : fxDt, drum.width);
+      drumSnap = false;
+    }
     // Ship trail: reads the sim velocity, writes only render particles and the comet ribbon.
     if (w.alive[0] === 1 && shipActive(w)) {
       const svx = w.vx[0] ?? 0;
       const svy = w.vy[0] ?? 0;
       emitShipTrail(shipX, shipY, svx, svy, fxDt, turboRate(turboK), turboK > 0 ? mixRgb(palette.ship, palette.yellow, 0.5 * turboK) : -1);
-      drawComet(shipX, shipY, svx, svy, fxDt);
+      drawComet(cometX(shipX), shipY, svx, svy, fxDt);
       // Ship wake through the lattice above 120 u/s.
       const wake = sim ? wakeAccel(Math.hypot(svx, svy)) : 0;
       if (sim && wake > 0) addForce(sim, shipX, shipY, WAKE_RADIUS, wake);
@@ -4571,7 +4683,13 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     governLattice(dt, now / 1000);
     stepParticles(dt);
     stats.particles = liveParticleCount();
-    if (cam.on) {
+    if (drum) {
+      if (!latticeActive) redrawGrid();
+      drawDrumObstacles(drum);
+      projectDrumFrame(drum);
+      app.render();
+      tiltScene.restore();
+    } else if (cam.on) {
       projectTilt();
       app.render();
       tiltScene.restore();
@@ -4590,8 +4708,27 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   function applyTilt(): void {
     tiltLevel = getTilt();
     cam = cameraFor(tiltLevel, arena.height);
-    lattice.setCamera(cam.on ? cam : null);
+    if (drum) drum.cam = drumCamera(TILT_DEG[tiltLevel], arena.height);
+    lattice.setCamera(drum || !cam.on ? null : cam);
     applyFit();
+  }
+
+  /** Cylinder only, just before the render: the comet ribbon in place, then the drum scene pass. */
+  function projectDrumFrame(d: Drum): void {
+    // The ribbon is rewritten in full from its own state every frame, so no restore is needed.
+    if (cometHalo.visible) {
+      drumProjectNodes(cometPositions, null, cometPositions.length >> 1, d, null);
+      cometGeom.getBuffer('aPosition').update();
+    }
+    tiltScene.projectDrum(d);
+  }
+
+  /** The comet's u: on a cylinder the image nearest its last head, so the ribbon never spans the seam. */
+  function cometX(x: number): number {
+    if (!(wrapW > 0)) return x;
+    cometU = cometUPrimed ? unwrapNear(cometU, x, wrapW) : x;
+    cometUPrimed = true;
+    return cometU;
   }
 
   /** Tilt only, just before the render: the comet ribbon in place, then the scene pass. */
@@ -4647,6 +4784,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     tiltLevel = getTilt();
     cam = cameraFor(tiltLevel, arena.height);
     lattice.setCamera(cam.on ? cam : null);
+    applySurface(def);
     applyLatticeTier(getEffectsTier());
     lattice.seedDust(arena);
     applyFit();
