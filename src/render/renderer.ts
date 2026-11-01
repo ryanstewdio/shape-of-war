@@ -49,7 +49,22 @@ import type { World } from '../game/world';
 import type { ArenaDef, LevelDef } from '../levelgen/leveldef';
 import { geomAlpha, invulnAlpha } from './blink';
 import { hash01 } from './color';
-import { arenaGridSegments, drawGrid, drawWalls, gridLineWidth, WALL_GLOW_PX, WALL_LINE_PX, wallPasses } from './grid';
+import {
+  arenaGridSegments,
+  drawGrid,
+  drawGridProjected,
+  drawWalls,
+  drawWallsProjected,
+  gridLineWidth,
+  WALL_GLOW_PX,
+  WALL_LINE_PX,
+  wallPasses,
+  type WallPass,
+} from './grid';
+// Wave V3-G: render only tilt (project.ts, tiltScene.ts). Off takes the v3 path untouched.
+import { cameraFor, fitProjected, parseTiltKnob, projectNodes, type Camera } from './project';
+import { getTilt, setTilt, type TiltLevel } from './tilt';
+import { createTiltScene } from './tiltScene';
 import {
   backingSize,
   bloomResolution,
@@ -1173,6 +1188,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   initParticles(particles, streak);
 
   const knobs = parseBloomKnobs(window.location.search);
+  const tiltKnob = parseTiltKnob(window.location.search);
+  if (tiltKnob !== null) setTilt(tiltKnob);
   const bloom = new AdvancedBloomFilter({
     threshold: currentRender.bloomThreshold,
     bloomScale: currentRender.bloomStrength,
@@ -1187,6 +1204,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let cssH = size.h;
   let playRect: PlayRect | null = null;
   let arena: ArenaDef = DEFAULT_ARENA;
+  // Tilt: the level last applied and its camera for the current arena (off: cam.on is false).
+  let tiltLevel: TiltLevel = 'off';
+  let cam: Camera = cameraFor(tiltLevel, arena.height);
   let fit: Fit = fitArena(arena.width, arena.height, { x: 0, y: 0, w: cssW, h: cssH });
   let bloomOn = true;
   let explicitBullets: BulletPoolLike | null = null;
@@ -1341,6 +1361,23 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let bossSeen = false;
   const bossUnder = new Graphics({ label: 'bossUnder' });
   const bossOver = new Graphics({ label: 'bossOver' });
+  // Wave V3-G tilt pass: what gets projected between drawing and app.render() (tiltScene.ts). The
+  // lattice projects its own nodes, the walls and v1 grid are redrawn projected, the HUD and the
+  // sticks (on the stage, outside world) are never projected.
+  const tiltScene = createTiltScene({
+    billboardParents: [entities, floor, glowSprites, fluid.layer],
+    particles: [
+      { layer: bullets, scale: false },
+      { layer: trails, scale: false },
+      { layer: particles, scale: true },
+      { layer: pulseLayer, scale: true },
+      { layer: lattice.dust, scale: false },
+      { layer: hazardLayer.container, scale: true },
+      { layer: cueLayer.container, scale: true },
+      { layer: enemyBulletLayer.layer.container, scale: true },
+    ],
+    freeform: [rings, ringGlow, enemyFx, enemyFxGlow, wallFlash, sawG, novaG, stormG, droneFx, bossUnder, bossOver],
+  });
   // Look v33: the damaged boss body. A copy of the body context with the removed arcs cut out of
   // the geometry (bossDamage.ts damagedSpec), and its glow texture, rebuilt only when the slot, the
   // stage or the neon settings change. Keyed by slot x 3 + stage.
@@ -1655,6 +1692,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   function redrawGrid(): void {
     // Standard and high draw the lattice instead; the v1 grid stays empty and hidden.
     if (latticeActive) return;
+    if (cam.on) {
+      // Tilt on the low tier: the projected v1 grid, without the ripple bend (known gap).
+      drawGridProjected(grid, gridSegs, palette.grid, fit.scale, cam);
+      gridRippling = false;
+      return;
+    }
     if (ripples.length === 0) {
       drawGrid(grid, gridSegs, palette.grid, fit.scale);
       gridRippling = false;
@@ -1666,13 +1709,19 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     gridRippling = true;
   }
 
+  /** Walls flat (off) or projected on the CPU (tilt), so they meet the projected lattice ends. */
+  function wallsTo(g: Graphics, colour: number, passes: readonly WallPass[]): void {
+    if (cam.on) drawWallsProjected(g, arena, colour, passes, cam);
+    else drawWalls(g, arena, colour, passes);
+  }
+
   function redrawWalls(r: Readonly<NeonRender>): void {
-    drawWalls(walls, arena, palette.grid, wallPasses(r.innerAlpha, r.wallWidthMul, fit.scale, 'crisp'));
-    drawWalls(wallGlow, arena, palette.grid, wallPasses(r.innerAlpha, r.wallWidthMul, fit.scale, 'bloom'));
+    wallsTo(walls, palette.grid, wallPasses(r.innerAlpha, r.wallWidthMul, fit.scale, 'crisp'));
+    wallsTo(wallGlow, palette.grid, wallPasses(r.innerAlpha, r.wallWidthMul, fit.scale, 'bloom'));
     // Pulse layer: white geometry, coloured per frame by tint and driven by alpha. A wide soft
     // pass plus a core pass, so it reads as glow on the fallback path too (no filter there).
     const s = Math.max(fit.scale, 0.01);
-    drawWalls(wallPulse, arena, 0xffffff, [
+    wallsTo(wallPulse, 0xffffff, [
       { width: (WALL_GLOW_PX * r.wallWidthMul * 1.6) / s, alpha: 0.35 },
       { width: (WALL_LINE_PX * r.wallWidthMul * 1.8) / s, alpha: 1 },
     ]);
@@ -1739,7 +1788,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
 
   function applyFit(): void {
     const rect = playRect ?? { x: 0, y: 0, w: cssW, h: cssH };
-    fit = fitArena(arena.width, arena.height, rect);
+    fit = cam.on ? fitProjected(arena.width, arena.height, rect, cam) : fitArena(arena.width, arena.height, rect);
     world.position.set(fit.x + shakeOff.x, fit.y + shakeOff.y);
     world.scale.set(fit.scale);
     const r = screenRectInWorld(cssW, cssH, fit);
@@ -4424,6 +4473,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   }
 
   function draw(w: World, alpha: number): void {
+    if (getTilt() !== tiltLevel) applyTilt();
     const now = performance.now();
     const dt = lastDraw === 0 ? 0 : (now - lastDraw) / 1000;
     lastDraw = now;
@@ -4478,7 +4528,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     governLattice(dt, now / 1000);
     stepParticles(dt);
     stats.particles = liveParticleCount();
-    app.render();
+    if (cam.on) {
+      projectTilt();
+      app.render();
+      tiltScene.restore();
+    } else app.render();
     if (retiredTextures.length > 0) {
       for (const t of retiredTextures) t.destroy(true);
       retiredTextures = [];
@@ -4487,6 +4541,24 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       for (const c of retiredContexts) c.destroy();
       retiredContexts = [];
     }
+  }
+
+  /** Tilt level changed (setTilt): new camera, projected or flat walls and lattice, new fit. */
+  function applyTilt(): void {
+    tiltLevel = getTilt();
+    cam = cameraFor(tiltLevel, arena.height);
+    lattice.setCamera(cam.on ? cam : null);
+    applyFit();
+  }
+
+  /** Tilt only, just before the render: the comet ribbon in place, then the scene pass. */
+  function projectTilt(): void {
+    // The ribbon is rewritten in full from its own state every frame, so no restore is needed.
+    if (cometHalo.visible) {
+      projectNodes(cometPositions, null, cometPositions.length >> 1, cam);
+      cometGeom.getBuffer('aPosition').update();
+    }
+    tiltScene.project(cam);
   }
 
   function resize(w: number, h: number, d: number): void {
@@ -4529,6 +4601,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     gov = initialGovernor();
     avgFrameMs = 0;
     lattice.clear();
+    tiltLevel = getTilt();
+    cam = cameraFor(tiltLevel, arena.height);
+    lattice.setCamera(cam.on ? cam : null);
     applyLatticeTier(getEffectsTier());
     lattice.seedDust(arena);
     applyFit();

@@ -7,6 +7,11 @@
 // Impulses, rings and forces all act by moving the previous position (a velocity change), so the
 // integrator stays one loop. Every array is allocated in createLatticeSim; stepping allocates
 // nothing.
+// Wave V3-G z channel (render only tilt): a lift field uz out of the floor, off by default. When
+// on, the same impulses drive it: kills and ring fronts kick it up (a shock ripples in depth as
+// the springs carry it), wells pull it down in a funnel (deepest at the centre) and pushing forces
+// lift it. Same springs, anchor, damping and clamps as the in plane field, bounded by maxZ. While
+// off nothing reads or writes it, so the in plane path is unchanged.
 import type { Ambient } from './ambient';
 import type { LatticeLayout } from './layout';
 
@@ -33,6 +38,11 @@ export const MAX_RINGS = 4;
 export const MAX_FORCES = 5;
 /** Share of a ring's strength left at the end of its life (see ringFade). */
 export const RING_END_FRAC = 0.25;
+/** Z channel: lift per u/s of a kick, and per u/s^2 of a force (wells negative). */
+export const Z_KICK_GAIN = 1;
+export const Z_FORCE_GAIN = 0.5;
+/** Z clamp as a multiple of the in plane displacement clamp. */
+export const Z_DISP_MUL = 1.5;
 /** Frame dt is clamped here before it enters the accumulator. */
 const MAX_FRAME_DT = 0.1;
 
@@ -74,6 +84,12 @@ export interface LatticeSim {
   forceN: number;
   /** Sub steps taken since creation (tests and stats). */
   steps: number;
+  /** Z channel on (tilt on). Off: uz and pz stay zero and are never touched. */
+  zOn: boolean;
+  /** Current and previous lift per free node, arena units toward the viewer. */
+  uz: Float32Array;
+  pz: Float32Array;
+  readonly maxZ: number;
 }
 
 /** Pure: the displacement clamp for a spacing. */
@@ -119,7 +135,19 @@ export function createLatticeSim(layout: LatticeLayout): LatticeSim {
     forceS: new Float32Array(MAX_FORCES),
     forceN: 0,
     steps: 0,
+    zOn: false,
+    uz: new Float32Array(n),
+    pz: new Float32Array(n),
+    maxZ: maxDispFor(layout.spacing) * Z_DISP_MUL,
   };
+}
+
+/** Turn the z channel on or off. Either way the lift field restarts at rest. */
+export function setZEnabled(sim: LatticeSim, on: boolean): void {
+  sim.zOn = on;
+  sim.uz.fill(0);
+  sim.pz.fill(0);
+  sim.dirty = true;
 }
 
 /** Return every node to rest and drop pending impulses, rings and forces. */
@@ -128,6 +156,8 @@ export function resetLattice(sim: LatticeSim): void {
   sim.uy.fill(0);
   sim.px.fill(0);
   sim.py.fill(0);
+  sim.uz.fill(0);
+  sim.pz.fill(0);
   sim.impN = 0;
   sim.ringAge.fill(1);
   sim.ringLife.fill(0);
@@ -270,6 +300,7 @@ function kick(sim: LatticeSim, id: number, dx: number, dy: number, d: number, dv
   const m = (dv * SUB_DT) / d;
   sim.px[id] = (sim.px[id] ?? 0) - dx * m;
   sim.py[id] = (sim.py[id] ?? 0) - dy * m;
+  if (sim.zOn) sim.pz[id] = (sim.pz[id] ?? 0) - dv * SUB_DT * Z_KICK_GAIN;
 }
 
 function impulseVisit(sim: LatticeSim, id: number, dx: number, dy: number, d: number, strength: number, radius: number): void {
@@ -287,7 +318,18 @@ function ringVisit(sim: LatticeSim, id: number, dx: number, dy: number, d: numbe
   kick(sim, id, dx, dy, d, perStep * Math.cos((off * Math.PI) / (2 * bandW)));
 }
 
+/** Pure: z force profile, 1 at the centre falling to 0 at the rim (a funnel for a well). */
+export function zForceProfile(q: number): number {
+  if (!(q >= 0) || !(q < 1)) return 0;
+  const r = 1 - q;
+  return r * r;
+}
+
 function forceVisit(sim: LatticeSim, id: number, dx: number, dy: number, d: number, accel: number, radius: number): void {
+  if (sim.zOn) {
+    const az = accel * Z_FORCE_GAIN * zForceProfile(d / radius);
+    sim.pz[id] = (sim.pz[id] ?? 0) - az * SUB_DT * SUB_DT;
+  }
   const a = accel * forceProfile(d / radius);
   if (a === 0 || d < 1e-3) return;
   const m = (a * SUB_DT * SUB_DT) / d;
@@ -400,14 +442,90 @@ function integrate(sim: LatticeSim): void {
   sim.uy = py;
   sim.px = ux;
   sim.py = uy;
+  if (sim.zOn) {
+    const pz2 = integrateZ(sim);
+    if (pz2 > peak) peak = pz2;
+  }
   sim.dirty = true;
   if (peak < SLEEP_EPS * SLEEP_EPS && sim.impN === 0 && sim.forceN === 0 && !ringsLive(sim)) {
     sim.ux.fill(0);
     sim.uy.fill(0);
     sim.px.fill(0);
     sim.py.fill(0);
+    sim.uz.fill(0);
+    sim.pz.fill(0);
     sim.awake = false;
   }
+}
+
+/** Verlet for the lift field, same terms and clamps as the in plane field. Returns the squared peak. */
+function integrateZ(sim: LatticeSim): number {
+  const L = sim.layout;
+  const n = L.free;
+  const nbr = L.nbr;
+  const uz = sim.uz;
+  const pz = sim.pz;
+  const k = sim.k;
+  const a = sim.anchor;
+  const keep = 1 - DAMPING;
+  const maxZ = sim.maxZ;
+  const maxV = sim.maxDisp * 0.5;
+  let peak = 0;
+  for (let i = 0; i < n; i++) {
+    const z = uz[i] ?? 0;
+    let lz = 0;
+    const b = i * 4;
+    for (let q = 0; q < 4; q++) {
+      const j = nbr[b + q] ?? -1;
+      if (j < 0) continue;
+      lz += (j < n ? (uz[j] ?? 0) : 0) - z;
+    }
+    let vz = (z - (pz[i] ?? 0)) * keep + k * lz - a * z;
+    if (vz > maxV) vz = maxV;
+    else if (vz < -maxV) vz = -maxV;
+    let nz = z + vz;
+    if (nz > maxZ) nz = maxZ;
+    else if (nz < -maxZ) nz = -maxZ;
+    pz[i] = nz;
+    const m2 = nz * nz;
+    if (m2 > peak) peak = m2;
+    const s2 = vz * vz;
+    if (s2 > peak) peak = s2;
+  }
+  sim.uz = pz;
+  sim.pz = uz;
+  return peak;
+}
+
+/**
+ * Write the drawn lift per node (blending the last two sub steps by alpha) into out: free nodes
+ * from the field, pinned ends 0. Writes zeros while the channel is off.
+ */
+export function writeLift(sim: LatticeSim, out: Float32Array, alpha: number): void {
+  const L = sim.layout;
+  const n = L.free;
+  if (!sim.zOn) {
+    out.fill(0, 0, Math.min(out.length, L.count));
+    return;
+  }
+  const uz = sim.uz;
+  const pz = sim.pz;
+  const t = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
+  for (let i = 0; i < n; i++) {
+    const p = pz[i] ?? 0;
+    out[i] = p + ((uz[i] ?? 0) - p) * t;
+  }
+  for (let i = n; i < L.count; i++) out[i] = 0;
+}
+
+/** Pure: largest absolute lift over the free nodes (tests and the dev panel). */
+export function maxLift(sim: LatticeSim): number {
+  let m = 0;
+  for (let i = 0; i < sim.layout.free; i++) {
+    const z = Math.abs(sim.uz[i] ?? 0);
+    if (z > m) m = z;
+  }
+  return m;
 }
 
 /**
