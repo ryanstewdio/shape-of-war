@@ -3,7 +3,8 @@
 // Pure: no PRNG, no DOM.
 
 /** v1 has a single kind. v2 adds 'cylinder' | 'torus' | 'sphere' | 'capsule' | 'twistedBand'. */
-export type SurfaceKind = 'flat';
+/** V3-H (D13) contract stub by Fable: 'cylinder' wraps u (docs/09 section 2.2). Forge implements it. */
+export type SurfaceKind = 'flat' | 'cylinder';
 
 export interface Vec3 {
   x: number;
