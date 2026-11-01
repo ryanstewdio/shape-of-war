@@ -42,6 +42,8 @@ export interface Events {
   'game:pause': void;
   'game:resume': void;
   'game:quit': void;
+  /** Ledger to Chorus (wave 6 contract stub): the visible screen changed. title and menu play the menu theme. */
+  'ui:screen': { screen: 'title' | 'menu' | 'settings' | 'play' | 'results' };
   'game:over': { score: number; stars: 0 | 1 | 2 | 3; levelIndex: number; mode: 'adventure' | 'endless' };
   'hud:score': { score: number; multiplier: number; lives: number; bombs: number; superCharge: number };
   'viewport:changed': ViewportInfo;
