@@ -5,8 +5,12 @@
 // the spin, so it reads as a chainsaw tooth. Pure maths only; the renderer owns the Graphics.
 // GW3: the saw is a bar that bends out toward the aim (Forge places the spikes and gives vx, vy as
 // the track tangent). Each tooth lies along its tangent with length spikeLen; the ghost smear is no
-// longer drawn (it read as a white backdrop behind the ship). While the saw level is above 0 a faint
-// bright chain line runs through consecutive teeth of each ring, sorted by phase (sawChain).
+// longer drawn (it read as a white backdrop behind the ship). While the saw level is above 0 a chain
+// line runs through consecutive teeth of each ring, sorted by phase (sawChain).
+// GW4: the near white chain line closed round the ship (the remaining white backdrop) is gone. The
+// bar is a glowing outline in the weapon hue along the chain line, teeth are metallic triangles in
+// the weapon hue with a white tip (toothTip), SPIKE_GHOSTS motion blur copies slide back along the
+// track (sawTrackGhost), and saw hits throw 2 to 4 sparks at the tooth (sawSparkCount, nearTooth).
 import { SAW_SPIKE_MAX, SPIKE_LEN } from '../game/weapons';
 
 function fin(v: number, d: number): number {
@@ -19,11 +23,18 @@ export const SPIKE_MAX = SAW_SPIKE_MAX; // GW3 glue: bar teeth top out at 40 u
 /** Half width of the triangle base at rest; a stretched tooth narrows to SPIKE_THIN of that. */
 export const SPIKE_HALF = 5;
 export const SPIKE_THIN = 0.7;
-/** Ghost copies behind the spin, and the angle (rad round the ship) between copies at full stretch. */
+/** GW4 motion blur: ghost copies along the track behind each tooth, the gap (u) between copies at full saw, and their alphas (x the saw level). */
 export const SPIKE_GHOSTS = 2;
-export const SPIKE_GHOST_STEP = 0.14;
-/** Ghost alphas (multiplied by the stretch share). */
-export const SPIKE_GHOST_ALPHA: readonly number[] = [0.42, 0.2];
+export const SPIKE_GHOST_GAP = 9;
+export const SPIKE_GHOST_ALPHA: readonly number[] = [0.38, 0.17];
+/** GW4 tooth tip: the front share of a tooth drawn white hot. */
+export const SPIKE_TIP = 0.32;
+/** GW4 bar outline: glow and line widths (u) in the weapon hue. */
+export const SAW_BAR_GLOW_W = 7;
+export const SAW_BAR_LINE_W = 1.8;
+/** GW4 hit sparks at the bar: 2 to 4 per hit. */
+export const SAW_SPARKS_MIN = 2;
+export const SAW_SPARKS_MAX = 4;
 
 /** Pure: stretch share 0 (rest) to 1 (full saw) of a spike of length len. */
 export function spikeStretch(len: number): number {
@@ -61,34 +72,65 @@ export function spikeTriangle(x: number, y: number, vx: number, vy: number, len:
   return out;
 }
 
-/** Pure: spin sign of a spike at (x, y) moving (vx, vy) round the ship at (sx, sy): 1, -1 or 0. */
-export function spikeSpin(sx: number, sy: number, x: number, y: number, vx: number, vy: number): number {
-  const c = (x - sx) * vy - (y - sy) * vx;
-  return c > 1e-9 ? 1 : c < -1e-9 ? -1 : 0;
-}
-
 export interface SpikePose {
   x: number;
   y: number;
-  vx: number;
-  vy: number;
 }
 
 /**
- * Pure: ghost copy k (1 based) of a spike: its position and tangent rotated round the ship at
- * (sx, sy) back against the spin by k x SPIKE_GHOST_STEP x stretch.
+ * Pure: motion blur ghost k (1 based) of a tooth at (x, y) moving along the unit track direction
+ * (vx, vy): the same tooth slid back along the track (not turned round the ship) by k x
+ * SPIKE_GHOST_GAP x level. A zero direction slides along -x.
  */
-export function spikeGhost(sx: number, sy: number, x: number, y: number, vx: number, vy: number, k: number, stretch: number, out: SpikePose): SpikePose {
-  const a = -spikeSpin(sx, sy, x, y, vx, vy) * k * SPIKE_GHOST_STEP * Math.max(0, Math.min(1, fin(stretch, 0)));
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  const dx = x - sx;
-  const dy = y - sy;
-  out.x = sx + dx * c - dy * s;
-  out.y = sy + dx * s + dy * c;
-  out.vx = vx * c - vy * s;
-  out.vy = vx * s + vy * c;
+export function sawTrackGhost(x: number, y: number, vx: number, vy: number, k: number, level: number, out: SpikePose): SpikePose {
+  const m = Math.hypot(fin(vx, 0), fin(vy, 0));
+  const tx = m > 1e-9 ? vx / m : 1;
+  const ty = m > 1e-9 ? vy / m : 0;
+  const d = Math.max(0, fin(k, 0)) * SPIKE_GHOST_GAP * Math.max(0, Math.min(1, fin(level, 0)));
+  out.x = fin(x, 0) - tx * d;
+  out.y = fin(y, 0) - ty * d;
   return out;
+}
+
+/**
+ * Pure: the white hot tip of a tooth triangle tri (tip, base, base as from spikeTriangle), written
+ * into out as a smaller triangle: the tip and the points SPIKE_TIP of the way down each side.
+ */
+export function toothTip(tri: Float32Array, out: Float32Array): Float32Array {
+  const tx = tri[0] ?? 0;
+  const ty = tri[1] ?? 0;
+  out[0] = tx;
+  out[1] = ty;
+  out[2] = tx + ((tri[2] ?? 0) - tx) * SPIKE_TIP;
+  out[3] = ty + ((tri[3] ?? 0) - ty) * SPIKE_TIP;
+  out[4] = tx + ((tri[4] ?? 0) - tx) * SPIKE_TIP;
+  out[5] = ty + ((tri[5] ?? 0) - ty) * SPIKE_TIP;
+  return out;
+}
+
+/** Pure: sparks for saw hit number seq: 2 to 4, cycling. */
+export function sawSparkCount(seq: number): number {
+  const n = SAW_SPARKS_MAX - SAW_SPARKS_MIN + 1;
+  return SAW_SPARKS_MIN + ((((seq | 0) % n) + n) % n);
+}
+
+/** A saw hit counts as on the bar within this many u of a tooth centre. */
+export const SAW_SPARK_REACH = 34;
+
+/**
+ * Pure: true when a hit at (hx, hy) lands within reach u of any of the count teeth stored in xs, ys
+ * from index from. Allocates nothing.
+ */
+export function nearTooth(hx: number, hy: number, xs: Float32Array, ys: Float32Array, from: number, count: number, reach: number): boolean {
+  const r2 = reach * reach;
+  const f = Math.max(0, from | 0);
+  const m = Math.max(f, Math.min(f + (count | 0), xs.length, ys.length));
+  for (let i = f; i < m; i++) {
+    const dx = hx - (xs[i] ?? 0);
+    const dy = hy - (ys[i] ?? 0);
+    if (dx * dx + dy * dy <= r2) return true;
+  }
+  return false;
 }
 
 // Chain line (GW3)

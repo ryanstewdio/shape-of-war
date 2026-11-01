@@ -317,17 +317,16 @@ import {
   createNovaSnakeState,
   NOVA_SNAKE_CORE_A,
   NOVA_SNAKE_CORE_W,
-  NOVA_SNAKE_DOTS,
+  NOVA_SNAKE_GLINT_SIZE,
+  NOVA_SNAKE_GLINTS,
   NOVA_SNAKE_GLOW_W,
   NOVA_SNAKE_TRACK,
   novaSnakeCount,
-  novaSnakeDot,
-  novaSnakeDotAlpha,
+  novaSnakeGlintShare,
   novaSnakeGlow,
   novaSnakeMark,
   novaSnakeSweep,
   polyAt,
-  resetNovaSnakeState,
 } from './novaSnake';
 import { BOSS_IDS } from '../levelgen/leveldef';
 import {
@@ -519,9 +518,12 @@ import {
   novaCoreFlare,
   novaCycleStops,
   novaEvent,
+  novaColour,
+  novaGlintSpot,
   novaGrow,
-  novaPulse,
   novaShift,
+  NOVA_GLINT_SIZE,
+  NOVA_GLINTS,
   novaSlotFor,
   novaStreamColour,
   novaWhite,
@@ -567,13 +569,34 @@ import {
   emergeTrailAlpha,
   onWellArrive,
   onWellSpawn,
-  resetArriveState,
-  resetEmergeState,
   stepArrive,
   stepEmerge,
   type DustPoint,
 } from './wellArrive';
-import { SAW_CHAIN_MAX, sawChain, sawChainAlpha, spikeDrawLen, spikeHalfWidth, spikeStretch, spikeTriangle } from './spikeSaw';
+import {
+  nearTooth,
+  SAW_SPARK_REACH,
+  SAW_BAR_GLOW_W,
+  SAW_BAR_LINE_W,
+  SAW_CHAIN_MAX,
+  sawChain,
+  sawChainAlpha,
+  sawSparkCount,
+  sawTrackGhost,
+  SPIKE_GHOST_ALPHA,
+  SPIKE_GHOSTS,
+  spikeDrawLen,
+  spikeHalfWidth,
+  spikeStretch,
+  spikeTriangle,
+  toothTip,
+  type SpikePose,
+} from './spikeSaw';
+// GW4 fluid plus crystal: the nova shader quads, gem glints and the one well reset.
+import { createGlint, GLINT_CORE, GLINT_STAR_PTS, glintAt, glintSize, glintStar } from './gemGlint';
+import { fluidShaderOn } from './wellFluid';
+import { createWellFluidView, type FluidQuadParams } from './wellFluidView';
+import { resetWellVisuals } from './wellReset';
 import {
   createShellState,
   onBossShield,
@@ -1247,10 +1270,35 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   // Look GW2: well arrival and snake emergence state, the chainsaw layer and the boss shell.
   const arrive = createArriveState();
   const emerge = createEmergeState();
+  const wellVisuals = { nova, arrive, emerge, snakes: novaSnakes };
   const dustPt: DustPoint = { x: 0, y: 0, a: 0 };
   const sawG = new Graphics({ label: 'spikeSaw' });
   let sawShown = false;
   const sawTri = new Float32Array(6);
+  // GW4 saw scratch: the white tip triangle and a motion blur ghost pose.
+  const sawTip = new Float32Array(6);
+  const sawGhost: SpikePose = { x: 0, y: 0 };
+  // GW4: the nova shader quads (Standard and High), their per frame parameters, and glint scratch.
+  const fluid = createWellFluidView();
+  const fluidP: FluidQuadParams = {
+    x: 0,
+    y: 0,
+    reach: 1,
+    timeSec: 0,
+    spin: 1,
+    seed: 0,
+    alpha: 1,
+    core: 1,
+    glow: 1,
+    white: NOVA_WHITE,
+    hue0: 0xffffff,
+    hue1: 0xffffff,
+    hue2: 0xffffff,
+    hue3: 0xffffff,
+  };
+  const glint = createGlint();
+  const glintPts = new Float32Array(GLINT_STAR_PTS * 2);
+  const glintPt = { x: 0, y: 0 };
   // GW3 chain line scratch: per ring (2) the teeth positions and phases, the sort order and counts.
   const chainX = new Float32Array(SAW_CHAIN_MAX * 2);
   const chainY = new Float32Array(SAW_CHAIN_MAX * 2);
@@ -1260,11 +1308,13 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const chainN = new Int32Array(2);
   let sawLevel = 0;
   let sawTint = 0xffffff;
+  let sawSparkSeq = 0;
   const shell = createShellState();
   const shellPt = new Float32Array(2);
   const shard: Shard = { x0: 0, y0: 0, x1: 0, y1: 0, a: 0 };
   let shellDropRot = 0;
   lines.addChildAt(sawG, lines.getChildIndex(bullets) + 1);
+  lines.addChildAt(fluid.layer, lines.getChildIndex(entities));
   // Look v33: drone mode glyph over the drone and the thin mode ring round the ship, one Graphics
   // rebuilt only while a drone mode is armed. Buzz scratch and the drawn drone and ship positions.
   const droneFx = new Graphics({ label: 'droneMode' });
@@ -1876,6 +1926,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     hitSeq = (hitSeq + 1) | 0;
     if (blocked) deflectAt(x, y, kind, id);
     else {
+      sawSparks(x, y);
       const colour = mixRgb(palette[hitHueKey(specFor(kind))], 0xffffff, HIT_FLASH_WHITE);
       addPulse(hitPool, PULSE_FLASH, x, y, 0, 0, 0, HIT_FLASH_LIFE, colour, 1);
     }
@@ -3278,7 +3329,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
    * bands with bright dashes flowing down them, WHIRL_MOTES dust motes on turbulent streamlines,
    * WHIRL_WISPS wisps peeling off the band edges, WHIRL_SPARKS multicolour shimmer sparks riding the
    * flow, and a bright white core flare. Every well draws into one shared Graphics (one batch),
-   * rebuilt once per frame. id seeds the flow (hash01, no PRNG).
+   * rebuilt once per frame. id seeds the flow (hash01, no PRNG). GW4: on Standard and High the gas,
+   * bands and wisps are one shader quad (wellFluidView); the motes, spark motes and NOVA_GLINTS gem
+   * glints draw on top on every tier.
    */
   function drawNova(slot: number, id: number, x: number, y: number, r: number, pullR: number, timeSec: number): void {
     const g = wellLayer();
@@ -3289,49 +3342,70 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const red = palette.red;
     const white = novaWhite(red, shift);
     novaCycleStops(palette, novaStops);
-    // Gas: filled spiral sectors trailing each band, one fill per layer, so the pull area reads as
-    // a disc of gas rather than lines.
-    for (let L = 0; L < WHIRL_GAS_LAYERS; L++) {
-      for (let b = 0; b < WHIRL_BANDS; b++) {
-        whirlGasSector(timeSec, b, WHIRL_BANDS, L, reach, id, gasPts);
-        gasRun(g, x, y);
-      }
-      g.fill({ color: white, alpha: whirlGasAlpha(L) * grow });
-    }
-    // Bands: each in three layered passes, wide and faint to thin and bright, then dashes sliding
-    // down it toward the core so the flow reads as moving.
-    for (let b = 0; b < WHIRL_BANDS; b++) {
-      whirlBand(timeSec, b, WHIRL_BANDS, reach, novaArm, 1, id);
-      novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
-      g.stroke({ width: reach * 0.09, color: white, alpha: 0.07 * grow, cap: 'round', join: 'round' });
-      novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
-      g.stroke({ width: reach * 0.035, color: white, alpha: 0.16 * grow, cap: 'round', join: 'round' });
-      novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
-      g.stroke({ width: 1.6, color: white, alpha: 0.45 * grow, cap: 'round', join: 'round' });
-      const base = (b * Math.PI * 2) / WHIRL_BANDS;
-      for (let d = 0; d < WHIRL_DASHES; d++) {
-        const u0 = whirlDashU(timeSec, b, d);
-        for (let q = 0; q < 4; q++) {
-          const u = Math.min(1, u0 + (WHIRL_DASH_U * q) / 3);
-          const rr = whirlFlowRadius(u, reach, timeSec, id, b);
-          const an = whirlFlowAngle(u, timeSec, base, id);
-          if (q === 0) g.moveTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
-          else g.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
+    const f = novaCoreFlare(age, timeSec);
+    const shader = fluidShaderOn(getEffectsTier());
+    if (shader) {
+      // GW4: Standard and High draw the gas as one shader quad sized to the pull radius.
+      fluidP.x = x;
+      fluidP.y = y;
+      fluidP.reach = reach;
+      fluidP.timeSec = timeSec;
+      fluidP.spin = 1;
+      fluidP.seed = hash01(id * 7919 + 13) * 64;
+      fluidP.alpha = Math.min(1, grow);
+      fluidP.core = 0.55 + 0.45 * f;
+      fluidP.glow = mapFxNeonGain(current.glowAlpha);
+      fluidP.white = white;
+      fluidP.hue0 = palette.cyan;
+      fluidP.hue1 = palette.magenta;
+      fluidP.hue2 = palette.yellow;
+      fluidP.hue3 = palette.blue;
+      fluid.set(slot, fluidP);
+    } else {
+      // Low keeps the GW3 geometry: gas sectors trailing each band, one fill per layer.
+      for (let L = 0; L < WHIRL_GAS_LAYERS; L++) {
+        for (let b = 0; b < WHIRL_BANDS; b++) {
+          whirlGasSector(timeSec, b, WHIRL_BANDS, L, reach, id, gasPts);
+          gasRun(g, x, y);
         }
-        g.stroke({ width: 2.6, color: 0xffffff, alpha: (0.3 + 0.6 * (1 - u0)) * grow, cap: 'round', join: 'round' });
+        g.fill({ color: white, alpha: whirlGasAlpha(L) * grow });
       }
-    }
-    // Wisps peel off the band edges and stretch along the flow.
-    for (let k = 0; k < WHIRL_WISPS; k++) {
-      const wa = whirlWisp(timeSec, id, k, reach, wispPts);
-      if (wa <= 0.01) continue;
-      for (let q = 0; q < WHIRL_WISP_PTS; q++) {
-        const px = x + (wispPts[q * 2] ?? 0);
-        const py = y + (wispPts[q * 2 + 1] ?? 0);
-        if (q === 0) g.moveTo(px, py);
-        else g.lineTo(px, py);
+      // Bands: three layered passes, wide and faint to thin and bright, then dashes sliding down.
+      for (let b = 0; b < WHIRL_BANDS; b++) {
+        whirlBand(timeSec, b, WHIRL_BANDS, reach, novaArm, 1, id);
+        novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
+        g.stroke({ width: reach * 0.09, color: white, alpha: 0.07 * grow, cap: 'round', join: 'round' });
+        novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
+        g.stroke({ width: reach * 0.035, color: white, alpha: 0.16 * grow, cap: 'round', join: 'round' });
+        novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
+        g.stroke({ width: 1.6, color: white, alpha: 0.45 * grow, cap: 'round', join: 'round' });
+        const base = (b * Math.PI * 2) / WHIRL_BANDS;
+        for (let d = 0; d < WHIRL_DASHES; d++) {
+          const u0 = whirlDashU(timeSec, b, d);
+          for (let q = 0; q < 4; q++) {
+            const u = Math.min(1, u0 + (WHIRL_DASH_U * q) / 3);
+            const rr = whirlFlowRadius(u, reach, timeSec, id, b);
+            const an = whirlFlowAngle(u, timeSec, base, id);
+            if (q === 0) g.moveTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
+            else g.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
+          }
+          g.stroke({ width: 2.6, color: 0xffffff, alpha: (0.3 + 0.6 * (1 - u0)) * grow, cap: 'round', join: 'round' });
+        }
       }
-      g.stroke({ width: 3.2, color: white, alpha: wa * grow, cap: 'round', join: 'round' });
+      // Wisps peel off the band edges and stretch along the flow.
+      for (let k = 0; k < WHIRL_WISPS; k++) {
+        const wa = whirlWisp(timeSec, id, k, reach, wispPts);
+        if (wa <= 0.01) continue;
+        for (let q = 0; q < WHIRL_WISP_PTS; q++) {
+          const px = x + (wispPts[q * 2] ?? 0);
+          const py = y + (wispPts[q * 2 + 1] ?? 0);
+          if (q === 0) g.moveTo(px, py);
+          else g.lineTo(px, py);
+        }
+        g.stroke({ width: 3.2, color: white, alpha: wa * grow, cap: 'round', join: 'round' });
+      }
+      // The core flares white (the shader draws its own core on the other tiers).
+      g.circle(x, y, r * 1.5 * grow).fill({ color: white, alpha: 0.18 * f });
     }
     // Dust: motes in four brightness buckets, one fill each.
     for (let k = 0; k < WHIRL_MOTES; k++) {
@@ -3353,18 +3427,40 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       }
       if (any) g.fill({ color: white, alpha: ((lo + hi) / 2) * grow });
     }
-    // The multicolour shimmer sparks (approved at GW2) now ride the flow.
+    // The coloured spark motes stay on top of the gas, steady (the glints are the shimmer now).
     for (let k = 0; k < WHIRL_SPARKS; k++) {
       whirlMote(timeSec, id + 7919, k, reach, novaMote);
       const c = novaStreamColour(novaStops, red, k, timeSec, shift);
-      const p = novaPulse(timeSec, k);
-      g.circle(x + novaMote.x, y + novaMote.y, 1.4 + p).fill({ color: c, alpha: Math.min(1, novaMote.a * 1.6) * p * grow });
+      g.circle(x + novaMote.x, y + novaMote.y, 1.8).fill({ color: c, alpha: Math.min(1, novaMote.a * 1.4) * grow });
     }
-    // The core flares white.
-    const f = novaCoreFlare(age, timeSec);
-    g.circle(x, y, r * 1.5 * grow).fill({ color: white, alpha: 0.18 * f });
+    // GW4 crystal shimmer: gem glints pop in and out on the flow, prismatic with a white hot centre.
+    for (let k = 0; k < NOVA_GLINTS; k++) {
+      glintAt(id * 13 + 1, k, timeSec, glint);
+      novaGlintSpot(glint.a, glint.b, timeSec, id, reach, glintPt);
+      drawGlint(g, x + glintPt.x, y + glintPt.y, glintSize(NOVA_GLINT_SIZE, glint.flare) * grow, glint.rot, novaColour(novaStops, red, glint.hue, 0, shift), glint.flare * grow);
+    }
     g.circle(x, y, r * (0.6 + 0.25 * f) * grow).fill({ color: white, alpha: 0.45 * f });
     g.circle(x, y, r * 0.32 * grow).fill({ color: 0xffffff, alpha: 0.7 + 0.3 * f });
+  }
+
+  /** GW4: one gem glint: a sharp 4 point star in its hue with a white hot centre star. */
+  function drawGlint(g: Graphics, x: number, y: number, size: number, rot: number, colour: number, a: number): void {
+    if (a <= 0.01 || size <= 0.2) return;
+    glintStar(x, y, size, rot, glintPts);
+    glintRun(g);
+    g.fill({ color: colour, alpha: Math.min(1, a) });
+    glintStar(x, y, size * GLINT_CORE, rot, glintPts);
+    glintRun(g);
+    g.fill({ color: 0xffffff, alpha: Math.min(1, a * 1.1) });
+  }
+
+  /** Add the star outline in glintPts as one closed polygon (no array allocation). */
+  function glintRun(g: Graphics): void {
+    for (let k = 0; k < GLINT_STAR_PTS; k++) {
+      if (k === 0) g.moveTo(glintPts[0] ?? 0, glintPts[1] ?? 0);
+      else g.lineTo(glintPts[k * 2] ?? 0, glintPts[k * 2 + 1] ?? 0);
+    }
+    g.closePath();
   }
 
   /**
@@ -3415,8 +3511,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
 
   /**
    * GW3 nova snakes: every tracked snake (it crawled out of a well) draws a faint white shimmer band
-   * and a white core line through its head and segments, with NOVA_SNAKE_DOTS bright dots running
-   * down the body, on the shared well layer.
+   * and a white core line through its head and segments, with NOVA_SNAKE_GLINTS gem glints travelling
+   * down the body (GW4), on the shared well layer.
    */
   function drawNovaSnakes(w: World, alpha: number, timeSec: number): void {
     if (novaSnakeCount(novaSnakes) === 0) return;
@@ -3447,10 +3543,14 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         if (pass === 0) g.stroke({ width: NOVA_SNAKE_GLOW_W, color: NOVA_WHITE, alpha: novaSnakeGlow(timeSec, h), cap: 'round', join: 'round' });
         else g.stroke({ width: NOVA_SNAKE_CORE_W, color: 0xffffff, alpha: NOVA_SNAKE_CORE_A, cap: 'round', join: 'round' });
       }
-      for (let d = 0; d < NOVA_SNAKE_DOTS; d++) {
-        const p = novaSnakeDot(timeSec, h, d);
+      // GW4: gem glints travel down the body (the shimmer), each popping with its own hue.
+      novaCycleStops(palette, novaStops);
+      for (let d = 0; d < NOVA_SNAKE_GLINTS; d++) {
+        const p = novaSnakeGlintShare(timeSec, h, d);
         polyAt(snakePts, n, p, snakeDot);
-        g.circle(snakeDot.x, snakeDot.y, 2.6).fill({ color: 0xffffff, alpha: novaSnakeDotAlpha(p) });
+        glintAt(head * 31 + 7, d, timeSec, glint);
+        const body = Math.sin(Math.PI * p);
+        drawGlint(g, snakeDot.x, snakeDot.y, glintSize(NOVA_SNAKE_GLINT_SIZE, glint.flare), glint.rot, novaColour(novaStops, 0xffffff, glint.hue, 0, 1), (0.35 + 0.65 * glint.flare) * (0.4 + 0.6 * body));
       }
     }
   }
@@ -3782,6 +3882,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       novaG.clear();
       novaShown = false;
     }
+    fluid.hideAll();
     stormCount = 0;
     if (novaSnakeCount(novaSnakes) > 0) novaSnakeSweep(novaSnakes, w.alive, w.kind, w.t, KIND_SNAKE_HEAD);
     if (enemyFxDirty) {
@@ -4142,33 +4243,68 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         if (s === 0) sawG.moveTo(px, py);
         else sawG.lineTo(px, py);
       }
-      sawG.stroke({ width: 1.6, color: mixRgb(sawTint, 0xffffff, 0.7), alpha: a, cap: 'round', join: 'round' });
+      // GW4: the bar is a glowing outline in the weapon hue (the near white line closed round the
+      // ship read as a white backdrop): a wide soft glow pass, then a thin bright line.
+      sawG.stroke({ width: SAW_BAR_GLOW_W, color: sawTint, alpha: a * 0.35, cap: 'round', join: 'round' });
+      for (let s = 0; s <= segs; s++) {
+        const t = chainOrder[s % n] ?? 0;
+        const px = chainX[o + t] ?? 0;
+        const py = chainY[o + t] ?? 0;
+        if (s === 0) sawG.moveTo(px, py);
+        else sawG.lineTo(px, py);
+      }
+      sawG.stroke({ width: SAW_BAR_LINE_W, color: sawTint, alpha: Math.min(1, a * 1.6), cap: 'round', join: 'round' });
       sawShown = true;
     }
   }
 
-  /** Add one triangle from sawTri to sawG. */
-  function sawPoly(): void {
-    sawG.moveTo(sawTri[0] ?? 0, sawTri[1] ?? 0)
-      .lineTo(sawTri[2] ?? 0, sawTri[3] ?? 0)
-      .lineTo(sawTri[4] ?? 0, sawTri[5] ?? 0)
+  /** Add one triangle from t (sawTri or sawTip) to sawG. */
+  function sawPoly(t: Float32Array = sawTri): void {
+    sawG.moveTo(t[0] ?? 0, t[1] ?? 0)
+      .lineTo(t[2] ?? 0, t[3] ?? 0)
+      .lineTo(t[4] ?? 0, t[5] ?? 0)
       .closePath();
   }
 
   /**
-   * GW2 chainsaw tooth, GW3 bar: a sharp triangle centred on (x, y) along the track tangent
-   * (vx, vy), len (spikeLen) long, with a hot white edge while stretched. No ghost smear (GW3: it
-   * read as a white backdrop behind the ship).
+   * GW2 chainsaw tooth, GW3 bar, GW4 look: a sharp metallic triangle in the weapon hue centred on
+   * (x, y) along the track direction (vx, vy), len (spikeLen) long, with a white hot tip (toothTip).
+   * While the saw runs, SPIKE_GHOSTS fading copies slide back along the track behind it (motion
+   * blur along the chain, never turned round the ship). No fill or halo behind the ship.
    */
   function drawSawTooth(x: number, y: number, vx: number, vy: number, len: number, tint: number): void {
     if (!sawShown) sawShown = true;
     const st = spikeStretch(len);
     const half = spikeHalfWidth(st);
+    if (sawLevel > 0) {
+      for (let k = 1; k <= SPIKE_GHOSTS; k++) {
+        sawTrackGhost(x, y, vx, vy, k, sawLevel, sawGhost);
+        spikeTriangle(sawGhost.x, sawGhost.y, vx, vy, len, half, sawTri);
+        sawPoly();
+        sawG.fill({ color: tint, alpha: (SPIKE_GHOST_ALPHA[k - 1] ?? 0) * sawLevel });
+      }
+    }
     spikeTriangle(x, y, vx, vy, len, half, sawTri);
     sawPoly();
     sawG.fill({ color: tint, alpha: 0.95 });
     sawPoly();
-    sawG.stroke({ width: 1 + 1.2 * st, color: st > 0.02 ? mixRgb(tint, 0xffffff, 0.5 + 0.5 * st) : tint, alpha: 0.6 + 0.4 * st, join: 'miter' });
+    // Metallic edge: a lighter rim in the hue (not white), brighter as the tooth stretches.
+    sawG.stroke({ width: 1 + 0.6 * st, color: mixRgb(tint, 0xffffff, 0.25 + 0.2 * st), alpha: 0.85, join: 'miter' });
+    toothTip(sawTri, sawTip);
+    sawPoly(sawTip);
+    sawG.fill({ color: 0xffffff, alpha: 0.75 + 0.25 * st });
+  }
+
+  /** GW4: a saw hit (fx:hit on a tooth while the saw runs) throws 2 to 4 sparks in the weapon hue. */
+  function sawSparks(x: number, y: number): void {
+    if (sawLevel <= 0) return;
+    const n = (chainN[0] ?? 0) + (chainN[1] ?? 0);
+    if (n === 0) return;
+    // The teeth of the last frame, packed per ring.
+    const near = nearTooth(x, y, chainX, chainY, 0, chainN[0] ?? 0, SAW_SPARK_REACH) || nearTooth(x, y, chainX, chainY, SAW_CHAIN_MAX, chainN[1] ?? 0, SAW_SPARK_REACH);
+    if (!near) return;
+    sawSparkSeq = (sawSparkSeq + 1) | 0;
+    burstSmall(x, y, mixRgb(sawTint, 0xffffff, 0.35), sawSparkCount(sawSparkSeq), 140, 380, 0.25);
   }
 
   function drawBullets(pool: BulletPoolLike | null, alpha: number, shipX: number, shipY: number, dt: number): void {
@@ -4205,7 +4341,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const st = style !== undefined ? (style[i] ?? 0) : 0;
         const h = homing !== undefined && homing[i] === 1;
         // Look v33: orbit spikes (marked from the weapon state in draw) take the triangle frame.
-        const spike = st === 3 && !h && i < spikeMask.length && spikeMask[i] === 1;
+        // GW4: both rings (mask 1 inner, 2 outer) are teeth; the outer ring used to fall through to
+        // the crescent sprite, so the long outer bar never read as saw teeth.
+        const spike = st === 3 && !h && i < spikeMask.length && (spikeMask[i] ?? 0) > 0;
         const code = spike ? SPIKE_CODE : styleCode(st, h);
         const vis = spike ? spikeVisual() : bulletStyleVisual(st, h);
         if (bulletCodeShown[i] !== code) {
@@ -4442,9 +4580,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     turboPrevActive = null;
     turboPrevTimer = 0;
     resetShellState(shell);
-    resetArriveState(arrive);
-    resetEmergeState(emerge);
-    resetNovaSnakeState(novaSnakes);
+    // GW4: every render side well state (nova slots, whirlpool quads, arrivals, emergences, nova
+    // snakes) clears with the level; the lattice and its dimples are rebuilt by setArena.
+    resetWellVisuals(wellVisuals);
+    fluid.hideAll();
+    sawLevel = 0;
   }
 
   /** New arena: wall features, calm threat, no flashes, pops or per slot fx state. */
@@ -4478,6 +4618,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     registerParticleStress(null);
     disposeParticles();
     lattice.destroy();
+    fluid.destroy();
     hazardLayer.destroy();
     cueLayer.destroy();
     enemyBulletLayer.destroy();
