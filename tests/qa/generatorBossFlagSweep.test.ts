@@ -25,7 +25,7 @@ const LAST_SEGMENT = 36;
 const V21_LEVEL_DIGEST = 'bfbf1886';
 const V21_ENDLESS_DIGEST = '40cefa1e';
 
-const ON = DEFAULT_GEN_CONFIG;
+const ON = { ...DEFAULT_GEN_CONFIG, enableCylinder: false }; // cylinder levels are checked in tests/levelgen/cylinder.test.ts
 const OFF = V2_GEN_CONFIG;
 
 /** FNV-1a folded over strings: one number for a long list of hashes. */

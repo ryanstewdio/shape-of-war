@@ -22,6 +22,9 @@ import { generateLevel } from '../../src/levelgen/generator';
 import { DEFAULT_GEN_CONFIG } from '../../src/levelgen/leveldef';
 import type { ArenaDef, LevelDef } from '../../src/levelgen/leveldef';
 
+/** Flat levels only: the replay pins predate the cylinder surface. */
+const NO_CYL = { ...DEFAULT_GEN_CONFIG, enableCylinder: false };
+
 const DT = 1 / 120;
 const TICKS = 2400; // 20 s
 const LEVELS: readonly SpaceLevel[] = ['off', 'low', 'medium', 'high'];
@@ -162,7 +165,7 @@ function v1Path(arena: ArenaDef, log: readonly InputState[]): Float64Array {
 
 describe('physics replay: Off is the frozen v1.0.0 formula on every arena shape', () => {
   it.each(ARENAS)('$name: 2400 steps of a recorded log match bit for bit, default state and explicit off', (a) => {
-    const level = generateLevel(a.runSeed, a.levelIndex, DEFAULT_GEN_CONFIG);
+    const level = generateLevel(a.runSeed, a.levelIndex, NO_CYL);
     const log = inputLog(TICKS, a.levelIndex);
     const frozen = v1Path(level.arena, log);
     const byDefault = runPath(quiet(level), 'off', log).path;
@@ -191,7 +194,7 @@ describe('physics replay: the same input log gives the same ship path', { timeou
   const cases = ARENAS.flatMap((a) => LEVELS.map((space) => ({ name: a.name, runSeed: a.runSeed, levelIndex: a.levelIndex, space })));
 
   it.each(cases)('$name $space: replays identically with enemies, hazards and weapons live', ({ runSeed, levelIndex, space }) => {
-    const level = generateLevel(runSeed, levelIndex, DEFAULT_GEN_CONFIG);
+    const level = generateLevel(runSeed, levelIndex, NO_CYL);
     const log = inputLog(TICKS, levelIndex + 100);
     const a = runPath(level, space, log);
     const b = runPath(level, space, jsonCopy(log));
@@ -200,7 +203,7 @@ describe('physics replay: the same input log gives the same ship path', { timeou
   });
 
   it('the four space levels really give four different paths on the same arena and log', () => {
-    const level = generateLevel(1, 1, DEFAULT_GEN_CONFIG);
+    const level = generateLevel(1, 1, NO_CYL);
     const log = inputLog(TICKS, 77);
     const paths = LEVELS.map((s) => runPath(quiet(level), s, log).path);
     for (let i = 0; i < paths.length; i++) {
@@ -211,7 +214,7 @@ describe('physics replay: the same input log gives the same ship path', { timeou
   });
 
   it('the setting changes mid level and the run replays identically, with no jump at the change', () => {
-    const level = generateLevel(0xdeadbeef, 36, DEFAULT_GEN_CONFIG);
+    const level = generateLevel(0xdeadbeef, 36, NO_CYL);
     const log = inputLog(TICKS, 9);
     const changes: [number, SpaceLevel][] = [
       [600, 'medium'],
@@ -241,7 +244,7 @@ describe('physics replay: path invariants per level', () => {
   };
 
   it.each(ARENAS)('$name: the ship stays inside the arena and under the speed cap at every level', (a) => {
-    const level = generateLevel(a.runSeed, a.levelIndex, DEFAULT_GEN_CONFIG);
+    const level = generateLevel(a.runSeed, a.levelIndex, NO_CYL);
     const log = inputLog(TICKS, a.levelIndex + 3);
     const probe = createConfineResult();
     for (const space of LEVELS) {
@@ -262,7 +265,7 @@ describe('physics replay: path invariants per level', () => {
   });
 
   it('is deterministic through death and respawn: lives, score and path replay, and a ship really died', () => {
-    const level = generateLevel(0xdeadbeef, 36, DEFAULT_GEN_CONFIG);
+    const level = generateLevel(0xdeadbeef, 36, NO_CYL);
     const log = inputLog(TICKS * 2, 21);
     let deaths = 0;
     for (const space of LEVELS) {
