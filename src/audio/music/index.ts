@@ -30,7 +30,7 @@
 import { bus as coreBus, type Bus } from '../../core/events';
 import type { BossId, BossTier, EnemyKind } from '../../levelgen/leveldef';
 import { getAudioGraph } from '../synth';
-import { createMenuTheme, type MenuThemePlayer, type MenuThemeState } from './menuTheme';
+import { createMenuTheme, type MenuThemePlayer, type MenuThemeState, type MenuThemeStore } from './menuTheme';
 import { BOSS_MOTIFS, BOSS_TIMBRES, voicesForPhase, type BossMotifNote } from './boss';
 import {
   allowedEnemyKinds,
@@ -250,6 +250,8 @@ export interface MusicOptions {
   onNote?: (n: NoteLog) => void;
   /** Voice spans from the engine (tests and debugging). */
   trace?: VoiceTrace;
+  /** Where the menu theme rotation keeps the last theme (menuTheme.ts). Default: memory for this page load. */
+  menuStore?: MenuThemeStore | null;
 }
 
 type QueuedAccent = { readonly type: 'kill'; readonly source: KillSource } | { readonly type: 'bomb' };
@@ -1186,7 +1188,7 @@ export function initMusic(opts: MusicOptions = {}): () => void {
   if (opts.volume !== undefined) volume = clampMusicVolume(opts.volume);
   const vis = opts.visibility === undefined ? defaultVisibility() : opts.visibility;
   hidden = vis?.hidden ?? false;
-  const menu = createMenuTheme({ graph: () => graphSource(), timer, volume: () => volume });
+  const menu = createMenuTheme({ graph: () => graphSource(), timer, volume: () => volume, store: opts.menuStore });
   menu.setHidden(hidden);
   menuTheme = menu;
   const offs = [
@@ -1472,9 +1474,9 @@ export function setMusicVolume(v: number): number {
 }
 
 /** The menu theme's state, for tests and the debug overlay. */
-export function menuThemeState(): { readonly state: MenuThemeState; readonly wanted: boolean; readonly engines: number; readonly starts: number } {
+export function menuThemeState(): { readonly state: MenuThemeState; readonly wanted: boolean; readonly engines: number; readonly starts: number; readonly theme: number } {
   const m = menuTheme;
-  return m ? { state: m.state, wanted: m.wanted, engines: m.engines, starts: m.starts } : { state: 'off', wanted: false, engines: 0, starts: 0 };
+  return m ? { state: m.state, wanted: m.wanted, engines: m.engines, starts: m.starts, theme: m.theme } : { state: 'off', wanted: false, engines: 0, starts: 0, theme: -1 };
 }
 
 export function getMusicVolume(): number {
