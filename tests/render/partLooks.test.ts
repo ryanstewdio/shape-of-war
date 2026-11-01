@@ -26,7 +26,7 @@ import {
   partSpecIndex,
 } from '../../src/render/bossShapes';
 import { hueDistance, hueOfRgb } from '../../src/render/emberFlame';
-import { palette } from '../../src/render/neon';
+import { BASE_PALETTE, palette } from '../../src/render/neon';
 import {
   decoyPulse,
   decoyTint,
@@ -198,7 +198,7 @@ describe('Tempestling look (GW3)', () => {
     expect(partR(PART_TEMPESTLING)).toBeCloseTo(R * 0.6, 6);
     const spec = buildPartSpec(PART_TEMPESTLING, 3);
     const body = spec.layers[0];
-    expect(body?.colour).toBe(bossColourOf(BOSS_TEMPEST));
+    expect(body?.colour).toBe('tempestling');
     expect(body?.prims[0]).toEqual(tempestKite(R * 0.6, 1));
     expect(spec.radius).toBeLessThan(TEMPEST_NOSE * R);
     expect(spec.layers.some((x) => x.colour === 'slime')).toBe(true);
@@ -212,5 +212,15 @@ describe('Tempestling look (GW3)', () => {
     expect(tempestlingLead(0, 50, 0)).toBeCloseTo(Math.PI / 2);
     expect(tempestlingLead(0, 0, 1.2)).toBe(1.2);
     expect(Number.isFinite(tempestlingLead(Number.NaN, Number.NaN, Number.NaN))).toBe(true);
+  });
+});
+
+describe('Tempestling palette (GW6)', () => {
+  it('is bossRed cooled: hue 25 toward the accent, saturation x0.8, lightness x0.9', () => {
+    const [h, s, l] = BASE_PALETTE.tempestling;
+    const [rh, rs, rl] = BASE_PALETTE.bossRed;
+    expect(Math.abs(((rh - h + 540) % 360) - 180)).toBeCloseTo(25, 5);
+    expect(s).toBeCloseTo(rs * 0.8, 5);
+    expect(l).toBeCloseTo(rl * 0.9, 2);
   });
 });

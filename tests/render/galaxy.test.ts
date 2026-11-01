@@ -158,8 +158,20 @@ describe('galaxy shader and renderer', () => {
     const body = src.slice(i, src.indexOf('\n  }\n', i));
     expect(body).toMatch(/const rate = GALAXY_SPEED;/);
     expect(body).toMatch(/fluidP\.arm = galaxyArmUniform\(timeSec, armBase, rate\)/);
-    expect(body).toMatch(/whirlMote\(timeSec, id, k, reach, novaMote, rate, GALAXY_ARMS, armBase\)/);
-    expect(body).toMatch(/whirlBand\(timeSec, b, WHIRL_BANDS, reach, novaArm, rate, id\)/);
+    expect(body).toMatch(/whirlMote\(timeSec, id, k, vis, novaMote, rate, GALAXY_ARMS, armBase\)/);
+    expect(body).toMatch(/whirlBand\(timeSec, b, WHIRL_BANDS, vis, novaArm, rate, id\)/);
     expect(body).not.toMatch(/new |\.clear\(/);
+  });
+});
+
+describe('GW6 compact whirlpool', () => {
+  it('draws bands, motes and glints in the visual disc, only the quad at the pull reach', () => {
+    const src = readFileSync(new URL('../../src/render/renderer.ts', import.meta.url), 'utf8');
+    const i = src.indexOf('function drawNova(');
+    const body = src.slice(i, src.indexOf('function drawGlint(', i));
+    expect(body).toMatch(/const vis = reach \* WHIRL_VISUAL;/);
+    expect(body).toMatch(/fluidP\.reach = reach;/);
+    expect(body).not.toMatch(/whirl(Mote|Wisp|GasSector)\([^)]*\breach\b/);
+    expect(body).not.toMatch(/novaGlintSpot\([^)]*\breach\b/);
   });
 });

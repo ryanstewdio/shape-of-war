@@ -9,6 +9,9 @@ import {
   FLUID_VERTEX,
   fluidDensity,
   fluidEdgeFade,
+  fluidHaze,
+  FLUID_VISUAL,
+  FLUID_HAZE,
   fluidOmega,
   fluidPhaseWeights,
   fluidShaderOn,
@@ -16,6 +19,7 @@ import {
   fluidSourceRadius,
   rgbUnit,
 } from '../../src/render/wellFluid';
+import { WHIRL_VISUAL } from '../../src/render/wellNova';
 import { turnsClockwise } from '../../src/render/wellNova';
 
 describe('fluid flow helpers', () => {
@@ -83,6 +87,26 @@ describe('fluid flow helpers', () => {
     expect(o[0]).toBeCloseTo(1);
     expect(o[1]).toBeCloseTo(128 / 255);
     expect(o[2]).toBe(0);
+  });
+});
+
+describe('GW6 compact disc', () => {
+  it('draws the gas disc at 65 percent of the pull radius with a faint 15 percent haze beyond', () => {
+    expect(WHIRL_VISUAL).toBe(0.65);
+    expect(FLUID_VISUAL).toBe(0.65);
+    expect(FLUID_HAZE).toBe(0.15);
+    expect(fluidHaze(0.5)).toBe(0);
+    expect(fluidHaze(0.65)).toBe(0);
+    expect(fluidHaze(0.66)).toBeGreaterThan(0.14);
+    expect(fluidHaze(0.66)).toBeLessThanOrEqual(0.15);
+    expect(fluidHaze(0.8)).toBeLessThan(fluidHaze(0.7));
+    expect(fluidHaze(1)).toBe(0);
+    expect(fluidHaze(Number.NaN)).toBe(0);
+  });
+
+  it('the shader maps the quad to the visual disc and keeps the clockwise spin', () => {
+    expect(FLUID_FRAGMENT).toMatch(/vec2 q = vPos \/ 0\.65;/);
+    expect(FLUID_FRAGMENT).not.toMatch(/layer\(vPos/);
   });
 });
 

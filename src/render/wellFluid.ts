@@ -16,7 +16,7 @@
 // by uArm) carry dark dust lanes just off their crests.
 
 import type { EffectsTier } from './effects';
-import { GALAXY_ARMS, GALAXY_SPEED, WHIRL_CW, WHIRL_TWIST } from './wellNova';
+import { GALAXY_ARMS, GALAXY_SPEED, WHIRL_CW, WHIRL_HAZE, WHIRL_TWIST, WHIRL_VISUAL } from './wellNova';
 
 /** Pure: Standard and High draw the nova gas with the shader quad; Low keeps the geometry path. */
 export function fluidShaderOn(tier: EffectsTier): boolean {
@@ -64,6 +64,20 @@ export const FLUID_GLOW_SCALE = 0.42;
 export const FLUID_ARM_A = 0.55;
 export const FLUID_LANE = 0.72;
 export const FLUID_LANE_OFF = 1.15;
+
+/** GW6: the gas disc is WHIRL_VISUAL of the quad (the pull radius); a faint haze fills the rest. */
+export const FLUID_VISUAL = WHIRL_VISUAL;
+export const FLUID_HAZE = WHIRL_HAZE;
+/** GW6: gas and glow brightness multiplier inside the smaller disc (same noise, denser light). */
+export const FLUID_BRIGHT = 1.18;
+
+/** Pure: haze alpha outside the visual disc at quad radius share r (0 inside the disc, FLUID_HAZE just outside, 0 at the pull radius). */
+export function fluidHaze(r: number): number {
+  const c = fin(r, 1);
+  if (c <= FLUID_VISUAL || c >= 1) return 0;
+  const v = (c - FLUID_VISUAL) / (1 - FLUID_VISUAL);
+  return FLUID_HAZE * (1 - v * v * (3 - 2 * v));
+}
 
 /** Pure: angular speed (rad/s, positive is clockwise on screen) at radius share u for a spin. */
 export function fluidOmega(u: number, spin = 1): number {
@@ -208,7 +222,7 @@ vec2 layer(vec2 q, float r, float tau, float salt) {
     float s = sin(ang);
     float k = exp(${glf(FLUID_DRIFT * FLUID_SPEED)} * tau);
     vec2 src = vec2(c * q.x - s * q.y, s * q.x + c * q.y) * k;
-    vec2 p = src * (uRadius / ${glf(FLUID_SCALE)}) + vec2(uSeed * 17.0 + salt * 31.7, uSeed * 5.3 - salt * 13.1);
+    vec2 p = src * (uRadius * ${glf(FLUID_VISUAL)} / ${glf(FLUID_SCALE)}) + vec2(uSeed * 17.0 + salt * 31.7, uSeed * 5.3 - salt * 13.1);
     vec2 warp = vec2(vnoise(p * 0.7 + 3.1), vnoise(p * 0.7 - 7.7)) - 0.5;
     float glow = vnoise(p * ${glf(FLUID_GLOW_SCALE)} + warp + 5.3);
     return vec2(fbm(p + ${glf(FLUID_WARP)} * 2.0 * warp), glow);
@@ -223,18 +237,27 @@ vec3 hueRing(float h) {
 }
 
 void main(void) {
-    float r = length(vPos);
-    if (r >= 1.0) {
+    float r0 = length(vPos);
+    if (r0 >= 1.0) {
         finalColor = vec4(0.0);
         return;
     }
+    // GW6: the disc is the inner share of the quad; outside it only a faint haze hints the pull area.
+    if (r0 > ${glf(FLUID_VISUAL)}) {
+        float hv = (r0 - ${glf(FLUID_VISUAL)}) / ${glf(1 - FLUID_VISUAL)};
+        float ha = ${glf(FLUID_HAZE)} * (1.0 - hv * hv * (3.0 - 2.0 * hv));
+        finalColor = vec4(uWhite * ha, ha) * uAlpha;
+        return;
+    }
+    vec2 q = vPos / ${glf(FLUID_VISUAL)};
+    float r = length(q);
     float ph = uTime / ${glf(FLUID_CYCLE)};
     float f1 = fract(ph);
     float f2 = fract(ph + 0.5);
     float w1 = 1.0 - abs(2.0 * f1 - 1.0);
     float w2 = 1.0 - w1;
-    vec2 l1 = layer(vPos, r, f1 * ${glf(FLUID_CYCLE)}, floor(ph));
-    vec2 l2 = layer(vPos, r, f2 * ${glf(FLUID_CYCLE)}, floor(ph + 0.5) + 0.5);
+    vec2 l1 = layer(q, r, f1 * ${glf(FLUID_CYCLE)}, floor(ph));
+    vec2 l2 = layer(q, r, f2 * ${glf(FLUID_CYCLE)}, floor(ph + 0.5) + 0.5);
     float wn = sqrt(w1 * w1 + w2 * w2);
     // Variance keeping cross fade, so the gas keeps its contrast mid fade.
     float n = 0.5 + ((l1.x - 0.5) * w1 + (l2.x - 0.5) * w2) / wn;
@@ -242,19 +265,19 @@ void main(void) {
     float edge = 1.0 - smoothstep(${glf(FLUID_EDGE0)}, 1.0, r);
     float dens = 1.0 - 0.6 * r;
     // Galaxy arms: the motes' log spiral turned by uArm, roughened by the gas noise.
-    float th = atan(vPos.y, vPos.x);
+    float th = atan(q.y, q.x);
     float sr = max(r, ${glf(0.12)});
     float armPh = ${glf(GALAXY_ARMS)} * (th - uArm - ${glf(WHIRL_CW * WHIRL_TWIST)} * log(1.0 / sr)) + (n - 0.5) * 1.6;
     float arm = smoothstep(0.35, 1.0, 0.5 + 0.5 * cos(armPh)) * smoothstep(0.08, 0.3, r);
     float lane = smoothstep(0.7, 1.0, 0.5 + 0.5 * cos(armPh + ${glf(FLUID_LANE_OFF)})) * (1.0 - arm) * smoothstep(0.14, 0.4, r);
     float gas = smoothstep(0.36, 0.74, n);
     float fil = smoothstep(0.66, 0.9, n) * (1.0 - r);
-    float aGas = (0.16 + 0.6 * gas + 0.42 * fil + ${glf(FLUID_ARM_A)} * arm * (0.5 + gas)) * dens * edge * (0.8 + 0.5 * uGlow);
+    float aGas = (0.16 + 0.6 * gas + 0.42 * fil + ${glf(FLUID_ARM_A)} * arm * (0.5 + gas)) * dens * edge * (0.8 + 0.5 * uGlow) * ${glf(FLUID_BRIGHT)};
     aGas *= 1.0 - ${glf(FLUID_LANE)} * lane;
     // Soft additive glow pass: low frequency gas light, more colour than cover.
-    float glow = smoothstep(0.3, 0.85, gl) * (0.55 + 0.45 * arm) * dens * edge * ${glf(FLUID_GLOW_A)} * (0.6 + 0.4 * uGlow);
+    float glow = smoothstep(0.3, 0.85, gl) * (0.55 + 0.45 * arm) * dens * edge * ${glf(FLUID_GLOW_A)} * (0.6 + 0.4 * uGlow) * ${glf(FLUID_BRIGHT)};
     float fr = (1.0 - smoothstep(0.0, ${glf(FLUID_FRINGE_W)}, abs(n - 0.56))) * edge * (0.35 + 0.65 * r);
-    float hue = fract(n * 3.0 + atan(vPos.y, vPos.x) * 0.1592 + uTime * 0.25);
+    float hue = fract(n * 3.0 + atan(q.y, q.x) * 0.1592 + uTime * 0.25);
     float aFr = fr * ${glf(FLUID_FRINGE_A)} * uGlow;
     float aCore = exp(-r * r / ${glf(FLUID_CORE * FLUID_CORE)}) * uCore;
     float aBulge = exp(-r * r / ${glf(FLUID_BULGE * FLUID_BULGE)}) * ${glf(FLUID_BULGE_A)} * (0.6 + 0.4 * uCore);

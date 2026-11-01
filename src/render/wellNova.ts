@@ -44,6 +44,10 @@ export const NOVA_DRAWS_PER_WELL = 1;
 
 /** Clockwise on screen: with y pointing down, an increasing atan2 angle turns clockwise. */
 export const WHIRL_CW = 1;
+/** GW6: the visual disc (gas, arms, dust, glints) is this share of the sim pull radius. */
+export const WHIRL_VISUAL = 0.65;
+/** GW6: alpha of the faint haze that hints the pull area between the visual disc and the pull radius. */
+export const WHIRL_HAZE = 0.15;
 /** Core radius share: the flow ends at this share of the reach. */
 export const WHIRL_CORE = 0.12;
 /** Seconds a mote takes from the rim to the core. */

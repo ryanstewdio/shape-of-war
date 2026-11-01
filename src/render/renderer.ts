@@ -558,6 +558,7 @@ import {
   WHIRL_DASH_U,
   WHIRL_DASHES,
   WHIRL_MOTES,
+  WHIRL_VISUAL,
   WHIRL_SPARKS,
   WHIRL_GAS_LAYERS,
   WHIRL_GAS_PTS,
@@ -3399,6 +3400,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const grow = novaGrow(age);
     const shift = novaShift(age);
     const reach = Math.max(r, pullR) * grow;
+    // GW6: everything but the shader quad and its haze lives in the smaller visual disc.
+    const vis = reach * WHIRL_VISUAL;
     const red = palette.red;
     const white = novaWhite(red, shift);
     novaCycleStops(palette, novaStops);
@@ -3408,7 +3411,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const rate = GALAXY_SPEED;
     const armBase = galaxyArmBase(id);
     if (shader) {
-      // GW4: Standard and High draw the gas as one shader quad sized to the pull radius.
+      // GW4: Standard and High draw the gas as one shader quad sized to the pull radius (it draws the disc at WHIRL_VISUAL of it plus a faint haze).
       fluidP.x = x;
       fluidP.y = y;
       fluidP.reach = reach;
@@ -3429,18 +3432,18 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       // Low keeps the GW3 geometry: gas sectors trailing each band, one fill per layer.
       for (let L = 0; L < WHIRL_GAS_LAYERS; L++) {
         for (let b = 0; b < WHIRL_BANDS; b++) {
-          whirlGasSector(timeSec, b, WHIRL_BANDS, L, reach, id, gasPts, rate);
+          whirlGasSector(timeSec, b, WHIRL_BANDS, L, vis, id, gasPts, rate);
           gasRun(g, x, y);
         }
         g.fill({ color: white, alpha: whirlGasAlpha(L) * grow });
       }
       // Bands: three layered passes, wide and faint to thin and bright, then dashes sliding down.
       for (let b = 0; b < WHIRL_BANDS; b++) {
-        whirlBand(timeSec, b, WHIRL_BANDS, reach, novaArm, rate, id);
+        whirlBand(timeSec, b, WHIRL_BANDS, vis, novaArm, rate, id);
         novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
-        g.stroke({ width: reach * 0.09, color: white, alpha: 0.07 * grow, cap: 'round', join: 'round' });
+        g.stroke({ width: vis * 0.09, color: white, alpha: 0.07 * grow, cap: 'round', join: 'round' });
         novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
-        g.stroke({ width: reach * 0.035, color: white, alpha: 0.16 * grow, cap: 'round', join: 'round' });
+        g.stroke({ width: vis * 0.035, color: white, alpha: 0.16 * grow, cap: 'round', join: 'round' });
         novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
         g.stroke({ width: 1.6, color: white, alpha: 0.45 * grow, cap: 'round', join: 'round' });
         const base = (b * Math.PI * 2) / WHIRL_BANDS;
@@ -3448,7 +3451,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
           const u0 = whirlDashU(timeSec, b, d, rate);
           for (let q = 0; q < 4; q++) {
             const u = Math.min(1, u0 + (WHIRL_DASH_U * q) / 3);
-            const rr = whirlFlowRadius(u, reach, timeSec, id, b, rate);
+            const rr = whirlFlowRadius(u, vis, timeSec, id, b, rate);
             const an = whirlFlowAngle(u, timeSec, base, id, rate);
             if (q === 0) g.moveTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
             else g.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
@@ -3458,7 +3461,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       }
       // Wisps peel off the band edges and stretch along the flow.
       for (let k = 0; k < WHIRL_WISPS; k++) {
-        const wa = whirlWisp(timeSec, id, k, reach, wispPts, rate);
+        const wa = whirlWisp(timeSec, id, k, vis, wispPts, rate);
         if (wa <= 0.01) continue;
         for (let q = 0; q < WHIRL_WISP_PTS; q++) {
           const px = x + (wispPts[q * 2] ?? 0);
@@ -3479,7 +3482,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         motePts[k * 3 + 2] = 0;
         continue;
       }
-      whirlMote(timeSec, id, k, reach, novaMote, rate, GALAXY_ARMS, armBase);
+      whirlMote(timeSec, id, k, vis, novaMote, rate, GALAXY_ARMS, armBase);
       motePts[k * 3] = x + novaMote.x;
       motePts[k * 3 + 1] = y + novaMote.y;
       motePts[k * 3 + 2] = novaMote.a * galaxyTwinkle(id, k, timeSec);
@@ -3499,14 +3502,14 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
     // The coloured spark motes stay on top of the gas, steady (the glints are the shimmer now).
     for (let k = 0; k < WHIRL_SPARKS; k++) {
-      whirlMote(timeSec, id + 7919, k, reach, novaMote, rate);
+      whirlMote(timeSec, id + 7919, k, vis, novaMote, rate);
       const c = novaStreamColour(novaStops, red, k, timeSec, shift);
       g.circle(x + novaMote.x, y + novaMote.y, 1.8).fill({ color: c, alpha: Math.min(1, novaMote.a * 1.4) * grow });
     }
     // GW4 crystal shimmer: gem glints pop in and out on the flow, prismatic with a white hot centre.
     for (let k = 0; k < NOVA_GLINTS; k++) {
       glintAt(id * 13 + 1, k, timeSec, glint);
-      novaGlintSpot(glint.a, glint.b, timeSec, id, reach, glintPt, rate);
+      novaGlintSpot(glint.a, glint.b, timeSec, id, vis, glintPt, rate);
       drawGlint(g, x + glintPt.x, y + glintPt.y, glintSize(NOVA_GLINT_SIZE, glint.flare) * grow, glint.rot, novaColour(novaStops, red, glint.hue, 0, shift), glint.flare * grow);
     }
     g.circle(x, y, r * (0.6 + 0.25 * f) * grow).fill({ color: white, alpha: 0.45 * f });
@@ -3547,8 +3550,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     stormShown = true;
     const last = entities.children[entities.children.length - 1];
     if (stormG.parent !== entities || (last !== stormG && last !== bossOver)) entities.addChild(stormG);
-    const c = palette[bossColourOf(BOSS_TEMPEST)];
-    const hot = mixRgb(c, 0xffffff, 0.75);
+    const c = palette.tempestling;
+    const hot = 0xffffff;
     for (let k = 0; k < stormCount; k++) {
       const x = stormX[k] ?? 0;
       const y = stormY[k] ?? 0;
