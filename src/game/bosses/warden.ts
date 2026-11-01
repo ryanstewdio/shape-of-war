@@ -5,13 +5,16 @@
 // Scratch: t0 ring clock, t1 seconds until the launched ring opens the core (-1 idle), t2 open
 // seconds left, retry the fairness recheck.
 //
-// Shield and swarm (boss abilities wave, phase 2 on): every 14 s of attack time Warden stops, its
-// core closes for 4 s (BossState.shielded, shieldLeft) and it releases 8 to 12 Hornets in two
-// bursts, "like bees leaving a hive" (Kind.BossPart PartType.Hornet in the add slots, so the add
-// cap holds). When the shield drops the core is open for WARDEN.openSec: a guaranteed window.
+// Shield and swarm (GW1: every phase): the first shield goes up 10 s into the fight, then one every
+// 14 s, start to start. Warden stops, its core closes for 4 s (BossState.shielded, shieldLeft) and
+// it releases 8 Hornets in two bursts of 4, "like bees leaving a hive" (Kind.BossPart
+// PartType.Hornet in their own pool of MAX_HORNETS, so other adds never take their slots). When the
+// shield drops the core is open for WARDEN_SHIELD.openSec (2.5 s): a guaranteed window.
+// GW1 device report: the shield never showed because it ran only in phase 2 and its clock restarted
+// at the phase change, so the first shield came 14 s after half health and the fight ended first.
 // Hornets fly straight out, then chase their target at 260 u/s and die on their own after 5 s.
-// Ability scratch (bs.abl): 0 shield cycle clock, 1 seconds into the shield, 2 bursts fired, 3
-// Hornets this shield, 4 shields so far (hash index).
+// Ability scratch (bs.abl): 0 shield cycle clock (step seconds since the last shield start), 1
+// seconds into the shield, 2 bursts fired, 3 Hornets this shield, 4 shields so far (hash index).
 import { removeEntity } from '../remove';
 import { angleBetween, distBetween, entityHash, moveHeading, targetOf, turnToward } from '../steer';
 import type { World } from '../world';
@@ -40,12 +43,17 @@ export function ringGaps(phase: number): number {
   return phase >= 2 ? WARDEN.gapsP2 : 1;
 }
 
-/** Pure: the shield is part of Warden's cycle from phase 2 on. */
+/** Pure: the shield is part of Warden's cycle in every phase (GW1). */
 export function shieldActive(phase: number): boolean {
-  return phase >= 2;
+  return phase >= 1;
 }
 
-/** Pure: Hornets for shield number n of the boss, from a hash value h in [0, 1): 8 to 12. */
+/** Pure: the shield cycle clock at the start of the fight, so the first shield comes at firstSec. */
+export function shieldClockStart(): number {
+  return WARDEN_SHIELD.everySec - WARDEN_SHIELD.firstSec;
+}
+
+/** Pure: Hornets for a shield from a hash value h in [0, 1), within hornetsMin to hornetsMax. */
 export function hornetsFor(h: number): number {
   const span = WARDEN_SHIELD.hornetsMax - WARDEN_SHIELD.hornetsMin + 1;
   const k = Math.floor((Number.isFinite(h) ? h : 0) * span);
@@ -66,8 +74,9 @@ export function reset(w: World, id: number, bs: BossState, first: boolean): void
   bs.open = false;
   bs.openLeft = -1;
   bs.mode = BossMode.Guarded;
-  // Boss rule 6: the cycle restarts, the shield clock too (Hornets are cleared with the adds).
-  bs.abl[CYCLE] = 0;
+  // Boss rule 6: the cycle restarts, the shield clock too (Hornets are cleared with the adds), so
+  // the first shield after a restart also comes firstSec in.
+  bs.abl[CYCLE] = shieldClockStart();
   bs.abl[INTO] = 0;
   bs.abl[BURSTS] = 0;
   bs.shielded = false;
@@ -86,7 +95,7 @@ function releaseBurst(w: World, id: number, bs: BossState, b: number): void {
   const a0 = angleBetween(w, id, targetOf(w, id)) + (b === 0 ? 0 : Math.PI / n);
   for (let k = 0; k < n; k++) {
     const a = a0 + (k * TAU) / n;
-    if (spawnHornet(w, bs, x + Math.cos(a) * d, y + Math.sin(a) * d, a) < 0) return; // add cap or full world
+    if (spawnHornet(w, bs, x + Math.cos(a) * d, y + Math.sin(a) * d, a) < 0) return; // Hornet cap or full world
   }
 }
 
@@ -96,7 +105,6 @@ function startShield(w: World, id: number, bs: BossState): void {
   bs.abl[COUNT] = hornetsFor(entityHash(w, id, 1000 + n));
   bs.abl[INTO] = 0;
   bs.abl[BURSTS] = 0;
-  bs.abl[CYCLE] = 0;
   bs.shielded = true;
   bs.shieldLeft = WARDEN_SHIELD.shieldSec;
   // The core closes: any open window or pending ring window ends.
@@ -104,12 +112,17 @@ function startShield(w: World, id: number, bs: BossState): void {
   bs.t2 = 0;
 }
 
-/** One shield step. Returns true while the shield is up (the rest of the cycle waits). */
-function stepShield(w: World, id: number, bs: BossState, dt: number, adt: number): boolean {
+/**
+ * One shield step. Returns true while the shield is up (the rest of the cycle waits). The clock runs
+ * on step time (dt, not the enraged rate) and keeps running through the shield, so shields start
+ * exactly everySec apart whatever the add pressure.
+ */
+function stepShield(w: World, id: number, bs: BossState, dt: number): boolean {
   if (!shieldActive(bs.phase)) return false;
+  bs.abl[CYCLE] = (bs.abl[CYCLE] ?? 0) + dt;
   if (!bs.shielded) {
-    bs.abl[CYCLE] = (bs.abl[CYCLE] ?? 0) + adt;
-    if ((bs.abl[CYCLE] ?? 0) < WARDEN_SHIELD.everySec) return false;
+    if ((bs.abl[CYCLE] ?? 0) < WARDEN_SHIELD.everySec - 1e-9) return false;
+    bs.abl[CYCLE] = (bs.abl[CYCLE] ?? 0) - WARDEN_SHIELD.everySec;
     startShield(w, id, bs);
   }
   const into = (bs.abl[INTO] ?? 0) + dt;
@@ -129,8 +142,7 @@ function stepShield(w: World, id: number, bs: BossState, dt: number, adt: number
   // The shield drops: a guaranteed window.
   bs.shielded = false;
   bs.shieldLeft = 0;
-  bs.abl[CYCLE] = 0;
-  bs.t2 = WARDEN.openSec;
+  bs.t2 = WARDEN_SHIELD.openSec;
   return false;
 }
 
@@ -157,7 +169,7 @@ function fireRing(w: World, id: number, bs: BossState, every: number): void {
 }
 
 export function step(w: World, id: number, bs: BossState, dt: number, adt: number): void {
-  if (stepShield(w, id, bs, dt, adt)) {
+  if (stepShield(w, id, bs, dt)) {
     // Shielded: Warden stops, no rings, the core stays closed.
     bs.open = false;
     bs.openLeft = -1;
@@ -174,7 +186,8 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
     bs.t1 -= adt;
     if (bs.t1 < 0) {
       bs.t1 = -1;
-      bs.t2 = WARDEN.openSec;
+      // A ring window never shortens a longer one already open (the 2.5 s window after a shield).
+      if (bs.t2 < WARDEN.openSec) bs.t2 = WARDEN.openSec;
     }
   }
   if (bs.retry > 0) {
@@ -190,9 +203,8 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
 }
 
 export function onPhase(w: World, id: number, bs: BossState, phase: number): void {
-  // The next ring uses the phase 2 interval and gaps; keep the clock where it is. The shield
-  // cycle starts now: the first shield comes a full interval after the phase change.
-  if (phase === 2) bs.abl[CYCLE] = 0;
+  // The next ring uses the phase 2 interval and gaps; keep the ring clock where it is. The shield
+  // clock keeps running too (GW1: restarting it here is what hid the shield on device).
 }
 
 /**

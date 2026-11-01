@@ -33,8 +33,8 @@ export const enum PartType {
   /** Brood after its stage 2 crack: one of three small spawns (slot 0 chases, 1 orbits and lays Slime, 2 flees and spawns Darts). */
   Broodling = 4,
   /**
-   * Warden's shield swarm (phase 2 on): a small fast add released in bursts while the shield is up.
-   * Kept in the add slots (BossState.addIds, addKind Kind.BossPart), not the part slots. 1 HP, chases
+   * Warden's shield swarm (every phase, GW1): a small fast add released in bursts while the shield is
+   * up. Kept in its own pool (BossState.hornetIds, MAX_HORNETS), not the add or part slots. 1 HP, chases
    * its target, dies on its own after HORNET.lifeSec. w.rot is its heading.
    */
   Hornet = 5,

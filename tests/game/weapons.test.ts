@@ -19,7 +19,7 @@ import {
   fireWeapon,
   ORBIT_RADIUS,
   setWeaponPickups,
-  SPIKE_OUT,
+  ORBIT_OUTER,
   WEAPON_DURATION,
   weaponPool,
   weaponState,
@@ -182,9 +182,9 @@ describe('pierce', () => {
 });
 
 describe('orbit', () => {
-  // V3 wave D (Ryan's orbit redesign): 4 blades at 80 u plus 4 spikes between them at 94 u, so 8
-  // style 3 bullets (was 4 at 80 u). With the stick idle nothing is pushed out.
-  it('four blades at 80 u and four spikes at 94 u follow a moving ship', () => {
+  // GW1 orbit v2: an inner ring of 4 spikes at 80 u and an outer ring of 4 at 100 u, so 8 style 3
+  // bullets. With the stick idle nothing stretches.
+  it('four spikes at 80 u and four at 100 u follow a moving ship', () => {
     const { w } = makeGame();
     equipWeapon(w, 'orbit');
     const input = aimAt(0, 0, 1, 0.5);
@@ -198,7 +198,7 @@ describe('orbit', () => {
         if (p.alive[b] !== 1 || p.style[b] !== STYLE_ORBIT) continue;
         const d = Math.hypot((p.x[b] ?? 0) - (w.x[0] ?? 0), (p.y[b] ?? 0) - (w.y[0] ?? 0));
         if (Math.abs(d - ORBIT_RADIUS) < 0.01) blades++;
-        else if (Math.abs(d - (ORBIT_RADIUS + SPIKE_OUT)) < 0.01) spikes++;
+        else if (Math.abs(d - ORBIT_OUTER) < 0.01) spikes++;
       }
       expect(blades).toBe(4);
       expect(spikes).toBe(4);
@@ -251,7 +251,7 @@ describe('weapon timer and death', () => {
     expect(liveStyle(w.bullets, STYLE_ORBIT)).toBe(8);
     equipWeapon(w, 'pierce');
     expect(currentWeapon(w)).toBe('pierce+orbit');
-    expect(liveStyle(w.bullets, STYLE_ORBIT)).toBe(10);
+    expect(liveStyle(w.bullets, STYLE_ORBIT)).toBe(8);
     for (let i = 0; i < 20 * 120 + 2; i++) stepGame(w, DT, idle());
     expect(currentWeapon(w)).toBe('spread');
     expect(liveStyle(w.bullets, STYLE_ORBIT)).toBe(0);

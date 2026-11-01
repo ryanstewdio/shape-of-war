@@ -19,7 +19,7 @@ export interface BossRow {
 
 /** All ten rows of the docs/13 roster. Wave A builds the first three behaviours. */
 export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
-  warden: { tier: 1, hp: 360, phases: 2, radius: 56, colour: 'bossBlue' },
+  warden: { tier: 1, hp: 432, phases: 2, radius: 56, colour: 'bossBlue' },
   brood: { tier: 1, hp: 400, phases: 2, radius: 52, colour: 'bossGreen' },
   spindle: { tier: 1, hp: 500, phases: 2, radius: 48, colour: 'bossYellow' },
   ember: { tier: 2, hp: 600, phases: 3, radius: 44, colour: 'bossOrange' },
@@ -72,6 +72,8 @@ export const HAZARD_RECHECK_SEC = 0.3;
  */
 export const MAX_HAZARDS = 8;
 export const MAX_ADDS = 8;
+/** Hornet pool (GW1): its own cap, separate from the add slots and the part slots. */
+export const MAX_HORNETS = 8;
 export const MAX_PARTS = 4;
 /** hud:boss throttle, s. */
 export const BOSS_HUD_INTERVAL = 0.1;
@@ -99,8 +101,9 @@ export const HAZARD = {
 export const WARDEN = {
   seekSpeed: 55,
   turnRate: 60 * DEG,
-  ringEvery: 4.5,
-  ringEveryP2: 3.5,
+  /** GW1: 10 percent faster than 4.5 and 3.5 s. */
+  ringEvery: 4.05,
+  ringEveryP2: 3.15,
   /** First ring this long after the entrance ends. */
   firstRing: 1.5,
   /** Full gap angle facing the ship. */
@@ -116,20 +119,26 @@ export const WARDEN = {
 } as const;
 
 /**
- * Warden shield and swarm (boss abilities wave, phase 2 on): every everySec of attack time it stops,
- * closes its core for shieldSec and releases Hornets in two bursts, then opens for WARDEN.openSec.
+ * Warden shield and swarm (GW1: every phase): firstSec into the fight, then every everySec start to
+ * start, it stops, closes its core for shieldSec and releases Hornets in two bursts, then opens for
+ * openSec.
  */
 export const WARDEN_SHIELD = {
+  /** GW1: the first shield goes up this many seconds into the fight (after the entrance). */
+  firstSec: 10,
+  /** Then one every everySec, start to start, in every phase. */
   everySec: 14,
   shieldSec: 4,
   /** Bursts fire this many seconds into the shield. */
   burstAt: [0.5, 2.0] as readonly number[],
-  /** Hornets per shield, chosen per shield from the entity hash (the add cap still applies). */
+  /** Hornets per shield (GW1: a fixed 8, two bursts of 4, in their own pool of MAX_HORNETS). */
   hornetsMin: 8,
-  hornetsMax: 12,
+  hornetsMax: 8,
+  /** Core open window when the shield drops. */
+  openSec: 2.5,
 } as const;
 
-/** Hornet (Warden's swarm add, Kind.BossPart PartType.Hornet in an add slot). */
+/** Hornet (Warden's swarm add, Kind.BossPart PartType.Hornet in a Hornet slot). */
 export const HORNET = {
   radius: 10,
   /** 1 HP in tenths of a hit. */

@@ -123,6 +123,10 @@ export interface GameState {
   wellNova: Uint8Array;
   /** False switches the super nova off (GameOptions.wellNova, v1 golden tests). */
   wellNovaOn: boolean;
+  /** Per entity, length w.cap: seconds a well entity has been in nova (drives the nova snakes, GW1). */
+  wellSnakeT: Float64Array;
+  /** Per snake slot: the well entity id a nova snake emerged from, -1 for a normal snake. */
+  snakeWell: Int32Array;
 
   // Snakes.
   snakeHead: Int32Array; // head id per slot, -1 free
@@ -286,6 +290,8 @@ function createState(w: World): GameState {
     wellAge: new Float64Array(MAX_WELLS),
     wellNova: new Uint8Array(MAX_WELLS),
     wellNovaOn: true,
+    wellSnakeT: new Float64Array(cap),
+    snakeWell: new Int32Array(SNAKE_SLOTS).fill(-1),
     snakeHead: new Int32Array(SNAKE_SLOTS).fill(-1),
     snakeSegs: new Int32Array(SNAKE_SLOTS * SNAKE_SEGMENTS).fill(-1),
     pathX: new Float32Array(SNAKE_SLOTS * SNAKE_PATH),

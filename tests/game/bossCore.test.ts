@@ -95,7 +95,7 @@ describe('schedule and entrance', () => {
   });
 
   it('hit points are tenths of a hit times hpMul, clamped to the Int16 range', () => {
-    expect(maxHpFor(BOSS_TABLE.warden, 1)).toBe(3600);
+    expect(maxHpFor(BOSS_TABLE.warden, 1)).toBe(4320); // 432 hits since GW1 (360 before)
     expect(maxHpFor(BOSS_TABLE.prism, 1)).toBe(10000);
     expect(maxHpFor(BOSS_TABLE.spindle, 1.25)).toBe(6250); // 500 hits since G3A (400 before)
     expect(maxHpFor(BOSS_TABLE.prism, 9)).toBe(32767);
@@ -265,7 +265,7 @@ describe('bomb and Detonate', () => {
     w.y[drone] = w.y[id] ?? 0;
     const hp0 = w.hp[id] ?? 0;
     detonate(w);
-    expect(w.hp[id]).toBe(hp0 - 360);
+    expect(w.hp[id]).toBe(hp0 - 432);
   });
 
   it('Detonate out of range does nothing to the boss', () => {
