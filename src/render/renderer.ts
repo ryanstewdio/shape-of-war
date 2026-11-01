@@ -254,7 +254,7 @@ import {
   type ThreatPulse,
   type WallFeature,
 } from './mapFx';
-import { burstBoss, burstSmall, emitBlinkStreak, emitDeflectSparks, emitEnemyTrail, emitGeomSparkle, emitNovaShimmer, trailsActive } from './particles';
+import { burstBoss, burstSmall, emitBlinkStreak, emitDeflectSparks, emitEnemyTrail, emitGeomSparkle, trailsActive } from './particles';
 import { bossSlot, DRONE_KIND_NUM, isFloorSlot, KIND_NUM, partSlot, partVisualSlot, specFor } from './shapeSpecs';
 // v31: Brood's split into Broodlings (sim:bossSplit): the green shard burst (bossSplit.ts).
 import {
@@ -484,34 +484,85 @@ import {
 import { DETACH_ARC, damageColours, damagedSpec, EDGE_SPAN, edgeFlicker, STUB_LEN, type DamageColours } from './bossDamage';
 import { EMBER_TONGUES, FLAME_BANDS, FLAME_STOP_COUNT, flameAt, flameColour, flameStops, flameTongue, TONGUE_FLOATS } from './emberFlame';
 import {
+  CALM_BANDS,
+  CALM_MOTES,
+  CALM_RATE,
+  CALM_REACH,
   createNovaState,
-  NOVA_ARM_PTS,
-  NOVA_ARMS,
-  NOVA_WHITE,
   NOVA_HUES,
-  novaCycleStops,
-  novaStreamColour,
-  novaArmPulse,
-  novaCoreFlare,
-  novaRingR,
-  novaWhite,
-  NOVA_RING_ALPHA,
-  NOVA_RING_WIDTH,
-  novaPulse,
-  novaShift,
-  NOVA_ORBITERS,
-  NOVA_REACH,
+  NOVA_WHITE,
   novaAny,
+  novaCoreFlare,
+  novaCycleStops,
   novaEvent,
   novaGrow,
-  novaOrbiter,
+  novaPulse,
+  novaShift,
   novaSlotFor,
-  novaSpiral,
-  NOVA_SLOTS,
+  novaStreamColour,
+  novaWhite,
   onWellNova,
   stepNovaState,
-  type Orbiter,
+  WHIRL_BAND_PTS,
+  WHIRL_BANDS,
+  WHIRL_DASH_U,
+  WHIRL_DASHES,
+  WHIRL_MOTES,
+  WHIRL_SPARKS,
+  whirlAngle,
+  whirlBand,
+  whirlDashU,
+  whirlMote,
+  whirlRadius,
+  type Mote,
 } from './wellNova';
+// Look GW2: well arrival ring, snake emergence, the orbit chainsaw and the boss shield shell.
+import {
+  ARRIVE_DOTS,
+  arriveAny,
+  arriveDot,
+  arriveEvent,
+  arriveFlash,
+  arriveProgress,
+  arriveRadius,
+  createArriveState,
+  createEmergeState,
+  EMERGE_TRAIL,
+  emergeAny,
+  emergeEvent,
+  emergeFlash,
+  emergeRing,
+  emergeTrack,
+  emergeTrailAlpha,
+  onWellArrive,
+  onWellSpawn,
+  resetArriveState,
+  resetEmergeState,
+  stepArrive,
+  stepEmerge,
+  type DustPoint,
+} from './wellArrive';
+import { SPIKE_GHOST_ALPHA, SPIKE_GHOSTS, spikeDrawLen, spikeGhost, spikeHalfWidth, spikeStretch, spikeTriangle, type SpikePose } from './spikeSaw';
+import {
+  createShellState,
+  onBossShield,
+  resetShellState,
+  SHELL_CORE_DIM,
+  SHELL_PAD,
+  SHELL_SIDES,
+  SHELL_WHITE,
+  shellBreath,
+  shellHit,
+  shellRimPulse,
+  shellRot,
+  shellShard,
+  shellVertex,
+  stepShell,
+  windowCorePulse,
+  windowRingR,
+  windowShare,
+  type Shard,
+} from './bossShell';
 import type { ShapePrim } from './shapeSpecs';
 import { createEnemyBulletLayer } from './enemyBullets';
 import type { EnemyBulletFrame, EnemyBulletsLike } from './enemyBulletFx';
@@ -535,6 +586,8 @@ export interface BulletPoolLike {
   /** Previous step positions, used to interpolate orbit blades that Swarm places each step. */
   readonly prevX?: Float32Array;
   readonly prevY?: Float32Array;
+  /** GW2: length in u of a style 3 orbit spike along its tangent (BulletPool.spikeLen), 0 otherwise. */
+  readonly spikeLen?: Float32Array;
 }
 
 /** Structural view of one circle from Thumbs' stickVisuals output, in CSS px. */
@@ -633,6 +686,9 @@ const KIND_DART = 6;
 const KIND_GRAVITY_WELL = 9;
 const KIND_GEOM = 10;
 const WELL_BASE_RADIUS = 24;
+const KIND_SNAKE_HEAD = 7;
+/** Look GW2: white particles in the snake emergence burst. */
+const EMERGE_BURST = 18;
 
 const DEFAULT_ARENA: ArenaDef = {
   shape: 'rect',
@@ -1129,13 +1185,27 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const piecePts = new Float32Array(PIECES * FRAG_PTS * 2);
   const fragScratch = new Float32Array(FRAG_PTS * 2);
   const fragCentre = new Float32Array(2);
-  // Two tone scratch (Spindle axis, Tempest tail) and the nova spiral arm buffer.
+  // Two tone scratch (Spindle axis, Tempest tail) and the whirlpool band buffer.
   const accentPts = new Float32Array(12);
-  const novaArm = new Float32Array(NOVA_ARM_PTS * 2);
-  const novaOrb: Orbiter = { x: 0, y: 0, a: 0, u: 0 };
+  const novaArm = new Float32Array(WHIRL_BAND_PTS * 2);
+  const novaMote: Mote = { x: 0, y: 0, u: 0, a: 0 };
+  // Mote scratch for the brightness buckets: x, y, alpha per mote (no per frame allocation).
+  const motePts = new Float32Array(WHIRL_MOTES * 3);
   const nova = createNovaState();
-  const novaEm: { acc: number }[] = Array.from({ length: NOVA_SLOTS }, () => ({ acc: 0 }));
   const novaG = new Graphics({ label: 'wellNova' });
+  // Look GW2: well arrival and snake emergence state, the chainsaw layer and the boss shell.
+  const arrive = createArriveState();
+  const emerge = createEmergeState();
+  const dustPt: DustPoint = { x: 0, y: 0, a: 0 };
+  const sawG = new Graphics({ label: 'spikeSaw' });
+  let sawShown = false;
+  const sawTri = new Float32Array(6);
+  const sawGhost: SpikePose = { x: 0, y: 0, vx: 0, vy: 0 };
+  const shell = createShellState();
+  const shellPt = new Float32Array(2);
+  const shard: Shard = { x0: 0, y0: 0, x1: 0, y1: 0, a: 0 };
+  let shellDropRot = 0;
+  lines.addChildAt(sawG, lines.getChildIndex(bullets) + 1);
   // Look v33: drone mode glyph over the drone and the thin mode ring round the ship, one Graphics
   // rebuilt only while a drone mode is armed. Buzz scratch and the drawn drone and ship positions.
   const droneFx = new Graphics({ label: 'droneMode' });
@@ -1739,6 +1809,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
    */
   function onHit(x: number, y: number, kind: number, id: number, blocked: boolean): void {
     if (kind === KIND_NUM.boss) {
+      if (blocked) shellHit(shell);
       onBossHit(x, y, blocked);
       return;
     }
@@ -1983,8 +2054,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       exposeSpread = 0;
       bossShake.x = 0;
       bossShake.y = 0;
+      resetShellState(shell);
       return;
     }
+    // GW2: the shield shell follows the view flag or 'sim:bossShield'; the window uses exposedLeft.
+    stepShell(shell, bossView.shielded === true, bossView.exposedLeft ?? -1, dt);
     bossIdx = bossIndex(bossView.id);
     bossTier = bossTierOf(bossIdx);
     if (prewarmedBoss !== bossIdx) prewarmExposed(bossIdx);
@@ -2510,6 +2584,17 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     // v31: a gravity well erupts into a supernova (Swarm, parallel run).
     onWellNova(bus, (id, x, y) => {
       novaEvent(nova, id, x, y);
+    }),
+    // Look GW2: the arrival ring, the snake emergence burst and the boss shield shell.
+    onWellArrive(bus, (id, x, y, inSec) => {
+      arriveEvent(arrive, id, x, y, inSec);
+    }),
+    onWellSpawn(bus, (_id, x, y) => {
+      emergeEvent(emerge, x, y);
+      burstSmall(x, y, NOVA_WHITE, EMERGE_BURST, 160, 420, 0.45);
+    }),
+    onBossShield(bus, (up) => {
+      shell.evUp = up;
     }),
   ];
   offFx.push(
@@ -3095,7 +3180,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
   }
 
-  /** Add points k0 to k1 of the arm buffer around (x, y) as one polyline. */
+  /** Add points k0 to k1 of the band buffer around (x, y) as one polyline. */
   function novaRun(g: Graphics, x: number, y: number, k0: number, k1: number): void {
     for (let k = k0; k <= k1; k++) {
       const px = x + (novaArm[k * 2] ?? 0);
@@ -3105,47 +3190,162 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
   }
 
+  /** The shared well layer (whirlpools, calm swirls, arrivals, emergences), shown on first use this frame. */
+  function wellLayer(): Graphics {
+    if (!novaShown) {
+      novaShown = true;
+      if (novaG.parent !== entities) entities.addChild(novaG);
+    }
+    return novaG;
+  }
+
   /**
-   * Supernova wells (v31, look v33 GW1). After the eruption the well becomes a white tornado: a
-   * dense spiral of NOVA_ARMS near white arms turning at NOVA_SPIN with a brightness pulse, a core
-   * that flares white, neon flecks riding the arms, and the outward shimmer stream from the shared
-   * pool in every hue of the ring. The only ring is a thin faint white line at exactly the sim pull
-   * radius pullR, no pulse. Every nova draws into one shared Graphics (one batch, normal blend),
-   * rebuilt once per frame only while a nova is live. Called per erupted well from drawEntities.
+   * Supernova wells (v31, look GW2 whirlpool). After the eruption the well becomes a whirlpool of
+   * white gas and dust spiralling inward and clockwise on screen, its outer edge at exactly the sim
+   * pull radius pullR (no ring): WHIRL_BANDS layered translucent log spiral bands with bright dashes
+   * flowing down them, WHIRL_MOTES dust motes falling to the core, WHIRL_SPARKS multicolour shimmer
+   * sparks riding the flow, and a bright white core flare. Every well draws into one shared Graphics
+   * (one batch), rebuilt once per frame. id seeds the motes (hash01, no PRNG).
    */
-  function drawNova(slot: number, x: number, y: number, r: number, pullR: number, timeSec: number, dt: number): void {
-    const g = novaG;
+  function drawNova(slot: number, id: number, x: number, y: number, r: number, pullR: number, timeSec: number): void {
+    const g = wellLayer();
     const age = nova.age[slot] ?? 0;
     const grow = novaGrow(age);
     const shift = novaShift(age);
-    const reach = r * NOVA_REACH * grow;
+    const reach = Math.max(r, pullR) * grow;
     const red = palette.red;
     const white = novaWhite(red, shift);
     novaCycleStops(palette, novaStops);
-    // The pull ring: a thin faint white line at exactly the sim pull radius, steady.
-    g.circle(x, y, novaRingR(pullR)).stroke({ width: NOVA_RING_WIDTH, color: NOVA_WHITE, alpha: NOVA_RING_ALPHA * grow });
-    // Tornado: NOVA_ARMS white arms, a soft wide pass then a bright core line, each arm pulsing.
-    for (let arm = 0; arm < NOVA_ARMS; arm++) {
-      novaSpiral(timeSec, arm, reach, novaArm);
-      const p = novaArmPulse(timeSec, arm);
-      novaRun(g, x, y, 0, NOVA_ARM_PTS - 1);
-      g.stroke({ width: 4, color: white, alpha: 0.22 * p * grow, cap: 'round', join: 'round' });
-      novaRun(g, x, y, 0, NOVA_ARM_PTS - 1);
-      g.stroke({ width: 1.4, color: white, alpha: 0.85 * p * grow, cap: 'round', join: 'round' });
+    // Gas: each band in three layered passes, wide and faint to thin and bright, then dashes
+    // sliding down it toward the core so the flow reads as moving.
+    for (let b = 0; b < WHIRL_BANDS; b++) {
+      whirlBand(timeSec, b, WHIRL_BANDS, reach, novaArm);
+      novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
+      g.stroke({ width: reach * 0.09, color: white, alpha: 0.07 * grow, cap: 'round', join: 'round' });
+      novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
+      g.stroke({ width: reach * 0.035, color: white, alpha: 0.16 * grow, cap: 'round', join: 'round' });
+      novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
+      g.stroke({ width: 1.6, color: white, alpha: 0.45 * grow, cap: 'round', join: 'round' });
+      const base = (b * Math.PI * 2) / WHIRL_BANDS;
+      for (let d = 0; d < WHIRL_DASHES; d++) {
+        const u0 = whirlDashU(timeSec, b, d);
+        for (let q = 0; q < 4; q++) {
+          const u = Math.min(1, u0 + (WHIRL_DASH_U * q) / 3);
+          const rr = whirlRadius(u, reach);
+          const an = whirlAngle(u, timeSec, base);
+          if (q === 0) g.moveTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
+          else g.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
+        }
+        g.stroke({ width: 2.6, color: 0xffffff, alpha: (0.3 + 0.6 * (1 - u0)) * grow, cap: 'round', join: 'round' });
+      }
+    }
+    // Dust: motes in four brightness buckets, one fill each.
+    for (let k = 0; k < WHIRL_MOTES; k++) {
+      whirlMote(timeSec, id, k, reach, novaMote);
+      motePts[k * 3] = x + novaMote.x;
+      motePts[k * 3 + 1] = y + novaMote.y;
+      motePts[k * 3 + 2] = novaMote.a;
+    }
+    for (let bk = 0; bk < 4; bk++) {
+      const lo = bk / 4;
+      const hi = (bk + 1) / 4;
+      let any = false;
+      for (let k = 0; k < WHIRL_MOTES; k++) {
+        const ma = motePts[k * 3 + 2] ?? 0;
+        if (ma > lo && ma <= hi) {
+          g.circle(motePts[k * 3] ?? 0, motePts[k * 3 + 1] ?? 0, 1 + 1.4 * hi);
+          any = true;
+        }
+      }
+      if (any) g.fill({ color: white, alpha: ((lo + hi) / 2) * grow });
+    }
+    // The multicolour shimmer sparks (approved at GW2) now ride the flow.
+    for (let k = 0; k < WHIRL_SPARKS; k++) {
+      whirlMote(timeSec, id + 7919, k, reach, novaMote);
+      const c = novaStreamColour(novaStops, red, k, timeSec, shift);
+      const p = novaPulse(timeSec, k);
+      g.circle(x + novaMote.x, y + novaMote.y, 1.4 + p).fill({ color: c, alpha: Math.min(1, novaMote.a * 1.6) * p * grow });
     }
     // The core flares white.
     const f = novaCoreFlare(age, timeSec);
-    g.circle(x, y, r * (0.5 + 0.25 * f) * grow).fill({ color: white, alpha: 0.35 * f });
-    g.circle(x, y, r * 0.3 * grow).fill({ color: 0xffffff, alpha: 0.6 + 0.4 * f });
-    // Flecks riding the arms inward, each a neon hue from the ring, twinkling.
-    for (let k = 0; k < NOVA_ORBITERS; k++) {
-      novaOrbiter(timeSec, k, reach, novaOrb);
-      const c = novaStreamColour(novaStops, red, k, timeSec, shift);
-      const p = novaPulse(timeSec, k);
-      g.circle(x + novaOrb.x, y + novaOrb.y, 1.2 + p).fill({ color: c, alpha: novaOrb.a * p * grow });
+    g.circle(x, y, r * 1.5 * grow).fill({ color: white, alpha: 0.18 * f });
+    g.circle(x, y, r * (0.6 + 0.25 * f) * grow).fill({ color: white, alpha: 0.45 * f });
+    g.circle(x, y, r * 0.32 * grow).fill({ color: 0xffffff, alpha: 0.7 + 0.3 * f });
+  }
+
+  /** Look GW2: a calm small swirl at a well before its nova, so the nova is a clear escalation. */
+  function drawCalmSwirl(id: number, x: number, y: number, r: number, timeSec: number): void {
+    const g = wellLayer();
+    const reach = r * CALM_REACH;
+    const col = mixRgb(palette.red, NOVA_WHITE, 0.35);
+    for (let b = 0; b < CALM_BANDS; b++) {
+      whirlBand(timeSec, b, CALM_BANDS, reach, novaArm, CALM_RATE);
+      novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
+      g.stroke({ width: 3, color: col, alpha: 0.12, cap: 'round', join: 'round' });
+      novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
+      g.stroke({ width: 1, color: col, alpha: 0.3, cap: 'round', join: 'round' });
     }
-    const em = novaEm[slot];
-    if (em !== undefined) emitNovaShimmer(em, x, y, r, red, novaStops, shift, timeSec, dt);
+    for (let k = 0; k < CALM_MOTES; k++) {
+      whirlMote(timeSec, id, k, reach, novaMote, CALM_RATE);
+      g.circle(x + novaMote.x, y + novaMote.y, 1.1);
+    }
+    g.fill({ color: col, alpha: 0.45 });
+  }
+
+  /** Look GW2: arrival rings converging on new wells and the snake emergence bursts and trails. */
+  function drawWellFx(): void {
+    if (arriveAny(arrive)) {
+      const g = wellLayer();
+      for (let k = 0; k < arrive.age.length; k++) {
+        const age = arrive.age[k] ?? Infinity;
+        if (!Number.isFinite(age)) continue;
+        const T = arrive.inSec[k] ?? 1;
+        const x = arrive.x[k] ?? 0;
+        const y = arrive.y[k] ?? 0;
+        const p = arriveProgress(age, T);
+        const fl = arriveFlash(age, T);
+        const fade = age < T ? 1 : fl;
+        if (fade > 0) {
+          g.circle(x, y, arriveRadius(p)).stroke({ width: 1.2, color: NOVA_WHITE, alpha: (0.12 + 0.3 * p) * fade });
+          for (let d = 0; d < ARRIVE_DOTS; d++) {
+            arriveDot(arrive.id[k] ?? 0, d, p, dustPt);
+            g.circle(x + dustPt.x, y + dustPt.y, 1 + dustPt.a);
+          }
+          g.fill({ color: NOVA_WHITE, alpha: (0.3 + 0.65 * p) * fade });
+        }
+        if (fl > 0) {
+          g.circle(x, y, 24 * (1 + 1.6 * (1 - fl))).fill({ color: 0xffffff, alpha: 0.55 * fl });
+          g.circle(x, y, 24 * (1.4 + 2.2 * (1 - fl))).stroke({ width: 3, color: NOVA_WHITE, alpha: fl });
+        }
+      }
+    }
+    if (emergeAny(emerge)) {
+      const g = wellLayer();
+      for (let k = 0; k < emerge.age.length; k++) {
+        const age = emerge.age[k] ?? Infinity;
+        if (!Number.isFinite(age)) continue;
+        const x = emerge.x[k] ?? 0;
+        const y = emerge.y[k] ?? 0;
+        const fl = emergeFlash(age);
+        const ta = emergeTrailAlpha(age);
+        g.circle(x, y, 10 + 18 * fl).fill({ color: 0xffffff, alpha: 0.9 * fl });
+        g.circle(x, y, emergeRing(age)).stroke({ width: 3, color: NOVA_WHITE, alpha: 0.8 * ta });
+        const n = emerge.count[k] ?? 0;
+        if (n >= 2) {
+          const base = k * EMERGE_TRAIL * 2;
+          for (let pass = 0; pass < 2; pass++) {
+            for (let q = 0; q < n; q++) {
+              const px = emerge.trail[base + q * 2] ?? x;
+              const py = emerge.trail[base + q * 2 + 1] ?? y;
+              if (q === 0) g.moveTo(px, py);
+              else g.lineTo(px, py);
+            }
+            if (pass === 0) g.stroke({ width: 7, color: NOVA_WHITE, alpha: 0.22 * ta, cap: 'round', join: 'round' });
+            else g.stroke({ width: 2.2, color: 0xffffff, alpha: 0.85 * ta, cap: 'round', join: 'round' });
+          }
+        }
+      }
+    }
   }
 
   /** Add one drone mode glyph centred at (x, y) to droneFx in colour c. */
@@ -3186,6 +3386,63 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     if (droneDrawn) modeGlyph(look.glyph, droneDrawX, droneDrawY - GLYPH_LIFT, c);
     if (twinDrawn) modeGlyph(look.glyph, twinDrawX, twinDrawY - GLYPH_LIFT, c);
     if (shipDrawn) g.circle(shipDrawX, shipDrawY, MODE_RING_R).stroke({ width: 1.2, color: c, alpha: 0.6 });
+  }
+
+  /**
+   * GW2 boss shield shell (Warden, or any boss that emits 'sim:bossShield'). Up: a slowly turning
+   * hexagon in the Bulwark white, translucent fill and a rim that pulses on every absorbed hit,
+   * the core veiled behind it. Dropped: 6 outline shards fly off and the open core pulses bright
+   * inside a ring that shrinks over the window. g is the over layer, u the under layer.
+   */
+  function drawShell(g: Graphics, u: Graphics, rs: number, lw: number, bodyA: number, timeSec: number): void {
+    const x = bodyX[0] ?? 0;
+    const y = bodyY[0] ?? 0;
+    const R = rs * SHELL_PAD;
+    const coreR = bossCoreFrac(bossIdx, 1) * rs;
+    if (shell.up) {
+      const rot = shellRot(timeSec);
+      shellDropRot = rot;
+      const pulse = shellRimPulse(shell.hitAge);
+      const br = shellBreath(timeSec);
+      // The core dims behind the shell.
+      u.circle(x, y, coreR * 1.25).fill({ color: 0x000000, alpha: (1 - SHELL_CORE_DIM) * bodyA });
+      for (let k = 0; k <= SHELL_SIDES; k++) {
+        shellVertex(k % SHELL_SIDES, rot, R, shellPt);
+        if (k === 0) g.moveTo(x + (shellPt[0] ?? 0), y + (shellPt[1] ?? 0));
+        else g.lineTo(x + (shellPt[0] ?? 0), y + (shellPt[1] ?? 0));
+      }
+      g.closePath();
+      g.fill({ color: SHELL_WHITE, alpha: (0.1 + 0.12 * pulse) * bodyA });
+      for (let k = 0; k <= SHELL_SIDES; k++) {
+        shellVertex(k % SHELL_SIDES, rot, R, shellPt);
+        if (k === 0) g.moveTo(x + (shellPt[0] ?? 0), y + (shellPt[1] ?? 0));
+        else g.lineTo(x + (shellPt[0] ?? 0), y + (shellPt[1] ?? 0));
+      }
+      g.closePath();
+      g.stroke({ width: lw * (1.6 + 2.4 * pulse), color: pulse > 0.05 ? 0xffffff : SHELL_WHITE, alpha: Math.min(1, 0.7 * br + 0.5 * pulse) * bodyA, join: 'miter' });
+      // An inner hexagon, counter turning, makes the shell read as a solid layer.
+      for (let k = 0; k <= SHELL_SIDES; k++) {
+        shellVertex(k % SHELL_SIDES, -rot, R * 0.86, shellPt);
+        if (k === 0) g.moveTo(x + (shellPt[0] ?? 0), y + (shellPt[1] ?? 0));
+        else g.lineTo(x + (shellPt[0] ?? 0), y + (shellPt[1] ?? 0));
+      }
+      g.closePath();
+      g.stroke({ width: lw * 0.8, color: SHELL_WHITE, alpha: 0.4 * br * bodyA });
+      return;
+    }
+    if (Number.isFinite(shell.dropAge)) {
+      for (let k = 0; k < SHELL_SIDES; k++) {
+        shellShard(k, shell.dropAge, shellDropRot, R, shard);
+        g.moveTo(x + shard.x0, y + shard.y0).lineTo(x + shard.x1, y + shard.y1);
+        g.stroke({ width: lw * 1.8, color: SHELL_WHITE, alpha: shard.a * bodyA, cap: 'round' });
+      }
+    }
+    if (shell.openLeft > 0) {
+      const share = windowShare(shell.openLeft, shell.openTotal);
+      const p = windowCorePulse(timeSec, share);
+      g.circle(x, y, coreR * (1 + 0.25 * p)).fill({ color: 0xffffff, alpha: 0.55 * p * bodyA });
+      g.circle(x, y, windowRingR(share) * rs).stroke({ width: lw * 1.6, color: 0xffffff, alpha: (0.5 + 0.5 * share) * bodyA });
+    }
   }
 
   /**
@@ -3282,6 +3539,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
           if (ring !== null && ring.alpha > 0) g.circle(x, y, ring.r * rs).stroke({ width: lw * ring.width, color: 0xffffff, alpha: ring.alpha });
         }
       }
+      drawShell(g, u, rs, lw, bodyA, timeSec);
       // Hit flash: a 60 ms white outline on every body.
       const fa = hitFlashAlpha(bossFlashAge) * bodyA;
       if (fa > 0) {
@@ -3328,12 +3586,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   function drawEntities(w: World, alpha: number, timeSec: number, dt: number): void {
     growPools(w.cap);
     flameTime = w.time;
-    // v31 nova layer: one Graphics, cleared and rebuilt only while a nova is live.
+    // v31 well layer: one Graphics, cleared once and rebuilt only while it holds content.
     const novaLive = novaAny(nova);
-    if (novaLive || novaShown) {
+    const emergeLive = emergeAny(emerge);
+    if (novaShown) {
       novaG.clear();
-      novaShown = novaLive;
-      if (novaLive && novaG.parent !== entities) entities.addChild(novaG);
+      novaShown = false;
     }
     if (enemyFxDirty) {
       enemyFx.clear();
@@ -3589,13 +3847,15 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       } else if (i === 0 && kind === KIND_SHIP && turboK > 0) {
         ev.glowMul *= turboGlow(turboK, timeSec);
       }
-      // v31: an erupted well draws its supernova swirl and sheds its shimmer stream.
-      if (kind === KIND_GRAVITY_WELL && novaLive) {
+      // v31, look GW2: an erupted well draws its whirlpool, out to exactly the sim pull radius of
+      // this well (nova radius once erupted); any other well turns a calm small swirl.
+      if (kind === KIND_GRAVITY_WELL) {
         const r = w.radius[i] ?? WELL_BASE_RADIUS;
-        const slot = novaSlotFor(nova, i, w.x[i] ?? ev.x, w.y[i] ?? ev.y, r);
-        // The ring sits at exactly the sim pull radius of this well (nova radius once erupted).
-        if (slot >= 0) drawNova(slot, ev.x, ev.y, r, wellInNova(w, i) ? NOVA_RADIUS : PULL_RADIUS, timeSec, dt);
+        const slot = novaLive ? novaSlotFor(nova, i, w.x[i] ?? ev.x, w.y[i] ?? ev.y, r) : -1;
+        if (slot >= 0) drawNova(slot, i, ev.x, ev.y, r, wellInNova(w, i) ? NOVA_RADIUS : PULL_RADIUS, timeSec);
+        else if (!teleNow) drawCalmSwirl(i, ev.x, ev.y, r, timeSec);
       }
+      if (kind === KIND_SNAKE_HEAD && emergeLive) emergeTrack(emerge, i, ev.x, ev.y);
       // Wells pull the lattice into a dimple (at most MAX_WELLS, read every frame).
       if (kind === KIND_GRAVITY_WELL && !teleNow && wellsSeen < MAX_WELLS && lattice.sim) {
         addForce(lattice.sim, ev.x, ev.y, wellPullRadius(w.radius[i] ?? 0), WELL_PULL_ACCEL);
@@ -3631,7 +3891,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     if (!prismDrawn && prismLayer) prismLayer.hide();
     drawBossIdentity(timeSec);
     drawDroneMode(arm.mode);
+    drawWellFx();
     if (novaLive) stepNovaState(nova, dt);
+    stepArrive(arrive, dt);
+    stepEmerge(emerge, dt);
     drawPops(dt);
     stats.entities = live;
   }
@@ -3658,6 +3921,37 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
   }
 
+  /** Add one triangle from sawTri to sawG. */
+  function sawPoly(): void {
+    sawG.moveTo(sawTri[0] ?? 0, sawTri[1] ?? 0)
+      .lineTo(sawTri[2] ?? 0, sawTri[3] ?? 0)
+      .lineTo(sawTri[4] ?? 0, sawTri[5] ?? 0)
+      .closePath();
+  }
+
+  /**
+   * GW2 chainsaw tooth: a sharp triangle centred on (x, y) along the tangent (vx, vy), len long.
+   * While stretched it takes a hot white edge and SPIKE_GHOSTS ghost copies behind the spin.
+   */
+  function drawSawTooth(x: number, y: number, vx: number, vy: number, len: number, sx: number, sy: number, tint: number): void {
+    if (!sawShown) sawShown = true;
+    const st = spikeStretch(len);
+    const half = spikeHalfWidth(st);
+    if (st > 0.02) {
+      for (let k = SPIKE_GHOSTS; k >= 1; k--) {
+        spikeGhost(sx, sy, x, y, vx, vy, k, st, sawGhost);
+        spikeTriangle(sawGhost.x, sawGhost.y, sawGhost.vx, sawGhost.vy, len, half, sawTri);
+        sawPoly();
+        sawG.fill({ color: tint, alpha: (SPIKE_GHOST_ALPHA[k - 1] ?? 0.2) * st });
+      }
+    }
+    spikeTriangle(x, y, vx, vy, len, half, sawTri);
+    sawPoly();
+    sawG.fill({ color: tint, alpha: 0.95 });
+    sawPoly();
+    sawG.stroke({ width: 1 + 1.2 * st, color: st > 0.02 ? mixRgb(tint, 0xffffff, 0.5 + 0.5 * st) : tint, alpha: 0.6 + 0.4 * st, join: 'miter' });
+  }
+
   function drawBullets(pool: BulletPoolLike | null, alpha: number, shipX: number, shipY: number, dt: number): void {
     if (!pool) {
       stats.bullets = 0;
@@ -3671,6 +3965,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     let live = 0;
     let restyled = false;
     const wallGlowOn = mapEffectsOn(getEffectsTier());
+    // GW2: orbit spikes draw as chainsaw teeth in one Graphics, rebuilt only while spikes show.
+    if (sawShown) {
+      sawG.clear();
+      sawShown = false;
+    }
+    const spikeLen = pool.spikeLen;
     for (let i = 0; i < bulletItems.length; i++) {
       const item = bulletItems[i];
       const tail = trailItems[i];
@@ -3704,6 +4004,20 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
           y = bulletRenderPos(pool.y[i] ?? 0, vy, alpha, SIM_DT);
         }
         const heading = Math.atan2(vy, vx);
+        if (spike) {
+          // The atlas frame has a fixed size, so the tooth (length from spikeLen) is drawn instead.
+          drawSawTooth(x, y, vx, vy, spikeDrawLen(spikeLen !== undefined ? (spikeLen[i] ?? 0) : 0), shipX, shipY, palette[vis.tint]);
+          if (item.x !== PARK) {
+            item.x = PARK;
+            item.y = PARK;
+          }
+          if (tail.x !== PARK) {
+            tail.x = PARK;
+            tail.y = PARK;
+          }
+          em.acc = 0;
+          continue;
+        }
         item.x = x;
         item.y = y;
         item.rotation = vis.orient === 'radial' ? Math.atan2(y - shipY, x - shipX) : heading;
@@ -3893,6 +4207,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     turboK = 0;
     turboPrevActive = null;
     turboPrevTimer = 0;
+    resetShellState(shell);
+    resetArriveState(arrive);
+    resetEmergeState(emerge);
   }
 
   /** New arena: wall features, calm threat, no flashes, pops or per slot fx state. */
