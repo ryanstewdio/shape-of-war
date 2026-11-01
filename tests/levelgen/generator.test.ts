@@ -210,7 +210,7 @@ describe('generator', { timeout: 30_000 }, () => {
     });
 
     it('GenConfig cuts are respected', () => {
-      const cfg: GenConfig = { enableSnake: false, enableSpawner: false, drones: ['attack'], supers: ['turbo'], enableV2Enemies: true, enableBosses: false };
+      const cfg: GenConfig = { enableSnake: false, enableSpawner: false, drones: ['attack'], supers: ['turbo'], enableV2Enemies: true, enableBosses: false, enableCylinder: true };
       for (const s of seeds(200)) {
         const d = gen.generateLevel(s, 40, cfg);
         expect(d.roster.map((e) => e.kind)).not.toContain('snake');
@@ -338,7 +338,7 @@ describe('generator', { timeout: 30_000 }, () => {
     });
 
     it('respects the snake cut and reports a broken def', () => {
-      const cut = gen.generateEndless(5, { enableSnake: false, enableSpawner: false, drones: ['attack'], supers: ['turbo'], enableV2Enemies: true, enableBosses: false });
+      const cut = gen.generateEndless(5, { enableSnake: false, enableSpawner: false, drones: ['attack'], supers: ['turbo'], enableV2Enemies: true, enableBosses: false, enableCylinder: true });
       expect(cut.roster.map((e) => e.kind)).not.toContain('snake');
       const bad = { ...structuredClone(gen.generateEndless(5)), objective: { kind: 'none' as const }, budgetPerSegment: 0 };
       expect(validateEndless(bad).errors.some((e) => e.startsWith('E1:'))).toBe(true);

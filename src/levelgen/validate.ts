@@ -11,6 +11,7 @@ import {
   GENERATOR_VERSION,
   GENERATOR_VERSION_V2,
   GENERATOR_VERSION_V3,
+  GENERATOR_VERSION_V4,
   LEVELDEF_VERSION,
   MAX_RETRIES,
   SPAWN_PATTERNS,
@@ -38,6 +39,7 @@ import type {
   WaveSchedule,
 } from './leveldef';
 import { ALL_ENEMY_KINDS, isV2Kind } from './v2enemies';
+import { CYLINDER_WIDTH_STEP, cylDist, cylObstacleDistance, cylinderEligible, insideRims } from './cylinder';
 
 // Constants shared with the W2 generator. docs/02 sections 6, 7, 8, 9, 11.
 export const ARENA_MIN_HEIGHT = 700;
@@ -423,9 +425,8 @@ function checkJson(c: Collector, def: unknown): void {
 function checkVersions(c: Collector, version: number, generatorVersion: number): void {
   c.check('J3', (report) => {
     if (version !== LEVELDEF_VERSION) report(`version ${version} !== ${LEVELDEF_VERSION}`);
-    if (generatorVersion !== GENERATOR_VERSION && generatorVersion !== GENERATOR_VERSION_V2 && generatorVersion !== GENERATOR_VERSION_V3) {
-      report(`generatorVersion ${generatorVersion} not ${GENERATOR_VERSION}, ${GENERATOR_VERSION_V2} or ${GENERATOR_VERSION_V3}`);
-    }
+    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4];
+    if (!known.includes(generatorVersion)) report(`generatorVersion ${generatorVersion} not ${known.join(', ')}`);
   });
 }
 
@@ -436,6 +437,14 @@ function checkVersions(c: Collector, version: number, generatorVersion: number):
  */
 export interface BossCheckOptions {
   enableBosses: boolean;
+}
+
+/**
+ * What validateLevel may know about the config that made a def. A GenConfig fits. enableCylinder
+ * false makes V1 reject a cylinder def; absent, a cylinder def is judged on C1 alone.
+ */
+export interface LevelCheckOptions extends BossCheckOptions {
+  enableCylinder?: boolean;
 }
 
 interface BossRules {
@@ -548,7 +557,33 @@ interface WaveRules {
   segmentSec: number | null;
 }
 
-function checkWaves(c: Collector, ws: WaveSchedule, arena: ArenaDef, roster: readonly RosterEntry[], rules: WaveRules): void {
+/**
+ * Point geometry of a surface. Flat: insideArena and plain distances. Cylinder: the margin applies
+ * to the rims only (x must be canonical, in [-W/2, W/2)) and every distance wraps in u.
+ */
+interface Geometry {
+  inside(p: Vec2, margin: number): boolean;
+  dist(a: Vec2, b: Vec2): number;
+  obstacle(o: Obstacle, p: Vec2): number;
+}
+
+function geometryOf(arena: ArenaDef, cylinder: boolean): Geometry {
+  if (cylinder) {
+    const W = arena.width;
+    return {
+      inside: (p, m) => insideRims(arena, p, m),
+      dist: (a, b) => cylDist(a, b, W),
+      obstacle: (o, p) => cylObstacleDistance(o, p, W),
+    };
+  }
+  return {
+    inside: (p, m) => insideArena(arena, p, m),
+    dist: (a, b) => Math.hypot(a.x - b.x, a.y - b.y),
+    obstacle: obstaclePointDistance,
+  };
+}
+
+function checkWaves(c: Collector, ws: WaveSchedule, arena: ArenaDef, roster: readonly RosterEntry[], rules: WaveRules, cylinder = false): void {
   c.check('W1', (report) => {
     const first = ws.waves[0];
     if (first === undefined) report('no waves');
@@ -574,13 +609,14 @@ function checkWaves(c: Collector, ws: WaveSchedule, arena: ArenaDef, roster: rea
     ws.waves.forEach((w, i) => {
       w.entries.forEach((e, k) => {
         if (e.mode !== 'fixed') return;
+        const g = geometryOf(arena, cylinder);
         const p = { x: e.x, y: e.y };
         const at = (): string => `wave ${i} entry ${k} (${f1(e.x)}, ${f1(e.y)})`;
-        if (!insideArena(arena, p, ENTRY_EDGE_MARGIN)) report(`${at()} outside arena bounds margin ${ENTRY_EDGE_MARGIN}`);
-        const ds = Math.hypot(e.x - arena.spawnPoint.x, e.y - arena.spawnPoint.y);
+        if (!g.inside(p, ENTRY_EDGE_MARGIN)) report(`${at()} outside arena bounds margin ${ENTRY_EDGE_MARGIN}`);
+        const ds = g.dist(p, arena.spawnPoint);
         if (ds < ENTRY_SPAWN_CLEAR) report(`${at()} spawn clearance ${f1(ds)} < ${ENTRY_SPAWN_CLEAR}`);
         arena.obstacles.forEach((o, j) => {
-          const d = obstaclePointDistance(o, p);
+          const d = g.obstacle(o, p);
           if (d < ENTRY_OBSTACLE_CLEAR) report(`${at()} within ${f1(d)} of obstacle ${j}`);
         });
       });
@@ -742,24 +778,25 @@ function checkHazards(c: Collector, def: LevelDef, band: Band): void {
   // Lazy so a malformed arena is reported by the check wrapper instead of throwing here.
   const wellClear = (): number => Math.max(WELL_SPAWN_WIDTH_FRACTION * arena.width, WELL_SPAWN_FLOOR);
   const spawnerClear = (): number => SPAWNER_SPAWN_WIDTH_FRACTION * arena.width;
-  const fromSpawn = (p: Vec2): number => Math.hypot(p.x - arena.spawnPoint.x, p.y - arena.spawnPoint.y);
+  const g = (): Geometry => geometryOf(arena, def.surface === 'cylinder');
+  const fromSpawn = (p: Vec2): number => g().dist(p, arena.spawnPoint);
   c.check('H1', (report) => {
     const n = hazards.wells.length;
     if (n > MAX_WELLS) report(`hazards: ${n} gravity wells, want 0 to ${MAX_WELLS}`);
     hazards.wells.forEach((w, i) => {
       const d = fromSpawn(w);
       if (d < wellClear()) report(`well ${i} spawn clearance ${f1(d)} < ${f1(wellClear())}`);
-      if (!insideArena(arena, w, WELL_EDGE)) report(`well ${i} outside arena bounds margin ${WELL_EDGE}`);
+      if (!g().inside(w, WELL_EDGE)) report(`well ${i} outside arena bounds margin ${WELL_EDGE}`);
       arena.obstacles.forEach((o, j) => {
-        const g = obstaclePointDistance(o, w);
-        if (g < WELL_OBSTACLE) report(`well ${i} within ${f1(g)} of obstacle ${j}`);
+        const d2 = g().obstacle(o, w);
+        if (d2 < WELL_OBSTACLE) report(`well ${i} within ${f1(d2)} of obstacle ${j}`);
       });
     });
   });
   c.check('H2', (report) => {
     hazards.wells.forEach((a, i) => {
       hazards.wells.slice(i + 1).forEach((b, k) => {
-        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        const d = g().dist(a, b);
         if (d < WELL_PAIR) report(`wells ${i} and ${i + k + 1} distance ${f1(d)} < ${WELL_PAIR}`);
       });
     });
@@ -770,14 +807,14 @@ function checkHazards(c: Collector, def: LevelDef, band: Band): void {
     hazards.spawners.forEach((s, i) => {
       const d = fromSpawn(s);
       if (d < spawnerClear()) report(`spawner ${i} spawn clearance ${f1(d)} < ${f1(spawnerClear())}`);
-      if (!insideArena(arena, s, SPAWNER_EDGE)) report(`spawner ${i} outside arena bounds margin ${SPAWNER_EDGE}`);
+      if (!g().inside(s, SPAWNER_EDGE)) report(`spawner ${i} outside arena bounds margin ${SPAWNER_EDGE}`);
       hazards.wells.forEach((w, j) => {
-        const dw = Math.hypot(s.x - w.x, s.y - w.y);
+        const dw = g().dist(s, w);
         if (dw < SPAWNER_WELL) report(`spawner ${i} within ${f1(dw)} of well ${j}`);
       });
       arena.obstacles.forEach((o, j) => {
-        const g = obstaclePointDistance(o, s);
-        if (g < SPAWNER_OBSTACLE) report(`spawner ${i} within ${f1(g)} of obstacle ${j}`);
+        const d2 = g().obstacle(o, s);
+        if (d2 < SPAWNER_OBSTACLE) report(`spawner ${i} within ${f1(d2)} of obstacle ${j}`);
       });
       if (!(s.spawnAtSec >= 0) || !(s.emitEverySec > 0) || !(s.dartsPerEmit >= 1) || !isInt(s.dartsPerEmit)) {
         report(`spawner ${i} timing ${s.spawnAtSec}, ${s.emitEverySec}, ${s.dartsPerEmit} invalid`);
@@ -810,7 +847,7 @@ function checkLoadout(c: Collector, def: LevelDef): void {
  * boss invariants B1 to B4 and J7. Pass the GenConfig (or its enableBosses) that made the def to
  * make B1 strict both ways and to run J7; generateLevel does.
  */
-export function validateLevel(def: LevelDef, opts?: BossCheckOptions): ValidationResult {
+export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): ValidationResult {
   const c = new Collector();
   checkJson(c, def);
   checkVersions(c, def.version, def.generatorVersion);
@@ -830,10 +867,11 @@ export function validateLevel(def: LevelDef, opts?: BossCheckOptions): Validatio
     firstAtSec: FIRST_WAVE_SEC,
     maxLive: BANDS[band].maxLiveEnemies,
     segmentSec: null,
-  });
+  }, def.surface === 'cylinder');
   checkHazards(c, def, band);
   checkLoadout(c, def);
-  checkSurface(c, def.surface);
+  checkSurface(c, def.surface, opts?.enableCylinder !== false);
+  checkCylinder(c, def);
   checkV2Content(c, def.generatorVersion, band, () => namedKinds(def.roster, def.waves));
   const o = def.objective;
   checkBoss(c, def.boss, def.generatorVersion, {
@@ -850,10 +888,34 @@ export function validateLevel(def: LevelDef, opts?: BossCheckOptions): Validatio
   return c.result();
 }
 
-/** V1: v2 hook. Only 'flat' is valid in v1; a missing field is an error too. */
-function checkSurface(c: Collector, surface: unknown): void {
+/**
+ * V1: the surface is 'flat', or 'cylinder' where allowCylinder (a level with the cylinder flag not
+ * known to be off). Every other value, and a missing field, is an error.
+ */
+function checkSurface(c: Collector, surface: unknown, allowCylinder = false): void {
   c.check('V1', (report) => {
-    if (surface !== 'flat') report(`surface ${String(surface)} !== 'flat' (only flat is valid in v1)`);
+    if (surface === 'flat' || (allowCylinder && surface === 'cylinder')) return;
+    report(`surface ${String(surface)} !== 'flat'${allowCylinder ? " or 'cylinder'" : ''}`);
+  });
+}
+
+/**
+ * C1 (D13 phase C0): a cylinder level is level 11 or later and not a boss level, its arena is rect
+ * or rectObstacles with a width that is a multiple of 64 u, and it carries GENERATOR_VERSION_V4,
+ * which no flat def carries.
+ */
+function checkCylinder(c: Collector, def: LevelDef): void {
+  c.check('C1', (report) => {
+    const cyl = def.surface === 'cylinder';
+    if (!cyl) {
+      if (def.generatorVersion === GENERATOR_VERSION_V4) report(`generatorVersion ${GENERATOR_VERSION_V4} on a ${String(def.surface)} level`);
+      return;
+    }
+    if (!cylinderEligible(def.levelIndex)) report(`cylinder on level ${def.levelIndex}: only levels from 11 that are not boss levels`);
+    const a = def.arena;
+    if (a.shape !== 'rect' && a.shape !== 'rectObstacles') report(`cylinder arena shape ${String(a.shape)}, want rect or rectObstacles`);
+    if (!isInt(a.width / CYLINDER_WIDTH_STEP)) report(`cylinder width ${a.width} not a multiple of ${CYLINDER_WIDTH_STEP}`);
+    if (def.generatorVersion !== GENERATOR_VERSION_V4) report(`cylinder with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V4}`);
   });
 }
 

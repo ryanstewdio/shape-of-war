@@ -16,6 +16,11 @@ export const GENERATOR_VERSION_V2 = 2;
  * carries a BossSpec). Every other def keeps GENERATOR_VERSION or GENERATOR_VERSION_V2.
  */
 export const GENERATOR_VERSION_V3 = 3;
+/**
+ * D13 phase C0. Generator version that marks only cylinder levels (surface 'cylinder'). Boss
+ * levels are always flat, so it never meets GENERATOR_VERSION_V3; every flat def keeps its version.
+ */
+export const GENERATOR_VERSION_V4 = 4;
 
 /** V3 boss ids, in schedule order (docs/13). A BossView id is the index in this list. */
 export const BOSS_IDS = ['warden', 'brood', 'spindle', 'ember', 'mirage', 'gravitas', 'bastion', 'tempest', 'twins', 'prism'] as const;
@@ -164,9 +169,9 @@ export interface LevelDef {
   par: number; // multiple of 500, at least 1000
   stars: [number, number, number]; // [par, 2 x par, 4 x par]
   /**
-   * W2, v2 hook (SPEC 3.3, docs/09 section 5). Reserved: only 'flat' is valid in v1 and nothing
-   * reads it. Optional in the type only so hand built defs elsewhere still compile; generateLevel
-   * always emits it and validateLevel (V1) rejects a missing or non flat value.
+   * W2, v2 hook (SPEC 3.3, docs/09 section 5). 'flat' or, since D13 phase C0, 'cylinder' (u wraps
+   * with period arena.width). Optional in the type only so hand built defs elsewhere still compile;
+   * generateLevel always emits it and validateLevel (V1) rejects a missing or other value.
    */
   surface?: SurfaceKind;
   /**
@@ -216,6 +221,12 @@ export interface GenConfig {
    * through the schedule in boss.ts (V3-A).
    */
   enableBosses: boolean;
+  /**
+   * D13 cylinder surface (phase C0). On: levels 11 and up that are not boss levels are drawn
+   * cylinder 35 percent of the time from their own stream and report GENERATOR_VERSION_V4. Off:
+   * output is byte identical to v3. Default on. Endless stays flat either way.
+   */
+  enableCylinder: boolean;
 }
 
 export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
@@ -225,13 +236,17 @@ export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>(
   supers: ['homing', 'detonate', 'turbo'],
   enableV2Enemies: true,
   enableBosses: true,
+  enableCylinder: true,
 });
 
-/** DEFAULT_GEN_CONFIG with the v2 enemies and the bosses off: the v1 generator, byte for byte. */
-export const V1_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableV2Enemies: false, enableBosses: false });
+/** DEFAULT_GEN_CONFIG with the v2 enemies, bosses and cylinder off: the v1 generator, byte for byte. */
+export const V1_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableV2Enemies: false, enableBosses: false, enableCylinder: false });
 
-/** DEFAULT_GEN_CONFIG with the bosses off: the v2.1 generator (v2 enemies on), byte for byte. */
-export const V2_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableBosses: false });
+/** DEFAULT_GEN_CONFIG with the bosses and cylinder off: the v2.1 generator (v2 enemies on), byte for byte. */
+export const V2_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableBosses: false, enableCylinder: false });
+
+/** DEFAULT_GEN_CONFIG with the cylinder off: the v3 generator (v2 enemies and bosses on), byte for byte. */
+export const V3_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableCylinder: false });
 
 export interface ValidationResult {
   ok: boolean;

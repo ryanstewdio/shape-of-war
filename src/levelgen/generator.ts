@@ -20,6 +20,7 @@ import {
   GENERATOR_VERSION,
   GENERATOR_VERSION_V2,
   GENERATOR_VERSION_V3,
+  GENERATOR_VERSION_V4,
   LEVELDEF_VERSION,
   MAX_RETRIES,
   SUPER_KINDS,
@@ -57,6 +58,7 @@ import type {
 import {
   ARENA_MAX_ASPECT,
   ARENA_MAX_WIDTH,
+  ARENA_MIN_ASPECT,
   BOMBS,
   ENTRY_EDGE_MARGIN,
   ENTRY_OBSTACLE_CLEAR,
@@ -90,6 +92,19 @@ import {
   validateLevel,
 } from './validate';
 import { bossForLevel, bossForSegment, bossHazards } from './boss';
+import {
+  CYLINDER_CHANCE,
+  SURFACE_SALT,
+  canonX,
+  cylDist,
+  cylFarthest,
+  cylObstacleDistance,
+  cylinderEligible,
+  cylinderWidth,
+  insideRims,
+  roundCanonX,
+} from './cylinder';
+import type { SurfaceKind } from '../core/surface';
 import { ALL_ENEMY_KINDS, V2_ENEMY_SALT, V2_SPAWN_UNIT, planV2Roster, swapGroupKind, v2GroupCount } from './v2enemies';
 
 /** Stage salts, docs/02 section 2. */
@@ -201,6 +216,35 @@ export function generateArena(r: Rng, band: Band): ArenaDef {
   return obstacles.length === 0 ? { ...base, shape: 'rect' } : { ...base, obstacles };
 }
 
+/**
+ * D13 cylinder arena, on the arena stream of a cylinder level only (flat levels never reach it).
+ * Draws: shape among rect and rectObstacles (band weights), height, aspect, then obstacles. The
+ * width snaps to a multiple of 64 u inside the size bounds before any obstacle is placed.
+ * Obstacles keep the flat placement rules, so none crosses the u seam.
+ */
+export function generateCylinderArena(r: Rng, band: Band): ArenaDef {
+  const b = BANDS[band];
+  const shapes = ['rect', 'rectObstacles'] as const;
+  const shape = rngPick(r, shapes, shapes.map((k) => b.shapeWeights[k]));
+  const height = intStep(r, b.arenaHeight.min, b.arenaHeight.max, 20);
+  const raw = roundTo(height * range(r, b.aspect.min, b.aspect.max), 20);
+  const width = cylinderWidth(raw, height, ARENA_MAX_WIDTH, ARENA_MIN_ASPECT, ARENA_MAX_ASPECT);
+  const base: ArenaDef = { shape, width, height, cornerRadius: 0, obstacles: [], spawnPoint: { x: 0, y: 0 } };
+  if (shape !== 'rectObstacles') return base;
+  const obstacles = placeObstacles(r, base, rngInt(r, b.obstacleCount.min, b.obstacleCount.max));
+  return obstacles.length === 0 ? { ...base, shape: 'rect' } : { ...base, obstacles };
+}
+
+/**
+ * D13 surface draw: one draw from mulberry32(deriveSeed(seed, SURFACE_SALT)), its own stream, so
+ * no other stage moves. Flag off, levels 1 to 10 and boss levels: 'flat' with no draw. seed is the
+ * level seed (not the retry seed), so a re-derive keeps the surface.
+ */
+export function pickSurface(seed: number, levelIndex: number, cfg: GenConfig): SurfaceKind {
+  if (!cfg.enableCylinder || !cylinderEligible(levelIndex)) return 'flat';
+  return chance(mulberry32(deriveSeed(seed, SURFACE_SALT)), CYLINDER_CHANCE) ? 'cylinder' : 'flat';
+}
+
 /** docs/02 section 6.2. Per attempt draws: orientation, length, cx, cy. Stops at the first exhausted obstacle. */
 function placeObstacles(r: Rng, arena: ArenaDef, count: number): Obstacle[] {
   const placed: Obstacle[] = [];
@@ -267,7 +311,13 @@ const objectiveTimeSec = (o: ObjectiveDef): number | null =>
 
 // Spawn points, docs/02 section 7.1.
 
-function spawnPointOk(arena: ArenaDef, p: Vec2): boolean {
+function spawnPointOk(arena: ArenaDef, p: Vec2, cyl: boolean): boolean {
+  if (cyl) {
+    const W = arena.width;
+    if (!insideRims(arena, p, ENTRY_EDGE_MARGIN)) return false;
+    if (cylDist(p, arena.spawnPoint, W) < ENTRY_SPAWN_CLEAR) return false;
+    return arena.obstacles.every((o) => cylObstacleDistance(o, p, W) >= ENTRY_OBSTACLE_CLEAR);
+  }
   if (!insideArena(arena, p, ENTRY_EDGE_MARGIN)) return false;
   if (Math.hypot(p.x - arena.spawnPoint.x, p.y - arena.spawnPoint.y) < ENTRY_SPAWN_CLEAR) return false;
   return arena.obstacles.every((o) => obstaclePointDistance(o, p) >= ENTRY_OBSTACLE_CLEAR);
@@ -282,8 +332,17 @@ interface EdgeAnchor {
   ty: number;
 }
 
-/** Draws: side and position (rect family) or one integer angle (circle, hexagon). */
-function edgeAnchor(r: Rng, arena: ArenaDef, inset: number): EdgeAnchor {
+/**
+ * Draws: side and position (rect family) or one integer angle (circle, hexagon). Cylinder: rim
+ * (top or bottom) and u placed in [0, W), canonicalised; there are no side walls.
+ */
+function edgeAnchor(r: Rng, arena: ArenaDef, inset: number, cyl: boolean): EdgeAnchor {
+  if (cyl) {
+    const side = rngInt(r, 0, 1);
+    const u = range(r, 0, arena.width);
+    const hh = arena.height / 2 - inset;
+    return { p: { x: canonX(u - arena.width / 2, arena.width), y: side === 0 ? -hh : hh }, tx: 1, ty: 0 };
+  }
   if (isPolar(arena)) {
     const deg = rngInt(r, 0, 359);
     const rad = (deg * Math.PI) / 180;
@@ -320,27 +379,33 @@ function cornerPoints(arena: ArenaDef): Vec2[] {
 }
 
 const roundPoint = (p: Vec2): Vec2 => ({ x: r1(p.x), y: r1(p.y) });
+/** Cylinder: canonical u rounded to 0.1, in the arena range [-W/2, W/2). */
+const roundCylPoint = (p: Vec2, width: number): Vec2 => ({ x: roundCanonX(p.x, width), y: r1(p.y) });
+const roundAt = (p: Vec2, arena: ArenaDef, cyl: boolean): Vec2 => (cyl ? roundCylPoint(p, arena.width) : roundPoint(p));
 
 /** One fresh candidate for a redraw. Draws as edgeAnchor, or one corner index. */
-function redrawPoint(r: Rng, arena: ArenaDef, pattern: SpawnPattern): Vec2 {
+function redrawPoint(r: Rng, arena: ArenaDef, pattern: SpawnPattern, cyl: boolean): Vec2 {
   if (pattern === 'corners') return cornerPoints(arena)[rngInt(r, 0, 3)] ?? SPAWN_ORIGIN;
-  return roundPoint(edgeAnchor(r, arena, pattern === 'cluster' ? CLUSTER_INSET : EDGE_INSET).p);
+  return roundAt(edgeAnchor(r, arena, pattern === 'cluster' ? CLUSTER_INSET : EDGE_INSET, cyl).p, arena, cyl);
 }
 
 type Placement = { mode: 'fixed'; p: Vec2 } | { mode: 'ring'; angleDeg: number; radius: number };
 
 /** Valid candidate as is; else up to POINT_REDRAWS redraws; else a ring spawn at 300 u. */
-function settle(r: Rng, arena: ArenaDef, pattern: SpawnPattern, candidate: Vec2): Placement {
-  if (spawnPointOk(arena, candidate)) return { mode: 'fixed', p: candidate };
+function settle(r: Rng, arena: ArenaDef, pattern: SpawnPattern, candidate: Vec2, cyl: boolean): Placement {
+  if (spawnPointOk(arena, candidate, cyl)) return { mode: 'fixed', p: candidate };
   for (let i = 0; i < POINT_REDRAWS; i++) {
-    const p = redrawPoint(r, arena, pattern);
-    if (spawnPointOk(arena, p)) return { mode: 'fixed', p };
+    const p = redrawPoint(r, arena, pattern, cyl);
+    if (spawnPointOk(arena, p, cyl)) return { mode: 'fixed', p };
   }
   return { mode: 'ring', angleDeg: rngInt(r, 0, 359), radius: FALLBACK_RING_RADIUS };
 }
 
-/** Per group draws: pattern geometry first, then per entry any redraws and the heading. */
-function emitGroup(r: Rng, arena: ArenaDef, kind: EnemyKind, count: number, pattern: SpawnPattern, startSec: number): SpawnEntry[] {
+/**
+ * Per group draws: pattern geometry first, then per entry any redraws and the heading. cyl: the
+ * arena is a cylinder, so edge and cluster points sit on the rims and wrap in u.
+ */
+function emitGroup(r: Rng, arena: ArenaDef, kind: EnemyKind, count: number, pattern: SpawnPattern, startSec: number, cyl = false): SpawnEntry[] {
   const step = count > 1 ? Math.min(ENTRY_STEP_SEC, MAX_GROUP_SPREAD_SEC / (count - 1)) : 0;
   const placements: Placement[] = [];
   if (pattern === 'ring') {
@@ -351,19 +416,19 @@ function emitGroup(r: Rng, arena: ArenaDef, kind: EnemyKind, count: number, patt
   } else if (pattern === 'corners') {
     const corners = cornerPoints(arena);
     const start = rngInt(r, 0, 3);
-    for (let k = 0; k < count; k++) placements.push(settle(r, arena, pattern, corners[(start + k) % 4] ?? SPAWN_ORIGIN));
+    for (let k = 0; k < count; k++) placements.push(settle(r, arena, pattern, corners[(start + k) % 4] ?? SPAWN_ORIGIN, cyl));
   } else if (pattern === 'edges') {
-    const a = edgeAnchor(r, arena, EDGE_INSET);
+    const a = edgeAnchor(r, arena, EDGE_INSET, cyl);
     for (let k = 0; k < count; k++) {
       const off = (k - (count - 1) / 2) * EDGE_SPREAD;
-      placements.push(settle(r, arena, pattern, roundPoint({ x: a.p.x + a.tx * off, y: a.p.y + a.ty * off })));
+      placements.push(settle(r, arena, pattern, roundAt({ x: a.p.x + a.tx * off, y: a.p.y + a.ty * off }, arena, cyl), cyl));
     }
   } else {
-    const a = edgeAnchor(r, arena, CLUSTER_INSET);
+    const a = edgeAnchor(r, arena, CLUSTER_INSET, cyl);
     for (let k = 0; k < count; k++) {
       const jx = range(r, -CLUSTER_JITTER, CLUSTER_JITTER);
       const jy = range(r, -CLUSTER_JITTER, CLUSTER_JITTER);
-      placements.push(settle(r, arena, pattern, roundPoint({ x: a.p.x + jx, y: a.p.y + jy })));
+      placements.push(settle(r, arena, pattern, roundAt({ x: a.p.x + jx, y: a.p.y + jy }, arena, cyl), cyl));
     }
   }
   return placements.map((pl, k) => ({
@@ -422,6 +487,7 @@ export function applyV2Enemies(
   arena: ArenaDef,
   roster: readonly RosterEntry[],
   list: { waves: readonly WaveDef[]; groups: readonly GroupRec[] },
+  cyl = false,
 ): { roster: RosterEntry[]; waves: WaveDef[] } {
   const plan = planV2Roster(r, band, roster, list.groups);
   const entries: SpawnEntry[][] = list.waves.map(() => []);
@@ -437,7 +503,7 @@ export function applyV2Enemies(
     }
     const pattern = patternFor(r, kind);
     if (g.first === 0) firstPattern[g.wave] = pattern;
-    out.push(...emitGroup(r, arena, kind, v2GroupCount(g.units), pattern, g.startSec));
+    out.push(...emitGroup(r, arena, kind, v2GroupCount(g.units), pattern, g.startSec, cyl));
   }
   const waves = list.waves.map((w, i) => ({ ...w, pattern: firstPattern[i] ?? w.pattern, entries: entries[i] ?? [] }));
   return { roster: plan.roster, waves };
@@ -460,6 +526,8 @@ interface WaveRun {
   fullRamp: boolean;
   /** Extra spawn units per wave (Endless band 4 escalation). */
   budgetBonus: number;
+  /** D13: the arena is a cylinder (wrapped spawn points). Absent means flat. */
+  cylinder?: boolean;
 }
 
 function rampU(run: WaveRun, t: number): number {
@@ -524,7 +592,7 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
       }
       const pattern = patternFor(r, kind);
       first ??= pattern;
-      const emitted = emitGroup(r, run.arena, kind, count, pattern, g * GROUP_START_STEP_SEC);
+      const emitted = emitGroup(r, run.arena, kind, count, pattern, g * GROUP_START_STEP_SEC, run.cylinder === true);
       groups.push({ wave: i, first: entries.length, count: emitted.length, kind, units: gb, startSec: g * GROUP_START_STEP_SEC });
       entries.push(...emitted);
     }
@@ -580,7 +648,12 @@ function farthestInside(arena: ArenaDef, margin: number): number {
   }
 }
 
-function randomPoint(r: Rng, arena: ArenaDef): Vec2 {
+function randomPoint(r: Rng, arena: ArenaDef, cyl: boolean): Vec2 {
+  if (cyl) {
+    // u placed in [0, W) then canonicalised to the arena range; v between the rims.
+    const u = range(r, 0, arena.width);
+    return { x: roundCanonX(u - arena.width / 2, arena.width), y: r1(range(r, -arena.height / 2, arena.height / 2)) };
+  }
   return { x: r1(range(r, -arena.width / 2, arena.width / 2)), y: r1(range(r, -arena.height / 2, arena.height / 2)) };
 }
 
@@ -592,19 +665,24 @@ const dist = (a: Vec2, b: Vec2): number => Math.hypot(a.x - b.x, a.y - b.y);
  * than the inscribed radius, so rect arenas can reach their corners (circle and hexagon in band 2
  * still get none, as docs/02 section 9.1 expects).
  */
-export function generateHazards(r: Rng, arena: ArenaDef, b: BandParams, cfg: GenConfig, objective: ObjectiveDef): HazardDef {
+export function generateHazards(r: Rng, arena: ArenaDef, b: BandParams, cfg: GenConfig, objective: ObjectiveDef, cyl = false): HazardDef {
+  // Cylinder: wrapped distances, and the edge margin applies to the rims only.
+  const W = arena.width;
+  const d2 = cyl ? (a: Vec2, c: Vec2): number => cylDist(a, c, W) : dist;
+  const inside = cyl ? (p: Vec2, m: number): boolean => insideRims(arena, p, m) : (p: Vec2, m: number): boolean => insideArena(arena, p, m);
+  const obsDist = cyl ? (o: Obstacle, p: Vec2): number => cylObstacleDistance(o, p, W) : obstaclePointDistance;
   const wells: GravityWellDef[] = [];
   const nWells = rngInt(r, b.wells.min, b.wells.max);
   const wellMin = Math.max(WELL_SPAWN_WIDTH_FRACTION * arena.width, WELL_SPAWN_FLOOR);
-  if (farthestInside(arena, WELL_EDGE) >= wellMin) {
+  if ((cyl ? cylFarthest(arena, WELL_EDGE) : farthestInside(arena, WELL_EDGE)) >= wellMin) {
     for (let i = 0; i < nWells; i++) {
       let placed = false;
       for (let a = 0; a < WELL_ATTEMPTS && !placed; a++) {
-        const p = randomPoint(r, arena);
-        if (dist(p, arena.spawnPoint) < wellMin) continue;
-        if (!insideArena(arena, p, WELL_EDGE)) continue;
-        if (arena.obstacles.some((o) => obstaclePointDistance(o, p) < WELL_OBSTACLE)) continue;
-        if (wells.some((w) => dist(w, p) < WELL_PAIR)) continue;
+        const p = randomPoint(r, arena, cyl);
+        if (d2(p, arena.spawnPoint) < wellMin) continue;
+        if (!inside(p, WELL_EDGE)) continue;
+        if (arena.obstacles.some((o) => obsDist(o, p) < WELL_OBSTACLE)) continue;
+        if (wells.some((w) => d2(w, p) < WELL_PAIR)) continue;
         wells.push(p);
         placed = true;
       }
@@ -618,12 +696,12 @@ export function generateHazards(r: Rng, arena: ArenaDef, b: BandParams, cfg: Gen
     for (let i = 0; i < n; i++) {
       let p: Vec2 | null = null;
       for (let a = 0; a < SPAWNER_ATTEMPTS && p === null; a++) {
-        const c = randomPoint(r, arena);
-        if (!insideArena(arena, c, SPAWNER_EDGE)) continue;
-        if (dist(c, arena.spawnPoint) < spawnerMin) continue;
-        if (wells.some((w) => dist(w, c) < SPAWNER_WELL)) continue;
-        if (arena.obstacles.some((o) => obstaclePointDistance(o, c) < SPAWNER_OBSTACLE)) continue;
-        if (spawners.some((s) => dist(s, c) < SPAWNER_WELL)) continue;
+        const c = randomPoint(r, arena, cyl);
+        if (!inside(c, SPAWNER_EDGE)) continue;
+        if (d2(c, arena.spawnPoint) < spawnerMin) continue;
+        if (wells.some((w) => d2(w, c) < SPAWNER_WELL)) continue;
+        if (arena.obstacles.some((o) => obsDist(o, c) < SPAWNER_OBSTACLE)) continue;
+        if (spawners.some((s) => d2(s, c) < SPAWNER_WELL)) continue;
         p = c;
       }
       if (p === null) break;
@@ -694,7 +772,10 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const s = attemptSeed(seed, attempt);
   const band = bandOf(levelIndex);
   const b = BANDS[band];
-  const arena = generateArena(stream(s, SALT.arena), band);
+  // D13: the surface stream is separate, so drawing it here moves no draw of any flat level.
+  const surface = pickSurface(seed, levelIndex, cfg);
+  const cyl = surface === 'cylinder';
+  const arena = cyl ? generateCylinderArena(stream(s, SALT.arena), band) : generateArena(stream(s, SALT.arena), band);
   const v1Roster = generateRoster(stream(s, SALT.roster), band, cfg);
   const loadout = stream(s, SALT.loadout);
   const drone = pickAllowed(loadout, DRONE_KINDS, b.droneWeights, cfg.drones, 'attack');
@@ -711,18 +792,20 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     rampOffsetSec: 0,
     fullRamp: false,
     budgetBonus: 0,
+    cylinder: cyl,
   });
   const v2 = runsV2(cfg, band);
   // The v2 stage only rewrites kinds and entries; atSec is untouched, so the loop fields match v1.
-  const { roster, waves: list } = v2 ? applyV2Enemies(stream(s, V2_ENEMY_SALT), band, arena, v1Roster, v1List) : { roster: v1Roster, waves: v1List.waves };
+  const { roster, waves: list } = v2 ? applyV2Enemies(stream(s, V2_ENEMY_SALT), band, arena, v1Roster, v1List, cyl) : { roster: v1Roster, waves: v1List.waves };
   const loop = loopFields(list, scheduleSec, b.intervalEndSec);
   const waves = scheduleOf(b, list, loop.from, loop.period);
-  const hazards = generateHazards(stream(s, SALT.hazards), arena, b, cfg, objective);
+  const hazards = generateHazards(stream(s, SALT.hazards), arena, b, cfg, objective, cyl);
   const { par, target } = computePar(waves, objective);
   if (objective.kind === 'scoreInTime') objective = { ...objective, target };
   const def: LevelDef = {
     version: LEVELDEF_VERSION,
-    generatorVersion: v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
+    // D13: a cylinder level reports GENERATOR_VERSION_V4; every flat level keeps its v3 version.
+    generatorVersion: cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
     runSeed,
     levelIndex,
     seed,
@@ -739,7 +822,7 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     hazards,
     par,
     stars: [par, 2 * par, 4 * par],
-    surface: 'flat',
+    surface,
     retries: attempt,
   };
   return withLevelBoss(def, cfg);

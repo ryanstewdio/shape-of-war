@@ -18,8 +18,10 @@ const CASES: readonly { level: number; kind: EnemyKind; hash: string }[] = [
   { level: 6, kind: 'charger', hash: '93A4C56E' },
   { level: 7, kind: 'swirl', hash: 'CC6859DC' },
   { level: 9, kind: 'splime', hash: '5BD14124' },
-  { level: 16, kind: 'bulwark', hash: 'D736C51F' },
-  { level: 17, kind: 'blink', hash: '43CADCE4' },
+  // D13 C0: seed 42 level 16 is now a cylinder level (was D736C51F flat at 374a7b9).
+  { level: 16, kind: 'bulwark', hash: '712BC1C1' },
+  // D13 C0: seed 42 level 17 is now a cylinder level too (was 43CADCE4 flat at 374a7b9).
+  { level: 17, kind: 'blink', hash: 'BCC2F1B8' },
   { level: 31, kind: 'sower', hash: '66AF8BD7' },
 ];
 
