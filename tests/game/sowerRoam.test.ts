@@ -1,5 +1,6 @@
-// GW3 Sower roam (Ryan): orbit the edge for a hashed 12 to 18 s, steer to within 150 u of the arena
-// centre, return to the edge and orbit again; one loop takes at least 20 s; it keeps sowing.
+// Sower roam (GW3, retimed GW4): the first dive a hashed 6 to 10 s after spawn, later dives a hashed
+// 14 to 20 s apart; each steers to within 150 u of the arena centre, returns to the edge and orbits
+// again; it keeps sowing. Real generated levels: sowerRoamReal.test.ts.
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
 import * as mine from '../../src/game/enemies/mine';
@@ -51,62 +52,100 @@ function trace(w: World, id: number, seconds: number): Trace {
 }
 
 describe('sower roam (pure)', () => {
-  it('edge time is 12 to 18 s, hashed from seed, spawn index and loop', () => {
-    const seen = new Set<number>();
+  it('dive gaps: 6 to 10 s for the first, 14 to 20 s after, hashed from seed, spawn index and loop', () => {
+    const first = new Set<number>();
+    const later = new Set<number>();
     for (let idx = 0; idx < 40; idx++) {
-      for (let loop = 0; loop < 4; loop++) {
-        const t = sower.edgeSeconds(7, idx, loop);
-        expect(t).toBeGreaterThanOrEqual(sower.ROAM_MIN_SEC);
-        expect(t).toBeLessThan(sower.ROAM_MIN_SEC + sower.ROAM_SPAN_SEC);
-        expect(sower.edgeSeconds(7, idx, loop)).toBe(t);
-        seen.add(Math.floor(t));
+      const f = sower.diveGapSeconds(7, idx, 0);
+      expect(f).toBeGreaterThanOrEqual(6);
+      expect(f).toBeLessThan(10);
+      first.add(Math.floor(f));
+      for (let loop = 1; loop < 4; loop++) {
+        const t = sower.diveGapSeconds(7, idx, loop);
+        expect(t).toBeGreaterThanOrEqual(14);
+        expect(t).toBeLessThan(20);
+        expect(sower.diveGapSeconds(7, idx, loop)).toBe(t);
+        later.add(Math.floor(t));
       }
     }
-    expect(seen.size).toBeGreaterThanOrEqual(5); // spread over the range
-    expect(sower.edgeSeconds(7, 3, 0)).not.toBe(sower.edgeSeconds(8, 3, 0));
+    expect(first.size).toBeGreaterThanOrEqual(4); // spread over the range
+    expect(later.size).toBeGreaterThanOrEqual(5);
+    expect(sower.diveGapSeconds(7, 3, 0)).not.toBe(sower.diveGapSeconds(8, 3, 0));
   });
 
   it('phase rules', () => {
     const { ROAM_EDGE: E, ROAM_IN: I, ROAM_OUT: O, nextRoamPhase: next } = sower;
-    expect(next(E, 15, 25, 14, true, 400)).toBe(I);
-    expect(next(E, 13, 25, 14, true, 400)).toBe(E); // edge time not up
-    expect(next(E, 15, 19, 14, true, 400)).toBe(E); // loop shorter than 20 s
-    expect(next(E, 15, 25, 14, false, 400)).toBe(E); // leaves only from the wall
-    expect(next(I, 1, 1, 14, false, 151)).toBe(I);
-    expect(next(I, 1, 1, 14, false, 150)).toBe(O);
-    expect(next(I, sower.INWARD_MAX_SEC, 1, 14, false, 300)).toBe(O); // blocked: give up
-    expect(next(O, 1, 1, 14, false, 300)).toBe(O);
-    expect(next(O, 1, 1, 14, true, 300)).toBe(E);
-    expect(sower.LOOP_MIN_SEC).toBe(20);
+    expect(next(E, 7, 7, 6.5, 0, false, 400)).toBe(I); // first dive: off the wall is fine
+    expect(next(E, 6, 6, 6.5, 0, true, 400)).toBe(E); // gap not up
+    expect(next(E, 3, 15, 14.5, 2, true, 400)).toBe(I);
+    expect(next(E, 1, 15, 14.5, 2, true, 400)).toBe(E); // back on the edge under 2 s
+    expect(next(I, 1, 1, 14, 2, false, 151)).toBe(I);
+    expect(next(I, 1, 1, 14, 2, false, 150)).toBe(O);
+    expect(next(I, sower.INWARD_MAX_SEC, 1, 14, 2, false, 300)).toBe(O); // blocked: give up
+    expect(next(O, 1, 1, 14, 2, false, 300)).toBe(O);
+    expect(next(O, 1, 1, 14, 2, true, 300)).toBe(E);
     expect(sower.CENTRE_REACH).toBe(150);
+    expect(sower.EDGE_MIN_SEC).toBe(2);
+  });
+
+  it('slide side takes the shorter way round an obstacle', () => {
+    // A 400 u wall at x = 0 from y = -300 to 100: from its left face at y = 50 the low end is nearer.
+    const { w } = makeGame({ arena: { shape: 'rectObstacles', width: 1400, height: 900, cornerRadius: 0, obstacles: [{ cx: 0, cy: -100, w: 24, h: 400 }], spawnPoint: { x: 300, y: 0 } } });
+    // Inward normal (-1, 0) on the left face; heading right. Clockwise (ny, -nx) = (0, 1) is down.
+    expect(sower.slideSide(w, -30, 50, 16, -1, 0, 1, 0)).toBe(1);
+    expect(sower.slideSide(w, -30, -250, 16, -1, 0, 1, 0)).toBe(-1);
+    const out = { heading: 0, side: 0 };
+    sower.inwardHeading(w, -30, 50, 16, 0, out);
+    expect(out.side).toBe(1);
+    expect(out.heading).toBeCloseTo(Math.PI / 2, 6); // slides down the face
+    sower.inwardHeading(w, -30, -250, 16, 1, out);
+    expect(out.side).toBe(1); // a kept side is never flipped mid contact
+    sower.inwardHeading(w, -300, 0, 16, 1, out);
+    expect(out.side).toBe(0); // clear way: straight at the centre
+    expect(out.heading).toBeCloseTo(0, 6);
   });
 });
 
 describe('sower roam in play', () => {
-  it('orbits for its hashed edge time, reaches the centre, returns to the edge and loops (rect)', () => {
+  it('first dive 6 to 10 s after spawn, reaches the centre, returns to the edge and loops (rect)', () => {
     const { w } = makeGame();
     const id = put(w, sower.def, 0, -300);
     const tr = trace(w, id, 70);
     const idx = sower.spawnIndex(w, id);
     expect(idx).toBe(0);
     const ins = tr.changes.filter((c) => c.phase === sower.ROAM_IN);
-    expect(ins.length).toBeGreaterThanOrEqual(2);
-    // The first turn: no earlier than the edge time (and 20 s since spawn).
+    expect(ins.length).toBeGreaterThanOrEqual(3);
+    // The first dive: exactly its hashed gap after the first step.
     const first = ins[0]?.t ?? 0;
-    expect(first).toBeGreaterThanOrEqual(Math.max(sower.edgeSeconds(w.level.seed, idx, 0), sower.LOOP_MIN_SEC) - 1e-6);
-    expect(first).toBeLessThan(sower.LOOP_MIN_SEC + 0.1); // 3 s to the wall plus 12 to 18 s, capped up to 20 s
-    // Each inward leg gets within 150 u of the centre.
-    for (const d of tr.minDist) if (Number.isFinite(d)) expect(d).toBeLessThanOrEqual(sower.CENTRE_REACH + 1e-3);
+    const gap0 = sower.diveGapSeconds(w.level.seed, idx, 0);
+    expect(first).toBeGreaterThanOrEqual(gap0 - 1e-6);
+    expect(first).toBeLessThan(gap0 + DT + 1e-6);
+    // Each completed inward leg gets within 150 u of the centre (a leg cut off by the trace end is skipped).
+    const outs = tr.changes.filter((c) => c.phase === sower.ROAM_OUT).length;
+    expect(outs).toBeGreaterThanOrEqual(3);
+    for (const d of tr.minDist.slice(0, outs)) expect(d).toBeLessThanOrEqual(sower.CENTRE_REACH + 1e-3);
     // Out then back to the edge.
     const seq = tr.changes.map((c) => c.phase);
     expect(seq.slice(0, 3)).toEqual([sower.ROAM_IN, sower.ROAM_OUT, sower.ROAM_EDGE]);
-    // On the edge again: hugging a wall.
-    const back = tr.changes[2]?.t ?? 0;
-    expect(back).toBeGreaterThan(first);
-    // Loop length: inward turn to inward turn at least 20 s.
-    for (let k = 1; k < ins.length; k++) expect((ins[k]?.t ?? 0) - (ins[k - 1]?.t ?? 0)).toBeGreaterThanOrEqual(sower.LOOP_MIN_SEC - 1e-6);
+    expect(tr.changes[2]?.t ?? 0).toBeGreaterThan(first);
+    // Later dives: 14 to 20 s apart (later when the return to the edge takes longer).
+    for (let k = 1; k < ins.length; k++) {
+      const gap = (ins[k]?.t ?? 0) - (ins[k - 1]?.t ?? 0);
+      expect(gap).toBeGreaterThanOrEqual(sower.diveGapSeconds(w.level.seed, idx, k) - 1e-4);
+      expect(gap).toBeLessThan(sower.DIVE_GAP_MIN + sower.DIVE_GAP_SPAN + 0.1);
+    }
     // Smooth steering: never more than the turn rate per step.
     expect(tr.maxTurn).toBeLessThanOrEqual(sower.ROAM_TURN * DT + 1e-5);
+  });
+
+  it('is not pulled by a well while off the edge, and is pulled again on it', () => {
+    const { w } = makeGame();
+    const id = put(w, sower.def, 0, -300);
+    expect(sower.isRoaming(w, id)).toBe(false);
+    for (let i = 0; i < 120 * 12 && sower.roamPhase(w, id) !== sower.ROAM_IN; i++) sower.step(w, id, DT);
+    expect(sower.isRoaming(w, id)).toBe(true);
+    for (let i = 0; i < 120 * 30 && sower.roamPhase(w, id) !== sower.ROAM_EDGE; i++) sower.step(w, id, DT);
+    expect(sower.isRoaming(w, id)).toBe(false);
   });
 
   it('returns to and hugs the wall after the centre visit', () => {

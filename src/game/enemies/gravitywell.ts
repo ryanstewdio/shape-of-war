@@ -36,6 +36,7 @@ import { moveTo } from '../steer';
 import { Kind, type World } from '../world';
 import { isDashing } from './charger';
 import { spawnSnake } from './snake';
+import { isRoaming } from './sower';
 import type { EnemyDef } from './types';
 
 export const def: EnemyDef = { kind: Kind.GravityWell, radius: 24, speed: 0, value: 250, colour: 'red', hp: 40, geoms: 5 };
@@ -272,9 +273,13 @@ function pulledByWell(k: number): boolean {
   );
 }
 
-/** A dashing Charger keeps its line: no pull (it can still be fed if its centre enters the core). */
+/**
+ * A dashing Charger and a Sower on a dive, in or out (GW4), keep their line: no pull (either can still be fed if
+ * its centre enters the core).
+ */
 function pullExempt(w: World, id: number): boolean {
-  return w.kind[id] === Kind.Charger && isDashing(w, id);
+  const k = w.kind[id];
+  return (k === Kind.Charger && isDashing(w, id)) || (k === Kind.Sower && isRoaming(w, id));
 }
 
 /** One well: ship contact and pull, bullet hits and pull, enemy feeding and pull. */
