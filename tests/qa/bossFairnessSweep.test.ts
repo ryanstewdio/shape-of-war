@@ -101,7 +101,8 @@ function sweepOne(id: BossId, mode: number, seed: number): Tally {
     for (let i = 0; i < w.cap; i++) {
       if (w.alive[i] !== 1) continue;
       entities++;
-      if (w.kind[i] === Kind.BossPart) parts++;
+      // Hornets have their own pool (MAX_HORNETS), so they do not count against MAX_PARTS.
+      if (w.kind[i] === Kind.BossPart && !bs.hornetIds.includes(i)) parts++;
     }
     const bullets = enemyBulletsOf(w).liveCount;
     const wave = countWaveEnemies(w);

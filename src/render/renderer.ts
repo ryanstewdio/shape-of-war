@@ -3405,7 +3405,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       const pulse = shellRimPulse(shell.hitAge);
       const br = shellBreath(timeSec);
       // The core dims behind the shell.
-      u.circle(x, y, coreR * 1.25).fill({ color: 0x000000, alpha: (1 - SHELL_CORE_DIM) * bodyA });
+      // GW2 glue: no dark paint on a boss (Ryan's rule); the shielded core reads as frosted white instead.
+      u.circle(x, y, coreR * 1.25).fill({ color: 0xf2f2f2, alpha: (1 - SHELL_CORE_DIM) * 0.4 * bodyA });
       for (let k = 0; k <= SHELL_SIDES; k++) {
         shellVertex(k % SHELL_SIDES, rot, R, shellPt);
         if (k === 0) g.moveTo(x + (shellPt[0] ?? 0), y + (shellPt[1] ?? 0));

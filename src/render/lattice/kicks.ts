@@ -61,7 +61,7 @@ export function latticeKickFor(type: FxType, ripple: number): LatticeKick | null
 }
 
 /** Wells read from the World each frame, at most this many. */
-export const MAX_WELLS = 3;
+export const MAX_WELLS = 4; // GW2: up to 4 live wells with arrivals
 /** Well pull: radius of influence is base plus a multiple of the well's hitbox radius. */
 export const WELL_PULL_BASE = 150;
 export const WELL_PULL_PER_R = 4;

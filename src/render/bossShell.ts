@@ -25,7 +25,7 @@ export const SHELL_CORE_DIM = 0.35;
 export const SHATTER_SEC = 0.75;
 export const SHATTER_DRIFT = 0.7;
 /** Open window length when the sim does not give one (Warden WARDEN_SHIELD.openSec). */
-export const SHELL_OPEN_SEC = 2.5;
+export const SHELL_OPEN_SEC = 2.0; // GW2 glue: Warden and Bastion windows are 2 s
 /** The window ring shrinks from this to the core share (both x the body radius). */
 export const WINDOW_RING_R0 = 1.25;
 export const WINDOW_RING_R1 = 0.3;
