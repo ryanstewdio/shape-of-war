@@ -3,14 +3,19 @@
 // BulletPool.spikeLen (SPIKE_REST at rest, up to SPIKE_MAX while it saws). While stretched it gets a
 // hot white edge and a motion smear of SPIKE_GHOSTS ghost copies rotated back round the ship against
 // the spin, so it reads as a chainsaw tooth. Pure maths only; the renderer owns the Graphics.
+// GW3: the saw is a bar that bends out toward the aim (Forge places the spikes and gives vx, vy as
+// the track tangent). Each tooth lies along its tangent with length spikeLen; the ghost smear is no
+// longer drawn (it read as a white backdrop behind the ship). While the saw level is above 0 a faint
+// bright chain line runs through consecutive teeth of each ring, sorted by phase (sawChain).
+import { SPIKE_LEN, SPIKE_STRETCH } from '../game/weapons';
 
 function fin(v: number, d: number): number {
   return Number.isFinite(v) ? v : d;
 }
 
 /** Spike length at rest and fully stretched (weapons SPIKE_LEN and SPIKE_LEN x SPIKE_STRETCH). */
-export const SPIKE_REST = 24;
-export const SPIKE_MAX = 60;
+export const SPIKE_REST = SPIKE_LEN;
+export const SPIKE_MAX = SPIKE_LEN * SPIKE_STRETCH;
 /** Half width of the triangle base at rest; a stretched tooth narrows to SPIKE_THIN of that. */
 export const SPIKE_HALF = 5;
 export const SPIKE_THIN = 0.7;
@@ -84,4 +89,69 @@ export function spikeGhost(sx: number, sy: number, x: number, y: number, vx: num
   out.vx = vx * c - vy * s;
   out.vy = vx * s + vy * c;
   return out;
+}
+
+// Chain line (GW3)
+
+/** Teeth per ring the chain scratch holds (the sim has at most 4 per ring, MAX_HITTERS 8 in all). */
+export const SAW_CHAIN_MAX = 8;
+/**
+ * The chain stays open (no closing segment) when the widest phase gap between neighbouring teeth
+ * exceeds this many even spacings: a bar bent toward the aim, not a full ring.
+ */
+export const SAW_CHAIN_OPEN = 1.5;
+
+function wrap2pi(a: number): number {
+  const t = Math.PI * 2;
+  const v = fin(a, 0) % t;
+  return v < 0 ? v + t : v;
+}
+
+/**
+ * Pure: chain order of n teeth with phases ph (rad, any real), written into order as tooth indices
+ * sorted by phase. When the teeth bunch up (widest gap past SAW_CHAIN_OPEN even spacings) the order
+ * starts just after the widest gap and the chain is open. Returns the segments to draw: n for a
+ * closed ring (the last joins the first), n - 1 for an open bar, 0 for fewer than two teeth.
+ * Allocates nothing.
+ */
+export function sawChain(ph: Float32Array, n: number, order: Int32Array): number {
+  const m = Math.max(0, Math.min(n | 0, ph.length, order.length));
+  for (let i = 0; i < m; i++) order[i] = i;
+  // Insertion sort by wrapped phase (m is tiny).
+  for (let i = 1; i < m; i++) {
+    const v = order[i] ?? 0;
+    const pv = wrap2pi(ph[v] ?? 0);
+    let j = i - 1;
+    while (j >= 0 && wrap2pi(ph[order[j] ?? 0] ?? 0) > pv) {
+      order[j + 1] = order[j] ?? 0;
+      j--;
+    }
+    order[j + 1] = v;
+  }
+  if (m < 2) return 0;
+  let widest = -1;
+  let at = 0;
+  for (let i = 0; i < m; i++) {
+    const a = wrap2pi(ph[order[i] ?? 0] ?? 0);
+    const b = i + 1 < m ? wrap2pi(ph[order[i + 1] ?? 0] ?? 0) : wrap2pi(ph[order[0] ?? 0] ?? 0) + Math.PI * 2;
+    if (b - a > widest) {
+      widest = b - a;
+      at = i;
+    }
+  }
+  if (widest <= (SAW_CHAIN_OPEN * Math.PI * 2) / m) return m;
+  // Rotate so the chain starts just after the widest gap.
+  const s = (at + 1) % m;
+  for (let r = 0; r < s; r++) {
+    const first = order[0] ?? 0;
+    for (let i = 0; i < m - 1; i++) order[i] = order[i + 1] ?? 0;
+    order[m - 1] = first;
+  }
+  return m - 1;
+}
+
+/** Pure: chain line alpha at saw level (0 hides it; faint, rising with the level). */
+export function sawChainAlpha(level: number): number {
+  const l = Math.max(0, Math.min(1, fin(level, 0)));
+  return l > 0 ? 0.2 + 0.35 * l : 0;
 }

@@ -303,9 +303,32 @@ import {
   GLYPH_LIFT,
   MODE_RING_R,
   partJitter,
+  TEMPESTLING_SWIRL_ARCS,
+  TEMPESTLING_SWIRL_LEN,
+  TEMPESTLING_SWIRL_R,
+  tempestlingLead,
+  tempestlingSwirl,
   type DroneGlyph,
 } from './partLooks';
 import { NOVA_RADIUS, PULL_RADIUS, wellInNova } from '../game/enemies/gravitywell';
+import { gs, SNAKE_SEGMENTS, SNAKE_SLOTS } from '../game/state';
+// GW3: nova snakes keep a white core line and a faint shimmer for their whole life.
+import {
+  createNovaSnakeState,
+  NOVA_SNAKE_CORE_A,
+  NOVA_SNAKE_CORE_W,
+  NOVA_SNAKE_DOTS,
+  NOVA_SNAKE_GLOW_W,
+  NOVA_SNAKE_TRACK,
+  novaSnakeCount,
+  novaSnakeDot,
+  novaSnakeDotAlpha,
+  novaSnakeGlow,
+  novaSnakeMark,
+  novaSnakeSweep,
+  polyAt,
+  resetNovaSnakeState,
+} from './novaSnake';
 import { BOSS_IDS } from '../levelgen/leveldef';
 import {
   approach,
@@ -347,6 +370,7 @@ import {
   PART_ANCHOR,
   PART_BROODLING,
   PART_POD,
+  PART_TEMPESTLING,
   PART_TURRET,
   partR,
   partType,
@@ -509,11 +533,18 @@ import {
   WHIRL_DASHES,
   WHIRL_MOTES,
   WHIRL_SPARKS,
-  whirlAngle,
+  WHIRL_GAS_LAYERS,
+  WHIRL_GAS_PTS,
+  WHIRL_WISP_PTS,
+  WHIRL_WISPS,
   whirlBand,
   whirlDashU,
+  whirlFlowAngle,
+  whirlFlowRadius,
+  whirlGasAlpha,
+  whirlGasSector,
   whirlMote,
-  whirlRadius,
+  whirlWisp,
   type Mote,
 } from './wellNova';
 // Look GW2: well arrival ring, snake emergence, the orbit chainsaw and the boss shield shell.
@@ -542,7 +573,7 @@ import {
   stepEmerge,
   type DustPoint,
 } from './wellArrive';
-import { SPIKE_GHOST_ALPHA, SPIKE_GHOSTS, spikeDrawLen, spikeGhost, spikeHalfWidth, spikeStretch, spikeTriangle, type SpikePose } from './spikeSaw';
+import { SAW_CHAIN_MAX, sawChain, sawChainAlpha, spikeDrawLen, spikeHalfWidth, spikeStretch, spikeTriangle } from './spikeSaw';
 import {
   createShellState,
   onBossShield,
@@ -588,6 +619,8 @@ export interface BulletPoolLike {
   readonly prevY?: Float32Array;
   /** GW2: length in u of a style 3 orbit spike along its tangent (BulletPool.spikeLen), 0 otherwise. */
   readonly spikeLen?: Float32Array;
+  /** GW3: orbit spike phase (rad round the ship), for the chain order (BulletPool.phase). */
+  readonly phase?: Float32Array;
 }
 
 /** Structural view of one circle from Thumbs' stickVisuals output, in CSS px. */
@@ -1191,8 +1224,26 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const novaMote: Mote = { x: 0, y: 0, u: 0, a: 0 };
   // Mote scratch for the brightness buckets: x, y, alpha per mote (no per frame allocation).
   const motePts = new Float32Array(WHIRL_MOTES * 3);
+  // GW3 fluid scratch: one gas sector outline and one wisp polyline.
+  const gasPts = new Float32Array(WHIRL_GAS_PTS * 4);
+  const wispPts = new Float32Array(WHIRL_WISP_PTS * 2);
   const nova = createNovaState();
   const novaG = new Graphics({ label: 'wellNova' });
+  // GW3 Tempestling overlay (fast swirl, bright leading edge): drawn positions this frame, one Graphics.
+  const STORM_MAX = 4;
+  const stormX = new Float64Array(STORM_MAX);
+  const stormY = new Float64Array(STORM_MAX);
+  const stormR = new Float64Array(STORM_MAX);
+  const stormLead = new Float64Array(STORM_MAX);
+  const stormH = new Float64Array(STORM_MAX);
+  const stormA = new Float64Array(STORM_MAX);
+  let stormCount = 0;
+  let stormShown = false;
+  // GW3 nova snakes: tracked heads and one body polyline scratch (head plus segments).
+  const novaSnakes = createNovaSnakeState();
+  const snakePts = new Float32Array((SNAKE_SEGMENTS + 1) * 2);
+  const snakeDot = { x: 0, y: 0 };
+  const stormG = new Graphics({ label: 'tempestling' });
   // Look GW2: well arrival and snake emergence state, the chainsaw layer and the boss shell.
   const arrive = createArriveState();
   const emerge = createEmergeState();
@@ -1200,7 +1251,15 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const sawG = new Graphics({ label: 'spikeSaw' });
   let sawShown = false;
   const sawTri = new Float32Array(6);
-  const sawGhost: SpikePose = { x: 0, y: 0, vx: 0, vy: 0 };
+  // GW3 chain line scratch: per ring (2) the teeth positions and phases, the sort order and counts.
+  const chainX = new Float32Array(SAW_CHAIN_MAX * 2);
+  const chainY = new Float32Array(SAW_CHAIN_MAX * 2);
+  const chainRingPh = new Float32Array(SAW_CHAIN_MAX * 2);
+  const chainPh = new Float32Array(SAW_CHAIN_MAX);
+  const chainOrder = new Int32Array(SAW_CHAIN_MAX);
+  const chainN = new Int32Array(2);
+  let sawLevel = 0;
+  let sawTint = 0xffffff;
   const shell = createShellState();
   const shellPt = new Float32Array(2);
   const shard: Shard = { x0: 0, y0: 0, x1: 0, y1: 0, a: 0 };
@@ -3199,13 +3258,27 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     return novaG;
   }
 
+  /** Add the gas sector outline in gasPts around (x, y) as one closed polygon. */
+  function gasRun(g: Graphics, x: number, y: number): void {
+    const n = WHIRL_GAS_PTS * 2;
+    for (let k = 0; k < n; k++) {
+      const px = x + (gasPts[k * 2] ?? 0);
+      const py = y + (gasPts[k * 2 + 1] ?? 0);
+      if (k === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+    g.closePath();
+  }
+
   /**
-   * Supernova wells (v31, look GW2 whirlpool). After the eruption the well becomes a whirlpool of
-   * white gas and dust spiralling inward and clockwise on screen, its outer edge at exactly the sim
-   * pull radius pullR (no ring): WHIRL_BANDS layered translucent log spiral bands with bright dashes
-   * flowing down them, WHIRL_MOTES dust motes falling to the core, WHIRL_SPARKS multicolour shimmer
-   * sparks riding the flow, and a bright white core flare. Every well draws into one shared Graphics
-   * (one batch), rebuilt once per frame. id seeds the motes (hash01, no PRNG).
+   * Supernova wells (v31, look GW2 whirlpool, GW3 fluid). After the eruption the well becomes a
+   * whirlpool of white gas and dust spiralling inward and clockwise on screen, its outer edge at
+   * exactly the sim pull radius pullR (no ring): WHIRL_GAS_LAYERS layers of soft white gas filling
+   * the space behind each band (denser toward the core), WHIRL_BANDS sheared and wobbling log spiral
+   * bands with bright dashes flowing down them, WHIRL_MOTES dust motes on turbulent streamlines,
+   * WHIRL_WISPS wisps peeling off the band edges, WHIRL_SPARKS multicolour shimmer sparks riding the
+   * flow, and a bright white core flare. Every well draws into one shared Graphics (one batch),
+   * rebuilt once per frame. id seeds the flow (hash01, no PRNG).
    */
   function drawNova(slot: number, id: number, x: number, y: number, r: number, pullR: number, timeSec: number): void {
     const g = wellLayer();
@@ -3216,10 +3289,19 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const red = palette.red;
     const white = novaWhite(red, shift);
     novaCycleStops(palette, novaStops);
-    // Gas: each band in three layered passes, wide and faint to thin and bright, then dashes
-    // sliding down it toward the core so the flow reads as moving.
+    // Gas: filled spiral sectors trailing each band, one fill per layer, so the pull area reads as
+    // a disc of gas rather than lines.
+    for (let L = 0; L < WHIRL_GAS_LAYERS; L++) {
+      for (let b = 0; b < WHIRL_BANDS; b++) {
+        whirlGasSector(timeSec, b, WHIRL_BANDS, L, reach, id, gasPts);
+        gasRun(g, x, y);
+      }
+      g.fill({ color: white, alpha: whirlGasAlpha(L) * grow });
+    }
+    // Bands: each in three layered passes, wide and faint to thin and bright, then dashes sliding
+    // down it toward the core so the flow reads as moving.
     for (let b = 0; b < WHIRL_BANDS; b++) {
-      whirlBand(timeSec, b, WHIRL_BANDS, reach, novaArm);
+      whirlBand(timeSec, b, WHIRL_BANDS, reach, novaArm, 1, id);
       novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
       g.stroke({ width: reach * 0.09, color: white, alpha: 0.07 * grow, cap: 'round', join: 'round' });
       novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
@@ -3231,13 +3313,25 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const u0 = whirlDashU(timeSec, b, d);
         for (let q = 0; q < 4; q++) {
           const u = Math.min(1, u0 + (WHIRL_DASH_U * q) / 3);
-          const rr = whirlRadius(u, reach);
-          const an = whirlAngle(u, timeSec, base);
+          const rr = whirlFlowRadius(u, reach, timeSec, id, b);
+          const an = whirlFlowAngle(u, timeSec, base, id);
           if (q === 0) g.moveTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
           else g.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
         }
         g.stroke({ width: 2.6, color: 0xffffff, alpha: (0.3 + 0.6 * (1 - u0)) * grow, cap: 'round', join: 'round' });
       }
+    }
+    // Wisps peel off the band edges and stretch along the flow.
+    for (let k = 0; k < WHIRL_WISPS; k++) {
+      const wa = whirlWisp(timeSec, id, k, reach, wispPts);
+      if (wa <= 0.01) continue;
+      for (let q = 0; q < WHIRL_WISP_PTS; q++) {
+        const px = x + (wispPts[q * 2] ?? 0);
+        const py = y + (wispPts[q * 2 + 1] ?? 0);
+        if (q === 0) g.moveTo(px, py);
+        else g.lineTo(px, py);
+      }
+      g.stroke({ width: 3.2, color: white, alpha: wa * grow, cap: 'round', join: 'round' });
     }
     // Dust: motes in four brightness buckets, one fill each.
     for (let k = 0; k < WHIRL_MOTES; k++) {
@@ -3273,13 +3367,107 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     g.circle(x, y, r * 0.32 * grow).fill({ color: 0xffffff, alpha: 0.7 + 0.3 * f });
   }
 
+  /**
+   * GW3 Tempestlings: a fast swirl of storm arcs round each one and a bright leading edge (the
+   * kite's front edges, white hot) facing its move direction. One Graphics, cleared only while it
+   * holds content, kept just under the boss identity layer.
+   */
+  function drawTempestlings(timeSec: number): void {
+    if (stormShown) {
+      stormG.clear();
+      stormShown = false;
+    }
+    if (stormCount === 0) return;
+    stormShown = true;
+    const last = entities.children[entities.children.length - 1];
+    if (stormG.parent !== entities || (last !== stormG && last !== bossOver)) entities.addChild(stormG);
+    const c = palette[bossColourOf(BOSS_TEMPEST)];
+    const hot = mixRgb(c, 0xffffff, 0.75);
+    for (let k = 0; k < stormCount; k++) {
+      const x = stormX[k] ?? 0;
+      const y = stormY[k] ?? 0;
+      const R = stormR[k] ?? 0;
+      const a = stormA[k] ?? 1;
+      const h = stormH[k] ?? 0;
+      for (let j = 0; j < TEMPESTLING_SWIRL_ARCS; j++) {
+        const s0 = tempestlingSwirl(timeSec, h, j);
+        const rr = R * (TEMPESTLING_SWIRL_R + 0.08 * j);
+        stormArc(x, y, rr, s0, s0 + TEMPESTLING_SWIRL_LEN);
+      }
+      stormG.stroke({ width: 1.8, color: c, alpha: 0.6 * a, cap: 'round' });
+      // Leading edge: wing, nose, wing of the kite turned to the move direction.
+      const L = stormLead[k] ?? 0;
+      const cl = Math.cos(L);
+      const sl = Math.sin(L);
+      const nx = 1.7 * R;
+      const bx = 0.15 * R;
+      const by = 0.72 * R;
+      stormG.moveTo(x + cl * bx - sl * by, y + sl * bx + cl * by)
+        .lineTo(x + cl * nx, y + sl * nx)
+        .lineTo(x + cl * bx + sl * by, y + sl * bx - cl * by);
+      stormG.stroke({ width: 4.5, color: c, alpha: 0.35 * a, join: 'miter' });
+      stormG.moveTo(x + cl * bx - sl * by, y + sl * bx + cl * by)
+        .lineTo(x + cl * nx, y + sl * nx)
+        .lineTo(x + cl * bx + sl * by, y + sl * bx - cl * by);
+      stormG.stroke({ width: 2, color: hot, alpha: 0.95 * a, join: 'miter' });
+    }
+  }
+
+  /**
+   * GW3 nova snakes: every tracked snake (it crawled out of a well) draws a faint white shimmer band
+   * and a white core line through its head and segments, with NOVA_SNAKE_DOTS bright dots running
+   * down the body, on the shared well layer.
+   */
+  function drawNovaSnakes(w: World, alpha: number, timeSec: number): void {
+    if (novaSnakeCount(novaSnakes) === 0) return;
+    const g = wellLayer();
+    const st = gs(w);
+    for (let k = 0; k < NOVA_SNAKE_TRACK; k++) {
+      const head = novaSnakes.head[k] ?? -1;
+      if (head < 0) continue;
+      const slot = w.a[head] ?? -1;
+      if (slot < 0 || slot >= SNAKE_SLOTS) continue;
+      snakePts[0] = interp(w.prevX[head] ?? 0, w.x[head] ?? 0, alpha);
+      snakePts[1] = interp(w.prevY[head] ?? 0, w.y[head] ?? 0, alpha);
+      let n = 1;
+      for (let sgi = 0; sgi < SNAKE_SEGMENTS; sgi++) {
+        const sid = st.snakeSegs[slot * SNAKE_SEGMENTS + sgi] ?? -1;
+        if (sid < 0 || w.alive[sid] !== 1 || w.a[sid] !== head) continue;
+        snakePts[n * 2] = interp(w.prevX[sid] ?? 0, w.x[sid] ?? 0, alpha);
+        snakePts[n * 2 + 1] = interp(w.prevY[sid] ?? 0, w.y[sid] ?? 0, alpha);
+        n++;
+      }
+      if (n < 2) continue;
+      const h = hash01(head);
+      for (let pass = 0; pass < 2; pass++) {
+        for (let q = 0; q < n; q++) {
+          if (q === 0) g.moveTo(snakePts[0] ?? 0, snakePts[1] ?? 0);
+          else g.lineTo(snakePts[q * 2] ?? 0, snakePts[q * 2 + 1] ?? 0);
+        }
+        if (pass === 0) g.stroke({ width: NOVA_SNAKE_GLOW_W, color: NOVA_WHITE, alpha: novaSnakeGlow(timeSec, h), cap: 'round', join: 'round' });
+        else g.stroke({ width: NOVA_SNAKE_CORE_W, color: 0xffffff, alpha: NOVA_SNAKE_CORE_A, cap: 'round', join: 'round' });
+      }
+      for (let d = 0; d < NOVA_SNAKE_DOTS; d++) {
+        const p = novaSnakeDot(timeSec, h, d);
+        polyAt(snakePts, n, p, snakeDot);
+        g.circle(snakeDot.x, snakeDot.y, 2.6).fill({ color: 0xffffff, alpha: novaSnakeDotAlpha(p) });
+      }
+    }
+  }
+
+  /** Add an arc (a0 to a1, clockwise on screen) round (x, y) to the Tempestling layer as its own subpath. */
+  function stormArc(x: number, y: number, r: number, a0: number, a1: number): void {
+    stormG.moveTo(x + Math.cos(a0) * r, y + Math.sin(a0) * r);
+    stormG.arc(x, y, r, a0, a1);
+  }
+
   /** Look GW2: a calm small swirl at a well before its nova, so the nova is a clear escalation. */
   function drawCalmSwirl(id: number, x: number, y: number, r: number, timeSec: number): void {
     const g = wellLayer();
     const reach = r * CALM_REACH;
     const col = mixRgb(palette.red, NOVA_WHITE, 0.35);
     for (let b = 0; b < CALM_BANDS; b++) {
-      whirlBand(timeSec, b, CALM_BANDS, reach, novaArm, CALM_RATE);
+      whirlBand(timeSec, b, CALM_BANDS, reach, novaArm, CALM_RATE, id);
       novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
       g.stroke({ width: 3, color: col, alpha: 0.12, cap: 'round', join: 'round' });
       novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
@@ -3594,6 +3782,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       novaG.clear();
       novaShown = false;
     }
+    stormCount = 0;
+    if (novaSnakeCount(novaSnakes) > 0) novaSnakeSweep(novaSnakes, w.alive, w.kind, w.t, KIND_SNAKE_HEAD);
     if (enemyFxDirty) {
       enemyFx.clear();
       enemyFxGlow.clear();
@@ -3714,7 +3904,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const a = w.a[i] ?? 0;
         const r = w.radius[i] ?? 0;
         if (r > 0) scale = r / partR(a);
-        if (partType(a) === PART_POD && !isTwinPart(a) && !isBroodlingPart(a)) scale *= podPulse(timeSec, hash01(i));
+        if (partType(a) === PART_POD && !isTwinPart(a) && !isBroodlingPart(a) && a !== PART_TEMPESTLING) scale *= podPulse(timeSec, hash01(i));
       }
       // Pickups spin on the render clock (phase per slot) and blink in their last 2 s (w.t).
       // Look v33: the drone pickup ring turns the other way to the weapon pickups.
@@ -3794,6 +3984,16 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
             bodyCount++;
           }
         }
+        // GW3: remember each Tempestling for its swirl and leading edge overlay.
+        if ((w.a[i] ?? 0) === PART_TEMPESTLING && stormCount < STORM_MAX) {
+          stormX[stormCount] = ev.x;
+          stormY[stormCount] = ev.y;
+          stormR[stormCount] = partR(PART_TEMPESTLING) * ev.scaleX;
+          stormLead[stormCount] = tempestlingLead(w.vx[i] ?? 0, w.vy[i] ?? 0, w.rot[i] ?? 0);
+          stormH[stormCount] = hash01(i);
+          stormA[stormCount] = ev.alpha;
+          stormCount++;
+        }
         // Wave B: Gravitas anchors are joined by faint lines (planTier2 reads these positions).
         const pt = partType(w.a[i] ?? 0);
         if (pt === PART_ANCHOR && anchorCount < TETHER_ANCHORS_MAX) {
@@ -3856,7 +4056,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         if (slot >= 0) drawNova(slot, i, ev.x, ev.y, r, wellInNova(w, i) ? NOVA_RADIUS : PULL_RADIUS, timeSec);
         else if (!teleNow) drawCalmSwirl(i, ev.x, ev.y, r, timeSec);
       }
-      if (kind === KIND_SNAKE_HEAD && emergeLive) emergeTrack(emerge, i, ev.x, ev.y);
+      if (kind === KIND_SNAKE_HEAD && emergeLive && emergeTrack(emerge, i, ev.x, ev.y) >= 0) novaSnakeMark(novaSnakes, i, w.t[i] ?? 0);
       // Wells pull the lattice into a dimple (at most MAX_WELLS, read every frame).
       if (kind === KIND_GRAVITY_WELL && !teleNow && wellsSeen < MAX_WELLS && lattice.sim) {
         addForce(lattice.sim, ev.x, ev.y, wellPullRadius(w.radius[i] ?? 0), WELL_PULL_ACCEL);
@@ -3890,6 +4090,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       s.scale.set(ev.scaleX * glowScale, ev.scaleY * glowScale);
     }
     if (!prismDrawn && prismLayer) prismLayer.hide();
+    drawTempestlings(timeSec);
+    drawNovaSnakes(w, alpha, timeSec);
     drawBossIdentity(timeSec);
     drawDroneMode(arm.mode);
     drawWellFx();
@@ -3907,18 +4109,41 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   /** Look v33: bullet ids of the orbit spikes this frame (1), from the shield hitter table. */
   let spikeMask = new Uint8Array(0);
 
-  /** Mark the orbit spikes: hitters at or past ShieldSpec.blades in WeaponState.blades. */
+  /** Mark the orbit spikes: hitters at or past ShieldSpec.blades in WeaponState.blades (1 + ring). */
   function markSpikes(w: World): void {
     const ws = weaponState(w);
     const sh = shieldOf(ws.kind);
     const cap = w.bullets.cap;
     if (spikeMask.length < cap) spikeMask = new Uint8Array(cap);
     else spikeMask.fill(0);
+    sawLevel = sh === null ? 0 : ws.saw;
     if (sh === null) return;
     // Orbit v2: every hitter is a spike (two rings of sh.perRing), so mark them all.
     for (let k = 0; k < sh.perRing * 2 && k < ws.blades.length; k++) {
       const id = ws.blades[k] ?? -1;
-      if (id >= 0 && id < cap) spikeMask[id] = 1;
+      if (id >= 0 && id < cap) spikeMask[id] = k < sh.perRing ? 1 : 2;
+    }
+  }
+
+  /** GW3: while the saw level is above 0, a faint bright chain line through each ring's teeth, by phase. */
+  function drawSawChain(): void {
+    const a = sawChainAlpha(sawLevel);
+    if (a <= 0) return;
+    for (let ring = 0; ring < 2; ring++) {
+      const n = chainN[ring] ?? 0;
+      const o = ring * SAW_CHAIN_MAX;
+      for (let k = 0; k < n; k++) chainPh[k] = chainRingPh[o + k] ?? 0;
+      const segs = sawChain(chainPh, n, chainOrder);
+      if (segs <= 0) continue;
+      for (let s = 0; s <= segs; s++) {
+        const t = chainOrder[s % n] ?? 0;
+        const px = chainX[o + t] ?? 0;
+        const py = chainY[o + t] ?? 0;
+        if (s === 0) sawG.moveTo(px, py);
+        else sawG.lineTo(px, py);
+      }
+      sawG.stroke({ width: 1.6, color: mixRgb(sawTint, 0xffffff, 0.7), alpha: a, cap: 'round', join: 'round' });
+      sawShown = true;
     }
   }
 
@@ -3931,21 +4156,14 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   }
 
   /**
-   * GW2 chainsaw tooth: a sharp triangle centred on (x, y) along the tangent (vx, vy), len long.
-   * While stretched it takes a hot white edge and SPIKE_GHOSTS ghost copies behind the spin.
+   * GW2 chainsaw tooth, GW3 bar: a sharp triangle centred on (x, y) along the track tangent
+   * (vx, vy), len (spikeLen) long, with a hot white edge while stretched. No ghost smear (GW3: it
+   * read as a white backdrop behind the ship).
    */
-  function drawSawTooth(x: number, y: number, vx: number, vy: number, len: number, sx: number, sy: number, tint: number): void {
+  function drawSawTooth(x: number, y: number, vx: number, vy: number, len: number, tint: number): void {
     if (!sawShown) sawShown = true;
     const st = spikeStretch(len);
     const half = spikeHalfWidth(st);
-    if (st > 0.02) {
-      for (let k = SPIKE_GHOSTS; k >= 1; k--) {
-        spikeGhost(sx, sy, x, y, vx, vy, k, st, sawGhost);
-        spikeTriangle(sawGhost.x, sawGhost.y, sawGhost.vx, sawGhost.vy, len, half, sawTri);
-        sawPoly();
-        sawG.fill({ color: tint, alpha: (SPIKE_GHOST_ALPHA[k - 1] ?? 0.2) * st });
-      }
-    }
     spikeTriangle(x, y, vx, vy, len, half, sawTri);
     sawPoly();
     sawG.fill({ color: tint, alpha: 0.95 });
@@ -3972,6 +4190,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       sawShown = false;
     }
     const spikeLen = pool.spikeLen;
+    const spikePh = pool.phase;
+    chainN[0] = 0;
+    chainN[1] = 0;
     for (let i = 0; i < bulletItems.length; i++) {
       const item = bulletItems[i];
       const tail = trailItems[i];
@@ -4007,7 +4228,18 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const heading = Math.atan2(vy, vx);
         if (spike) {
           // The atlas frame has a fixed size, so the tooth (length from spikeLen) is drawn instead.
-          drawSawTooth(x, y, vx, vy, spikeDrawLen(spikeLen !== undefined ? (spikeLen[i] ?? 0) : 0), shipX, shipY, palette[vis.tint]);
+          drawSawTooth(x, y, vx, vy, spikeDrawLen(spikeLen !== undefined ? (spikeLen[i] ?? 0) : 0), palette[vis.tint]);
+          // GW3: remember the tooth for its ring's chain line.
+          const ring = (spikeMask[i] ?? 1) === 2 ? 1 : 0;
+          const cn = chainN[ring] ?? 0;
+          if (cn < SAW_CHAIN_MAX) {
+            const o = ring * SAW_CHAIN_MAX + cn;
+            chainX[o] = x;
+            chainY[o] = y;
+            chainRingPh[o] = spikePh !== undefined ? (spikePh[i] ?? 0) : Math.atan2(y - shipY, x - shipX);
+            chainN[ring] = cn + 1;
+          }
+          sawTint = palette[vis.tint];
           if (item.x !== PARK) {
             item.x = PARK;
             item.y = PARK;
@@ -4045,6 +4277,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         em.acc = 0;
       }
     }
+    drawSawChain();
     if (restyled) {
       bullets.update();
       trails.update();
@@ -4211,6 +4444,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     resetShellState(shell);
     resetArriveState(arrive);
     resetEmergeState(emerge);
+    resetNovaSnakeState(novaSnakes);
   }
 
   /** New arena: wall features, calm threat, no flashes, pops or per slot fx state. */

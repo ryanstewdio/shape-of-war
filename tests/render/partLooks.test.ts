@@ -2,10 +2,10 @@
 // colour and a glyph, the Hornet buzzes, and the decoy pulses red orange.
 import { describe, expect, it } from 'vitest';
 import { PartType } from '../../src/game/bosses/types';
-import { GRAVITANT, HORNET } from '../../src/game/bosses/table';
+import { GRAVITANT, HORNET, TEMPESTLING } from '../../src/game/bosses/table';
 import { DRONE_MODES } from '../../src/core/events';
 import { Kind } from '../../src/game/world';
-import { BOSS_MIRAGE } from '../../src/render/bossLook';
+import { BOSS_MIRAGE, BOSS_TEMPEST, bossColourOf } from '../../src/render/bossLook';
 import {
   bossBodyR,
   buildPartSpec,
@@ -17,6 +17,10 @@ import {
   PART_HORNET,
   PART_MIRROR,
   PART_SPEC_TYPES,
+  PART_TEMPESTLING,
+  TEMPEST_NOSE,
+  TEMPESTLING_SHARE,
+  tempestKite,
   PART_TYPES,
   partR,
   partSpecIndex,
@@ -33,6 +37,9 @@ import {
   partJitter,
   partLook,
   PART_LOOKS,
+  TEMPESTLING_SWIRL_HZ,
+  tempestlingLead,
+  tempestlingSwirl,
   PICKUP_LOOKS,
 } from '../../src/render/partLooks';
 import { DRONE_PICKUP_SPEC, DRONE_SPEC, DRONE_TWIN_SPEC, partSlot, specFor, specForSlot } from '../../src/render/shapeSpecs';
@@ -46,6 +53,7 @@ const ALL_PART_TYPES = [
   PartType.Hornet,
   PartType.Gravitant,
   PartType.Mirror,
+  PartType.Tempestling,
 ];
 
 describe('part look registry', () => {
@@ -170,5 +178,39 @@ describe('pickup and drone looks', () => {
     }
     expect(lo).toBeLessThan(0.05);
     expect(hi).toBeGreaterThan(0.95);
+  });
+});
+
+describe('Tempestling look (GW3)', () => {
+  it('has its own baked spec, not the pod, and matches the sim part type and size share', () => {
+    expect(PART_TEMPESTLING).toBe(PartType.Tempestling);
+    expect(TEMPESTLING_SHARE).toBe(TEMPESTLING.sizeShare);
+    const l = partLook(PartType.Tempestling);
+    expect(l.name).toBe('tempestling');
+    expect(l.tint).toBe('baked');
+    expect(isBakedPart(PART_TEMPESTLING)).toBe(true);
+    expect(partSlot(PART_TEMPESTLING, 3)).not.toBe(partSlot(PartType.Pod, 3));
+    expect(specForSlot(partSlot(PART_TEMPESTLING, 3))).toEqual(buildPartSpec(PART_TEMPESTLING, 3));
+  });
+
+  it('is the Tempest kite in the Tempest storm colour at 60 percent of the body size', () => {
+    const R = bossBodyR(BOSS_TEMPEST);
+    expect(partR(PART_TEMPESTLING)).toBeCloseTo(R * 0.6, 6);
+    const spec = buildPartSpec(PART_TEMPESTLING, 3);
+    const body = spec.layers[0];
+    expect(body?.colour).toBe(bossColourOf(BOSS_TEMPEST));
+    expect(body?.prims[0]).toEqual(tempestKite(R * 0.6, 1));
+    expect(spec.radius).toBeLessThan(TEMPEST_NOSE * R);
+    expect(spec.layers.some((x) => x.colour === 'slime')).toBe(true);
+  });
+
+  it('swirls fast and leads with its move direction', () => {
+    expect(TEMPESTLING_SWIRL_HZ).toBeGreaterThanOrEqual(1);
+    const a = tempestlingSwirl(0, 0.3, 0);
+    const b = tempestlingSwirl(0.1, 0.3, 0);
+    expect(b - a).toBeCloseTo(0.1 * TEMPESTLING_SWIRL_HZ * Math.PI * 2, 6);
+    expect(tempestlingLead(0, 50, 0)).toBeCloseTo(Math.PI / 2);
+    expect(tempestlingLead(0, 0, 1.2)).toBe(1.2);
+    expect(Number.isFinite(tempestlingLead(Number.NaN, Number.NaN, Number.NaN))).toBe(true);
   });
 });
