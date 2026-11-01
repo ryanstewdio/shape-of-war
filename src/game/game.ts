@@ -20,6 +20,7 @@ import { stepSpawner } from './spawner';
 import { endlessLevel, startEndless, stepEndlessAwards } from './endless';
 import { currentMultiplier, gs, syncMultiplier, type GameMode, type GameState, type ScoringPort, type SegmentSource } from './state';
 import { stepSupers, triggerSuper } from './supers';
+import { stepWellArrivals } from './wellArrival';
 import { createWorld, stepWorld, type World } from './world';
 
 export interface GameOptions {
@@ -129,6 +130,7 @@ export function stepGame(w: World, dt: number, input: InputState): void {
   if (g.outcome !== 'running') return;
   stepWorld(w, dt, input);
   stepWeapons(w, dt);
+  stepWellArrivals(w); // GW2: wells arriving in play (telegraph, then live)
   stepWells(w, dt);
   separate(w, dt);
   bulletHits(w);

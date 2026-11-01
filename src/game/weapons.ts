@@ -315,6 +315,40 @@ export function stepSaw(level: number, held: boolean, dt: number): number {
   return level - rate <= 1e-9 ? 0 : level - rate;
 }
 
+/**
+ * Saw power (GW2, orbit feel 2 of 5): while the saw level is above SAW_POWER_AT every spike deals
+ * SAW_DAMAGE_MULT damage (hits alternate 1 and 2, HP is integer) and rests SAW_COOL_MULT of its
+ * shield cooldown. At or below it, resting behaviour is unchanged.
+ */
+export const SAW_POWER_AT = 0.5;
+export const SAW_DAMAGE_MULT = 1.5;
+export const SAW_COOL_MULT = 0.7;
+
+/** Pure: true while the saw level powers the spikes. */
+export function sawPowered(level: number): boolean {
+  return level > SAW_POWER_AT;
+}
+
+const sawFx = { on: false };
+
+/** Set the saw level; 'sim:saw' { on: true } when it leaves 0, { on: false } when it returns to 0. */
+function setSaw(s: WeaponState, level: number): void {
+  const was = s.saw > 0;
+  s.saw = level;
+  const now = level > 0;
+  if (was === now) return;
+  sawFx.on = now;
+  bus.emit('sim:saw', sawFx);
+}
+
+/** Damage of the next powered spike hit: 1 and 2 alternately (mean SAW_DAMAGE_MULT). */
+export function sawHitDamage(w: World): number {
+  const s = weaponState(w);
+  const n = 1 + s.sawOdd;
+  s.sawOdd ^= 1;
+  return n;
+}
+
 /** Pure: length multiplier of a spike at saw level and weight (1 to SPIKE_STRETCH). */
 export function spikeStretch(level: number, weight: number): number {
   return 1 + (SPIKE_STRETCH - 1) * level * weight;
@@ -364,6 +398,8 @@ export interface WeaponState extends DropCounter {
   orbitPhase: number;
   /** Chainsaw level 0 to 1 (rises while the aim stick is held, falls on release). */
   saw: number;
+  /** Powered saw hit parity: alternate 1 and 2 damage, so powered hits average SAW_DAMAGE_MULT. */
+  sawOdd: number;
   hudTimer: number;
   hud: { kind: WeaponKind; remaining: number; total: number; title: string };
   pickupFx: { x: number; y: number; weapon: WeaponKind };
@@ -390,6 +426,7 @@ function createWeaponState(): WeaponState {
     hitters: 0,
     orbitPhase: 0,
     saw: 0,
+    sawOdd: 0,
     hudTimer: 0,
     hud: { kind: 'spread', remaining: 0, total: WEAPON_DURATION, title: 'spread' },
     pickupFx: { x: 0, y: 0, weapon: 'spread' },
@@ -461,7 +498,7 @@ function removeBlades(w: World): void {
     s.stretch[i] = 1;
   }
   s.hitters = 0;
-  s.saw = 0;
+  setSaw(s, 0);
 }
 
 /** Switch the active kind, swapping the shield when it changes. */
@@ -674,7 +711,7 @@ export function placeBlades(w: World, dt = 0): void {
   const combo = comboIndex(s.kind);
   const n = sh.perRing * 2;
   s.hitters = n;
-  s.saw = stepSaw(s.saw, held, dt);
+  setSaw(s, stepSaw(s.saw, held, dt));
   for (let i = 0; i < n; i++) {
     const ring = ringOf(sh, i);
     const a = spikeAngle(sh, i, s.orbitPhase);

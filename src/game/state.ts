@@ -11,7 +11,8 @@ export const SNAKE_SLOTS = 8;
 export const SNAKE_SEGMENTS = 12;
 /** Path history samples per snake (one per sim step). 256 steps at 120 Hz covers 216 u at any speed above 101 u/s. */
 export const SNAKE_PATH = 256;
-export const MAX_WELLS = 3;
+/** Live wells at once: up to 3 from the generator, at most 4 with wells arriving in play (GW2). */
+export const MAX_WELLS = 4;
 export const QUEUE_CAP = 512;
 
 export type Outcome = 'running' | 'won' | 'lost';
@@ -123,6 +124,16 @@ export interface GameState {
   wellNova: Uint8Array;
   /** False switches the super nova off (GameOptions.wellNova, v1 golden tests). */
   wellNovaOn: boolean;
+  /** Per slot: the well's ordinal (generator index, then spec count plus arrival index), keys novaSecFor. */
+  wellOrd: Int32Array;
+  /** Wells arrived during play so far (GW2), the arrival index of the next one. */
+  wellArrivals: number;
+  /** Wave clock time of the next arrival telegraph, -1 until scheduled. */
+  wellArriveAt: number;
+  /** Well entity whose arrival telegraph is running, -1 for none. */
+  wellArriving: number;
+  /** Reused 'sim:wellArrive' payload. */
+  wellArriveFx: { id: number; x: number; y: number; inSec: number };
   /** Per entity, length w.cap: seconds a well entity has been in nova (drives the nova snakes, GW1). */
   wellSnakeT: Float64Array;
   /** Per snake slot: the well entity id a nova snake emerged from, -1 for a normal snake. */
@@ -290,6 +301,11 @@ function createState(w: World): GameState {
     wellAge: new Float64Array(MAX_WELLS),
     wellNova: new Uint8Array(MAX_WELLS),
     wellNovaOn: true,
+    wellOrd: Int32Array.from({ length: MAX_WELLS }, (_, i) => i),
+    wellArrivals: 0,
+    wellArriveAt: -1,
+    wellArriving: -1,
+    wellArriveFx: { id: 0, x: 0, y: 0, inSec: 0 },
     wellSnakeT: new Float64Array(cap),
     snakeWell: new Int32Array(SNAKE_SLOTS).fill(-1),
     snakeHead: new Int32Array(SNAKE_SLOTS).fill(-1),

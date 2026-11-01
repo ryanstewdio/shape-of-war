@@ -18,7 +18,7 @@ import { removeEntity } from './remove';
 import { gs, isDroppedHazard, isHostile, isV2Enemy, SNAKE_SEGMENTS, SNAKE_SLOTS, type GameState, type KillFx } from './state';
 import { SHIP_RADIUS } from './ship';
 import { moveTo } from './steer';
-import { bulletRadiusOf, capsuleHits, SAW_AT, shieldOf, SPIKE_PIERCE, SPIKE_RADIUS, weaponState } from './weapons';
+import { bulletRadiusOf, capsuleHits, SAW_AT, SAW_COOL_MULT, sawHitDamage, sawPowered, shieldOf, SPIKE_PIERCE, SPIKE_RADIUS, weaponState } from './weapons';
 import { Kind, type World } from './world';
 
 const hits = new Int32Array(64);
@@ -256,6 +256,7 @@ export function orbitHits(w: World, dt: number): void {
       continue;
     }
     const saw = (s.stretch[i] ?? 1) > SAW_AT;
+    const powered = sawPowered(s.saw);
     const most = saw ? hits.length : sh.piercing ? SPIKE_PIERCE : 1;
     let struck = 0;
     const n = queryCircleInto(w.grid, w, bx, by, half + r, hits);
@@ -273,10 +274,10 @@ export function orbitHits(w: World, dt: number): void {
       p.lastHit[b] = id;
       // A hitter on a Bulwark's front arc is absorbed: it rests without dealing damage.
       if (shielded(w, id, bx, by)) emitHit(gs(w), bx, by, Kind.Bulwark, id, true);
-      else hurt(w, id, 1, bx, by);
+      else hurt(w, id, powered ? sawHitDamage(w) : 1, bx, by);
       struck++;
     }
-    if (struck > 0) s.bladeCool[i] = sh.cooldown;
+    if (struck > 0) s.bladeCool[i] = powered ? sh.cooldown * SAW_COOL_MULT : sh.cooldown;
   }
 }
 
