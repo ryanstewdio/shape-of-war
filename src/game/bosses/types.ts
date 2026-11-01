@@ -42,6 +42,11 @@ export const enum PartType {
   Gravitant = 6,
   /** Mirage after its stage 2 crack: a 1 HP decoy at one of its last two positions. w.rot copies the shield arc. */
   Mirror = 7,
+  /**
+   * Tempest after its stage 2 crack (GW2): one of two smaller Tempests (TEMPESTLING.sizeShare of the
+   * body radius) that lap the wall, lay Slime and dash like the body. w.rot is its heading.
+   */
+  Tempestling = 8,
 }
 
 /** Where a boss is in its life on this level or Endless segment. */

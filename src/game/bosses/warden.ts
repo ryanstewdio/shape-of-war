@@ -9,10 +9,13 @@
 // 14 s, start to start. Warden stops, its core closes for 4 s (BossState.shielded, shieldLeft) and
 // it releases 8 Hornets in two bursts of 4, "like bees leaving a hive" (Kind.BossPart
 // PartType.Hornet in their own pool of MAX_HORNETS, so other adds never take their slots). When the
-// shield drops the core is open for WARDEN_SHIELD.openSec (2.5 s): a guaranteed window.
+// shield drops the core is open for WARDEN_SHIELD.openSec (2.0 s since GW2): a guaranteed window.
 // GW1 device report: the shield never showed because it ran only in phase 2 and its clock restarted
 // at the phase change, so the first shield came 14 s after half health and the fight ended first.
-// Hornets fly straight out, then chase their target at 260 u/s and die on their own after 5 s.
+// Hornets fly straight out, then chase their target at 300 u/s and die on their own after 5 s.
+// GW2 (fairness 5 of 5, target 4): 520 hits, rings every 3.7 s (2.8 s in phase 2), 10 Hornets per
+// shield in two bursts of 5, a 2.0 s window after the shield, and in phase 2 the dropping shield
+// fires one ring of 12 enemy bullets. 'sim:bossShield' fires on every shield edge (shield.ts).
 // Ability scratch (bs.abl): 0 shield cycle clock (step seconds since the last shield start), 1
 // seconds into the shield, 2 bursts fired, 3 Hornets this shield, 4 shields so far (hash index).
 import { removeEntity } from '../remove';
@@ -20,7 +23,9 @@ import { angleBetween, distBetween, entityHash, moveHeading, targetOf, turnTowar
 import type { World } from '../world';
 import { bossEnraged, HAZARD_OVERLAP, spawnHornet, spawnRing } from './core';
 import { hazardTelegraph } from './kit';
+import { setShield } from './shield';
 import { bossOf, type BossState } from './state';
+import { ENEMY_BULLET_RADIUS, spawnEnemyBullet } from '../enemyBullets';
 import { ENRAGE_RATE, HAZARD, HAZARD_RECHECK_SEC, HORNET, WARDEN, WARDEN_SHIELD } from './table';
 import { BossMode, type BossDef } from './types';
 
@@ -79,14 +84,21 @@ export function reset(w: World, id: number, bs: BossState, first: boolean): void
   bs.abl[CYCLE] = shieldClockStart();
   bs.abl[INTO] = 0;
   bs.abl[BURSTS] = 0;
-  bs.shielded = false;
-  bs.shieldLeft = 0;
+  setShield(bs, false, w.x[id] ?? 0, w.y[id] ?? 0, 0);
   if (first) bs.abl[SHIELDS] = 0;
 }
 
 /** Release burst b: Hornets spread evenly round the body, flying straight out. */
 function releaseBurst(w: World, id: number, bs: BossState, b: number): void {
-  const n = burstSize(bs.abl[COUNT] ?? WARDEN_SHIELD.hornetsMin, b);
+  releaseHornets(w, id, bs, burstSize(bs.abl[COUNT] ?? WARDEN_SHIELD.hornetsMin, b), b);
+}
+
+/**
+ * Release n Hornets from boss id, spread evenly round the body and flying straight out, into the
+ * shared Hornet pool (MAX_HORNETS). Burst b above 0 sits between the first burst's lanes. Bastion's
+ * phase 3 shield uses it too (GW2).
+ */
+export function releaseHornets(w: World, id: number, bs: BossState, n: number, b: number): void {
   if (n <= 0) return;
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
@@ -105,8 +117,7 @@ function startShield(w: World, id: number, bs: BossState): void {
   bs.abl[COUNT] = hornetsFor(entityHash(w, id, 1000 + n));
   bs.abl[INTO] = 0;
   bs.abl[BURSTS] = 0;
-  bs.shielded = true;
-  bs.shieldLeft = WARDEN_SHIELD.shieldSec;
+  setShield(bs, true, w.x[id] ?? 0, w.y[id] ?? 0, WARDEN_SHIELD.shieldSec);
   // The core closes: any open window or pending ring window ends.
   bs.t1 = -1;
   bs.t2 = 0;
@@ -139,11 +150,46 @@ function stepShield(w: World, id: number, bs: BossState, dt: number): boolean {
     bs.shieldLeft = left;
     return true;
   }
-  // The shield drops: a guaranteed window.
-  bs.shielded = false;
-  bs.shieldLeft = 0;
+  // The shield drops: a guaranteed window, and in phase 2 a ring of bullets.
+  setShield(bs, false, w.x[id] ?? 0, w.y[id] ?? 0, 0);
   bs.t2 = WARDEN_SHIELD.openSec;
+  if (dropRingActive(bs.phase)) fireDropRing(w, id, bs);
   return false;
+}
+
+/** Pure: the dropping shield fires its bullet ring in phase 2 only (GW2). */
+export function dropRingActive(phase: number): boolean {
+  return phase >= 2;
+}
+
+/** Pure: heading of bullet k of the drop ring, the first one facing heading (spacing TAU / n). */
+export function dropRingHeading(heading: number, k: number, n: number): number {
+  return heading + (k * TAU) / (n > 0 ? n : 1);
+}
+
+/**
+ * Phase 2 shield drop (GW2): dropRingBullets enemy bullets evenly round the body edge, the first
+ * facing the target, each charging for the tier telegraph before it launches (a charging bullet never
+ * collides). fx:bossShot fires once at launch through the shared volley report.
+ */
+function fireDropRing(w: World, id: number, bs: BossState): void {
+  const n = WARDEN_SHIELD.dropRingBullets;
+  const r = (w.radius[id] ?? 0) + ENEMY_BULLET_RADIUS;
+  const x = w.x[id] ?? 0;
+  const y = w.y[id] ?? 0;
+  const a0 = angleBetween(w, id, targetOf(w, id));
+  const tele = hazardTelegraph(bs.row.tier);
+  let firstId = -1;
+  for (let k = 0; k < n; k++) {
+    const a = dropRingHeading(a0, k, n);
+    const b = spawnEnemyBullet(w, x + Math.cos(a) * r, y + Math.sin(a) * r, a, WARDEN_SHIELD.dropRingSpeed, ENEMY_BULLET_RADIUS, bs.row.tier, tele);
+    if (firstId < 0) firstId = b;
+  }
+  if (firstId >= 0) {
+    bs.shotId = firstId;
+    bs.shotEv.x = x;
+    bs.shotEv.y = y;
+  }
 }
 
 function fireRing(w: World, id: number, bs: BossState, every: number): void {
@@ -186,7 +232,7 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
     bs.t1 -= adt;
     if (bs.t1 < 0) {
       bs.t1 = -1;
-      // A ring window never shortens a longer one already open (the 2.5 s window after a shield).
+      // A ring window never shortens a longer one already open (the window after a shield).
       if (bs.t2 < WARDEN.openSec) bs.t2 = WARDEN.openSec;
     }
   }

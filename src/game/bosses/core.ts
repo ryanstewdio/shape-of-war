@@ -31,6 +31,7 @@ import {
   pullSpeed,
   wrapPi,
 } from './kit';
+import { setShield } from './shield';
 import { cancelVolley, stepVolleyLaunch } from './shots';
 import { armState, bossOf, type BossState } from './state';
 import {
@@ -410,7 +411,7 @@ export function bossContacts(w: World, dt: number): boolean {
     return true;
   }
   if (bs.split) {
-    // Broodlings (and Gravitants) are the body now: contact with any of them kills.
+    // Broodlings (and Gravitants, Tempestlings) are the body now: contact with any of them kills.
     for (let k = 0; k < MAX_PARTS; k++) {
       const p = livePart(w, bs, k);
       if (p > 0 && isBodyPart(w.a[p] ?? -1) && circlesOverlap(sx, sy, SHIP_RADIUS, w.x[p] ?? 0, w.y[p] ?? 0, w.radius[p] ?? 0)) {
@@ -721,6 +722,7 @@ function defeatBoss(w: World, bs: BossState, id: number, px = 0, py = 0): void {
   clearParts(w, bs);
   clearHornets(w, bs);
   cancelVolley(bs);
+  setShield(bs, false, x, y, 0); // a shield up at the kill (Detonate) drops with the body
   bs.viewMode = BossMode.Dying;
   emitBossHud(w, bs, 0, true);
   if (id > 0) removeEntity(w, id);
@@ -981,7 +983,7 @@ export function spawnAdd(w: World, bs: BossState, def: EnemyDef, x: number, y: n
 
 /** Pure: a part type that is the boss body after a split, so contact with it kills. */
 export function isBodyPart(type: number): boolean {
-  return type === PartType.Broodling || type === PartType.Gravitant;
+  return type === PartType.Broodling || type === PartType.Gravitant || type === PartType.Tempestling;
 }
 
 /** Hornet id in Hornet slot k, or -1. Hornets have their own pool (BossState.hornetIds, GW1). */
