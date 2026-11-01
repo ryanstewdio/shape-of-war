@@ -3651,7 +3651,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     if (spikeMask.length < cap) spikeMask = new Uint8Array(cap);
     else spikeMask.fill(0);
     if (sh === null) return;
-    for (let k = sh.blades; k < sh.blades + sh.spikes && k < ws.blades.length; k++) {
+    // Orbit v2: every hitter is a spike (two rings of sh.perRing), so mark them all.
+    for (let k = 0; k < sh.perRing * 2 && k < ws.blades.length; k++) {
       const id = ws.blades[k] ?? -1;
       if (id >= 0 && id < cap) spikeMask[id] = 1;
     }
