@@ -18,6 +18,10 @@
 // from the neon glow, never the SPEC 4 grid alpha.
 // Ambient: a slow row and column drift added as positions are written (lattice/ambient.ts), so
 // the field never sits still. While it runs the position buffer uploads every frame.
+// Wave V3-G tilt: with a camera set, the sim's z channel runs and every written frame of node
+// positions is projected in place on the CPU (project.ts) before the one upload, so the lines,
+// the major echo and the heat glow (all on the one position buffer) follow the tilt with no extra
+// pass. With no camera nothing here changes: no z, no projection.
 import {
   Buffer,
   BufferUsage,
@@ -38,11 +42,14 @@ import { buildLattice, type LatticeLayout } from './lattice/layout';
 import {
   createLatticeSim,
   latticeAlpha,
+  setZEnabled,
   stepLattice,
+  writeLift,
   writePositions,
   writePositionsAmbient,
   type LatticeSim,
 } from './lattice/sim';
+import { projectNodes, type Camera } from './project';
 
 // Vertex colour line shader. Written in the GLSL style pixi's own programs use: no version line,
 // so GlProgram adds the WebGL1 defines (in, out, finalColor) and it compiles on both contexts.
@@ -106,7 +113,7 @@ export interface LatticeView {
   /** Lattice lines. Add inside the grid layer. */
   readonly lines: Container;
   /** Dust motes. Add inside the grid layer, under the lines. */
-  readonly dust: Container;
+  readonly dust: ParticleContainer;
   /** The live sim, null before the first build or while off. */
   readonly sim: LatticeSim | null;
   readonly nodes: number;
@@ -131,6 +138,8 @@ export interface LatticeView {
   pulse(x: number, y: number, colour: number, p: HeatPulse): void;
   /** Ambient drift amplitude in arena units, 0 for none (the lattice may then sleep). */
   setAmbient(amp: number): void;
+  /** Tilt camera, or null for the flat v3 path. Turns the z channel on or off with it. */
+  setCamera(cam: Camera | null): void;
   destroy(): void;
 }
 
@@ -254,6 +263,8 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   let colour = 0xffffff;
   let pixel = 1;
   let arenaNow: ArenaDef | null = null;
+  let camera: Camera | null = null;
+  let lift: Float32Array = new Float32Array(0);
   const motes: Dust = createDust();
   const items: Particle[] = [];
   const dotW = Math.max(1, dotTexture.width);
@@ -286,6 +297,14 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     sim = createLatticeSim(layout);
     heat = createHeat(layout.count);
     ambient = createAmbient(layout);
+    lift = new Float32Array(layout.count);
+    if (camera) setZEnabled(sim, true);
+  }
+
+  /** Tilt only: lift and project the frame just written into the position buffer. */
+  function projectFrame(s: LatticeSim, g: Gpu, cam: Camera): void {
+    writeLift(s, lift, latticeAlpha(s));
+    projectNodes(g.positions, lift, s.layout.count, cam);
   }
 
   function frame(dt: number, timeSec: number): void {
@@ -294,8 +313,12 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     if (ambient && ambientAmp > 0) {
       stepAmbient(ambient, timeSec, ambientAmp);
       writePositionsAmbient(sim, gpu.positions, latticeAlpha(sim), ambient);
+      if (camera) projectFrame(sim, gpu, camera);
       gpu.posBuf.update();
-    } else if (writePositions(sim, gpu.positions, latticeAlpha(sim))) gpu.posBuf.update();
+    } else if (writePositions(sim, gpu.positions, latticeAlpha(sim))) {
+      if (camera) projectFrame(sim, gpu, camera);
+      gpu.posBuf.update();
+    }
     if (heat) {
       const wasAwake = heat.awake;
       stepHeat(heat, sim.layout, dt);
@@ -316,6 +339,14 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     // Turning the drift off writes the rest positions once so no offset is left behind.
     if (next === 0 && ambientAmp > 0 && sim) sim.dirty = true;
     ambientAmp = next;
+  }
+
+  function setCamera(cam: Camera | null): void {
+    const next = cam && cam.on ? cam : null;
+    if (next === camera) return;
+    camera = next;
+    // Either way the next frame rewrites every node (flat or projected) once.
+    if (sim) setZEnabled(sim, camera !== null);
   }
 
   function seed(arena: ArenaDef): void {
@@ -391,6 +422,7 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     glow,
     pulse,
     setAmbient,
+    setCamera,
     destroy(): void {
       clear();
       lines.destroy({ children: true });

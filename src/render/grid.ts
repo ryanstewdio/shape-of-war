@@ -2,6 +2,8 @@
 import type { Graphics } from 'pixi.js';
 import type { ArenaDef } from '../levelgen/leveldef';
 import { gridSegments, hexagonPoints } from './gridGeom';
+import type { Camera } from './project';
+import { obstaclePolys, outlinePoints, projectFlat } from './tiltGeom';
 
 /**
  * Line widths in device independent (CSS) px; divided by the world scale so they stay constant
@@ -85,4 +87,27 @@ export function drawWalls(g: Graphics, arena: ArenaDef, colour: number, passes: 
       g.stroke({ width: pass.width, color: colour, alpha: pass.alpha, join: 'round' });
     }
   }
+}
+
+/**
+ * Tilt only (docs/12 Wave V3-G): the arena wall and obstacle outlines projected on the CPU, so
+ * they stay crisp and meet the projected lattice ends exactly. Same passes as drawWalls.
+ */
+export function drawWallsProjected(g: Graphics, arena: ArenaDef, colour: number, passes: readonly WallPass[], cam: Camera): void {
+  g.clear();
+  const outline = projectFlat(outlinePoints(arena), cam);
+  const obstacles = obstaclePolys(arena).map((o) => projectFlat(o, cam));
+  for (const pass of passes) {
+    g.poly(outline, true);
+    g.stroke({ width: pass.width, color: colour, alpha: pass.alpha, join: 'round' });
+    for (const o of obstacles) {
+      g.poly(o, true);
+      g.stroke({ width: pass.width, color: colour, alpha: pass.alpha, join: 'round' });
+    }
+  }
+}
+
+/** Tilt only: the v1 grid (low tier) with every segment end projected. Lines stay lines. */
+export function drawGridProjected(g: Graphics, segs: readonly number[], colour: number, scale: number, cam: Camera): void {
+  drawGrid(g, projectFlat(segs, cam), colour, scale);
 }
