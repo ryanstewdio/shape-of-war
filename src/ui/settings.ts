@@ -1,6 +1,6 @@
 // Settings screen (docs/01 section 10, docs/03 sections 7 and 8, SPEC 4). Neon slider 0 to 100
 // over a live preview arena, Volume slider, Music slider (v2, 0 is off), Space physics (Off, Low,
-// Medium, High; v2), Weapon pickups (On, Off; v2), Effects (Low, Standard, High; v2), Show FPS,
+// Medium, High; v2), Weapon pickups (On, Off; v2), Effects (Low, Standard, High; v2), 3D tilt (Off, Low, High; v3), Show FPS,
 // Bloom / Fallback, Play seed, Reset progress, and a hidden debug menu behind five taps on the
 // version label. The same screen opens from the menu and from the pause screen.
 // The model is pure apart from injected effects, so tests drive it with fakes. applyNeon is
@@ -13,21 +13,26 @@ import {
   loadMusic,
   loadSettings,
   loadSpacePhysics,
+  loadTilt,
   loadWeaponPickups,
   parseEffects,
   parseSeedInput,
   parseSpacePhysics,
+  parseTilt,
   saveEffects,
   saveGlowPath,
   saveMusic,
   saveSetting,
   saveSpacePhysics,
+  saveTilt,
   saveWeaponPickups,
   SPACE_LEVELS,
+  TILT_SETTINGS,
   type EffectsTierSetting,
   type GlowPathSetting,
   type SpaceLevelSetting,
   type StorageLike,
+  type TiltSetting,
 } from '../core/settings';
 import { button, createScreen, el, type Screen } from './dom';
 import { createFrameThrottle, createSlider } from './slider';
@@ -57,6 +62,11 @@ export interface SettingsEffects {
    */
   setEffectsTier(tier: EffectsTierSetting): void;
   /**
+   * 3D tilt level (v3). Called at boot, then once per change. main.ts maps it to Glow's setTilt
+   * from src/render/tilt.ts.
+   */
+  setTilt(level: TiltSetting): void;
+  /**
    * Music volume 0 to 100, 0 is off (v2). Called at boot, then once per distinct value while the
    * slider drags, so the level is audible as it moves. main.ts feeds src/audio/music/index.ts and
    * the named wireMusic port.
@@ -74,6 +84,7 @@ export interface SettingsView {
   spacePhysics: SpaceLevelSetting;
   weaponPickups: boolean;
   effects: EffectsTierSetting;
+  tilt: TiltSetting;
   /** Music volume 0 to 100, 0 is off. */
   music: number;
 }
@@ -96,6 +107,8 @@ export interface SettingsModel {
   setWeaponPickups(on: boolean): void;
   /** Row tap: persist sow.settings.effects and call the effect once. Same tier: no effect call. */
   setEffectsTier(tier: EffectsTierSetting): void;
+  /** Row tap: persist sow.settings.tilt and call the effect once. Same level: no effect call. */
+  setTilt(level: TiltSetting): void;
   /** Slider drag: state now, and the effect once per distinct value. Nothing is saved yet. */
   musicInput(v: number): void;
   /** Finger up: persist sow.settings.music. The effect is not called again for an unchanged value. */
@@ -125,6 +138,7 @@ export function createSettingsModel(fx: SettingsEffects, storage?: StorageLike |
     spacePhysics: loadSpacePhysics(storage),
     weaponPickups: loadWeaponPickups(storage),
     effects: loadEffects(storage),
+    tilt: loadTilt(storage),
     music: loadMusic(storage),
   };
   /** The music value the effect last received, so a finger up never repeats it. */
@@ -140,6 +154,7 @@ export function createSettingsModel(fx: SettingsEffects, storage?: StorageLike |
       fx.setSpacePhysics(state.spacePhysics);
       fx.setWeaponPickups(state.weaponPickups);
       fx.setEffectsTier(state.effects);
+      fx.setTilt(state.tilt);
       musicApplied = state.music;
       fx.setMusicVolume(state.music);
     },
@@ -190,6 +205,13 @@ export function createSettingsModel(fx: SettingsEffects, storage?: StorageLike |
       state.effects = next;
       saveEffects(next, storage); // always written, so a failed earlier write heals on the next tap
       if (changed) fx.setEffectsTier(next);
+    },
+    setTilt(level) {
+      const next = parseTilt(level);
+      const changed = next !== state.tilt;
+      state.tilt = next;
+      saveTilt(next, storage); // always written, so a failed earlier write heals on the next tap
+      if (changed) fx.setTilt(next);
     },
     musicInput(v) {
       state.music = clampMusic(v);
@@ -296,6 +318,30 @@ export interface EffectsButtonState {
 /** Pure: the three Effects buttons in order (Low, Standard, High) with the current tier marked. */
 export function effectsButtonStates(current: EffectsTierSetting): EffectsButtonState[] {
   return EFFECTS_TIER_SETTINGS.map((tier) => ({ tier, label: effectsLabel(tier), selected: tier === current }));
+}
+
+export const TILT_ROW_LABEL = '3D tilt';
+
+const TILT_LABELS: Readonly<Record<TiltSetting, string>> = {
+  off: 'Off',
+  low: 'Low',
+  high: 'High',
+};
+
+/** Pure: the text on one 3D tilt button. */
+export function tiltLabel(level: TiltSetting): string {
+  return TILT_LABELS[level];
+}
+
+export interface TiltButtonState {
+  level: TiltSetting;
+  label: string;
+  selected: boolean;
+}
+
+/** Pure: the three 3D tilt buttons in order (Off, Low, High) with the current level marked. */
+export function tiltButtonStates(current: TiltSetting): TiltButtonState[] {
+  return TILT_SETTINGS.map((level) => ({ level, label: tiltLabel(level), selected: level === current }));
 }
 
 export const MUSIC_SLIDER_LABEL = 'Music';
@@ -434,6 +480,20 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
   effectsBtns.append(...effectsButtons);
   effectsRow.append(el('div', 'sow-choice-label', EFFECTS_ROW_LABEL), effectsBtns);
 
+  // 3D tilt: label with Off, Low and High buttons, the same row shape as Effects.
+  const tiltRow = el('div', 'sow-choice');
+  tiltRow.setAttribute('role', 'group');
+  tiltRow.setAttribute('aria-label', TILT_ROW_LABEL);
+  const tiltButtons = TILT_SETTINGS.map((level) =>
+    button(tiltLabel(level), () => {
+      model.setTilt(level);
+      refresh();
+    }),
+  );
+  const tiltBtns = el('div', 'sow-choice-btns');
+  tiltBtns.append(...tiltButtons);
+  tiltRow.append(el('div', 'sow-choice-label', TILT_ROW_LABEL), tiltBtns);
+
   const seedField = el('input', 'sow-input');
   seedField.type = 'text';
   seedField.inputMode = 'numeric';
@@ -488,7 +548,7 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
     if (r.fire) debugRow.style.display = debugRow.style.display === 'none' ? '' : 'none';
   });
 
-  panel.append(title, neon.root, volume.root, music.root, spaceRow, weaponRow, effectsRow, toggles, seedRow, seedLine, bottom, debugRow, version);
+  panel.append(title, neon.root, volume.root, music.root, spaceRow, weaponRow, effectsRow, tiltRow, toggles, seedRow, seedLine, bottom, debugRow, version);
   s.root.append(panel);
 
   function refresh(): void {
@@ -511,6 +571,12 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
     });
     effectsButtonStates(model.state.effects).forEach((st, i) => {
       const b = effectsButtons[i];
+      if (b === undefined) return;
+      b.classList.toggle('sow-on', st.selected);
+      b.setAttribute('aria-pressed', st.selected ? 'true' : 'false');
+    });
+    tiltButtonStates(model.state.tilt).forEach((st, i) => {
+      const b = tiltButtons[i];
       if (b === undefined) return;
       b.classList.toggle('sow-on', st.selected);
       b.setAttribute('aria-pressed', st.selected ? 'true' : 'false');

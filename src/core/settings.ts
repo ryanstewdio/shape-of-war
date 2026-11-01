@@ -198,6 +198,29 @@ export function saveEffects(tier: EffectsTierSetting, storage: StorageLike | nul
   writeRaw(storage, EFFECTS_KEY, parseEffects(tier));
 }
 
+// 3D tilt (v3 wave 6): "off", "low" or "high", default "off". TiltSetting is the same literal union
+// as TiltLevel in src/render/tilt.ts (Glow), declared here so core never imports render.
+// Kept out of Settings and DEFAULT_SETTINGS, like effects and glowPath.
+
+export type TiltSetting = 'off' | 'low' | 'high';
+/** Button order on the settings row. */
+export const TILT_SETTINGS: readonly TiltSetting[] = ['off', 'low', 'high'];
+export const TILT_KEY = `${SETTINGS_PREFIX}tilt`;
+export const DEFAULT_TILT: TiltSetting = 'off';
+
+/** Pure: anything other than the three exact lower case strings (and null) falls back to "off". */
+export function parseTilt(raw: string | null): TiltSetting {
+  return raw === 'off' || raw === 'low' || raw === 'high' ? raw : DEFAULT_TILT;
+}
+
+export function loadTilt(storage: StorageLike | null = defaultStorage()): TiltSetting {
+  return parseTilt(readRaw(storage, TILT_KEY));
+}
+
+export function saveTilt(level: TiltSetting, storage: StorageLike | null = defaultStorage()): void {
+  writeRaw(storage, TILT_KEY, parseTilt(level));
+}
+
 // Music volume (v2 addendum 3.9, docs/10 wave D): an integer 0 to 100, default 50, where 0 is off.
 // Stored as plain decimal text. Kept out of Settings and DEFAULT_SETTINGS on purpose, like the
 // other v2 keys, so the v1 settings shape and the storage key audit stay as they are.

@@ -48,6 +48,8 @@ import type { LevelDef } from './levelgen/leveldef';
 import { generateEndless, generateEndlessSegment, levelHash } from './levelgen/generator';
 import { installDevPanel, setGlowPath, setShowFps } from './render/devpanel';
 import { setEffectsTier } from './render/effects';
+import { setTilt } from './render/tilt';
+import { createScreenAnnouncer } from './ui/screenEvent';
 import { applyNeon, currentNeon } from './render/neon';
 import { createRenderer, type GameRenderer, type StickCircleLike } from './render/renderer';
 import { attachTouch, type TouchHandle } from './input/touch';
@@ -521,6 +523,7 @@ async function boot(): Promise<void> {
     setSpacePhysics: (level) => applySpacePhysics(level),
     setWeaponPickups: (on) => applyWeaponPickups(on),
     setEffectsTier: (tier) => applyEffectsTier(tier),
+    setTilt: (level) => setTilt(level),
     setMusicVolume: (v) => {
       setMusicEngineVolume(v); // src/audio/music/index.ts, clamps 0 to 100, 0 is silence
       wireMusicPort(v);
@@ -611,6 +614,9 @@ async function boot(): Promise<void> {
     }
   };
 
+  // Wave 6 contract: 'ui:screen' once per change of visible screen (ui/screenEvent.ts).
+  const announceScreen = createScreenAnnouncer((screen) => bus.emit('ui:screen', { screen }));
+
   function dispatch(a: FlowAction): void {
     const prev = flow;
     const next = reduceFlow(prev, a);
@@ -622,6 +628,7 @@ async function boot(): Promise<void> {
     applyMusicCue(musicCue(prev, next)); // after startLevel, so a start reads the new level's seed
     cues.flow(prev, next); // levelComplete or levelFail on entering results, once
     paintScreens();
+    announceScreen(flow);
   }
 
   /** game:over from the sim (Swarm) or the fallback check below. */
@@ -805,6 +812,7 @@ async function boot(): Promise<void> {
   hud.setLevel(menuLevel(), level.par, pick.hash);
   hud.setSuper(level.superType);
   paintScreens();
+  announceScreen(flow); // the first screen at boot is title
   if (renderer !== null) loop.start();
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
