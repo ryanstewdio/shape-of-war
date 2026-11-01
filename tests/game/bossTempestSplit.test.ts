@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/core/events';
 import { bossBonusAwarded, bossOnBomb, bossSlain, countParts, damageBoss, damageBossPart, livePart } from '../../src/game/bosses/core';
 import { BOSS_TABLE, CRACK_AT, STAGGER_SEC, TEMPEST, TEMPESTLING } from '../../src/game/bosses/table';
-import { dashEveryFor, splitHp, tempestlingAdt, tempestlingRadius } from '../../src/game/bosses/tempest';
+import { dashEveryFor, SLOT, splitHp, tempestlingAdt, tempestlingRadius } from '../../src/game/bosses/tempest';
 import { BossMode, HazardType, PartType } from '../../src/game/bosses/types';
 import { createBossView, readBoss } from '../../src/game/bosses/view';
 import { stepGame } from '../../src/game/game';
@@ -112,7 +112,7 @@ describe('tempest split', () => {
       stepGame(w, DT, idle());
       peakMarkers = Math.max(peakMarkers, markers(w));
       [a, b].forEach((p, k) => {
-        const st = bs(w).abl[k * 8] ?? 0;
+        const st = bs(w).abl[k * SLOT] ?? 0; // GW6: 16 slots per part (8 before)
         const marked = st === 1;
         if (marked && !wasMarked[k]) dashes[k] = (dashes[k] ?? 0) + 1;
         wasMarked[k] = marked;

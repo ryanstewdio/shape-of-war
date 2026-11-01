@@ -497,8 +497,31 @@ export const TEMPESTLING = {
    */
   chaseSpeed: 165,
   chaseSpeedMax: 185,
-  /** GW4: wind up seconds, the lane marker shown the whole time (the tier telegraph was 0.6 s). */
-  windupSec: 0.7,
+  /**
+   * GW4: wind up seconds, the lane marker shown the whole time (the tier telegraph was 0.6 s).
+   * GW6: 0.5 s (0.7 before); the aim tracks the ship's lead point and locks at the end.
+   */
+  windupSec: 0.5,
+  /** GW6: after a dash the part turns to face the ship within this long. */
+  turnSec: 0.2,
+  /** GW6: a dash line ends with the body edge at least this far from every wall and obstacle. */
+  wallClip: 60,
+  /** GW6 unstuck: a centre this close to a wall or obstacle counts as near it. */
+  nearWall: 140,
+  /** GW6 unstuck: near a wall this long (any state), or moved less than stuckMove in stuckWindow of chase. */
+  nearSec: 1,
+  stuckMove: 40,
+  stuckWindow: 1,
+  /** GW6 unstuck: then it steers toward the arena centre for this long. */
+  unstuckSec: 0.6,
+  /**
+   * GW6 cut off: in a pincer slot 1 aims this far to the side of slot 0's aim point, across slot 0's
+   * line on the side the ship is sidestepping to (its own side of the line when the ship is not), so
+   * the step that clears one dash runs into the other.
+   */
+  cutOff: 80,
+  /** GW6: a sideways ship speed under this (u/s) is no sidestep; slot 1 then cuts on its own side. */
+  sidestepMin: 40,
   /** GW3: committed dash speed, u/s (GW5: 462, 420 before). */
   dashSpeed: 462,
   /** GW3: a wind up starts only when the dash line runs at least this far before the wall. */

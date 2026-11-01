@@ -107,19 +107,21 @@ function trace(secs: number): Trace {
 }
 
 describe('tempest gw3 pure rules', () => {
-  it('big Tempest hit points plus 15 then 10 percent (GW5), speed ratio 1.4, full rate, opposite flanks', () => {
+  it('big Tempest hit points plus 15 then 10 percent (GW5), speed ratio 1.4, full rate, flanks a quarter turn apart (GW6)', () => {
     expect(BOSS_TABLE.tempest.hp).toBe(Math.round(900 * 1.15) * 1.1); // GW5: plus 10 percent
     expect(tempestlingSpeed()).toBe(TEMPESTLING.chaseSpeed); // GW4: 165 u/s (1.4x the lap speed before)
     expect(TEMPESTLING.rate).toBe(1);
     expect(TEMPESTLING.dashSpeed).toBe(462); // GW5: 420 before
     expect(TEMPESTLING.wallKeep).toBe(150);
     expect(flankBearing(0.5, 0)).toBe(0.5);
-    expect(flankBearing(0.5, 1)).toBeCloseTo(0.5 - Math.PI, 9);
+    expect(flankBearing(0.5, 1)).toBeCloseTo(0.5 + Math.PI / 2, 9); // GW6: a quarter turn (opposite before)
+    expect(flankBearing(0.5, 1, -1)).toBeCloseTo(0.5 - Math.PI / 2, 9);
     expect(markerClearedEarly(0.01)).toBe(false); // a marker expires 0.01 s before its wind up ends
     expect(markerClearedEarly(0.4)).toBe(true);
     expect(firstDashClock(4)).toBe(4 - TEMPESTLING.firstDash);
     expect(bearingGap(3, -3)).toBeCloseTo(2 * Math.PI - 6, 9);
     expect(pincerReady(Math.PI * 0.6, 0)).toBe(true);
+    expect(pincerReady(Math.PI * 0.95, 0)).toBe(false); // GW6: opposite is no longer a pincer
     expect(pincerReady(0.3, 0.2)).toBe(false);
     expect(pincerReady(0.3, TEMPESTLING.flankWait)).toBe(true);
   });
@@ -145,12 +147,12 @@ describe('tempestlings gw3', () => {
     expect(t.minWall).toBeGreaterThanOrEqual(TEMPESTLING.wallKeep - 1);
   });
 
-  it('flanks: at most wind ups the two sit on opposite sides of the ship', () => {
+  it('flanks: at most wind ups the two sit about a quarter turn apart around the ship (GW6)', () => {
     expect(t.flankGaps.length).toBeGreaterThan(0);
-    // GW4: the flank wait is 1 s (2.5 before), so the first pincer after the split (the two side by
-    // side) may start on the wait; most still come from opposite sides.
-    const opposite = t.flankGaps.filter((g) => g > Math.PI / 2).length;
-    expect(opposite * 3).toBeGreaterThanOrEqual(t.flankGaps.length * 2);
+    // GW4: the flank wait is 1 s, so a pincer may start on the wait; most come from a quarter turn
+    // apart (GW6: opposite sides before), so the two dash lines cross.
+    const quarter = t.flankGaps.filter((g) => g >= Math.PI / 4 - 0.02 && g <= (3 * Math.PI) / 4 + 0.02).length;
+    expect(quarter * 3).toBeGreaterThanOrEqual(t.flankGaps.length * 2);
   });
 
   it('every marker is a lane marker inside the hazard cap', () => {

@@ -94,7 +94,7 @@ describe('tempest gw5 numbers', () => {
     expect(TEMPEST.firstDash).toBe(4);
   });
 
-  it('Tempestlings: chase 165 to 185 u/s by hit points, dash every 2.6 s, dash 462 u/s, wind up 0.7 s', () => {
+  it('Tempestlings: chase 165 to 185 u/s by hit points, dash every 2.6 s, dash 462 u/s, wind up 0.5 s (GW6, 0.7 before)', () => {
     expect(TEMPESTLING.chaseSpeed).toBe(165);
     expect(TEMPESTLING.chaseSpeedMax).toBe(185);
     expect(tempestlingSpeed()).toBe(165);
@@ -109,7 +109,7 @@ describe('tempest gw5 numbers', () => {
     expect(hpShareOf(5, 0)).toBe(1);
     expect(tempestlingDashEvery()).toBe(2.6);
     expect(TEMPESTLING.dashSpeed).toBeCloseTo(420 * 1.1, 9);
-    expect(TEMPESTLING.windupSec).toBe(0.7);
+    expect(TEMPESTLING.windupSec).toBe(0.5);
   });
 
   it('the fan: 6 bullets, at least 12 deg apart, centred back along the dash heading', () => {
@@ -143,7 +143,9 @@ describe('tempest gw5 in play', () => {
       const fans = [0, 0];
       let dashSteps = 0;
       const input = idle();
-      for (let i = 0; i < 120 * 20; i++) {
+      // GW6: 30 s (20 before). The cut off part's dash ends near the ship's sidestep, so the ship is
+      // more often inside the fan's minimum range in its rest and a fan is skipped.
+      for (let i = 0; i < 120 * 30; i++) {
         const before = enemyBulletsOf(w); // the shared empty pool until the first bullet
         for (let e = 0; e < ENEMY_BULLET_CAP; e++) was[e] = before.alive[e] ?? 0;
         const px = parts.map((p) => w.x[p] ?? 0);
