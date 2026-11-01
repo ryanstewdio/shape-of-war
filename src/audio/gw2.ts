@@ -16,6 +16,8 @@ export const SAW_WOBBLE_HZ = 28;
 export const SAW_GAIN = 0.1;
 
 export const NOVA_RELEASE = 0.4;
+/** Fade for every sustained voice when a level resets or the player leaves play, seconds. */
+export const RESET_FADE = 0.1;
 export const NOVA_GAIN = 0.16;
 export const NOVA_PAN_PERIOD = 3.2;
 export const NOVA_FILTER_LO = 160;
@@ -102,21 +104,22 @@ export function installGw2(b: Bus, backend: Gw2Backend): Gw2Controller {
   const novas = new Map<number, LoopHandle>();
   const shields = new Map<string, { hum: LoopHandle | null }>();
 
-  const stopSaw = (): void => {
-    saw?.stop(SAW_RAMP_OUT);
+  const stopSaw = (release: number = SAW_RAMP_OUT): void => {
+    saw?.stop(release);
     saw = null;
   };
-  const stopShield = (id: string): void => {
+  const stopShield = (id: string, release: number = SHIELD_RELEASE): void => {
     const s = shields.get(id);
     if (!s) return;
-    s.hum?.stop(SHIELD_RELEASE);
+    s.hum?.stop(release);
     shields.delete(id);
   };
+  /** Stop every sustained voice with a short fade and clear all bookkeeping. */
   const stopAll = (): void => {
-    stopSaw();
-    for (const h of novas.values()) h.stop(NOVA_RELEASE);
+    stopSaw(RESET_FADE);
+    for (const h of novas.values()) h.stop(RESET_FADE);
     novas.clear();
-    for (const id of [...shields.keys()]) stopShield(id);
+    for (const id of [...shields.keys()]) stopShield(id, RESET_FADE);
   };
 
   const offs = [
@@ -153,6 +156,11 @@ export function installGw2(b: Bus, backend: Gw2Backend): Gw2Controller {
     b.on('game:start', stopAll),
     b.on('game:quit', stopAll),
     b.on('game:over', stopAll),
+    // Leaving play (menu, results, title, settings) must leave nothing looping. Pause and resume
+    // are deliberately not handled: live voices stay tracked and stop only on their own events.
+    b.on('ui:screen', (p) => {
+      if (p.screen !== 'play') stopAll();
+    }),
   ];
   return {
     loopCount: () => (saw ? 1 : 0) + novas.size + [...shields.values()].filter((s) => s.hum).length,
