@@ -22,8 +22,14 @@
 // positions is projected in place on the CPU (project.ts) before the one upload, so the lines,
 // the major echo and the heat glow (all on the one position buffer) follow the tilt with no extra
 // pass. With no camera nothing here changes: no z, no projection.
+// D13 phase C1 drum (cylinder levels): with a drum set, every frame writes and projects the nodes
+// through the drum (drum.ts), since the camera turns with the ship. Each node's texture u picks a
+// texel of a two texel glass texture (opaque front, BACK_ALPHA back), so the one line mesh draws
+// the back half through the glass. The lattice's first and last columns sit at u = minus and plus
+// W/2, the same line on the drum, so the rows close into rings with no seam segment.
 import {
   Buffer,
+  BufferImageSource,
   BufferUsage,
   Container,
   Geometry,
@@ -49,6 +55,7 @@ import {
   writePositionsAmbient,
   type LatticeSim,
 } from './lattice/sim';
+import { BACK_ALPHA, drumProjectNodes, type Drum } from './drum';
 import { projectNodes, type Camera } from './project';
 
 // Vertex colour line shader. Written in the GLSL style pixi's own programs use: no version line,
@@ -140,6 +147,8 @@ export interface LatticeView {
   setAmbient(amp: number): void;
   /** Tilt camera, or null for the flat v3 path. Turns the z channel on or off with it. */
   setCamera(cam: Camera | null): void;
+  /** Drum for a cylinder level, or null. Read every frame (its camU moves); wins over the camera. */
+  setDrum(drum: Drum | null): void;
   destroy(): void;
 }
 
@@ -174,7 +183,7 @@ function makeGpu(layout: LatticeLayout, arena: ArenaDef, colour: number, heatSha
   }
   const posBuf = new Buffer({ data: positions, label: 'lattice-positions', usage: BufferUsage.VERTEX | BufferUsage.COPY_DST });
   // UVs all 0: every vertex samples the white texel, the mesh tint gives the colour.
-  const uvBuf = new Buffer({ data: new Float32Array(layout.count * 2), label: 'lattice-uvs', usage: BufferUsage.VERTEX });
+  const uvBuf = new Buffer({ data: new Float32Array(layout.count * 2), label: 'lattice-uvs', usage: BufferUsage.VERTEX | BufferUsage.COPY_DST });
   // An empty index list still needs a valid buffer; such a mesh is simply hidden.
   const majorIdx = new Buffer({ data: layout.major.length > 0 ? layout.major : new Uint32Array(2), label: 'lattice-major', usage: BufferUsage.INDEX });
   const minorIdx = new Buffer({ data: layout.minor.length > 0 ? layout.minor : new Uint32Array(2), label: 'lattice-minor', usage: BufferUsage.INDEX });
@@ -245,6 +254,14 @@ function freeGpu(g: Gpu): void {
   g.minorIdx.destroy();
 }
 
+/** Two texels, premultiplied: opaque white (front) and white at BACK_ALPHA (back, through the glass). */
+function makeGlassTexture(): Texture {
+  const b = Math.round(255 * BACK_ALPHA);
+  const resource = new Uint8Array([255, 255, 255, 255, b, b, b, b]);
+  const source = new BufferImageSource({ resource, width: 2, height: 1, alphaMode: 'premultiplied-alpha', scaleMode: 'linear', label: 'drum-glass' });
+  return new Texture({ source, label: 'drum-glass' });
+}
+
 /** Create the lattice and dust views. dotTexture is a small soft dot (one source for all motes). */
 export function createLatticeView(dotTexture: Texture): LatticeView {
   const lines = new Container({ label: 'lattice' });
@@ -264,6 +281,8 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   let pixel = 1;
   let arenaNow: ArenaDef | null = null;
   let camera: Camera | null = null;
+  let drum: Drum | null = null;
+  let glassTex: Texture | null = null;
   let lift: Float32Array = new Float32Array(0);
   const motes: Dust = createDust();
   const items: Particle[] = [];
@@ -298,7 +317,34 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     heat = createHeat(layout.count);
     ambient = createAmbient(layout);
     lift = new Float32Array(layout.count);
-    if (camera) setZEnabled(sim, true);
+    if (camera || drum) setZEnabled(sim, true);
+    if (drum) applyLineTexture();
+  }
+
+  /** Glass texture on the line meshes while a drum is set, the white texel otherwise. */
+  function applyLineTexture(): void {
+    if (!gpu) return;
+    let t: Texture = Texture.WHITE;
+    if (drum) {
+      glassTex ??= makeGlassTexture();
+      t = glassTex;
+    } else {
+      // Back to the flat path: every vertex samples the white texel again.
+      const uv = gpu.uvBuf.data;
+      if (uv instanceof Float32Array) uv.fill(0);
+      gpu.uvBuf.update();
+    }
+    gpu.minor.texture = t;
+    gpu.major.texture = t;
+    gpu.majorEcho.texture = t;
+  }
+
+  /** Drum only: lift and project the frame just written, and pick each node's texel. */
+  function drumFrame(s: LatticeSim, g: Gpu, d: Drum): void {
+    writeLift(s, lift, latticeAlpha(s));
+    const uv = g.uvBuf.data;
+    drumProjectNodes(g.positions, lift, s.layout.count, d, uv instanceof Float32Array ? uv : null);
+    g.uvBuf.update();
   }
 
   /** Tilt only: lift and project the frame just written into the position buffer. */
@@ -310,7 +356,16 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   function frame(dt: number, timeSec: number): void {
     if (!sim || !gpu) return;
     stepLattice(sim, dt);
-    if (ambient && ambientAmp > 0) {
+    if (drum) {
+      // The drum turns with the ship: write and project every node every frame.
+      sim.dirty = true;
+      if (ambient && ambientAmp > 0) {
+        stepAmbient(ambient, timeSec, ambientAmp);
+        writePositionsAmbient(sim, gpu.positions, latticeAlpha(sim), ambient);
+      } else writePositions(sim, gpu.positions, latticeAlpha(sim));
+      drumFrame(sim, gpu, drum);
+      gpu.posBuf.update();
+    } else if (ambient && ambientAmp > 0) {
       stepAmbient(ambient, timeSec, ambientAmp);
       writePositionsAmbient(sim, gpu.positions, latticeAlpha(sim), ambient);
       if (camera) projectFrame(sim, gpu, camera);
@@ -346,7 +401,17 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     if (next === camera) return;
     camera = next;
     // Either way the next frame rewrites every node (flat or projected) once.
-    if (sim) setZEnabled(sim, camera !== null);
+    if (sim) setZEnabled(sim, camera !== null || drum !== null);
+  }
+
+  function setDrum(d: Drum | null): void {
+    if (d === drum) return;
+    drum = d;
+    if (sim) {
+      setZEnabled(sim, camera !== null || drum !== null);
+      sim.dirty = true;
+    }
+    applyLineTexture();
   }
 
   function seed(arena: ArenaDef): void {
@@ -423,8 +488,11 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     pulse,
     setAmbient,
     setCamera,
+    setDrum,
     destroy(): void {
       clear();
+      glassTex?.destroy(true);
+      glassTex = null;
       lines.destroy({ children: true });
       glow.destroy({ children: true });
       heatShader.destroy();
