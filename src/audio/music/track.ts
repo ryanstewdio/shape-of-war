@@ -12,13 +12,16 @@
 //   decides when; buildBar takes the fill bar).
 // A tune with a form (v3.4, compose.ts) plays its written lead in place of the arp: a varied
 // pass swaps the B section's lead for the arp figure, and passes 2 and 3 of every 4 move the A
-// section an octave (leadOctave). The space breakdown drops the drums and holds pads and bass.
+// section an octave (leadOctave). v3.5: the loop's S section is a 16th note arpeggio section,
+// every odd pass changes the lead timbre, and the space breakdown (breakdown.ts) is placed by
+// play time and drops drums and bass under a risen, echoing pad.
 // Battle tracks (battle polish) add two fixed parts: the hook, played verbatim by the arp on bar
 // 0 of every 8 (it returns every 8 bars whatever the pass), and the jump bass on bars 4 and 8.
 import { hash01 } from '../../core/rng';
 import { chordToneMidi, fitPitch, STEPS_PER_BAR, type ChordName } from './harmony';
 import { pentatonicMidi } from './scale';
-import { chipChord, fx, leadForBar, sectionOf, type NoteFx, type Section } from './compose';
+import { arpCycle, arpDirFor, arpRun, fx, leadForBar, secondLoopLead, SECTION_BARS, sectionOf, type LeadVoice, type NoteFx, type Section } from './compose';
+import { isBreakdownBar } from './breakdown';
 import {
   DEFAULT_TUNE,
   FILL_BARS,
@@ -238,8 +241,15 @@ export function structuralFill(tune: Tune, bar: number): FillBar {
 
 /** Held notes at least this long (steps) get the lead's vibrato. */
 export const VIBRATO_MIN_STEPS = 4;
-/** Velocity of the space breakdown's held bass. */
-export const SPACE_BASS_VEL = 0.6;
+/** Velocity of the pad in the space breakdown: the pad rises while drums and bass drop (v3.5). */
+export const BREAK_PAD_VEL = 1.8;
+/** Velocity of an arpeggio run note on the beat, and off it. */
+export const ARP_RUN_VEL = 0.72;
+export const ARP_RUN_VEL_WEAK = 0.52;
+/** The lead's 16th note runs start from the chord root nearest this far below the tune root ... */
+export const ARP_RUN_DROP = 7;
+/** ... but never nearest a note under this one, so a low tune's run stays above G3. */
+export const ARP_RUN_BASE_MIN = 62;
 
 /**
  * Pure: the A section's register on a pass, semitones: as written on passes 0, 1, 4, 5 ..., an
@@ -255,20 +265,40 @@ export function leadOctave(tune: Tune, pass: number): number {
 }
 
 /**
+ * Pure: the lead voice on a pass: a level tune's second loop (every odd pass) changes the lead
+ * timbre (compose.ts secondLoopLead), so repeats never sound identical. Battle tracks keep theirs.
+ */
+export function leadVoiceFor(tune: Tune, pass: number): LeadVoice | null {
+  const f = tune.form;
+  if (f === undefined) return null;
+  return tune.battle !== true && Math.max(0, Math.trunc(pass)) % 2 === 1 ? secondLoopLead(f.lead) : f.lead;
+}
+
+/** Pure: the colour of a lead note in a section, from the lead voice. */
+function leadFx(lv: LeadVoice, sec: Section | null, echo: NoteFx['echo'], vibrato: number, slideFrom: number | null, swapped: boolean): NoteFx {
+  const duty = lv.wave === 'pulse' ? (sec === 'B' ? lv.dutyB : lv.duty) : 0;
+  const base = { echo, duty, bell: lv.wave === 'bell', vibrato, slideFrom };
+  // Only a swapped (second loop) voice names its wave, so a first pass note is as before.
+  const wave = swapped && (lv.wave === 'triangle' || lv.wave === 'sawtooth') ? lv.wave : undefined;
+  return fx(wave === undefined ? base : { ...base, wave });
+}
+
+/**
  * Pure: the written lead of a bar (a tune with a form), in the lead voice: the pulse duty of the
  * section (the B section changes it), the bell, vibrato on held notes, slides and the echo send
- * (always the long echo in the space breakdown).
+ * (always the long echo in the space breakdown). `section` plays another section's phrase in the
+ * bar (the breakdown plays the S phrase wherever it falls).
  */
-export function leadNotes(tune: Tune, bar: number, pass = 0): TrackNote[] {
+export function leadNotes(tune: Tune, bar: number, pass = 0, section?: Section): TrackNote[] {
   const f = tune.form;
   if (f === undefined) return [];
   const lb = tuneBar(tune, bar);
-  const sec = sectionOf(tune, lb);
+  const sec = section ?? sectionOf(tune, lb);
   const shift = sec === 'A' ? leadOctave(tune, pass) : 0;
-  const lv = f.lead;
-  const duty = lv.wave === 'pulse' ? (sec === 'B' ? lv.dutyB : lv.duty) : 0;
+  const lv = leadVoiceFor(tune, pass) ?? f.lead;
+  const swapped = lv !== f.lead;
   const echo = sec === 'S' ? 2 : lv.echo;
-  return leadForBar(tune, lb).map((n) =>
+  return leadForBar(tune, lb, section).map((n) =>
     note(
       'arp',
       n.step,
@@ -276,57 +306,89 @@ export function leadNotes(tune: Tune, bar: number, pass = 0): TrackNote[] {
       n.dur,
       n.vel,
       false,
-      fx({ echo, duty, bell: lv.wave === 'bell', vibrato: n.dur >= VIBRATO_MIN_STEPS ? lv.vibrato : 0, slideFrom: n.slideFrom === null ? null : n.slideFrom + shift }),
+      leadFx(lv, sec, echo, n.dur >= VIBRATO_MIN_STEPS ? lv.vibrato : 0, n.slideFrom === null ? null : n.slideFrom + shift, swapped),
     ),
   );
 }
 
 /**
- * Pure: the pad of a bar with a form. A chip pad is one voice stepping through the chord tones
- * every half sixteenth; a held pad is the detuned chord. In the space breakdown (and on every bar
- * of a space piece) the pad sends to the long echo and its lowest note carries the noise wind.
+ * Pure: the arpeggio section's lead (v3.5): 16th note runs over the bar's chord in the lead
+ * voice, up, down or up and down, the direction changing per 4 bar block and per pass, with the
+ * slap echo. It plays where the loop's S section used to hold the breakdown.
  */
-export function formPadNotes(chord: Chord, tune: Tune, bar: number, space: boolean): TrackNote[] {
+export function arpRunNotes(tune: Tune, bar: number, pass = 0): TrackNote[] {
+  const f = tune.form;
+  if (f === undefined) return [];
+  const lb = tuneBar(tune, bar);
+  const lv = leadVoiceFor(tune, pass) ?? f.lead;
+  const dir = arpDirFor(tune, Math.floor(lb / SECTION_BARS), pass);
+  const run = arpRun(tune, lb, dir, Math.max(ARP_RUN_BASE_MIN, tune.root - ARP_RUN_DROP));
+  const colour = leadFx(lv, 'A', 1, 0, null, lv !== f.lead);
+  return run.map((m, s) => note('arp', s, m, 1, s % 4 === 0 ? ARP_RUN_VEL : ARP_RUN_VEL_WEAK, false, colour));
+}
+
+/**
+ * Pure: the pad of a bar with a form. A chip pad is one voice stepping through the chord tones
+ * every half sixteenth, up, down or up and down by 4 bar block (v3.5); a held pad is the detuned
+ * chord, except in the C section, where one voice arpeggiates the chord in sixteenths (the
+ * accompaniment arpeggio, v3.5). In the space breakdown (and on every bar of a space piece) the
+ * pad is held, sends to the long echo and its lowest note carries the noise wind; in the
+ * breakdown it also rises (BREAK_PAD_VEL).
+ */
+export function formPadNotes(chord: Chord, tune: Tune, bar: number, space: boolean, pass = 0): TrackNote[] {
   const f = tune.form;
   const lb = tuneBar(tune, bar);
   const low = chord.pad[0] ?? chord.bass + 12;
+  const dir = arpDirFor(tune, Math.floor(lb / SECTION_BARS), pass);
   if (f !== undefined && f.pad === 'chip' && !space) {
-    return [note('pad', 0, low, STEPS_PER_BAR, 1, false, fx({ chord: chipChord(tune, lb, low), chordSec: tune.stepSec / 2 }))];
+    return [note('pad', 0, low, STEPS_PER_BAR, 1, false, fx({ chord: arpCycle(tune, lb, dir, low), chordSec: tune.stepSec / 2 }))];
+  }
+  if (f !== undefined && f.pad === 'held' && !space && sectionOf(tune, lb) === 'C') {
+    // A space piece keeps its wind under the arpeggio (and its long echo).
+    const sp = f.space;
+    return [note('pad', 0, low, STEPS_PER_BAR, 1, false, fx({ chord: arpCycle(tune, lb, dir, low), chordSec: tune.stepSec, wind: sp, echo: sp ? 2 : 0 }))];
   }
   const windy = space || f?.space === true;
-  return chord.pad.map((m, i) => note('pad', 0, m, STEPS_PER_BAR, 1, false, windy ? fx({ echo: 2, wind: i === 0 }) : undefined));
+  const vel = space ? BREAK_PAD_VEL : 1;
+  return chord.pad.map((m, i) => note('pad', 0, m, STEPS_PER_BAR, vel, false, windy ? fx({ echo: 2, wind: i === 0 }) : undefined));
 }
 
 const LAYER_ORDER: Readonly<Record<Layer, number>> = { bass: 0, pad: 1, kick: 2, perc: 3, hat: 4, arp: 5 };
 
-/** Pure: the melody layer of a bar: the fill run, a battle hook, the written lead or the hashed arp. */
-function melody(s: number, bar: number, chord: Chord, tune: Tune, pass: number, variant: PassVariant, fill: FillBar, sec: Section | null): TrackNote[] {
+/** Pure: the melody layer of a bar: the fill run, a battle hook, the written lead, an arpeggio run or the hashed arp. */
+function melody(s: number, bar: number, chord: Chord, tune: Tune, pass: number, variant: PassVariant, fill: FillBar, sec: Section | null, brk: boolean): TrackNote[] {
+  if (brk) return leadNotes(tune, bar, pass, 'S');
   if (fill === 1) return fillRun(chord, tune);
   if (sec === null) return arpNotes(s, bar, chord, tune, pass, variant === 'arp');
-  // A varied pass plays the hashed arp figure in place of the B section's lead; A, C and S are
+  // The loop's S section is the arpeggio section; the breakdown is placed by play time.
+  if (sec === 'S') return arpRunNotes(tune, bar, pass);
+  // A varied pass plays the hashed arp figure in place of the B section's lead; A and C are
   // always as written, so the tune stays recognisable.
   if (variant === 'arp' && sec === 'B') return arpNotes(s, bar, chord, tune, pass, true);
   return leadNotes(tune, bar, pass);
 }
 
-/** Pure: every note of one bar of the base track. */
+/**
+ * Pure: every note of one bar of the base track. `bar` counts from the start of the tune (the
+ * breakdown timeline, breakdown.ts, reads it as play time).
+ */
 export function buildBar(seed: number, bar: number, tune: Tune = DEFAULT_TUNE, fill: FillBar = null): BarPattern {
   const s = seed >>> 0;
   const chord = chordForBar(bar, tune);
   const pass = Math.max(0, passOf(tune, bar));
   const variant = passVariant(s, pass, tune);
   const sec = sectionOf(tune, tuneBar(tune, bar));
-  // The space breakdown has no drums: held pads, a held bass, the sparse lead. A fill (a phase
-  // change or a tune rotation; structural fills never fall in it) turns the bar back into a full
-  // bar with the fill's drums.
-  const fl = fill;
-  const space = sec === 'S' && fl === null;
-  const kick = space ? [] : fl === 1 ? drums('kick', FILL_KICK) : kickNotes(bar, tune);
-  const perc = space ? [] : fl === 1 ? drums('perc', FILL_PERC) : percNotes(bar, tune);
-  const hat = space ? [] : fl === null ? hatNotes(tune) : fillHats(fl);
-  const bass = space ? [note('bass', 0, chord.bass, STEPS_PER_BAR, SPACE_BASS_VEL)] : bassNotes(chord, tune, variant === 'bass', isJumpBar(tune, bar));
-  const pad = sec === null ? padNotes(chord) : formPadNotes(chord, tune, bar, space);
-  const arp = melody(s, bar, chord, tune, pass, variant, fl, sec);
+  // The space breakdown (v3.5: 30 to 45 s in, then every 90 to 120 s) has no drums and no bass:
+  // a risen, echoing, windy pad and the sparse S phrase. It wins over any fill, so a lift change
+  // or a rotation can never turn it back into a full bar.
+  const brk = isBreakdownBar(s, tune, bar);
+  const fl = brk ? null : fill;
+  const kick = brk ? [] : fl === 1 ? drums('kick', FILL_KICK) : kickNotes(bar, tune);
+  const perc = brk ? [] : fl === 1 ? drums('perc', FILL_PERC) : percNotes(bar, tune);
+  const hat = brk ? [] : fl === null ? hatNotes(tune) : fillHats(fl);
+  const bass = brk ? [] : bassNotes(chord, tune, variant === 'bass', isJumpBar(tune, bar));
+  const pad = sec === null ? padNotes(chord) : formPadNotes(chord, tune, bar, brk, pass);
+  const arp = melody(s, bar, chord, tune, pass, variant, fl, sec, brk);
   const notes = [...bass, ...pad, ...kick, ...perc, ...hat, ...arp].sort((a, b) => a.step - b.step || LAYER_ORDER[a.layer] - LAYER_ORDER[b.layer]);
   return { bar: tuneBar(tune, bar), chord: chord.name, tune: tune.id, pass, variant, fill: fl, notes };
 }

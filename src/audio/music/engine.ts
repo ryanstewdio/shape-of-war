@@ -12,15 +12,20 @@
 // v3.4 voice colour (compose.ts NoteFx): pulse leads with a duty cycle (a periodic wave), a two
 // operator FM bell, slides, delayed vibrato on held notes, a chip pad that steps one voice through
 // the chord, and filtered noise wind under a space pad.
+// v3.5 tone (Ryan M1: "slightly sharp and irritating" on earbuds): square, saw and pulse leads (bed
+// lead, chip pad, motifs, stingers, accents) pass a low pass that tracks the note (tone.ts), every
+// attack lasts at least 4 ms, the hat and clap buses are band limited below 7 kHz, and the space
+// breakdown lifts the long echo (setSpace). The master tone stage sits after the synth master.
 // The context is a narrow structural type: a real AudioContext satisfies it and tests pass a fake.
 import { hash01 } from '../../core/rng';
+import { attackSec, leadCutoffHz, LEAD_LP_Q, needsLeadFilter, NOISE_LP_HZ } from '../tone';
 import type { EchoSend, NoteFx } from './compose';
 import { MUSIC_MASTER_MAX } from './intensity';
 import { midiToHz } from './scale';
 import type { PlannedNote } from './scheduler';
 import type { Timbre } from './layers';
 import type { Layer } from './track';
-import { bedWaveTrim, DEFAULT_TUNE, type BedTimbre } from './tunes';
+import { bedWaveTrim, DEFAULT_TUNE, WAVE_WEIGHT, type BedTimbre } from './tunes';
 
 export const MUSIC_VOICE_CAP = 16;
 /** Most voices the composed bed holds at once (pad crossfade at a bar line), see layers tests. */
@@ -274,7 +279,8 @@ export const PAD_LP_HZ = 900;
 export const PAD_LFO_HZ = 0.125;
 export const PAD_LFO_DEPTH_HZ = 450;
 export const PAD_DETUNE_CENTS = 9;
-export const HAT_HP_HZ = 7000;
+/** Hat highpass (v3.5: down from 7 kHz, the hat now sits in a 4.5 to 7 kHz band). */
+export const HAT_HP_HZ = 4500;
 export const KICK_F0 = 120;
 export const KICK_F1 = 45;
 export const KICK_SWEEP_SEC = 0.12;
@@ -296,6 +302,11 @@ export const LONG_ECHO_STEPS = 3;
 export const LONG_FEEDBACK = 0.42;
 export const LONG_WET = 0.35;
 export const LONG_LP_HZ = 2400;
+/** The long echo in the space breakdown (v3.5): more return and a longer tail. */
+export const BREAK_LONG_WET = 0.7;
+export const BREAK_LONG_FEEDBACK = 0.55;
+/** Seconds the long echo takes to swell into and out of the breakdown (time constant). */
+export const BREAK_ECHO_TC = 0.4;
 /** Longest delay line, seconds (a dotted eighth at 100 BPM is 0.45 s). */
 export const ECHO_MAX_SEC = 1;
 /** Harmonics in a pulse wave. */
@@ -446,7 +457,7 @@ export interface VoiceShape {
 /** Pure: envelope and glide times for a motif voice, fitted inside its duration. */
 export function voiceShape(n: VoiceNote): VoiceShape {
   const len = Math.max(0.01, n.dur);
-  const attack = Math.min(n.timbre.attack, len * 0.3);
+  const attack = attackSec(Math.min(n.timbre.attack, len * 0.3));
   const release = Math.max(0.004, Math.min(n.timbre.release, len - attack - 0.002));
   const glide = n.fromMidi === null ? 0 : Math.min(n.timbre.glideSec, len * 0.6);
   const peak = n.gain / (n.timbre.partner ? 2 : 1);
@@ -497,6 +508,8 @@ export interface MusicEngine {
   setMaster(gain: number): void;
   /** Master lowpass cutoff, Hz, ramped from the current time. */
   setCutoff(hz: number): void;
+  /** Swell the long echo into (true) or out of (false) the space breakdown from audio time t. */
+  setSpace(on: boolean, t: number): void;
   /** Fade out and stop every voice, including notes scheduled ahead. */
   silence(): void;
   /** Silence and disconnect everything. The engine is unusable afterwards. */
@@ -573,6 +586,8 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
   const padBus = filter(ctx, 'lowpass', PAD_LP_HZ, 1.2);
   const hatBus = filter(ctx, 'highpass', HAT_HP_HZ);
   const percBus = filter(ctx, 'bandpass', PERC_BP_HZ, 0.9);
+  // v3.5: noise hits are band limited below 7 kHz.
+  const noiseLp = filter(ctx, 'lowpass', NOISE_LP_HZ);
   // Bed and melody meet in the limiter (when the context has one), then the music volume.
   const limiter = makeLimiter(ctx);
   const sum: NodeLike = limiter ?? out;
@@ -581,8 +596,9 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
   out.connect(destination);
   bassBus.connect(master);
   padBus.connect(master);
-  hatBus.connect(master);
-  percBus.connect(master);
+  hatBus.connect(noiseLp);
+  percBus.connect(noiseLp);
+  noiseLp.connect(master);
   // Motifs, stingers and accents carry their own filters and skip the threat lowpass, so a lone
   // enemy's motif is audible at low threat.
   const motifBus = ctx.createGain();
@@ -597,15 +613,18 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
   lfo.connect(lfoDepth);
   lfoDepth.connect(padBus.frequency);
   lfo.start(ctx.currentTime);
-  const graph: NodeLike[] = [lfo, lfoDepth, bassBus, padBus, hatBus, percBus, motifBus, master, out];
+  const graph: NodeLike[] = [lfo, lfoDepth, bassBus, padBus, hatBus, percBus, noiseLp, motifBus, master, out];
   if (limiter) graph.push(limiter);
   // Echo buses, built once (never during a tick). They return into the master lowpass.
   let slapIn: NodeLike | null = null;
   let longIn: NodeLike | null = null;
   let longDelay: DelayLike | null = null;
+  let longRet: GainLike | null = null;
+  let longFb: GainLike | null = null;
+  let spaceOn = false;
   let echoStep = 0;
   if (typeof ctx.createDelay === 'function') {
-    const mk = (sec: number, fb: number, wet: number, lpHz: number | null): { input: GainLike; delay: DelayLike } => {
+    const mk = (sec: number, fb: number, wet: number, lpHz: number | null): { input: GainLike; delay: DelayLike; ret: GainLike; feedback: GainLike } => {
       const input = ctx.createGain();
       input.gain.value = 1;
       const delay = (ctx.createDelay as (m: number) => DelayLike)(ECHO_MAX_SEC);
@@ -625,12 +644,14 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
       tail.connect(ret);
       ret.connect(master);
       graph.push(input, delay, feedback, ret);
-      return { input, delay };
+      return { input, delay, ret, feedback };
     };
     slapIn = mk(SLAP_SEC, SLAP_FEEDBACK, SLAP_WET, null).input;
     const long = mk(longEchoSec(DEFAULT_TUNE.stepSec), LONG_FEEDBACK, LONG_WET, LONG_LP_HZ);
     longIn = long.input;
     longDelay = long.delay;
+    longRet = long.ret;
+    longFb = long.feedback;
     echoStep = DEFAULT_TUNE.stepSec;
   }
   // Pulse waves by duty, made on first use (a handful per session).
@@ -663,6 +684,16 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
     o.type = type;
     o.frequency.setValueAtTime(hz, t);
     return o;
+  }
+
+  /**
+   * A low pass that tracks a bright lead (tone.ts leadCutoffHz): 6x the note, capped at 5 kHz.
+   * Pushed onto `chain`; the caller connects the source into it and it into the envelope.
+   */
+  function leadLp(hz: number, chain: NodeLike[]): FilterLike {
+    const f = filter(ctx, 'lowpass', leadCutoffHz(hz), LEAD_LP_Q);
+    chain.push(f);
+    return f;
   }
 
   /** A pulse oscillator of a duty (a square without periodic waves). */
@@ -730,7 +761,9 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
     chain.push(bp, lvl);
   }
 
-  function envelope(peak: number, t: number, attack: number, hold: number, release: number): GainLike {
+  function envelope(peak: number, t: number, atk: number, hold: number, release: number): GainLike {
+    // v3.5: no attack faster than 4 ms (a faster edge clicks on earbuds).
+    const attack = attackSec(atk);
     const g = ctx.createGain();
     g.gain.setValueAtTime(FLOOR, t);
     g.gain.linearRampToValueAtTime(Math.max(FLOOR, peak), t + attack);
@@ -777,7 +810,7 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
       case 'bass':
         return envelope(peak, t, 0.006, len * 0.5, len * 0.5);
       default:
-        return envelope(peak, t, 0.002, 0, len - 0.002);
+        return envelope(peak, t, 0.004, 0, len - 0.004);
     }
   }
 
@@ -834,7 +867,11 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
       stepPitches(o, f.chord, f.chordSec, t, len, true);
       sources.push(o);
       env = envelope(n.gain * trim * CHIP_PAD_PEAK, t, 0.01, n.dur, PAD_RELEASE_SEC);
-      o.connect(env);
+      // The tracking low pass follows the chord's top note, so no step is brighter than 6x.
+      const lp = leadLp(midiToHz(Math.max(...f.chord)), chain);
+      o.connect(lp);
+      lp.connect(env);
+      if (f.wind) wind(env, t, len, sources, chain);
       bus = master;
     } else if (n.layer === 'pad') {
       const peak = voicePeak('pad', n.gain * trim) / 2;
@@ -848,20 +885,31 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
       if (f.wind) wind(env, t, len, sources, chain);
       bus = padBus;
     } else {
-      const peak = n.gain * trim;
+      // A second loop wave (compose.ts secondLoopLead) is trimmed to the bed lead's loudness.
+      const wave = f.wave ?? bed.arp;
+      const waveTrim = f.wave === undefined ? 1 : Math.min(1.25, (WAVE_WEIGHT[bed.arp] ?? 1) / (WAVE_WEIGHT[f.wave] ?? 1));
+      const peak = n.gain * trim * waveTrim;
       const held = n.dur > LEAD_HOLD_SEC;
       if (f.bell) {
-        env = envelope(peak, t, 0.003, 0, len - 0.003);
+        env = envelope(peak, t, 0.004, 0, len - 0.004);
         const car = bell(hz, t, len, sources, chain);
         car.connect(env);
       } else {
-        env = held ? envelope(peak, t, 0.005, len * 0.7, len * 0.3) : envelope(peak, t, 0.002, 0, len - 0.002);
+        env = held ? envelope(peak, t, 0.005, len * 0.7, len * 0.3) : envelope(peak, t, 0.004, 0, len - 0.004);
         const startHz = f.slideFrom === null ? hz : midiToHz(f.slideFrom);
-        const o = f.duty > 0 ? pulse(f.duty, startHz, t) : osc(bed.arp, startHz, t);
+        const bright = f.duty > 0 || needsLeadFilter(wave);
+        const o = f.duty > 0 ? pulse(f.duty, startHz, t) : osc(wave, startHz, t);
         if (f.slideFrom !== null) slide(o, hz, t, len);
         vibrato(o, f.vibrato, t, len, sources, chain);
         sources.unshift(o);
-        o.connect(env);
+        if (bright) {
+          // v3.5: pulse, square and saw leads pass the tracking low pass (the note's own pitch).
+          const lp = leadLp(Math.max(hz, startHz), chain);
+          o.connect(lp);
+          lp.connect(env);
+        } else {
+          o.connect(env);
+        }
       }
       bus = master;
     }
@@ -879,8 +927,12 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
       const len = voiceLength(n.layer, n.dur);
       const env = envFor(n, t, len, bed);
       const sources = sourcesFor(n, t, bed);
-      for (const s of sources) s.connect(env);
-      launch('bed', sources, [], env, busFor(n.layer), t, len);
+      const chain: NodeLike[] = [];
+      // v3.5: a square or saw lead passes the tracking low pass.
+      const head: NodeLike = n.layer === 'arp' && n.midi !== null && needsLeadFilter(bed.arp) ? leadLp(midiToHz(n.midi), chain) : env;
+      if (head !== env) head.connect(env);
+      for (const s of sources) s.connect(head);
+      launch('bed', sources, chain, env, busFor(n.layer), t, len);
     },
     playVoice(n: VoiceNote, cls: 'motif' | 'accent' | 'boss' = 'motif'): void {
       if (disposed || !(n.gain > 0) || !(n.dur > 0)) return;
@@ -889,7 +941,20 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
       const len = Math.max(0.01, n.dur);
       const tb = n.timbre;
       const hz = midiToHz(n.midi);
-      const f = filter(ctx, tb.filter, tb.filterHz, tb.q);
+      // v3.5: a square or saw motif voice tracks its note: a low pass timbre closes to 6x the note
+      // (never opening past its own cutoff); a band or high pass timbre gets a tracking low pass after it.
+      const bright = needsLeadFilter(tb.wave) || (tb.partner !== null && needsLeadFilter(tb.partner.wave));
+      const track = leadCutoffHz(Math.max(hz, n.fromMidi === null ? 0 : midiToHz(n.fromMidi)));
+      const lowpassTimbre = tb.filter === 'lowpass';
+      const f = filter(ctx, tb.filter, bright && lowpassTimbre ? Math.min(tb.filterHz, track) : tb.filterHz, tb.q);
+      const chain: NodeLike[] = [f];
+      let tail: NodeLike = f;
+      if (bright && !lowpassTimbre) {
+        const lp = filter(ctx, 'lowpass', track, LEAD_LP_Q);
+        f.connect(lp);
+        chain.push(lp);
+        tail = lp;
+      }
       const env = envelope(sh.peak, t, sh.attack, len - sh.release, sh.release);
       const mk = (wave: OscillatorType, detune: number): OscLike => {
         const o = ctx.createOscillator();
@@ -913,8 +978,8 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
         for (const o of oscs) stepPitches(o, arp, sec, t, len, false);
       }
       const sources: SourceLike[] = oscs;
-      f.connect(env);
-      launch(cls, sources, [f], env, motifBus, t, len, n.echo);
+      tail.connect(env);
+      launch(cls, sources, chain, env, motifBus, t, len, n.echo);
     },
     accentRoom(t: number, len: number, upcoming: readonly Span[]): number {
       if (disposed) return 0;
@@ -934,6 +999,13 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
     setCutoff(hz: number): void {
       if (disposed || !(hz > 0)) return;
       master.frequency.setTargetAtTime(hz, ctx.currentTime, 0.05);
+    },
+    setSpace(on: boolean, t: number): void {
+      if (disposed || on === spaceOn) return;
+      spaceOn = on;
+      const at = Math.max(ctx.currentTime, t);
+      longRet?.gain.setTargetAtTime(on ? BREAK_LONG_WET : LONG_WET, at, BREAK_ECHO_TC);
+      longFb?.gain.setTargetAtTime(on ? BREAK_LONG_FEEDBACK : LONG_FEEDBACK, at, BREAK_ECHO_TC);
     },
     silence(): void {
       const now = ctx.currentTime;

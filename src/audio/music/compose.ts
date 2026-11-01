@@ -72,6 +72,8 @@ export interface NoteFx {
   readonly chordSec: number;
   /** Filtered noise wind under a pad. */
   readonly wind: boolean;
+  /** Lead wave override (v3.5 second loop timbre), or absent for the bed's own lead wave. */
+  readonly wave?: OscillatorType;
 }
 
 /** A note with no colour. */
@@ -176,10 +178,11 @@ export function leadPitch(n: LeadNote, abs: number, t: Tune): number {
 
 /**
  * Pure: the lead notes that start in one loop bar, pitched in the bar's harmony. A slide reads
- * the previous note of the phrase, so the bend starts where the line was.
+ * the previous note of the phrase, so the bend starts where the line was. `section` plays that
+ * section's phrase in place of the bar's own (the space breakdown, v3.5).
  */
-export function leadForBar(t: Tune, loopBar: number): PlacedLead[] {
-  const sec = sectionOf(t, loopBar);
+export function leadForBar(t: Tune, loopBar: number, section?: Section): PlacedLead[] {
+  const sec = section ?? sectionOf(t, loopBar);
   const ph = sec === null ? undefined : t.form?.phrases[sec];
   if (ph === undefined) return [];
   const phraseBar = ((loopBar % SECTION_BARS) + SECTION_BARS) % SECTION_BARS;
@@ -202,6 +205,74 @@ export function leadForBar(t: Tune, loopBar: number): PlacedLead[] {
 export function chipChord(t: Tune, loopBar: number, base: number): number[] {
   const h = harmonyForBar(loopBar, t.key);
   return [0, 1, 2, 3].map((d) => chordToneMidi(h, d, base));
+}
+
+// ---------------------------------------------------------------------------------------
+// Arpeggios (v3.5, Ryan M1: "could use more variety and arpeggio"). 16th note runs over the bar's
+// chord: up, down or up and down, the pattern changing from section to section and pass to pass.
+
+export type ArpDir = 'up' | 'down' | 'updown';
+export const ARP_DIRS: readonly ArpDir[] = ['up', 'down', 'updown'];
+
+/** Chord degrees (chordToneMidi) of a bar of 16th note lead runs, per direction. */
+export const ARP_RUNS: Readonly<Record<ArpDir, readonly number[]>> = {
+  up: [0, 1, 2, 3, 0, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4],
+  down: [4, 3, 2, 1, 4, 3, 2, 1, 3, 2, 1, 0, 3, 2, 1, 0],
+  updown: [0, 1, 2, 3, 4, 3, 2, 1, 0, 1, 2, 3, 4, 3, 2, 1],
+};
+
+/** One cycle of chord degrees a single accompaniment voice steps through, per direction. */
+export const ARP_CYCLES: Readonly<Record<ArpDir, readonly number[]>> = {
+  up: [0, 1, 2, 3],
+  down: [3, 2, 1, 0],
+  updown: [0, 1, 2, 3, 2, 1],
+};
+
+/** Pure: a small per tune offset so two tunes do not use the same pattern in the same section. */
+function tuneArpOffset(t: Tune): number {
+  return (t.bpm + t.root) % ARP_DIRS.length;
+}
+
+/**
+ * Pure: the arpeggio direction of a 4 bar block of the loop (loop bar / 4) on a pass. Neighbouring
+ * blocks always differ, and each pass moves every block on to the next pattern.
+ */
+export function arpDirFor(t: Tune, block: number, pass: number): ArpDir {
+  const i = Math.max(0, Math.trunc(block)) + tuneArpOffset(t) + Math.max(0, Math.trunc(pass));
+  return ARP_DIRS[i % ARP_DIRS.length] ?? 'up';
+}
+
+/**
+ * Pure: a bar of 16th note lead runs over the bar's chord, MIDI, one per step, from the chord root
+ * nearest `base`. The second bar of each pair climbs one chord tone, so the run keeps moving.
+ */
+export function arpRun(t: Tune, loopBar: number, dir: ArpDir, base: number): number[] {
+  const h = harmonyForBar(loopBar, t.key);
+  const lift = loopBar % 2 === 1 ? 1 : 0;
+  return ARP_RUNS[dir].map((d) => chordToneMidi(h, d + lift, base));
+}
+
+/** Pure: one cycle of chord tones (MIDI) for an arpeggiating accompaniment voice. */
+export function arpCycle(t: Tune, loopBar: number, dir: ArpDir, base: number): number[] {
+  const h = harmonyForBar(loopBar, t.key);
+  return ARP_CYCLES[dir].map((d) => chordToneMidi(h, d, base));
+}
+
+/**
+ * Pure: the lead voice of a level tune's second loop (odd passes), so a repeat never sounds
+ * identical: a pulse turns to a triangle, a triangle or saw to a 25 percent pulse, a bell to a
+ * triangle. The echo send and vibrato stay.
+ */
+export function secondLoopLead(lv: LeadVoice): LeadVoice {
+  switch (lv.wave) {
+    case 'pulse':
+      return { ...lv, wave: 'triangle' };
+    case 'triangle':
+    case 'sawtooth':
+      return { ...lv, wave: 'pulse', duty: 0.25, dutyB: 0.125 };
+    case 'bell':
+      return { ...lv, wave: 'triangle' };
+  }
 }
 
 // ---------------------------------------------------------------------------------------

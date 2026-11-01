@@ -7,6 +7,7 @@ import { fitsHarmony, harmonyForBar, inChord, inScale, STEPS_PER_BAR, type Harmo
 import { pentatonicMidi, pitchClass } from '../../../src/audio/music/scale';
 import { buildBar, leadNotes, structuralFill, type FillBar, type Layer } from '../../../src/audio/music/track';
 import { formBars, isSpaceBar, MODE_STEPS, SECTION_BARS } from '../../../src/audio/music/compose';
+import { isBreakdownBar } from '../../../src/audio/music/breakdown';
 import {
   BOSS_KEYS,
   BATTLE_IDS,
@@ -188,7 +189,7 @@ describe('the tunes differ', () => {
     expect(distinct((t) => t.form?.lead)).toBe(TUNES.length);
   });
 
-  it('every level tune drops into a 4 to 8 bar space breakdown once a loop; two space pieces carry wind on every bar', () => {
+  it('every level tune keeps a 4 to 8 bar S block in its loop, now a 16th note arpeggio section with drums (v3.5); two space pieces carry wind on every bar', () => {
     for (const t of TUNES) {
       const space = Array.from({ length: t.loopBars }, (_, b) => isSpaceBar(t, b));
       const runs: number[] = [];
@@ -205,15 +206,14 @@ describe('the tunes differ', () => {
         expect(r).toBeGreaterThanOrEqual(4);
         expect(r).toBeLessThanOrEqual(8);
       }
-      // No drums in the breakdown, a held bass, pads on the long echo.
+      // Outside a timed breakdown (breakdown.ts) the S block drives: kick, bass and a lead run on
+      // every sixteenth. Seed 1, first pass: no S block of the first loop is in a breakdown.
       for (let b = 0; b < t.loopBars; b++) {
-        if (!isSpaceBar(t, b)) continue;
-        expect(structuralFill(t, b + t.loopBars)).toBeNull();
+        if (!isSpaceBar(t, b) || isBreakdownBar(1, t, b)) continue;
         const p = buildBar(1, b, t, null);
-        expect(p.notes.filter((n) => n.layer === 'kick' || n.layer === 'perc' || n.layer === 'hat')).toEqual([]);
-        expect(p.notes.filter((n) => n.layer === 'bass')).toHaveLength(1);
-        for (const n of p.notes.filter((n) => n.layer === 'pad')) expect(n.fx?.echo).toBe(2);
-        expect(p.notes.some((n) => n.fx?.wind === true)).toBe(true);
+        expect(p.notes.some((n) => n.layer === 'kick'), `${t.id} bar ${b}`).toBe(true);
+        expect(p.notes.some((n) => n.layer === 'bass')).toBe(true);
+        expect(p.notes.filter((n) => n.layer === 'arp').map((n) => n.step)).toEqual(Array.from({ length: 16 }, (_, i) => i));
       }
     }
     const spacey = TUNES.filter((t) => t.form?.space === true);
