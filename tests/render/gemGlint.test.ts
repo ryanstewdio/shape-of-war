@@ -74,9 +74,9 @@ describe('gem glints', () => {
     expect(hue0).toBeLessThan(1);
   });
 
-  it('every slot is always alive, so nova snakes show 3 to 5 glints at any time', () => {
-    expect(glintsAlive(NOVA_SNAKE_GLINTS)).toBeGreaterThanOrEqual(3);
-    expect(glintsAlive(NOVA_SNAKE_GLINTS)).toBeLessThanOrEqual(5);
+  it('every slot is always alive, so nova snakes show a ribbon of 6 to 10 glints at any time', () => {
+    expect(glintsAlive(NOVA_SNAKE_GLINTS)).toBeGreaterThanOrEqual(6);
+    expect(glintsAlive(NOVA_SNAKE_GLINTS)).toBeLessThanOrEqual(10);
     const g = createGlint();
     for (let t = 0; t < 3; t += 0.037) {
       glintAt(1, 0, t, g);
