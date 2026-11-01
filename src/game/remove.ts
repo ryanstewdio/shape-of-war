@@ -20,12 +20,23 @@ export function removeEntity(w: World, id: number): void {
       g.snakeWell[slot] = -1;
     }
   } else if (k === Kind.GravityWell) {
+    // Compact every per slot well array together, so a well keeps its own age, nova and ordinal.
     let n = 0;
     for (let i = 0; i < g.wellCount; i++) {
       const wid = g.wellIds[i] ?? -1;
-      if (wid !== id) g.wellIds[n++] = wid;
+      if (wid === id) continue;
+      g.wellIds[n] = wid;
+      g.wellAge[n] = g.wellAge[i] ?? 0;
+      g.wellNova[n] = g.wellNova[i] ?? 0;
+      g.wellOrd[n] = g.wellOrd[i] ?? n;
+      n++;
     }
-    for (let i = n; i < g.wellIds.length; i++) g.wellIds[i] = -1;
+    for (let i = n; i < g.wellIds.length; i++) {
+      g.wellIds[i] = -1;
+      g.wellAge[i] = 0;
+      g.wellNova[i] = 0;
+      g.wellOrd[i] = i;
+    }
     g.wellCount = n;
     g.wellSnakeT[id] = 0;
   } else if (k === Kind.Drone) {

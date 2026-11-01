@@ -368,9 +368,9 @@ describe('orbit v2 (GW1): two counter rotating rings and the chainsaw', () => {
     expect(rest[2]).toBe(0); // beyond the short spike
     expect(rest[3]).toBe(0);
     const sawn = run(1);
-    expect(sawn[0]).toBe(1);
-    expect(sawn[1]).toBe(1);
-    expect(sawn[2]).toBe(1); // 45 u along the tangent: inside the 60 u chainsaw
+    // GW2: a powered saw (level above 0.5) alternates 1 and 2 damage per hit, 1.5x on average.
+    for (const k of [0, 1, 2]) expect([1, 2]).toContain(sawn[k]); // [2]: 45 u along the tangent, inside the 60 u chainsaw
+    expect(sawn[0]! + sawn[1]! + sawn[2]!).toBe(4); // 1 + 2 + 1
     expect(sawn[3]).toBe(0); // 40 u off the line: outside the capsule
   });
 

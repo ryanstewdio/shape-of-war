@@ -2,7 +2,7 @@
 // player bullets and most enemies inside 320 u, kills the ship on contact, consumes enemies whose
 // centre enters it (mass plus 1, radius plus 2), explodes at mass 20, can be shot down.
 // Pair handling is a direct loop over all entities because the pull radius exceeds two grid cells
-// and there are at most 3 wells. Mass lives in gs(w).aux.
+// and there are at most MAX_WELLS (4) wells. Mass lives in gs(w).aux. Wells arriving in play: wellArrival.ts.
 //
 // Pull model (B9, v1.1): the ship and each pulled enemy carry a pull velocity channel v that
 // relaxes toward a target T(d) = PEAK x falloff(d) at rate PULL_DAMP per second,
@@ -190,17 +190,30 @@ export function massOf(w: World, id: number): number {
   return gs(w).aux[id] ?? 0;
 }
 
+/**
+ * Create a well at (x, y) with tele seconds of telegraph and add it to the next well slot, keyed by
+ * ordinal ord for its nova time. Returns the id, or -1 when the slots or the world are full.
+ */
+export function addWell(w: World, x: number, y: number, tele: number, ord: number): number {
+  const g = gs(w);
+  if (g.wellCount >= MAX_WELLS) return -1;
+  const id = spawnFromDef(w, def, x, y, tele);
+  if (id < 0) return -1;
+  const i = g.wellCount++;
+  g.wellIds[i] = id;
+  g.wellAge[i] = 0;
+  g.wellNova[i] = 0;
+  g.wellOrd[i] = ord;
+  g.wellSnakeT[id] = 0;
+  return id;
+}
+
 /** Place the level's wells. Call once at game start. */
 export function spawnWells(w: World): void {
-  const g = gs(w);
   const list = w.level.hazards.wells;
-  for (let i = 0; i < list.length && g.wellCount < MAX_WELLS; i++) {
+  for (let i = 0; i < list.length; i++) {
     const p = list[i];
-    if (p === undefined) continue;
-    const id = spawnFromDef(w, def, p.x, p.y, 0);
-    if (id < 0) continue;
-    g.wellIds[g.wellCount++] = id;
-    g.wellSnakeT[id] = 0;
+    if (p !== undefined) addWell(w, p.x, p.y, 0, i);
   }
 }
 
@@ -337,13 +350,16 @@ function stepOneWell(w: World, well: number, dt: number, blend: number, nova: bo
   }
 }
 
-/** Age well slot i by dt and let it erupt once its hashed time is up ('sim:wellNova', once). */
+/**
+ * Age well slot i by dt and let it erupt once its hashed time is up ('sim:wellNova', once). The
+ * time is keyed by the well's ordinal, so it does not change when an earlier slot is compacted out.
+ */
 function tickNova(w: World, id: number, i: number, dt: number): void {
   const g = gs(w);
   if (g.wellNova[i] === 1 || !g.wellNovaOn) return;
   const age = (g.wellAge[i] ?? 0) + dt;
   g.wellAge[i] = age;
-  if (age < novaSecFor(w.level.seed, i)) return;
+  if (age < novaSecFor(w.level.seed, g.wellOrd[i] ?? i)) return;
   g.wellNova[i] = 1;
   bus.emit('sim:wellNova', { id, x: w.x[id] ?? 0, y: w.y[id] ?? 0 });
 }
@@ -372,7 +388,8 @@ export function stepWells(w: World, dt: number): void {
 
   for (let i = g.wellCount - 1; i >= 0; i--) {
     const id = g.wellIds[i] ?? -1;
-    if (id > 0 && w.alive[id] === 1 && w.kind[id] === Kind.GravityWell) {
+    // A well still telegraphing its arrival (GW2) is harmless: no age, no pull, no contact.
+    if (id > 0 && w.alive[id] === 1 && w.kind[id] === Kind.GravityWell && (g.tele[id] ?? 0) <= 0) {
       tickNova(w, id, i, dt);
       const nova = g.wellNova[i] === 1;
       stepOneWell(w, id, dt, 1 - k, nova);
