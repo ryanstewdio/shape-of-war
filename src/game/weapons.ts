@@ -9,8 +9,9 @@
 // the pair weapon for a fresh 20 s; a third replaces the older ingredient. Spread drops only while a
 // weapon is active, and a drop falls due within COMBINE_DROP_KILLS kills while one is. Orbit v2
 // (GW1, Ryan): no forward bullet and no push. Two rings of 4 spikes circle the ship in opposite
-// directions at 80 u and 100 u; while the aim stick is held the spikes on the aim side stretch along
-// their orbit tangent to 2.5x over 0.25 s (and back), a chainsaw arc that hits all it touches.
+// directions at 80 u and 100 u. GW3 chainsaw bar: while the saw level is above 0 both ring tracks bend
+// out toward the aim into a bar (outer tip 320 u, inner 208 u), so the spinning spikes run out along
+// one side of the bar, round the tip and back along the other, like a chain.
 import { bus, type BaseWeaponKind, type ComboKind, type WeaponKind } from '../core/events';
 import { hash01 } from '../core/rng';
 import {
@@ -248,24 +249,30 @@ export const WHIRL_SHIELD: ShieldSpec = { perRing: ORBIT_PER_RING, inner: ORBIT_
 export const ECLIPSE_SHIELD: ShieldSpec = { perRing: ORBIT_PER_RING, inner: ORBIT_RADIUS, outer: ORBIT_OUTER, rev: 2.0, cooldown: 0.15, piercing: true };
 /** Most hitters (both rings) any shield has. */
 export const MAX_HITTERS = 8;
-/** Spike length at rest along its orbit tangent, u, and the capsule radius of its hit test. */
+/** Spike length at rest along its track, u, and the capsule radius of its hit test. */
 export const SPIKE_LEN = 24;
 export const SPIKE_RADIUS = 7;
-/** Eclipse resting spikes pierce up to this many enemies. */
-export const SPIKE_PIERCE = 3;
+/** Spike length at the bar tip (GW3), u: SPIKE_LEN at rest growing to this with level x profile. */
+export const SAW_SPIKE_MAX = 40;
 /**
- * Chainsaw: while the aim stick is held the saw level rises 0 to 1 over STRETCH_SEC (and falls as
- * fast on release); aim side spikes are SPIKE_LEN x (1 + (SPIKE_STRETCH - 1) x level x weight) long.
- * A level, not a per spike ramp, because a spike crosses the cone in about 0.14 s at 2.4 rev/s.
+ * Legacy GW2 tangent stretch (no longer used by the sim, which keeps spikes at SPIKE_LEN to
+ * SAW_SPIKE_MAX). Kept only because the render tooth scale still reads it (see the hand off).
  */
 export const SPIKE_STRETCH = 2.5;
+/** Eclipse resting spikes pierce up to this many enemies. */
+export const SPIKE_PIERCE = 3;
+/** The saw level rises 0 to 1 over STRETCH_SEC while the aim stick is held and falls as fast on release. */
 export const STRETCH_SEC = 0.25;
-/** A spike within this angle of the aim (rad, 60 deg) saws while the aim stick is held. */
-export const SAW_CONE = Math.PI / 3;
-/** Full stretch inside this angle of the aim (rad, 50 deg); it fades to none at SAW_CONE. */
-export const SAW_FULL = (50 * Math.PI) / 180;
-/** A spike stretched past this multiplier is a chainsaw: it hits every enemy along its length. */
+/** Bar profile: full reach within BAR_FULL of the aim (25 deg), none at BAR_EDGE (70 deg) and beyond. */
+export const BAR_FULL = (25 * Math.PI) / 180;
+export const BAR_EDGE = (70 * Math.PI) / 180;
+/** Bar reach K per ring: radius r0 x (1 + level x K x profile). Outer 100 u to 320 u, inner 80 u to 208 u. */
+export const BAR_REACH_INNER = 1.6;
+export const BAR_REACH_OUTER = 2.2;
+/** A spike whose track radius multiplier passes this is on the bar: it hits every enemy along its sweep. */
 export const SAW_AT = 1.05;
+/** A sweep longer than this in one step (u) is a jump (aim flick, respawn), not motion: no swept capsule. */
+export const SWEEP_MAX = 160;
 
 /** Pure: the shield of a kind (orbit and Halo share the orbit numbers), or null. */
 export function shieldOf(kind: WeaponKind): ShieldSpec | null {
@@ -300,12 +307,59 @@ function wrapAngle(a: number): number {
   return v;
 }
 
-/** Pure: how much a spike at angle a joins the saw: 1 within SAW_FULL of aim, 0 at SAW_CONE and beyond. */
-export function sawWeight(a: number, aim: number): number {
-  const rel = Math.abs(wrapAngle(a - aim));
-  if (rel <= SAW_FULL) return 1;
-  if (rel >= SAW_CONE) return 0;
-  return (SAW_CONE - rel) / (SAW_CONE - SAW_FULL);
+/** Pure: bar profile of a spike at angle d from the aim: 1 within BAR_FULL, smoothstep down to 0 at BAR_EDGE. */
+export function barProfile(d: number): number {
+  const rel = Math.abs(wrapAngle(d));
+  if (rel <= BAR_FULL) return 1;
+  if (rel >= BAR_EDGE) return 0;
+  const t = (BAR_EDGE - rel) / (BAR_EDGE - BAR_FULL);
+  return t * t * (3 - 2 * t);
+}
+
+/** Pure: d barProfile / d d (per radian), 0 on the flat top and outside the bar. */
+export function barSlope(d: number): number {
+  const w = wrapAngle(d);
+  const rel = Math.abs(w);
+  if (rel <= BAR_FULL || rel >= BAR_EDGE) return 0;
+  const t = (BAR_EDGE - rel) / (BAR_EDGE - BAR_FULL);
+  const g = (6 * t * (1 - t)) / (BAR_EDGE - BAR_FULL);
+  return w > 0 ? -g : g;
+}
+
+/** Pure: bar reach K of a ring (0 inner, 1 outer). */
+export function barReach(ring: number): number {
+  return ring === 0 ? BAR_REACH_INNER : BAR_REACH_OUTER;
+}
+
+/** Pure: radius multiplier of a ring track at angle a: 1 + level x K x profile(a - aim). */
+export function trackScale(ring: number, level: number, a: number, aim: number): number {
+  return 1 + level * barReach(ring) * barProfile(a - aim);
+}
+
+/** Pure: radius of a ring track (rest radius r0) at angle a, saw level and aim. */
+export function trackRadius(r0: number, ring: number, level: number, a: number, aim: number): number {
+  return r0 * trackScale(ring, level, a, aim);
+}
+
+/**
+ * Pure: unit direction of travel of a spike at angle a on the bent track, turning dir (+1 or -1).
+ * The track is P(a) = R(a) (cos a, sin a), so dP/da = R'(a) (cos a, sin a) + R(a) (-sin a, cos a).
+ */
+export function trackTangent(r0: number, ring: number, level: number, a: number, aim: number, dir: number, out: { x: number; y: number }): void {
+  const r = trackRadius(r0, ring, level, a, aim);
+  const dr = r0 * level * barReach(ring) * barSlope(a - aim);
+  const c = Math.cos(a);
+  const sn = Math.sin(a);
+  const x = (dr * c - r * sn) * dir;
+  const y = (dr * sn + r * c) * dir;
+  const l = Math.sqrt(x * x + y * y);
+  out.x = l > 1e-9 ? x / l : -sn * dir;
+  out.y = l > 1e-9 ? y / l : c * dir;
+}
+
+/** Pure: spike length at saw level and bar profile f: SPIKE_LEN to SAW_SPIKE_MAX. */
+export function spikeLength(level: number, f: number): number {
+  return SPIKE_LEN + (SAW_SPIKE_MAX - SPIKE_LEN) * level * f;
 }
 
 /** Pure: the saw level one step later: toward 1 while held, toward 0 otherwise, over STRETCH_SEC. */
@@ -331,13 +385,30 @@ export function sawPowered(level: number): boolean {
 
 const sawFx = { on: false };
 
-/** Set the saw level; 'sim:saw' { on: true } when it leaves 0, { on: false } when it returns to 0. */
-function setSaw(s: WeaponState, level: number): void {
-  const was = s.saw > 0;
+/**
+ * Set the saw level. 'sim:saw' { on: true } when the level is above 0 on a step with the aim stick
+ * held and the saw is not already sounding, { on: false } when a sounding saw returns to 0. After a
+ * pause silenced it (pauseSaw), it sounds again only on a step where the stick is still held.
+ */
+function setSaw(s: WeaponState, level: number, held: boolean): void {
   s.saw = level;
-  const now = level > 0;
-  if (was === now) return;
-  sawFx.on = now;
+  if (s.sawOn) {
+    if (level > 0) return;
+    s.sawOn = false;
+  } else {
+    if (!(level > 0 && held)) return;
+    s.sawOn = true;
+  }
+  sawFx.on = s.sawOn;
+  bus.emit('sim:saw', sawFx);
+}
+
+/** The game paused: a sounding saw emits 'sim:saw' { on: false }; the level is kept for resume. */
+export function pauseSaw(w: World): void {
+  const s = weaponState(w);
+  if (!s.sawOn) return;
+  s.sawOn = false;
+  sawFx.on = false;
   bus.emit('sim:saw', sawFx);
 }
 
@@ -347,11 +418,6 @@ export function sawHitDamage(w: World): number {
   const n = 1 + s.sawOdd;
   s.sawOdd ^= 1;
   return n;
-}
-
-/** Pure: length multiplier of a spike at saw level and weight (1 to SPIKE_STRETCH). */
-export function spikeStretch(level: number, weight: number): number {
-  return 1 + (SPIKE_STRETCH - 1) * level * weight;
 }
 
 /**
@@ -390,7 +456,7 @@ export interface WeaponState extends DropCounter {
   blades: Int32Array;
   /** Seconds until each hitter may damage again. */
   bladeCool: Float32Array;
-  /** Length multiplier of each spike (1 at rest, up to SPIKE_STRETCH while it saws). */
+  /** Track radius multiplier of each spike (1 at rest, up to 1 + K on the bar tip). */
   stretch: Float32Array;
   /** Live hitters of the current shield (both rings), 0 without one. */
   hitters: number;
@@ -398,6 +464,8 @@ export interface WeaponState extends DropCounter {
   orbitPhase: number;
   /** Chainsaw level 0 to 1 (rises while the aim stick is held, falls on release). */
   saw: number;
+  /** True while 'sim:saw' last said on. */
+  sawOn: boolean;
   /** Powered saw hit parity: alternate 1 and 2 damage, so powered hits average SAW_DAMAGE_MULT. */
   sawOdd: number;
   hudTimer: number;
@@ -426,6 +494,7 @@ function createWeaponState(): WeaponState {
     hitters: 0,
     orbitPhase: 0,
     saw: 0,
+    sawOn: false,
     sawOdd: 0,
     hudTimer: 0,
     hud: { kind: 'spread', remaining: 0, total: WEAPON_DURATION, title: 'spread' },
@@ -498,7 +567,7 @@ function removeBlades(w: World): void {
     s.stretch[i] = 1;
   }
   s.hitters = 0;
-  setSaw(s, 0);
+  setSaw(s, 0, false);
 }
 
 /** Switch the active kind, swapping the shield when it changes. */
@@ -692,12 +761,15 @@ export function fireWeapon(w: World, x: number, y: number, aim: number): void {
   }
 }
 
+const tan = { x: 0, y: 0 };
+
 /**
  * Place the spikes around the ship at orbitPhase: the inner ring turning forward, the outer ring
- * back. Over dt the saw level moves toward 1 while the aim stick is held (0 otherwise) and each spike
- * within SAW_CONE of the aim stretches with it. Writes the render contract: style 3,
- * phase (angle round the ship), vx and vy along the orbit tangent, spikeLen. Spawns any spike that is
- * missing (pool full earlier). prevX and prevY keep the last spot for render.
+ * back. Over dt the saw level moves toward 1 while the aim stick is held (0 otherwise) and both ring
+ * tracks bend out toward the aim into the chainsaw bar (trackRadius). Writes the render contract:
+ * style 3, phase (angle round the ship), vx and vy the unit direction of travel along the bent track,
+ * spikeLen. Spawns any spike that is missing (pool full earlier). prevX and prevY keep the last spot
+ * for render and for the swept hit capsule.
  */
 export function placeBlades(w: World, dt = 0): void {
   const s = weaponState(w);
@@ -711,18 +783,18 @@ export function placeBlades(w: World, dt = 0): void {
   const combo = comboIndex(s.kind);
   const n = sh.perRing * 2;
   s.hitters = n;
-  setSaw(s, stepSaw(s.saw, held, dt));
+  setSaw(s, stepSaw(s.saw, held, dt), held);
   for (let i = 0; i < n; i++) {
     const ring = ringOf(sh, i);
     const a = spikeAngle(sh, i, s.orbitPhase);
-    const m = spikeStretch(s.saw, sawWeight(a, aim));
+    const r0 = ring === 0 ? sh.inner : sh.outer;
+    const f = barProfile(a - aim);
+    const m = 1 + s.saw * barReach(ring) * f;
     s.stretch[i] = m;
-    const r = ring === 0 ? sh.inner : sh.outer;
-    const omega = ringDir(ring) * sh.rev * 2 * Math.PI;
-    const c = Math.cos(a);
-    const sn = Math.sin(a);
-    const x = sx + c * r;
-    const y = sy + sn * r;
+    const r = r0 * m;
+    trackTangent(r0, ring, s.saw, a, aim, ringDir(ring), tan);
+    const x = sx + Math.cos(a) * r;
+    const y = sy + Math.sin(a) * r;
     let b = s.blades[i] ?? -1;
     if (b < 0 || p.alive[b] !== 1 || p.style[b] !== STYLE_ORBIT) {
       b = spawnBullet(p, x, y, 0, 0, s.timer);
@@ -737,11 +809,11 @@ export function placeBlades(w: World, dt = 0): void {
       p.y[b] = y;
     }
     p.phase[b] = a;
-    p.vx[b] = -sn * omega * r;
-    p.vy[b] = c * omega * r;
+    p.vx[b] = tan.x;
+    p.vy[b] = tan.y;
     p.life[b] = s.timer;
     p.combo[b] = combo;
-    p.spikeLen[b] = SPIKE_LEN * m;
+    p.spikeLen[b] = spikeLength(s.saw, f);
   }
 }
 

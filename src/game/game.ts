@@ -8,7 +8,7 @@ import { initLevelBoss } from './bosses/index';
 import { bulletHits, orbitHits, separate, shipHits, shipPickups } from './combat';
 import { clearEnemyBullets, stepEnemyBullets } from './enemyBullets';
 import { clearPickup } from './pickup';
-import { setWeaponPickups, stepWeapons } from './weapons';
+import { pauseSaw, setWeaponPickups, stepWeapons } from './weapons';
 import { registerSwarmBehaviours } from './defs';
 import { stepDrone } from './drones';
 import { spawnWells, stepWells } from './enemies/gravitywell';
@@ -56,7 +56,25 @@ export function createGame(level: LevelDef, opts: GameOptions = {}): World {
   syncMultiplier(w);
   spawnWells(w);
   initLevelBoss(w); // V3: arms LevelDef.boss when present; nothing otherwise
+  watchPause(w);
   return w;
+}
+
+let unwatchPause: (() => void) | null = null;
+
+/**
+ * GW3 (Chorus): 'game:pause' silences a sounding chainsaw ('sim:saw' { on: false }) for the newest
+ * game only. Resume needs no hook: the first step after 'game:resume' with the aim stick still held
+ * and the saw level above 0 emits 'sim:saw' { on: true } (weapons.ts setSaw).
+ */
+function watchPause(w: World): void {
+  if (unwatchPause !== null) unwatchPause();
+  unwatchPause = bus.on('game:pause', () => pauseGame(w));
+}
+
+/** The game paused (also wired to 'game:pause' by createGame): silences the saw. */
+export function pauseGame(w: World): void {
+  pauseSaw(w);
 }
 
 /** Swap the scoring hooks at runtime (Ledger wiring). */

@@ -18,7 +18,7 @@ import { removeEntity } from './remove';
 import { gs, isDroppedHazard, isHostile, isV2Enemy, SNAKE_SEGMENTS, SNAKE_SLOTS, type GameState, type KillFx } from './state';
 import { SHIP_RADIUS } from './ship';
 import { moveTo } from './steer';
-import { bulletRadiusOf, capsuleHits, SAW_AT, SAW_COOL_MULT, sawHitDamage, sawPowered, shieldOf, SPIKE_PIERCE, SPIKE_RADIUS, weaponState } from './weapons';
+import { bulletRadiusOf, capsuleHits, SAW_AT, SWEEP_MAX, SAW_COOL_MULT, sawHitDamage, sawPowered, shieldOf, SPIKE_PIERCE, SPIKE_RADIUS, weaponState } from './weapons';
 import { Kind, type World } from './world';
 
 const hits = new Int32Array(64);
@@ -224,8 +224,10 @@ export function bulletHits(w: World): void {
 }
 
 /**
- * Orbit v2 spikes vs enemy (orbit and the orbit pairs, GW1). Each spike is a capsule along its orbit
- * tangent (p.phase gives the angle, p.spikeLen the length, SPIKE_RADIUS the radius). A resting spike
+ * Orbit v2 spikes vs enemy (orbit and the orbit pairs, GW1). Each spike is a capsule swept from its
+ * previous to its current position (GW3: fast spikes on the chainsaw bar never tunnel), lengthened by
+ * p.spikeLen at either end, SPIKE_RADIUS wide. A jump longer than SWEEP_MAX uses the spike alone along
+ * its direction of travel (p.vx, p.vy). A resting spike
  * damages the first targetable enemy it touches (wells included, snake segments ignored) by 1 like a
  * blade; Eclipse resting spikes pierce up to SPIKE_PIERCE. A stretched spike (the chainsaw) hits every
  * enemy along its length. Then the spike rests the shield's cooldown. No push. Never consumed.
@@ -245,11 +247,29 @@ export function orbitHits(w: World, dt: number): void {
     if (b < 0 || p.alive[b] !== 1 || p.style[b] !== STYLE_ORBIT) continue;
     const bx = p.x[b] ?? 0;
     const by = p.y[b] ?? 0;
-    const a = p.phase[b] ?? 0;
-    const tx = -Math.sin(a);
-    const ty = Math.cos(a);
-    const half = (p.spikeLen[b] ?? 0) / 2;
-    if (boss > 0 && capsuleHits(w.x[boss] ?? 0, w.y[boss] ?? 0, w.radius[boss] ?? 0, bx, by, tx, ty, half, r)) {
+    const ex = bx - (p.prevX[b] ?? bx);
+    const ey = by - (p.prevY[b] ?? by);
+    const seg = Math.sqrt(ex * ex + ey * ey);
+    let tx: number;
+    let ty: number;
+    let cx = bx;
+    let cy = by;
+    let half = (p.spikeLen[b] ?? 0) / 2;
+    if (seg > 1e-6 && seg <= SWEEP_MAX) {
+      tx = ex / seg;
+      ty = ey / seg;
+      cx = bx - ex / 2;
+      cy = by - ey / 2;
+      half += seg / 2;
+    } else {
+      const vx = p.vx[b] ?? 0;
+      const vy = p.vy[b] ?? 0;
+      const l = Math.sqrt(vx * vx + vy * vy);
+      const a = p.phase[b] ?? 0;
+      tx = l > 1e-9 ? vx / l : -Math.sin(a);
+      ty = l > 1e-9 ? vy / l : Math.cos(a);
+    }
+    if (boss > 0 && capsuleHits(w.x[boss] ?? 0, w.y[boss] ?? 0, w.radius[boss] ?? 0, cx, cy, tx, ty, half, r)) {
       // Against a boss body a hitter rests 0.25 s (boss rule 8), its shield cooldown otherwise.
       damageBoss(w, BOSS_DAMAGE.orbit, bx, by);
       s.bladeCool[i] = ORBIT_BOSS_COOLDOWN;
@@ -259,11 +279,11 @@ export function orbitHits(w: World, dt: number): void {
     const powered = sawPowered(s.saw);
     const most = saw ? hits.length : sh.piercing ? SPIKE_PIERCE : 1;
     let struck = 0;
-    const n = queryCircleInto(w.grid, w, bx, by, half + r, hits);
+    const n = queryCircleInto(w.grid, w, cx, cy, half + r, hits);
     for (let j = 0; j < n && struck < most; j++) {
       const id = hits[j] ?? 0;
       if (id === 0) continue;
-      if (!capsuleHits(w.x[id] ?? 0, w.y[id] ?? 0, w.radius[id] ?? 0, bx, by, tx, ty, half, r)) continue;
+      if (!capsuleHits(w.x[id] ?? 0, w.y[id] ?? 0, w.radius[id] ?? 0, cx, cy, tx, ty, half, r)) continue;
       if (w.kind[id] === Kind.BossPart) {
         p.lastHit[b] = id;
         damageBossPart(w, id, BOSS_DAMAGE.orbit, bx, by);

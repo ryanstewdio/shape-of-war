@@ -1,6 +1,6 @@
 // V3 wave D: weapon combining (docs/13 SPEC 3.5 "Combining", "Spread as an ingredient", "Drop
 // schedule", "The six pairs") and orbit v2 (GW1: no forward bullet, two counter rotating rings of 4
-// spikes at 80 u and 100 u, aim side spikes stretch to a 2.5x chainsaw over 0.25 s).
+// spikes at 80 u and 100 u; GW3: while the saw level is up both tracks bend out into a chainsaw bar).
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus, type WeaponKind } from '../../src/core/events';
 import { type BulletPool, killBullet, stepBulletPool, STYLE_ORBIT, STYLE_PIERCE, STYLE_RAPID, STYLE_SPREAD } from '../../src/game/bullets';
@@ -26,14 +26,14 @@ import {
   ORBIT_SHIELD,
   ringDir,
   ringOf,
-  SAW_CONE,
-  SAW_FULL,
-  sawWeight,
+  BAR_EDGE,
+  BAR_FULL,
+  barProfile,
+  SAW_SPIKE_MAX,
   shieldOf,
   spikeAngle,
   SPIKE_LEN,
-  SPIKE_STRETCH,
-  spikeStretch,
+  trackRadius,
   stepSaw,
   STRETCH_SEC,
   weaponPool,
@@ -254,23 +254,21 @@ function wrap(a: number): number {
 }
 
 describe('orbit v2 (GW1): two counter rotating rings and the chainsaw', () => {
-  it('pure rules: 2.5x over 0.25 s and back, 60 deg cone, rings half a gap apart turning opposite ways', () => {
-    expect(SPIKE_STRETCH).toBe(2.5);
+  it('pure rules: level 0 to 1 over 0.25 s and back, bar profile, rings half a gap apart turning opposite ways', () => {
     expect(STRETCH_SEC).toBe(0.25);
-    expect(SAW_CONE).toBeCloseTo(Math.PI / 3, 9);
     let level = 0;
     for (let i = 0; i < 30; i++) level = stepSaw(level, true, DT);
     expect(level).toBeCloseTo(1, 6); // 30 steps of 1/120 s = 0.25 s
-    expect(spikeStretch(level, 1)).toBeCloseTo(2.5, 6);
+    expect(trackRadius(ORBIT_OUTER, 1, level, 0, 0)).toBeCloseTo(320, 6);
     for (let i = 0; i < 15; i++) level = stepSaw(level, false, DT);
     expect(level).toBeCloseTo(0.5, 6);
     for (let i = 0; i < 15; i++) level = stepSaw(level, false, DT);
     expect(level).toBe(0);
-    expect(sawWeight(0, 0)).toBe(1);
-    expect(sawWeight((55 * Math.PI) / 180, 0)).toBeGreaterThan(0);
-    expect(sawWeight((61 * Math.PI) / 180, 0)).toBe(0);
-    expect(sawWeight(Math.PI, 0)).toBe(0);
-    expect(sawWeight(2 * Math.PI - 0.1, 0)).toBe(1); // wraps
+    expect(barProfile(0)).toBe(1);
+    expect(barProfile((55 * Math.PI) / 180)).toBeGreaterThan(0);
+    expect(barProfile((71 * Math.PI) / 180)).toBe(0);
+    expect(barProfile(Math.PI)).toBe(0);
+    expect(barProfile(2 * Math.PI - 0.1)).toBe(1); // wraps
     expect(ringDir(0)).toBe(1);
     expect(ringDir(1)).toBe(-1);
     expect(ringOf(ORBIT_SHIELD, 3)).toBe(0);
@@ -289,7 +287,7 @@ describe('orbit v2 (GW1): two counter rotating rings and the chainsaw', () => {
     expect(capsuleHits(20, 55, 20, 0, 0, 0, 1, 30, 7)).toBe(false);
   });
 
-  it('two rings of 4: 80 u turning forward and 100 u turning back, no push', () => {
+  it('two rings of 4: 80 u turning forward and 100 u turning back at rest, no push', () => {
     const { w } = makeGame();
     setInvulnerable(w, true);
     equipWeapon(w, 'orbit');
@@ -300,7 +298,7 @@ describe('orbit v2 (GW1): two counter rotating rings and the chainsaw', () => {
     let ai = angleOf(w, inner);
     let ao = angleOf(w, outer);
     for (let i = 0; i < 12; i++) {
-      stepGame(w, DT, aimAt(1, 0)); // aim held: the saw stretches, the radii stay
+      stepGame(w, DT, idle()); // no aim: the saw stays at rest, so the radii stay
       const ni = angleOf(w, inner);
       const no = angleOf(w, outer);
       expect(wrap(ni - ai)).toBeGreaterThan(0);
@@ -316,7 +314,7 @@ describe('orbit v2 (GW1): two counter rotating rings and the chainsaw', () => {
     }
   });
 
-  it('holding the aim stretches aim side spikes to 2.5x over 0.25 s along the tangent; the far side stays short', () => {
+  it('holding the aim bends both tracks into a bar over 0.25 s; the far side stays at rest', () => {
     const { w } = makeGame();
     setInvulnerable(w, true);
     equipWeapon(w, 'orbit');
@@ -324,29 +322,34 @@ describe('orbit v2 (GW1): two counter rotating rings and the chainsaw', () => {
     const p = w.bullets;
     for (let i = 0; i < 30; i++) stepGame(w, DT, aimAt(1, 0));
     expect(s.saw).toBeCloseTo(1, 6);
-    let sawn = 0;
+    let barred = 0;
     for (let k = 0; k < s.hitters; k++) {
       const b = s.blades[k] ?? -1;
       const rel = Math.abs(wrap(angleOf(w, b)));
+      const d = Math.hypot((p.x[b] ?? 0) - (w.x[0] ?? 0), (p.y[b] ?? 0) - (w.y[0] ?? 0));
+      const r0 = k < ORBIT_SHIELD.perRing ? ORBIT_RADIUS : ORBIT_OUTER;
       const len = p.spikeLen[b] ?? 0;
-      if (rel <= SAW_FULL - 1e-3) {
-        expect(len).toBeCloseTo(SPIKE_LEN * SPIKE_STRETCH, 3);
-        sawn++;
+      expect(d).toBeCloseTo(trackRadius(r0, k < ORBIT_SHIELD.perRing ? 0 : 1, 1, angleOf(w, b), 0), 2);
+      if (rel <= BAR_FULL - 1e-3) {
+        expect(d).toBeCloseTo(r0 * (k < ORBIT_SHIELD.perRing ? 2.6 : 3.2), 2);
+        expect(len).toBeCloseTo(SAW_SPIKE_MAX, 3);
+        barred++;
       }
-      if (rel >= SAW_CONE + 1e-3) expect(len).toBeCloseTo(SPIKE_LEN, 5);
-      // The tangent: vx, vy are square to the radius.
-      const rx = (p.x[b] ?? 0) - (w.x[0] ?? 0);
-      const ry = (p.y[b] ?? 0) - (w.y[0] ?? 0);
-      expect(Math.abs(rx * (p.vx[b] ?? 0) + ry * (p.vy[b] ?? 0))).toBeLessThan(1e-2 * Math.hypot(rx, ry) * Math.hypot(p.vx[b] ?? 0, p.vy[b] ?? 0) + 1e-6);
+      if (rel >= BAR_EDGE + 1e-3) {
+        expect(d).toBeCloseTo(r0, 2);
+        expect(len).toBeCloseTo(SPIKE_LEN, 5);
+      }
+      // Direction of travel is a unit vector.
+      expect(Math.hypot(p.vx[b] ?? 0, p.vy[b] ?? 0)).toBeCloseTo(1, 5);
     }
-    expect(sawn).toBeGreaterThan(0);
+    expect(barred).toBeGreaterThan(0); // after 30 steps an outer spike sits 9 deg off the aim
     // Release: back to rest within 0.25 s.
     for (let i = 0; i < 30; i++) stepGame(w, DT, idle());
     expect(s.saw).toBe(0);
     for (let k = 0; k < s.hitters; k++) expect(p.spikeLen[s.blades[k] ?? -1] ?? 0).toBeCloseTo(SPIKE_LEN, 5);
   });
 
-  it('a stretched spike hits every enemy along its capsule; at rest it hits one, like a blade', () => {
+  it('a spike on the bar hits every enemy along its sweep; at rest it hits one, like a blade', () => {
     const run = (saw: number): number[] => {
       const { w } = makeGame();
       equipWeapon(w, 'orbit');
@@ -354,9 +357,9 @@ describe('orbit v2 (GW1): two counter rotating rings and the chainsaw', () => {
       s.orbitPhase = 0; // inner spike 0 at (80, 0), tangent +y
       s.saw = saw;
       w.ship.aimAngle = 0;
-      placeBlades(w);
+      placeBlades(w); // saw 1: spike 0 jumps out along the bar from 80 u to 208 u
       only(w, 0);
-      const ids = [put(w, pinwheel.def, ORBIT_RADIUS, 0), put(w, pinwheel.def, ORBIT_RADIUS, 4), put(w, pinwheel.def, ORBIT_RADIUS, 45), put(w, pinwheel.def, ORBIT_RADIUS + 40, 0)];
+      const ids = [put(w, pinwheel.def, ORBIT_RADIUS, 0), put(w, pinwheel.def, ORBIT_RADIUS, 4), put(w, pinwheel.def, ORBIT_RADIUS, 45), put(w, pinwheel.def, 150, 0), put(w, pinwheel.def, 208, 0), put(w, pinwheel.def, 150, 70)];
       for (const id of ids) w.hp[id] = 100;
       orbitHits(w, DT);
       const out = ids.map((id) => 100 - (w.hp[id] ?? 0));
@@ -366,12 +369,13 @@ describe('orbit v2 (GW1): two counter rotating rings and the chainsaw', () => {
     const rest = run(0);
     expect(rest[0]! + rest[1]!).toBe(1); // one of the two on the spike, once
     expect(rest[2]).toBe(0); // beyond the short spike
-    expect(rest[3]).toBe(0);
+    expect(rest[3]! + rest[4]! + rest[5]!).toBe(0);
     const sawn = run(1);
     // GW2: a powered saw (level above 0.5) alternates 1 and 2 damage per hit, 1.5x on average.
-    for (const k of [0, 1, 2]) expect([1, 2]).toContain(sawn[k]); // [2]: 45 u along the tangent, inside the 60 u chainsaw
-    expect(sawn[0]! + sawn[1]! + sawn[2]!).toBe(4); // 1 + 2 + 1
-    expect(sawn[3]).toBe(0); // 40 u off the line: outside the capsule
+    for (const k of [0, 1, 3, 4]) expect([1, 2]).toContain(sawn[k]); // all along the 80 u to 208 u sweep
+    expect(sawn[0]! + sawn[1]! + sawn[3]! + sawn[4]!).toBe(6); // 1 + 2 + 1 + 2
+    expect(sawn[2]).toBe(0); // 45 u off the sweep line
+    expect(sawn[5]).toBe(0); // 70 u off the sweep line
   });
 
   it('a spike rests the shield cooldown after it strikes', () => {
@@ -426,7 +430,7 @@ describe('orbit v2 (GW1): two counter rotating rings and the chainsaw', () => {
       expect(s.saw).toBeCloseTo(1, 6);
       let longest = 0;
       for (let k = 0; k < s.hitters; k++) longest = Math.max(longest, w.bullets.spikeLen[s.blades[k] ?? -1] ?? 0);
-      expect(longest).toBeCloseTo(SPIKE_LEN * SPIKE_STRETCH, 3);
+      expect(longest).toBeCloseTo(SAW_SPIKE_MAX, 3);
       bus.clear();
     }
   });
