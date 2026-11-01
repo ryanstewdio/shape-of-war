@@ -644,6 +644,12 @@ function partDamaged(w: World, bs: BossState | null, id: number, applied: number
 export function damageBossPart(w: World, id: number, amount: number, hx: number, hy: number): boolean {
   if (w.alive[id] !== 1 || w.kind[id] !== Kind.BossPart) return false;
   const g = gs(w);
+  const guard = bossOf(w);
+  const gate = guard === null ? undefined : guard.def.partGate;
+  if (guard !== null && gate !== undefined && !gate(w, guard, id)) {
+    emitHit(g, hx, hy, Kind.BossPart, id, true); // a shielded part: blocked, no damage
+    return false;
+  }
   const prev = w.hp[id] ?? 0;
   const amt = Math.round(amount);
   const hp = prev - amt;

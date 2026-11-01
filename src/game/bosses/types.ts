@@ -90,6 +90,11 @@ export interface BossDef {
   leak?(w: World, id: number, bs: BossState, amount: number): number;
   /** Optional: the core body took damage and lived (Twins: the front body falls). */
   afterDamage?(w: World, id: number, bs: BossState): void;
+  /**
+   * Optional: false when a hit on part is blocked now (Bastion's turret shield after a turret death).
+   * Absent means every part hit lands.
+   */
+  partGate?(w: World, bs: BossState, part: number): boolean;
   /** Optional: part took applied tenths (at most its hit points); broke is true once it was removed. */
   onPartDamage?(w: World, bs: BossState, part: number, applied: number, broke: boolean): void;
   /**

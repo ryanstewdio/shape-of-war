@@ -1,13 +1,16 @@
 // Bastion (tier 3, red, level 35; docs/12 roster row 7). Holds the arena centre and turns at
-// 0.3 rad/s. Four corner turrets (Kind.BossPart, 8 HP each) sit on the diagonals of its facing and
+// 0.3 rad/s. Four corner turrets (Kind.BossPart, 18 HP each since GW3) sit on the diagonals of its facing and
 // take one turn every 1.5 s in order (attack clock, so enrage shortens it); a destroyed turret skips
 // its turns, so the total turn rate never changes. A turn fires a lane straight out from the turret.
 // The core takes damage only once two turrets are down. Phases follow the turrets (phaseOf): four,
 // two, none. Every 12 s a Bulwark joins on the side facing the target. The core never fires.
 // Shots (BOSS_SHOTS.bastion, cut 5): each turret alternates a lane and a 200 u/s bullet on its own
 // turns, so the turn rate is unchanged, phase 2 has half the bullets and phase 3 none.
-// Phase 3 (G3C "no longer a threat once disarmed"): when the last turret dies the hit points drop
-// to at most BASTION.wakeHpShare of maximum and the core wakes. It leaves the centre and pursues
+// Turret shield and bar (GW3 "turrets too easy, Bastion loses down to 50 percent easily"): each
+// turret death shields the live turrets for BASTION.turretShieldSec (hits blocked, partGate) and
+// takes BASTION.turretBarShare of maximum hit points off the bar, so turret kills alone move the
+// bar 20 percent at most; the old drop to half at waking is gone. Turret shield clock: bs.abl[4].
+// Phase 3 (G3C "no longer a threat once disarmed"): when the last turret dies the core wakes. It leaves the centre and pursues
 // the target (50 u/s since GW2, see below) with one sweep arm riding the body, and every 5 s (3.5 s after the stage 2
 // crack) it stops, shows a lane marker for the tier telegraph and charges along it. Always open.
 // Scratch: t0 turn clock, t1 add clock, n0 the turret whose turn is next, n1 the shot bits, retry
@@ -38,10 +41,20 @@ export const enum Wake {
   Charge = 2,
 }
 
-/** Pure: phase 3 hit points: hp capped at BASTION.wakeHpShare of maxHp. */
-export function wakeHp(hp: number, maxHp: number): number {
-  const cap = Math.round(maxHp * BASTION.wakeHpShare);
-  return hp < cap ? hp : cap;
+/** Pure: tenths one turret death takes off the bar for a boss of maxHp. */
+export function turretBarCut(maxHp: number): number {
+  return Math.round(maxHp * BASTION.turretBarShare);
+}
+
+/** Pure: the body hit points after a turret death: the cut, never below 1 (a turret never kills the core). */
+export function hpAfterTurret(hp: number, maxHp: number): number {
+  const left = hp - turretBarCut(maxHp);
+  return left > 1 ? left : hp > 1 ? 1 : hp;
+}
+
+/** Pure: the turret shield clock after dt seconds. */
+export function turretShieldAfter(left: number, dt: number): number {
+  return left - dt > 0 ? left - dt : 0;
 }
 
 /** Pure: seconds between charges for a crack stage (shorter after the stage 2 crack). */
@@ -53,6 +66,8 @@ const CYCLE = 0;
 const INTO = 1;
 const BURSTS = 2;
 const OPEN = 3;
+/** bs.abl slot of the turret shield clock (seconds left). */
+export const TURRET_SHIELD = 4;
 
 /** Pure: the phase 3 shield cycle clock at waking, so the first shield comes firstSec after it. */
 export function shieldClockStart(): number {
@@ -297,6 +312,7 @@ export function reset(w: World, id: number, bs: BossState, first: boolean): void
 }
 
 export function step(w: World, id: number, bs: BossState, dt: number, adt: number): void {
+  bs.abl[TURRET_SHIELD] = turretShieldAfter(bs.abl[TURRET_SHIELD] ?? 0, dt);
   w.rot[id] = wrapPi((w.rot[id] ?? 0) + BASTION.turnRate * dt);
   placeTurrets(w, id, bs, false);
   const n = countParts(w, bs);
@@ -313,7 +329,6 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
 export function onPhase(w: World, id: number, bs: BossState, phase: number): void {
   // Phases read the turrets; the turn clock keeps running. Phase 3 wakes the core.
   if (phase < 3) return;
-  w.hp[id] = wakeHp(w.hp[id] ?? 0, bs.maxHp);
   wakeReset(w, id, bs);
 }
 
@@ -325,9 +340,27 @@ export function entryHome(d: number): number {
   return 0;
 }
 
-/** A turret break updates the window at once, so the hit that follows lands even before the next step. */
+/**
+ * A turret break updates the window at once, so the hit that follows lands even before the next
+ * step; it takes its share off the bar and shields the turrets left. Runs before the core syncs the
+ * phase and the cracks, so both read the new hit points.
+ */
 export function onPartDamage(w: World, bs: BossState, part: number, applied: number, broke: boolean): void {
-  if (broke) setWindow(bs, countParts(w, bs));
+  if (!broke) return;
+  const id = bs.id;
+  if (id > 0 && w.alive[id] === 1) w.hp[id] = hpAfterTurret(w.hp[id] ?? 0, bs.maxHp);
+  const n = countParts(w, bs);
+  if (n > 0) bs.abl[TURRET_SHIELD] = BASTION.turretShieldSec;
+  setWindow(bs, n);
 }
 
-export const def: BossDef = { reset, step, onPhase, entryHome, phaseOf, onPartDamage };
+/** Pure: a turret hit lands only when the turret shield is down. */
+export function turretOpen(shieldLeft: number): boolean {
+  return shieldLeft <= 0;
+}
+
+export function partGate(w: World, bs: BossState, part: number): boolean {
+  return turretOpen(bs.abl[TURRET_SHIELD] ?? 0);
+}
+
+export const def: BossDef = { reset, step, onPhase, entryHome, phaseOf, onPartDamage, partGate };

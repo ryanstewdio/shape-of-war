@@ -11,19 +11,26 @@
 // Tempests (Kind.BossPart, PartType.Tempestling, slots 0 and 1, TEMPESTLING.sizeShare of the body
 // radius) that share the remaining hit points evenly, following the Brood split pattern:
 // 'sim:bossSplit' fires once, the bar is the sum of the two, contact with either kills and the fight
-// ends with the second. Each laps the wall (the second the other way round), lays Slime and dashes
-// at its target like the body, its Slime and dash clocks at TEMPESTLING.rate of the body's. A wind
-// up whose marker was cleared (bomb, ship death) goes back to the lap, so no dash is unmarked. Split
-// scratch per slot k in bs.abl from k * SLOT: move state, its timer, dash clock, Slime clock, lap
-// angle, lap direction, dash heading, marker id.
+// ends with the second. GW3 ("smaller Tempests non threatening, abandon their dash, drift at the
+// edge"): between dashes each chases a flank point TEMPESTLING.flankDist from the ship at
+// TEMPESTLING.speedRatio of the body's lap speed, slot 0 on its own side of the ship and slot 1 on
+// the opposite side, the point kept TEMPESTLING.wallKeep from every wall. Slot 0 leads a pincer:
+// when its dash clock is due and the two are on opposite sides of the ship (or flankWait has run
+// out) both wind up together, so their dash lines come from opposite sides. Every marker is followed
+// by a committed dash through the ship at TEMPESTLING.dashSpeed (to the wall, at least dashMin long;
+// the old code dropped the dash when the marker expired a hair before the wind up ended). Only a
+// marker cleared early (bomb, ship death) sends the part back to its chase, so no dash is unmarked.
+// Lays Slime, clocks at TEMPESTLING.rate. Move state TempestMove.Lap means the chase for a part.
+// Split scratch per slot k in bs.abl from k * SLOT: move state, its timer, dash clock, Slime clock,
+// spare, spare, dash heading, marker id.
 import { bus } from '../../core/events';
-import { isInside } from '../arena';
+import { confine, createConfineResult, isInside } from '../arena';
 import * as slime from '../enemies/slime';
 import { removeEntity } from '../remove';
 import { spawnFromDef } from '../state';
 import { angleBetween, moveToHit, stepToward, targetOf } from '../steer';
 import { Kind, type World } from '../world';
-import { bossEnraged, clearHazards, crackBody, spawnLaneMarker, spawnPart, wallDistance } from './core';
+import { bossEnraged, clearHazards, crackBody, livePart, spawnLaneMarker, spawnPart, wallDistance } from './core';
 import { hazardTelegraph, wrapPi } from './kit';
 import { bossOf, type BossState } from './state';
 import { BOSS_TABLE, ENRAGE_RATE, MAX_PARTS, TEMPEST, TEMPESTLING } from './table';
@@ -187,10 +194,41 @@ const MOVE = 0;
 const TIMER = 1;
 const DASH = 2;
 const SLIME = 3;
-const ANGLE = 4;
-const DIR = 5;
 const HEADING = 6;
 const MARK = 7;
+
+/** A marker gone with more wind up than this left was cleared early (bomb, ship death), not expired. */
+export const MARKER_SLACK = 0.05;
+
+/** Pure: a Tempestling's chase speed, u/s. */
+export function tempestlingSpeed(): number {
+  return TEMPEST.lapSpeed * TEMPESTLING.speedRatio;
+}
+
+/** Pure: the flank bearing from the ship for slot k, given slot 0's bearing: the two are opposite. */
+export function flankBearing(bearing0: number, k: number): number {
+  return k === 0 ? bearing0 : wrapPi(bearing0 + Math.PI);
+}
+
+/** Pure: true when a wind up with t seconds left lost its marker early (cleared, not expired). */
+export function markerClearedEarly(t: number): boolean {
+  return t > MARKER_SLACK;
+}
+
+/** Pure: the dash clock at the split (both slots: slot 0 leads a pincer). */
+export function firstDashClock(every: number): number {
+  return every - TEMPESTLING.firstDash;
+}
+
+/** Pure: absolute angle between two bearings, in [0, pi]. */
+export function bearingGap(a: number, b: number): number {
+  return Math.abs(wrapPi(a - b));
+}
+
+/** Pure: a pincer may start: the two on opposite sides of the ship (gap over 90 degrees), or waited too long. */
+export function pincerReady(gap: number, waited: number): boolean {
+  return gap > Math.PI / 2 || waited >= TEMPESTLING.flankWait;
+}
 
 /** Pure: hit points of part k of count after a split of hp: even shares, part 0 takes the remainder. */
 export function splitHp(hp: number, k: number, count: number): number {
@@ -240,13 +278,11 @@ function splitBody(w: World, id: number, bs: BossState): void {
     const ab = bs.abl;
     ab[o + MOVE] = TempestMove.Lap;
     ab[o + TIMER] = 0;
-    ab[o + DASH] = dashEveryFor(bs.phase) - TEMPESTLING.firstDash;
+    ab[o + DASH] = firstDashClock(dashEveryFor(bs.phase));
     ab[o + SLIME] = 0;
-    ab[o + ANGLE] = Math.atan2(w.y[p] ?? 0, w.x[p] ?? 0);
-    ab[o + DIR] = k === 0 ? bs.dir : -bs.dir;
     ab[o + HEADING] = 0;
     ab[o + MARK] = -1;
-    w.rot[p] = wrapPi((ab[o + ANGLE] ?? 0) + ((ab[o + DIR] ?? 1) * Math.PI) / 2);
+    w.rot[p] = wrapPi(bs.angle + (side * bs.dir * Math.PI) / 2);
   }
   bs.splitEv.parts = made;
   bus.emit('sim:bossSplit', bs.splitEv);
@@ -263,10 +299,101 @@ function slotOf(bs: BossState, id: number): number {
   return -1;
 }
 
+const flank = createConfineResult();
+
+/** Bearing from the ship (target t) to part p, or 0 when they coincide. */
+function bearingFrom(w: World, t: number, p: number): number {
+  const dx = (w.x[p] ?? 0) - (w.x[t] ?? 0);
+  const dy = (w.y[p] ?? 0) - (w.y[t] ?? 0);
+  return dx === 0 && dy === 0 ? 0 : Math.atan2(dy, dx);
+}
+
+/** Pure: the i th axis try: 0, +1, -1, +2, -2 ... steps. */
+export function axisStep(i: number): number {
+  const j = (i + 1) >> 1;
+  return i % 2 === 1 ? j : -j;
+}
+
 /**
- * One step of a Tempestling (Kind.BossPart, PartType.Tempestling): the body's lap, Slime trail,
- * marked wind up, dash and rest, on its own scratch slot, with its clocks at TEMPESTLING.rate.
- * Paused while the ship is down or the boss is staggered.
+ * The flank axis: the bearing from the ship (t) to part p0, turned in AXIS_STEP steps (nearest
+ * first) until both flank points sit wallKeep inside the walls, so neither is clamped onto the
+ * ship near a wall. The bearing itself when no turn fits.
+ */
+function flankAxis(w: World, t: number, p0: number): number {
+  const arena = w.level.arena;
+  const b0 = bearingFrom(w, t, p0);
+  const sx = w.x[t] ?? 0;
+  const sy = w.y[t] ?? 0;
+  const f = TEMPESTLING.flankDist;
+  const keep = TEMPESTLING.wallKeep;
+  for (let i = 0; i < AXIS_TRIES; i++) {
+    const b = b0 + axisStep(i) * AXIS_STEP;
+    const c = Math.cos(b) * f;
+    const s = Math.sin(b) * f;
+    if (isInside(arena, sx + c, sy + s, keep) && isInside(arena, sx - c, sy - s, keep)) return b;
+  }
+  return b0;
+}
+
+const AXIS_STEP = Math.PI / 12;
+const AXIS_TRIES = 13;
+
+/**
+ * Chase step: inside the wall band head straight out of it (nearest point wallKeep from the walls),
+ * else toward the flank point on this slot's side of the ship, clamped wallKeep from the walls.
+ */
+function chase(w: World, bs: BossState, id: number, k: number, t: number, dt: number): void {
+  const arena = w.level.arena;
+  const keep = TEMPESTLING.wallKeep;
+  const x = w.x[id] ?? 0;
+  const y = w.y[id] ?? 0;
+  const step = tempestlingSpeed() * dt;
+  const out = confine(arena, x, y, keep, flank);
+  if (out.hit) {
+    stepToward(w, id, out.x, out.y, step);
+    return;
+  }
+  const p0 = livePart(w, bs, 0);
+  const b = flankBearing(flankAxis(w, t, p0 > 0 ? p0 : id), p0 > 0 ? k : 0);
+  const fx = (w.x[t] ?? 0) + Math.cos(b) * TEMPESTLING.flankDist;
+  const fy = (w.y[t] ?? 0) + Math.sin(b) * TEMPESTLING.flankDist;
+  const f = confine(arena, fx, fy, keep, flank);
+  stepToward(w, id, f.x, f.y, step);
+}
+
+/**
+ * Start part id (slot k)'s wind up at target t: a lane marker along the line through t to the wall.
+ * False (no change) when that line is shorter than TEMPESTLING.dashMin or there is no marker.
+ */
+function windup(w: World, bs: BossState, id: number, k: number, t: number): boolean {
+  const o = k * SLOT;
+  const ab = bs.abl;
+  const heading = angleBetween(w, id, t);
+  const x = w.x[id] ?? 0;
+  const y = w.y[id] ?? 0;
+  const len = rayToWall(w, x, y, heading, w.radius[id] ?? 0);
+  if (len < TEMPESTLING.dashMin) return false; // too short a line: keep chasing
+  const m = spawnLaneMarker(w, bs, x, y, heading, len, TEMPEST.markerHalfWidth);
+  if (m < 0) return false; // no marker (hazard cap): keep chasing
+  ab[o + DASH] = 0;
+  ab[o + HEADING] = heading;
+  ab[o + MARK] = m;
+  w.rot[id] = heading;
+  ab[o + MOVE] = TempestMove.Windup;
+  ab[o + TIMER] = hazardTelegraph(bs.row.tier);
+  return true;
+}
+
+function toChase(ab: Float64Array, o: number): void {
+  ab[o + MOVE] = TempestMove.Lap;
+  ab[o + MARK] = -1;
+  ab[o + TIMER] = 0;
+}
+
+/**
+ * One step of a Tempestling (Kind.BossPart, PartType.Tempestling): chase its flank point, Slime
+ * trail, marked wind up, committed dash and rest, on its own scratch slot, its clocks at
+ * TEMPESTLING.rate. Paused while the ship is down or the boss is staggered.
  */
 export function stepTempestling(w: World, id: number, dt: number): void {
   const bs = bossOf(w);
@@ -277,12 +404,10 @@ export function stepTempestling(w: World, id: number, dt: number): void {
   const ab = bs.abl;
   const adt = tempestlingAdt(dt, bossEnraged(w));
   let state = (ab[o + MOVE] ?? 0) as TempestMove;
-  if (state === TempestMove.Windup && !markerAlive(w, bs, ab[o + MARK] ?? -1)) {
-    // The marker was cleared (bomb, ship death): no unmarked dash, back to the lap.
+  if (state === TempestMove.Windup && !markerAlive(w, bs, ab[o + MARK] ?? -1) && markerClearedEarly(ab[o + TIMER] ?? 0)) {
+    // The marker was cleared (bomb, ship death): no unmarked dash, back to the chase.
+    toChase(ab, o);
     state = TempestMove.Lap;
-    ab[o + MOVE] = state;
-    ab[o + MARK] = -1;
-    ab[o + ANGLE] = Math.atan2(w.y[id] ?? 0, w.x[id] ?? 0);
   }
   if (state !== TempestMove.Rest && state !== TempestMove.Windup) {
     ab[o + SLIME] = (ab[o + SLIME] ?? 0) + adt;
@@ -292,20 +417,22 @@ export function stepTempestling(w: World, id: number, dt: number): void {
     }
   }
   if (state === TempestMove.Lap) {
-    ab[o + ANGLE] = lapStep(w, id, ab[o + ANGLE] ?? 0, ab[o + DIR] ?? 1, dt);
+    const tgt = targetOf(w, id);
+    chase(w, bs, id, k, tgt, dt);
     ab[o + DASH] = (ab[o + DASH] ?? 0) + adt;
-    if ((ab[o + DASH] ?? 0) < dashEveryFor(bs.phase)) return;
-    const heading = angleBetween(w, id, targetOf(w, id));
-    const x = w.x[id] ?? 0;
-    const y = w.y[id] ?? 0;
-    const m = spawnLaneMarker(w, bs, x, y, heading, rayToWall(w, x, y, heading, w.radius[id] ?? 0), TEMPEST.markerHalfWidth);
-    if (m < 0) return; // no marker (hazard cap): keep lapping and try next step
-    ab[o + DASH] = 0;
-    ab[o + HEADING] = heading;
-    ab[o + MARK] = m;
-    w.rot[id] = heading;
-    ab[o + MOVE] = TempestMove.Windup;
-    ab[o + TIMER] = hazardTelegraph(bs.row.tier);
+    const due = (ab[o + DASH] ?? 0) - dashEveryFor(bs.phase);
+    if (due < 0) return;
+    const other = livePart(w, bs, 1 - k);
+    if (other > 0 && k === 1) return; // slot 0 leads the pincer while it lives
+    if (other > 0) {
+      // The pincer: both wind up together from opposite sides of the ship, once in position.
+      const gap = bearingGap(bearingFrom(w, tgt, id), bearingFrom(w, tgt, other));
+      if (!pincerReady(gap, due)) return;
+      if (!windup(w, bs, id, 0, tgt)) return;
+      if ((ab[SLOT + MOVE] ?? 0) === TempestMove.Lap) windup(w, bs, other, 1, tgt); // a short line skips this pincer
+      return;
+    }
+    windup(w, bs, id, k, tgt);
     return;
   }
   const t = (ab[o + TIMER] ?? 0) - dt; // sim time: enrage never shortens the telegraph or the rest
@@ -320,19 +447,17 @@ export function stepTempestling(w: World, id: number, dt: number): void {
     return;
   }
   if (state === TempestMove.Dash) {
-    const v = TEMPEST.dashSpeed * dt;
+    const v = TEMPESTLING.dashSpeed * dt;
     const h = ab[o + HEADING] ?? 0;
     const hit = moveToHit(w, id, (w.x[id] ?? 0) + Math.cos(h) * v, (w.y[id] ?? 0) + Math.sin(h) * v);
     if (hit || t <= 0) {
       ab[o + MOVE] = TempestMove.Rest;
-      ab[o + TIMER] = TEMPEST.restSec;
+      ab[o + TIMER] = TEMPESTLING.restSec;
     }
     return;
   }
   if (t > 0) return;
-  ab[o + ANGLE] = Math.atan2(w.y[id] ?? 0, w.x[id] ?? 0);
-  ab[o + MOVE] = TempestMove.Lap;
-  ab[o + TIMER] = 0;
+  toChase(ab, o);
 }
 
 export const def: BossDef = { reset, step, onPhase, entryHome, cracks };
