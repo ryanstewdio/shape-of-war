@@ -34,11 +34,11 @@ function kill(w: World, k: number): void {
 }
 
 describe('bastion gw4 rules', () => {
-  it('30 HP turrets, rebuilt at 15 HP after 18 s above 33 percent, core plus 20 percent, shield every 10 s', () => {
+  it('30 HP turrets, rebuilt at 15 HP after 12 s (GW5) above 33 percent, core plus 20 then 15 percent, shield every 10 s', () => {
     expect(BASTION.turretHp).toBe(300);
     expect(regenHp()).toBe(150);
-    expect(BASTION.regenSec).toBe(18);
-    expect(BOSS_TABLE.bastion.hp).toBe(Math.round(900 * 1.2));
+    expect(BASTION.regenSec).toBe(12); // GW5: 18 before
+    expect(BOSS_TABLE.bastion.hp).toBe(Math.round(900 * 1.2 * 1.15)); // GW5: plus 15 percent
     expect(BASTION_SHIELD.everySec).toBe(10);
     expect(regenAllowed(3400, 10000, 2)).toBe(true);
     expect(regenAllowed(3300, 10000, 2)).toBe(false);

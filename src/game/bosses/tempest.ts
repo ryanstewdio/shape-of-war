@@ -26,17 +26,23 @@
 // obstacle floor rayToWall's bisection could jump past an obstacle, so a marked dash stopped short.
 // Now TEMPESTLING.dashEvery of chase, a 1 s flank wait, slot 0 waits for slot 1 to be back in its
 // chase, rayToWall marches, and the wind up is TEMPESTLING.windupSec with its marker throughout.
+// GW5 ("a little too easy", fairness 5, target 4): dash every TEMPESTLING.dashEvery (2.6 s), dash
+// 10 percent faster, the chase speeds up from chaseSpeed to chaseSpeedMax as the part loses its hit
+// points, and each dash ends with a fan of TEMPESTLING.fanCount bullets fired back along its path in
+// the rest (only while the ship is at least ENEMY_BULLET_MIN_RANGE from the muzzle).
 // Split scratch per slot k in bs.abl from k * SLOT: move state, its timer, dash clock, Slime clock,
-// spare, spare, dash heading, marker id.
+// hit points at the split, fan pending (1) flag, dash heading, marker id.
 import { bus } from '../../core/events';
 import { confine, createConfineResult, isInside } from '../arena';
+import { ENEMY_BULLET_RADIUS, spawnEnemyBullet } from '../enemyBullets';
 import * as slime from '../enemies/slime';
 import { removeEntity } from '../remove';
 import { spawnFromDef } from '../state';
 import { angleBetween, moveToHit, stepToward, targetOf } from '../steer';
 import { Kind, type World } from '../world';
 import { bossEnraged, clearHazards, crackBody, livePart, markerLife, spawnLaneMarker, spawnPart, wallDistance } from './core';
-import { hazardTelegraph, wrapPi } from './kit';
+import { hazardTelegraph, pointDist, wrapPi } from './kit';
+import { fanHeading, inShotRange } from './shots';
 import { bossOf, type BossState } from './state';
 import { BOSS_TABLE, ENRAGE_RATE, MAX_PARTS, TEMPEST, TEMPESTLING } from './table';
 import { BossMode, PartType, type BossDef } from './types';
@@ -214,15 +220,33 @@ const MOVE = 0;
 const TIMER = 1;
 const DASH = 2;
 const SLIME = 3;
+const HP0 = 4;
+const FAN = 5;
 const HEADING = 6;
 const MARK = 7;
 
 /** A marker gone with more wind up than this left was cleared early (bomb, ship death), not expired. */
 export const MARKER_SLACK = 0.05;
 
-/** Pure: a Tempestling's chase speed, u/s. */
-export function tempestlingSpeed(): number {
-  return TEMPESTLING.chaseSpeed;
+/**
+ * Pure: a Tempestling's chase speed, u/s, for the share of its split hit points it still holds:
+ * chaseSpeed at full, chaseSpeedMax at none, linear between (GW5). Out of range shares clamp.
+ */
+export function tempestlingSpeed(hpShare = 1): number {
+  const s = hpShare > 1 ? 1 : hpShare > 0 ? hpShare : 0;
+  return TEMPESTLING.chaseSpeedMax + (TEMPESTLING.chaseSpeed - TEMPESTLING.chaseSpeedMax) * s;
+}
+
+/** Pure: the share of its split hit points a part holds (1 when the split value is unknown). */
+export function hpShareOf(hp: number, hp0: number): number {
+  if (!(hp0 > 0)) return 1;
+  const s = hp / hp0;
+  return s > 1 ? 1 : s > 0 ? s : 0;
+}
+
+/** Pure: the centre heading of the post dash fan: back along the dash path (GW5). */
+export function fanCentre(dashHeading: number): number {
+  return wrapPi(dashHeading + Math.PI);
 }
 
 /** Pure: the flank bearing from the ship for slot k, given slot 0's bearing: the two are opposite. */
@@ -305,6 +329,8 @@ function splitBody(w: World, id: number, bs: BossState): void {
     ab[o + TIMER] = 0;
     ab[o + DASH] = firstDashClock(tempestlingDashEvery());
     ab[o + SLIME] = 0;
+    ab[o + HP0] = w.hp[p] ?? 0;
+    ab[o + FAN] = 0;
     ab[o + HEADING] = 0;
     ab[o + MARK] = -1;
     w.rot[p] = wrapPi(bs.angle + (side * bs.dir * Math.PI) / 2);
@@ -372,7 +398,7 @@ function chase(w: World, bs: BossState, id: number, k: number, t: number, dt: nu
   const keep = TEMPESTLING.wallKeep;
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
-  const step = tempestlingSpeed() * dt;
+  const step = tempestlingSpeed(hpShareOf(w.hp[id] ?? 0, bs.abl[k * SLOT + HP0] ?? 0)) * dt;
   const out = confine(arena, x, y, keep, flank);
   if (out.hit) {
     stepToward(w, id, out.x, out.y, step);
@@ -416,6 +442,43 @@ function toChase(ab: Float64Array, o: number): void {
   ab[o + MOVE] = TempestMove.Lap;
   ab[o + MARK] = -1;
   ab[o + TIMER] = 0;
+  ab[o + FAN] = 0;
+}
+
+const DEG = Math.PI / 180;
+
+/**
+ * GW5: part id's post dash fan, TEMPESTLING.fanCount bullets centred back along its dash heading,
+ * charging for the tier telegraph at the body edge. False, firing nothing, while the ship is
+ * within ENEMY_BULLET_MIN_RANGE of the muzzle (the rest rechecks every step). No allocation.
+ */
+export function fireDashFan(w: World, bs: BossState, id: number, dashHeading: number): boolean {
+  const c = fanCentre(dashHeading);
+  const r = w.radius[id] ?? 0;
+  const bx = w.x[id] ?? 0;
+  const by = w.y[id] ?? 0;
+  let mx = bx + Math.cos(c) * r;
+  let my = by + Math.sin(c) * r;
+  if (!isInside(w.level.arena, mx, my, ENEMY_BULLET_RADIUS)) {
+    mx = bx;
+    my = by;
+  }
+  if (w.ship.active && !inShotRange(pointDist(mx, my, w.x[0] ?? 0, w.y[0] ?? 0))) return false;
+  const tier = bs.row.tier;
+  const tele = hazardTelegraph(tier);
+  const n = TEMPESTLING.fanCount;
+  const spread = TEMPESTLING.fanSpreadDeg * DEG;
+  let firstId = -1;
+  for (let k = 0; k < n; k++) {
+    const b = spawnEnemyBullet(w, mx, my, fanHeading(c, k, n, spread), TEMPESTLING.fanSpeed, ENEMY_BULLET_RADIUS, tier, tele);
+    if (firstId < 0) firstId = b;
+  }
+  if (firstId >= 0) {
+    bs.shotId = firstId;
+    bs.shotEv.x = mx;
+    bs.shotEv.y = my;
+  }
+  return true;
 }
 
 /**
@@ -488,9 +551,12 @@ export function stepTempestling(w: World, id: number, dt: number): void {
     if (hit || t <= 0) {
       ab[o + MOVE] = TempestMove.Rest;
       ab[o + TIMER] = TEMPESTLING.restSec;
+      ab[o + FAN] = 1;
+      if (fireDashFan(w, bs, id, h)) ab[o + FAN] = 0;
     }
     return;
   }
+  if ((ab[o + FAN] ?? 0) === 1 && fireDashFan(w, bs, id, ab[o + HEADING] ?? 0)) ab[o + FAN] = 0;
   if (t > 0) return;
   toChase(ab, o);
 }
