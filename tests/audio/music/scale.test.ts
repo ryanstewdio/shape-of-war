@@ -8,6 +8,7 @@ import {
 } from '../../../src/audio/music/scale';
 import { fitsHarmony, harmonyForBar, inChord, isStrongStep } from '../../../src/audio/music/harmony';
 import { buildBar, LOOP_BARS, STEPS_PER_BAR } from '../../../src/audio/music/track';
+import { DEFAULT_TUNE } from '../../../src/audio/music/tunes';
 
 const SEEDS = [0, 1, 2, 42, 0x229578a8, 0xdeadbeef, 0xffffffff, 123456789];
 
@@ -59,11 +60,12 @@ describe('every base track note is in the scale', () => {
           expect(inNaturalMinor(n.midi)).toBe(true);
           const abs = bar * STEPS_PER_BAR + n.step;
           if (n.layer === 'arp') {
-            expect(fitsHarmony(n.midi, abs)).toBe(true);
-            // Weak steps keep the composed pentatonic line.
-            if (!isStrongStep(abs)) expect(inPentatonic(n.midi)).toBe(true);
+            expect(fitsHarmony(n.midi, abs, DEFAULT_TUNE.key)).toBe(true);
+            // Weak steps of the hashed arp keep the composed pentatonic line (the written lead
+            // moves through the whole mode).
+            if (!isStrongStep(abs) && n.fx === undefined) expect(inPentatonic(n.midi)).toBe(true);
           } else {
-            expect(inChord(n.midi, harmonyForBar(bar))).toBe(true);
+            expect(inChord(n.midi, harmonyForBar(bar, DEFAULT_TUNE.key))).toBe(true);
           }
         }
       }

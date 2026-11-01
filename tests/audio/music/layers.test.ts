@@ -23,6 +23,10 @@ import { chordToneMidi, fitsHarmony, harmonyAtStep, harmonyForBar, inChord, isSt
 import { inPentatonic, pentatonicMidi } from '../../../src/audio/music/scale';
 import { LOOP_BARS, STEPS_PER_BAR } from '../../../src/audio/music/track';
 import { ENEMY_KINDS, V2_ENEMY_KINDS, type EnemyKind } from '../../../src/levelgen/leveldef';
+import { DEFAULT_TUNE } from '../../../src/audio/music/tunes';
+
+/** The default tune's key: motifs and entrance phrases default to it. */
+const K = DEFAULT_TUNE.key;
 
 // Compile time: tsc (npm run build) fails if EnemyKind gains a kind LAYER_KINDS lacks.
 type MissingKinds = Exclude<EnemyKind, (typeof LAYER_KINDS)[number]>;
@@ -87,16 +91,16 @@ describe('layer registry', () => {
         for (let bar = 0; bar < LOOP_BARS * 2; bar++) {
           for (const n of LAYERS_FULL[k].motif(seed, bar)) {
             const abs = bar * STEPS_PER_BAR + n.step;
-            expect(fitsHarmony(n.midi, abs), `${k} bar ${bar} step ${n.step} midi ${n.midi}`).toBe(true);
+            expect(fitsHarmony(n.midi, abs, K), `${k} bar ${bar} step ${n.step} midi ${n.midi}`).toBe(true);
             if (isStrongStep(abs)) {
               strong++;
-              expect(inChord(n.midi, harmonyForBar(bar))).toBe(true);
+              expect(inChord(n.midi, harmonyForBar(bar, K))).toBe(true);
             }
             if (n.fromMidi !== null) expect(inPentatonic(n.fromMidi)).toBe(true);
             expect(n.step).toBeGreaterThanOrEqual(0);
             expect(n.step).toBeLessThan(STEPS_PER_BAR);
           }
-          expect(inChord(stingerMidi(LAYERS_FULL[k], bar), harmonyForBar(bar))).toBe(true);
+          expect(inChord(stingerMidi(LAYERS_FULL[k], bar), harmonyForBar(bar, K))).toBe(true);
         }
       }
     }
@@ -122,13 +126,13 @@ describe('layer registry', () => {
           expect(n.step).toBe(start + (shape?.at ?? 0));
           expect(n.dur).toBe(shape?.dur);
           // Each note is the shape's chord degree in its own bar's chord, never below A3.
-          const h = harmonyAtStep(n.step);
+          const h = harmonyAtStep(n.step, K);
           expect(inChord(n.midi, h)).toBe(true);
           expect(n.midi).toBe(chordToneMidi(h, shape?.deg ?? 0, stingerBase(e.register)));
           expect(n.midi).toBeGreaterThanOrEqual(STINGER_BASE_MIN - 12);
         });
         // Inside one chord the contour is identical whatever the chord: same rises and falls.
-        const sameChord = placed.every((n) => harmonyAtStep(n.step) === harmonyAtStep(start));
+        const sameChord = placed.every((n) => harmonyAtStep(n.step, K) === harmonyAtStep(start, K));
         if (sameChord) {
           const dirs = placed.slice(1).map((n, i) => Math.sign(n.midi - (placed[i]?.midi ?? 0)));
           const want = e.phrase.slice(1).map((n, i) => Math.sign(n.deg - (e.phrase[i]?.deg ?? 0)));
@@ -162,8 +166,8 @@ describe('layer registry', () => {
           expect(LAYERS_FULL[k].motif(seed, bar)).toEqual(LAYERS_FULL[k].motif(seed, bar));
           expect(cutMotifs([...LAYER_KINDS])[k].motif(seed, bar)).toEqual(LAYERS_FULL[k].motif(seed, bar));
         }
-        // The loop repeats every 8 bars.
-        expect(LAYERS_FULL[k].motif(seed, 3)).toEqual(LAYERS_FULL[k].motif(seed, 3 + LOOP_BARS));
+        // The loop repeats with the default tune's loop.
+        expect(LAYERS_FULL[k].motif(seed, 3)).toEqual(LAYERS_FULL[k].motif(seed, 3 + DEFAULT_TUNE.loopBars));
       }
     }
   });

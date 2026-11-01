@@ -19,9 +19,11 @@
 // a payload without a kind. So a Mine pop is not a Sower kill, and Snake segments in a head's
 // death burst have their own voice. Segments never count toward a streak, so a burst still ends
 // in the head's big chord.
+import { hash01 } from '../../core/rng';
 import type { Events } from '../../core/events';
+import type { EchoSend } from './compose';
 import type { EnemyKind } from '../../levelgen/leveldef';
-import { chordToneMidi, harmonyForBar } from './harmony';
+import { chordToneMidi, harmonyForBar, snapToScale } from './harmony';
 import { brighten, LAYERS_FULL, TIMBRES, type Timbre } from './layers';
 import { A4, inPentatonic, pentatonicMidi } from './scale';
 import { chordForBar, STEPS_PER_BAR } from './track';
@@ -264,7 +266,9 @@ export function isBigSource(s: KillSource): boolean {
  * Distinct per source; hit ticks are built on it (hits.ts). Kill notes use killNoteMidi.
  */
 export function killMidi(spec: Pick<KillSpec, 'degree'>, bar: number, tune: Tune = DEFAULT_TUNE): number {
-  return pentatonicMidi(spec.degree + chordForBar(bar, tune).arpAnchor, tune.root);
+  // Snapped into the tune's scale: a lydian, mixolydian or whole tone tune does not hold the
+  // minor pentatonic of its root (a minor tune is unchanged).
+  return snapToScale(pentatonicMidi(spec.degree + chordForBar(bar, tune).arpAnchor, tune.root), tune.key);
 }
 
 /** Pure: the nearest pentatonic note at or below a MIDI note. */
@@ -306,6 +310,115 @@ export function chordHit(bar: number, big: boolean, withResolve: boolean, tune: 
   if (!withResolve) return { midis: all, gain: CHORD_GAIN };
   const top = resolveMidi(bar, tune);
   return { midis: all.filter((m) => m !== top), gain: ACCENT_GAIN_MAX - RESOLVE_GAIN };
+}
+
+// ---------------------------------------------------------------------------------------
+// Kill variation (v3.4, Ryan 2026-11-01: "more variety in the notes created by kills by varying
+// note length, loudness, echo, and some notes should have arpeggio"). Each kill note takes its
+// colour from the stateless hash of its kill index (kill notes played so far this session) and
+// its source, so the same run plays the same colours and no PRNG is touched:
+//   - length: a staccato half sixteenth, a sixteenth, or half a beat (cut to the gate's room);
+//   - loudness: three levels;
+//   - echo: none, the short slap or the long dotted eighth echo;
+//   - about 1 kill in 4 plays a fast 3 or 4 note arpeggio of the current chord on its one voice
+//     instead of a single note, starting from the kill's place in the bar's climb, so combo
+//     kills climb the arpeggio. Every note is a chord tone of the bar's harmony.
+
+/** Kill note lengths, sixteenths: staccato, a sixteenth, half a beat. */
+export const KILL_LEN_STEPS: readonly number[] = [0.5, 1, 2];
+/** Kill note loudness levels, a factor on the note gain (never above 1, so the accent cap holds). */
+export const KILL_LOUDNESS: readonly number[] = [0.55, 0.78, 1];
+/** Share of kill notes that play an arpeggio. */
+export const KILL_ARP_SHARE = 0.25;
+/** Arpeggio note length, sixteenths (a thirty second), squeezed to fit the gate's room. */
+export const KILL_ARP_NOTE_STEPS = 0.5;
+/** Highest chord degree an arpeggio reaches above the root nearest A4 (two octaves up). */
+export const KILL_ARP_TOP_DEG = 6;
+
+export interface KillVariation {
+  /** Note length, sixteenths, before the gate's room cuts it. */
+  readonly lenSteps: number;
+  /** Loudness level 0 (soft) to 2 (full). */
+  readonly loud: 0 | 1 | 2;
+  /** KILL_LOUDNESS of the level. */
+  readonly gainScale: number;
+  readonly echo: EchoSend;
+  /** Arpeggio notes (3 or 4), or 0 for a single note. */
+  readonly arp: 0 | 3 | 4;
+}
+
+const SALT_LEN = 0x1e57;
+const SALT_LOUD = 0x2a11;
+const SALT_ECHO = 0x3c0d;
+const SALT_ARP = 0x4b77;
+const SALT_ARPN = 0x5d21;
+
+/** Pure: a 32 bit FNV-1a hash of a source name, so every source has its own hash lane. */
+export function sourceSalt(s: KillSource): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193) >>> 0;
+  return h >>> 0;
+}
+
+function pick3(h: number): 0 | 1 | 2 {
+  return h < 1 / 3 ? 0 : h < 2 / 3 ? 1 : 2;
+}
+
+/** Pure: the colour of the kill note with this kill index from this source. */
+export function killVariation(index: number, source: KillSource): KillVariation {
+  const k = Math.max(0, Math.trunc(Number.isFinite(index) ? index : 0)) >>> 0;
+  const salt = sourceSalt(source);
+  const len = pick3(hash01(k, (salt ^ SALT_LEN) >>> 0));
+  const loud = pick3(hash01(k, (salt ^ SALT_LOUD) >>> 0));
+  const echo = pick3(hash01(k, (salt ^ SALT_ECHO) >>> 0));
+  const arp = hash01(k, (salt ^ SALT_ARP) >>> 0) < KILL_ARP_SHARE ? (hash01(k, (salt ^ SALT_ARPN) >>> 0) < 0.5 ? 3 : 4) : 0;
+  return { lenSteps: KILL_LEN_STEPS[len] ?? 1, loud, gainScale: KILL_LOUDNESS[loud] ?? 1, echo, arp };
+}
+
+/** Pure: the variation table of a source: the colours of its first `n` kill indices. */
+export function killVariationTable(source: KillSource, n: number): KillVariation[] {
+  const out: KillVariation[] = [];
+  for (let i = 0; i < Math.max(0, Math.trunc(n)); i++) out.push(killVariation(i, source));
+  return out;
+}
+
+/**
+ * Pure: a kill arpeggio: `count` chord tones of the bar's harmony climbing from degree `index`
+ * (the kill's place in the bar, so combo kills start higher), from the root nearest A4, capped
+ * so the top note stays at or under KILL_ARP_TOP_DEG.
+ */
+export function killArpeggio(bar: number, index: number, count: number, tune: Tune = DEFAULT_TUNE): number[] {
+  const h = harmonyForBar(bar, tune.key);
+  const n = Math.max(1, Math.trunc(count));
+  const start = Math.max(0, Math.min(Math.trunc(index), KILL_ARP_TOP_DEG - (n - 1)));
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) out.push(chordToneMidi(h, start + i, KILL_BASE));
+  return out;
+}
+
+/** A kill note as the engine plays it: length, gain factor, echo and arpeggio, in steps. */
+export interface KillPlay {
+  /** First (or only) pitch. */
+  readonly midi: number;
+  /** Voice length, sixteenths: never past the gate's room. */
+  readonly steps: number;
+  readonly gainScale: number;
+  readonly echo: EchoSend;
+  /** Arpeggio pitches, or null for a single note. */
+  readonly arp: readonly number[] | null;
+  /** Sixteenths per arpeggio note. */
+  readonly arpSteps: number;
+}
+
+/** Pure: how a gated kill note plays (`room` is the gate's dur in steps). */
+export function killPlay(v: KillVariation, bar: number, index: number, room: number, tune: Tune = DEFAULT_TUNE): KillPlay {
+  const r = Math.max(0.5, room);
+  if (v.arp > 0) {
+    const arp = killArpeggio(bar, index, v.arp, tune);
+    const arpSteps = Math.min(KILL_ARP_NOTE_STEPS, r / v.arp);
+    return { midi: arp[0] ?? killNoteMidi(bar, index, tune), steps: r, gainScale: v.gainScale, echo: v.echo, arp, arpSteps };
+  }
+  return { midi: killNoteMidi(bar, index, tune), steps: Math.min(r, v.lenSteps), gainScale: v.gainScale, echo: v.echo, arp: null, arpSteps: 0 };
 }
 
 /** Pure: kill notes allowed per bar at a threat level. */

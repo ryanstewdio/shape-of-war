@@ -16,13 +16,17 @@
 // turning on or off) also earns a 2 bar fill, and every odd pass of the loop ends in one.
 //
 // Boss music (v3 wave B): 'sim:bossEnter', 'sim:bossPhase' and 'sim:bossDown' drive bossLife.ts.
-// The fight cross fades into a battle track (battle.ts, tunes.ts BATTLE_TUNES: three minor keys,
-// 120 BPM) on the join bar, opening with the track's intro hit (battlePolish.ts), and returns to
+// The fight cross fades into a battle track (battle.ts, tunes.ts BATTLE_TUNES: three minor modes,
+// each at its own tempo since v3.4) on the join bar, opening with the track's intro hit (battlePolish.ts), and returns to
 // the level tune two bars after the motif stops; the boss motif (boss.ts,
 // fitted to the battle track's chords) plays as class 'boss' voices; the enemy
 // motifs duck and only the newest three keep a voice; the threat floor is 0.8 while the boss
 // lives. A boss death that ends the level ('game:over' in the same step) rings the defeat
 // stinger out before the engine is released.
+//
+// v3.4: each kill note takes its length, loudness, echo send and (about 1 in 4) a fast chord
+// arpeggio from a hash of its kill index and source (kills.ts killVariation); the engine's long
+// echo follows the tune's tempo.
 import { bus as coreBus, type Bus } from '../../core/events';
 import type { BossId, BossTier, EnemyKind } from '../../levelgen/leveldef';
 import { getAudioGraph } from '../synth';
@@ -97,6 +101,8 @@ import {
   KILL_QUEUE_MAX,
   KILL_SPECS,
   killNoteMidi,
+  killPlay,
+  killVariation,
   RESOLVE_GAIN,
   RESOLVE_STEPS,
   RESOLVE_TIMBRE,
@@ -573,11 +579,15 @@ function applyGate(s: Session, sched: Scheduler, r: GateResult, source: KillSour
   if (a.type === 'note' && source !== null) {
     const spec = KILL_SPECS[source];
     const w = where(s, a.step);
-    // The kind's voice, the chord's arpeggio: climbing with the kill count in the bar.
-    const midi = killNoteMidi(w.bar, a.index, w.tune);
+    // The kind's voice, the chord's arpeggio: climbing with the kill count in the bar. v3.4: each
+    // kill note's length, loudness, echo and arpeggio come from a hash of its index and source.
+    const kp = killPlay(killVariation(s.stats.notes, source), w.bar, a.index, a.dur, w.tune);
+    const midi = kp.midi;
     const time = sched.timeOf(a.step);
-    const gain = spec.noteGain * (0.8 + 0.2 * level);
-    s.engine.playVoice({ time, dur: a.dur * w.tune.stepSec, midi, fromMidi: null, gain, timbre: spec.noteTimbre }, 'accent');
+    const gain = spec.noteGain * (0.8 + 0.2 * level) * kp.gainScale;
+    const sec = w.tune.stepSec;
+    const voice = { time, dur: kp.steps * sec, midi, fromMidi: null, gain, timbre: spec.noteTimbre, echo: kp.echo };
+    s.engine.playVoice(kp.arp === null ? voice : { ...voice, arp: kp.arp, arpSec: kp.arpSteps * sec }, 'accent');
     s.stats.notes++;
     if (noteHook) logNote(w.tune, { role: 'kill', layer: null, kind: enemyOf(source), source, step: a.step, time, midi, gain, at });
     if (a.resolveAt !== null) {
@@ -771,6 +781,8 @@ function onStep(p: Session, step: number, time: number): void {
   const w = where(p, step);
   const sec = w.tune.stepSec;
   p.playSec += sec;
+  // The long echo follows the tune's tempo (a no op unless the tempo changed).
+  p.engine.setStepSec(sec);
   if (volume === 0) return;
   const barIndex = Math.floor(step / STEPS_PER_BAR);
   const inBar = step % STEPS_PER_BAR;

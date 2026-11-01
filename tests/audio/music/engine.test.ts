@@ -18,6 +18,7 @@ import {
 } from '../../../src/audio/music/engine';
 import { LAYERS_FULL } from '../../../src/audio/music/layers';
 import { midiToHz } from '../../../src/audio/music/scale';
+import { DEFAULT_TUNE } from '../../../src/audio/music/tunes';
 import type { PlannedNote } from '../../../src/audio/music/scheduler';
 import { FakeContext, FakeContextNoLimiter, FakeNode, FakeOsc } from './fakeAudio';
 
@@ -122,7 +123,8 @@ describe('music engine', () => {
     engine.play({ layer: 'arp', midi: 69, time: 0.1, dur: 0.125, gain: 0.1 });
     engine.play({ layer: 'hat', midi: null, time: 0.1, dur: 0.125, gain: 0.1 });
     const types = ctx.oscs.slice(start).map((o: FakeOsc) => o.type);
-    expect(types).toEqual(['triangle', 'sawtooth', 'sawtooth', 'sine', 'square']);
+    const bed = DEFAULT_TUNE.bed;
+    expect(types).toEqual([bed.bass, bed.pad, bed.pad, 'sine', bed.arp]);
     const kick = ctx.oscs[start + 3];
     expect(kick?.frequency.calls[0]?.v).toBe(KICK_F0);
     expect(kick?.frequency.calls.at(-1)?.v).toBe(KICK_F1);

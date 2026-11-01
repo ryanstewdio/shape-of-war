@@ -18,7 +18,12 @@ import { CUT1_KEEP, LAYER_KINDS, LAYERS_FULL } from '../../../src/audio/music/la
 const phraseLen = (k: EnemyKind): number => LAYERS_FULL[k].phrase.length;
 import { GAIN_CEILING, STINGER_GAIN } from '../../../src/audio/music/lifecycle';
 import { START_LEAD_SEC, TICK_MS } from '../../../src/audio/music/scheduler';
-import { BAR_SEC, STEP_SEC, STEPS_PER_BAR } from '../../../src/audio/music/track';
+import { STEPS_PER_BAR } from '../../../src/audio/music/track';
+import { DEFAULT_TUNE } from '../../../src/audio/music/tunes';
+
+/** The default tune's grid (Neon Drive, 138 BPM). */
+const STEP_SEC = DEFAULT_TUNE.stepSec;
+const BAR_SEC = STEP_SEC * STEPS_PER_BAR;
 import { Bus } from '../../../src/core/events';
 import type { EnemyKind } from '../../../src/levelgen/leveldef';
 import { FakeContext, FakeNode, FakeTimer } from './fakeAudio';
@@ -89,7 +94,7 @@ describe('enemy layers in the music loop', () => {
     st.forEach((n, i) => {
       expect(n.step).toBe(next + (LAYERS_FULL.grunt.phrase[i]?.at ?? -1));
       expect(n.time).toBeCloseTo(stepTime(n.step), 9);
-      expect(inChord(n.midi ?? 0, harmonyAtStep(n.step))).toBe(true);
+      expect(inChord(n.midi ?? 0, harmonyAtStep(n.step, DEFAULT_TUNE.key))).toBe(true);
       expect(n.gain).toBeLessThanOrEqual(STINGER_GAIN);
     });
     // Quantized to the audio clock: never in the past, at most one lookahead plus a step ahead.
@@ -145,7 +150,8 @@ describe('enemy layers in the music loop', () => {
   it('6 kinds plus the bed at full threat stay within 16 voices, steal motifs first, and sum under 1.0', () => {
     startMusic(14);
     bus.emit('sim:threat', { level: 1 });
-    advance(1);
+    // Half a bar in, so the entrance phrases end by the bar line the motifs join on.
+    advance(BAR_SEC / 2);
     const six: EnemyKind[] = ['snake', 'splime', 'bulwark', 'wanderer', 'charger', 'grunt'];
     for (const k of six) bus.emit('sim:enemyEnter', { kind: k, live: 1 });
     advance(BAR_SEC * 10, () => {

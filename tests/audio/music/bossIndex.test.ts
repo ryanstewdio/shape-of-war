@@ -18,7 +18,7 @@ import {
   type MusicOptions,
   type NoteLog,
 } from '../../../src/audio/music/index';
-import { KILL_SPECS } from '../../../src/audio/music/kills';
+import { KILL_LOUDNESS, KILL_SPECS } from '../../../src/audio/music/kills';
 import { LAYERS_FULL } from '../../../src/audio/music/layers';
 import { ACCENT_RESERVE, BOSS_STING_GAIN, GAIN_CEILING, HIT_RESERVE, STINGER_GAIN } from '../../../src/audio/music/lifecycle';
 import { TICK_MS } from '../../../src/audio/music/scheduler';
@@ -113,16 +113,16 @@ describe('boss entry', () => {
     expect(musicState().bossTier).toBe(1);
   });
 
-  it('switches any level tune to the tier boss bed (A, 120 BPM) on the join bar, and back after the boss', () => {
+  it('switches any level tune to a battle track on the join bar, at its tempo, and back after the boss', () => {
     install({ tune: 'tide' });
     startMusic(12);
     advance(1.1);
-    expect(musicState().bpm).toBe(104);
+    expect(musicState().bpm).toBe(tuneById('tide').bpm);
     const at = musicState().nextStep;
     enter('ember', 2);
     advance(BAR_SEC * 3);
     const join = barLineAfter(at);
-    expect(musicState().bpm).toBe(120);
+    expect(BATTLE_TUNES.map((t) => t.bpm)).toContain(musicState().bpm);
     expect(musicState().bossTier).toBe(2);
     // The entry chord is on the tide chord that was sounding (B dorian), the motif in the boss bed.
     const tide = tuneById('tide');
@@ -132,15 +132,16 @@ describe('boss entry', () => {
     const battle = bedAfter[0]?.tune;
     expect(BATTLE_TUNES.map((t) => t.id)).toContain(battle);
     for (const n of bedAfter) expect(n.tune).toBe(battle);
-    // Steps after the join are 0.125 s apart (120 BPM).
+    // Steps after the join are on the battle track's grid.
+    const sec = BATTLE_TUNES.find((t) => t.id === battle)?.stepSec ?? 0;
     const kicks = log.filter((n) => n.role === 'bed' && n.layer === 'kick' && n.step >= join);
     const k0 = kicks[0];
     const k1 = kicks[1];
-    expect((k1?.time ?? 0) - (k0?.time ?? 0)).toBeCloseTo(((k1?.step ?? 0) - (k0?.step ?? 0)) * 0.125, 9);
+    expect((k1?.time ?? 0) - (k0?.time ?? 0)).toBeCloseTo(((k1?.step ?? 0) - (k0?.step ?? 0)) * sec, 9);
     for (const n of role('boss')) expect(inTierScale(n.midi ?? 0, 2)).toBe(true);
     bus.emit('sim:bossDown', { id: 'ember', x: 0, y: 0 });
     advance(BAR_SEC * 4);
-    expect(musicState().bpm).toBe(104);
+    expect(musicState().bpm).toBe(tuneById('tide').bpm);
     expect(musicState().bossTier).toBeNull();
   });
 
@@ -182,13 +183,13 @@ describe('ducking', () => {
     expect(musicState().duck).toBeCloseTo(BOSS_DUCK, 9);
     const during = peak(grunt(s1, s1 + 2 * STEPS_PER_BAR));
     expect(during / before).toBeCloseTo(BOSS_DUCK, 6);
-    // Kill notes are not ducked.
+    // Kill notes are not ducked (each takes one of three loudness levels, v3.4).
     bus.emit('fx:kill', { x: 0, y: 0, colour: 'blue', kind: Kind.Grunt, id: 1 });
     bus.emit('sfx', 'explode');
     advance(0.5);
     const kills = role('kill');
     expect(kills.length).toBeGreaterThan(0);
-    for (const k of kills) expect(k.gain).toBeGreaterThanOrEqual(KILL_SPECS.grunt.noteGain * 0.8 - 1e-12);
+    for (const k of kills) expect(k.gain).toBeGreaterThanOrEqual(KILL_SPECS.grunt.noteGain * 0.8 * (KILL_LOUDNESS[0] ?? 1) - 1e-12);
     bus.emit('sim:bossDown', { id: 'warden', x: 0, y: 0 });
     advance(1.5);
     const halfway = musicState().duck;

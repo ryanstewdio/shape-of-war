@@ -6,9 +6,15 @@
 // The graph is
 //   bed voices -> layer buses (bass lowpass, pad lowpass with LFO, perc bandpass, hat
 //   highpass) -> master lowpass -> limiter -> music gain (at most 0.35) -> synth master;
-//   motif, stinger and accent voices (own filter each) -> motif bus -> limiter.
+//   motif, stinger and accent voices (own filter each) -> motif bus -> limiter;
+//   echo sends (v3.4): any voice may send to a short slap delay or a long dotted eighth delay
+//   with feedback, both returning into the master lowpass. Echo adds no voices.
+// v3.4 voice colour (compose.ts NoteFx): pulse leads with a duty cycle (a periodic wave), a two
+// operator FM bell, slides, delayed vibrato on held notes, a chip pad that steps one voice through
+// the chord, and filtered noise wind under a space pad.
 // The context is a narrow structural type: a real AudioContext satisfies it and tests pass a fake.
 import { hash01 } from '../../core/rng';
+import type { EchoSend, NoteFx } from './compose';
 import { MUSIC_MASTER_MAX } from './intensity';
 import { midiToHz } from './scale';
 import type { PlannedNote } from './scheduler';
@@ -54,10 +60,19 @@ export interface SourceLike extends NodeLike {
   onended: ((ev: Event) => unknown) | null;
 }
 
+/** An opaque periodic wave made by the context. */
+export type PeriodicWaveLike = object;
+
 export interface OscLike extends SourceLike {
   type: OscillatorType;
   readonly frequency: ParamLike;
   readonly detune: ParamLike;
+  /** Every browser oscillator has it; without it a pulse falls back to a square. */
+  setPeriodicWave?(wave: PeriodicWaveLike): void;
+}
+
+export interface DelayLike extends NodeLike {
+  readonly delayTime: ParamLike;
 }
 
 export interface BufferLike {
@@ -87,6 +102,10 @@ export interface MusicContext {
   createBuffer(channels: number, length: number, sampleRate: number): BufferLike;
   /** Every browser AudioContext has it; a context without it runs with no limiter. */
   createDynamicsCompressor?(): CompressorLike;
+  /** Every browser AudioContext has it; a context without it runs with no echo. */
+  createDelay?(maxDelayTime: number): DelayLike;
+  /** Every browser AudioContext has it; a context without it plays pulses as squares. */
+  createPeriodicWave?(real: Float32Array, imag: Float32Array): PeriodicWaveLike;
 }
 
 /**
@@ -268,6 +287,40 @@ export const ARP_DECAY_SEC = 0.11;
 export const ARP_LEN_FRAC = 0.88;
 export const PAD_ATTACK_SEC = 0.25;
 export const PAD_RELEASE_SEC = 0.4;
+/** Slap echo: delay, feedback and return level. */
+export const SLAP_SEC = 0.11;
+export const SLAP_FEEDBACK = 0.15;
+export const SLAP_WET = 0.3;
+/** Long echo: a dotted eighth (3 sixteenths) with feedback through a lowpass. */
+export const LONG_ECHO_STEPS = 3;
+export const LONG_FEEDBACK = 0.42;
+export const LONG_WET = 0.35;
+export const LONG_LP_HZ = 2400;
+/** Longest delay line, seconds (a dotted eighth at 100 BPM is 0.45 s). */
+export const ECHO_MAX_SEC = 1;
+/** Harmonics in a pulse wave. */
+export const PULSE_HARMONICS = 24;
+/** FM bell: modulator ratio, start and end modulation index. */
+export const BELL_RATIO = 3.5;
+export const BELL_INDEX_START = 2.5;
+export const BELL_INDEX_END = 0.15;
+/** Delayed vibrato: rate, onset and the time it takes to reach full depth. */
+export const VIBRATO_HZ = 5.5;
+export const VIBRATO_DELAY_SEC = 0.14;
+export const VIBRATO_RISE_SEC = 0.2;
+/** A slide reaches its pitch in at most this long. */
+export const SLIDE_SEC = 0.07;
+/** Lead notes longer than this (seconds) hold, with a release, instead of plucking. */
+export const LEAD_HOLD_SEC = 0.16;
+/** A chip pad is one pulse voice at this share of the pad layer gain. */
+export const CHIP_PAD_PEAK = 0.5;
+/** Duty of the chip pad's pulse. */
+export const CHIP_PAD_DUTY = 0.25;
+/** Noise wind: share of the pad note's peak, bandpass Q and its sweep (Hz). */
+export const WIND_LEVEL = 0.6;
+export const WIND_Q = 3;
+export const WIND_LO_HZ = 350;
+export const WIND_HI_HZ = 1400;
 /** Notes per pad chord, so the pad layer gain is shared by its three notes. */
 const PAD_NOTES = 3;
 const NOISE_SEC = 1;
@@ -284,8 +337,9 @@ export function voiceLength(layer: Layer, dur: number): number {
     case 'perc':
       return PERC_DECAY_SEC;
     case 'arp':
-      // Shorter than a sixteenth at every tune tempo (up to 132 BPM), so arp notes never overlap.
-      return Math.min(dur * ARP_LEN_FRAC, ARP_DECAY_SEC) + 0.01;
+      // A sixteenth is shorter than a sixteenth at every tune tempo (up to 150 BPM), so arp
+      // notes never overlap; a written lead's held note rings for most of its length.
+      return dur > LEAD_HOLD_SEC ? dur * 0.92 : Math.min(dur * ARP_LEN_FRAC, ARP_DECAY_SEC) + 0.01;
     case 'bass':
       return dur * 0.9;
   }
@@ -294,6 +348,35 @@ export function voiceLength(layer: Layer, dur: number): number {
 /** Pure: the envelope peak for one voice of a planned note. */
 export function voicePeak(layer: Layer, gain: number): number {
   return layer === 'pad' ? gain / PAD_NOTES : gain;
+}
+
+/** Pure: the cosine coefficients of a pulse wave of duty d (0 to 1), index 0 the DC term (0). */
+export function pulseCoefficients(duty: number, harmonics: number = PULSE_HARMONICS): Float32Array {
+  const d = Math.min(0.95, Math.max(0.05, duty));
+  const out = new Float32Array(harmonics + 1);
+  for (let n = 1; n <= harmonics; n++) out[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * d);
+  return out;
+}
+
+/** Pure: the long echo's delay for a tempo: a dotted eighth, capped to the delay line. */
+export function longEchoSec(stepSec: number): number {
+  return Math.min(ECHO_MAX_SEC, Math.max(0.05, LONG_ECHO_STEPS * stepSec));
+}
+
+/**
+ * Pure: the frequency schedule of a chip arpeggio on one voice: each note for `noteSec`, cycling
+ * through the notes for `len` seconds (cycle false: once through, the last note held).
+ */
+export function arpSchedule(midis: readonly number[], noteSec: number, len: number, cycle: boolean): { at: number; midi: number }[] {
+  const out: { at: number; midi: number }[] = [];
+  if (midis.length === 0 || !(noteSec > 0)) return out;
+  const count = cycle ? Math.max(1, Math.ceil(len / noteSec)) : midis.length;
+  for (let i = 0; i < count; i++) {
+    const at = i * noteSec;
+    if (at >= len && i > 0) break;
+    out.push({ at, midi: midis[i % midis.length] ?? 0 });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -344,6 +427,12 @@ export interface VoiceNote {
   readonly fromMidi: number | null;
   readonly gain: number;
   readonly timbre: Timbre;
+  /** Echo send (v3.4 kill variation). Default none. */
+  readonly echo?: EchoSend;
+  /** A fast arpeggio the voice steps through once, last note held (v3.4 kill arpeggio). */
+  readonly arp?: readonly number[];
+  /** Seconds per arpeggio note. */
+  readonly arpSec?: number;
 }
 
 export interface VoiceShape {
@@ -402,6 +491,8 @@ export interface MusicEngine {
   playVoice(n: VoiceNote, cls?: 'motif' | 'accent' | 'boss'): void;
   /** Voices kill accents may take over [t, t + len), given the notes not scheduled yet. */
   accentRoom(t: number, len: number, upcoming: readonly Span[]): number;
+  /** Set the long echo to a dotted eighth of this sixteenth length (a no op when unchanged). */
+  setStepSec(sec: number): void;
   /** Music master gain, clamped to 0 to 0.35, ramped from the current time. */
   setMaster(gain: number): void;
   /** Master lowpass cutoff, Hz, ramped from the current time. */
@@ -508,6 +599,52 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
   lfo.start(ctx.currentTime);
   const graph: NodeLike[] = [lfo, lfoDepth, bassBus, padBus, hatBus, percBus, motifBus, master, out];
   if (limiter) graph.push(limiter);
+  // Echo buses, built once (never during a tick). They return into the master lowpass.
+  let slapIn: NodeLike | null = null;
+  let longIn: NodeLike | null = null;
+  let longDelay: DelayLike | null = null;
+  let echoStep = 0;
+  if (typeof ctx.createDelay === 'function') {
+    const mk = (sec: number, fb: number, wet: number, lpHz: number | null): { input: GainLike; delay: DelayLike } => {
+      const input = ctx.createGain();
+      input.gain.value = 1;
+      const delay = (ctx.createDelay as (m: number) => DelayLike)(ECHO_MAX_SEC);
+      delay.delayTime.value = sec;
+      const feedback = ctx.createGain();
+      feedback.gain.value = fb;
+      const ret = ctx.createGain();
+      ret.gain.value = wet;
+      input.connect(delay);
+      const tail: NodeLike = lpHz === null ? delay : filter(ctx, 'lowpass', lpHz);
+      if (tail !== delay) {
+        delay.connect(tail);
+        graph.push(tail);
+      }
+      tail.connect(feedback);
+      feedback.connect(delay);
+      tail.connect(ret);
+      ret.connect(master);
+      graph.push(input, delay, feedback, ret);
+      return { input, delay };
+    };
+    slapIn = mk(SLAP_SEC, SLAP_FEEDBACK, SLAP_WET, null).input;
+    const long = mk(longEchoSec(DEFAULT_TUNE.stepSec), LONG_FEEDBACK, LONG_WET, LONG_LP_HZ);
+    longIn = long.input;
+    longDelay = long.delay;
+    echoStep = DEFAULT_TUNE.stepSec;
+  }
+  // Pulse waves by duty, made on first use (a handful per session).
+  const pulses = new Map<number, PeriodicWaveLike>();
+  const pulseFor = (duty: number): PeriodicWaveLike | null => {
+    if (typeof ctx.createPeriodicWave !== 'function') return null;
+    const hit = pulses.get(duty);
+    if (hit) return hit;
+    const real = pulseCoefficients(duty);
+    const w = ctx.createPeriodicWave(real, new Float32Array(real.length));
+    pulses.set(duty, w);
+    return w;
+  };
+  const echoBus = (e: EchoSend | undefined): NodeLike | null => (e === 1 ? slapIn : e === 2 ? longIn : null);
   const noise = noiseFor(ctx);
   let disposed = false;
   let nextId = 1;
@@ -526,6 +663,71 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
     o.type = type;
     o.frequency.setValueAtTime(hz, t);
     return o;
+  }
+
+  /** A pulse oscillator of a duty (a square without periodic waves). */
+  function pulse(duty: number, hz: number, t: number): OscLike {
+    const o = osc('square', hz, t);
+    const w = duty === 0.5 ? null : pulseFor(duty);
+    if (w !== null && typeof o.setPeriodicWave === 'function') o.setPeriodicWave(w);
+    return o;
+  }
+
+  /** Slide an oscillator (started at the pitch it slides from) into `hz`. */
+  function slide(o: OscLike, hz: number, t: number, len: number): void {
+    o.frequency.exponentialRampToValueAtTime(hz, t + Math.min(SLIDE_SEC, len * 0.3));
+  }
+
+  /** Delayed vibrato on an oscillator's detune: an LFO source and its depth node. */
+  function vibrato(o: OscLike, cents: number, t: number, len: number, sources: SourceLike[], chain: NodeLike[]): void {
+    const on = t + VIBRATO_DELAY_SEC;
+    if (!(cents > 0) || len <= VIBRATO_DELAY_SEC + 0.05) return;
+    const l = osc('sine', VIBRATO_HZ, t);
+    const depth = ctx.createGain();
+    depth.gain.setValueAtTime(0, t);
+    depth.gain.setValueAtTime(0, on);
+    depth.gain.linearRampToValueAtTime(cents, Math.min(t + len, on + VIBRATO_RISE_SEC));
+    l.connect(depth);
+    depth.connect(o.detune);
+    sources.push(l);
+    chain.push(depth);
+  }
+
+  /** Step one oscillator through a list of pitches (a chip arpeggio). */
+  function stepPitches(o: OscLike, midis: readonly number[], noteSec: number, t: number, len: number, cycle: boolean): void {
+    for (const e of arpSchedule(midis, noteSec, len, cycle)) o.frequency.setValueAtTime(midiToHz(e.midi), t + e.at);
+  }
+
+  /** A two operator FM bell: a sine carrier, a sine modulator at BELL_RATIO whose index decays. */
+  function bell(hz: number, t: number, len: number, sources: SourceLike[], chain: NodeLike[]): OscLike {
+    const car = osc('sine', hz, t);
+    const mod = osc('sine', hz * BELL_RATIO, t);
+    const idx = ctx.createGain();
+    idx.gain.setValueAtTime(hz * BELL_INDEX_START, t);
+    idx.gain.exponentialRampToValueAtTime(Math.max(1, hz * BELL_INDEX_END), t + Math.max(0.05, len));
+    mod.connect(idx);
+    idx.connect(car.frequency);
+    sources.push(car, mod);
+    chain.push(idx);
+    return car;
+  }
+
+  /** Filtered noise wind under a pad: a swept bandpass on the noise loop, into the voice env. */
+  function wind(env: GainLike, t: number, len: number, sources: SourceLike[], chain: NodeLike[]): void {
+    const src = ctx.createBufferSource();
+    src.buffer = noise;
+    src.loop = true;
+    const bp = filter(ctx, 'bandpass', WIND_LO_HZ, WIND_Q);
+    bp.frequency.setValueAtTime(WIND_LO_HZ, t);
+    bp.frequency.linearRampToValueAtTime(WIND_HI_HZ, t + len * 0.5);
+    bp.frequency.linearRampToValueAtTime(WIND_LO_HZ, t + len);
+    const lvl = ctx.createGain();
+    lvl.gain.value = WIND_LEVEL;
+    src.connect(bp);
+    bp.connect(lvl);
+    lvl.connect(env);
+    sources.push(src);
+    chain.push(bp, lvl);
   }
 
   function envelope(peak: number, t: number, attack: number, hold: number, release: number): GainLike {
@@ -592,12 +794,14 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
    * pruned at the audio clock, not at t, because accents can land before notes already
    * scheduled ahead.
    */
-  function launch(cls: VoiceClass, sources: SourceLike[], chain: NodeLike[], env: GainLike, bus: NodeLike, t: number, len: number): void {
+  function launch(cls: VoiceClass, sources: SourceLike[], chain: NodeLike[], env: GainLike, bus: NodeLike, t: number, len: number, echo?: EchoSend): void {
     const now = ctx.currentTime;
     const vout = ctx.createGain();
     vout.gain.value = 1;
     env.connect(vout);
     vout.connect(bus);
+    const send = echoBus(echo);
+    if (send !== null) vout.connect(send);
     const nodes: NodeLike[] = [...sources, ...chain, env, vout];
     const voice: Voice = { id: nextId++, cls, sources, nodes, out: vout };
     pool.prune(now);
@@ -614,9 +818,63 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
     if (last) last.onended = (): void => disconnectAll(nodes);
   }
 
+  /** A bed lead or pad note with v3.4 colour (compose.ts NoteFx). */
+  function playColoured(n: PlannedNote, f: NoteFx, bed: BedTimbre): void {
+    const t = Math.max(ctx.currentTime, n.time);
+    const len = voiceLength(n.layer, n.dur);
+    const hz = n.midi === null ? 0 : midiToHz(n.midi);
+    const sources: SourceLike[] = [];
+    const chain: NodeLike[] = [];
+    const trim = bedWaveTrim(n.layer, bed);
+    let env: GainLike;
+    let bus: NodeLike;
+    if (n.layer === 'pad' && f.chord !== null) {
+      // Chip pad: one pulse voice stepping through the chord, straight to the master.
+      const o = pulse(CHIP_PAD_DUTY, hz, t);
+      stepPitches(o, f.chord, f.chordSec, t, len, true);
+      sources.push(o);
+      env = envelope(n.gain * trim * CHIP_PAD_PEAK, t, 0.01, n.dur, PAD_RELEASE_SEC);
+      o.connect(env);
+      bus = master;
+    } else if (n.layer === 'pad') {
+      const peak = voicePeak('pad', n.gain * trim) / 2;
+      env = envelope(peak, t, PAD_ATTACK_SEC, n.dur, PAD_RELEASE_SEC);
+      for (const d of [-bed.padDetune, bed.padDetune]) {
+        const o = osc(bed.pad, hz, t);
+        o.detune.setValueAtTime(d, t);
+        o.connect(env);
+        sources.push(o);
+      }
+      if (f.wind) wind(env, t, len, sources, chain);
+      bus = padBus;
+    } else {
+      const peak = n.gain * trim;
+      const held = n.dur > LEAD_HOLD_SEC;
+      if (f.bell) {
+        env = envelope(peak, t, 0.003, 0, len - 0.003);
+        const car = bell(hz, t, len, sources, chain);
+        car.connect(env);
+      } else {
+        env = held ? envelope(peak, t, 0.005, len * 0.7, len * 0.3) : envelope(peak, t, 0.002, 0, len - 0.002);
+        const startHz = f.slideFrom === null ? hz : midiToHz(f.slideFrom);
+        const o = f.duty > 0 ? pulse(f.duty, startHz, t) : osc(bed.arp, startHz, t);
+        if (f.slideFrom !== null) slide(o, hz, t, len);
+        vibrato(o, f.vibrato, t, len, sources, chain);
+        sources.unshift(o);
+        o.connect(env);
+      }
+      bus = master;
+    }
+    launch('bed', sources, chain, env, bus, t, len, f.echo);
+  }
+
   return {
     play(n: PlannedNote, bed: BedTimbre = DEFAULT_TUNE.bed): void {
       if (disposed || !(n.gain > 0)) return;
+      if (n.fx !== undefined && (n.layer === 'arp' || n.layer === 'pad')) {
+        playColoured(n, n.fx, bed);
+        return;
+      }
       const t = Math.max(ctx.currentTime, n.time);
       const len = voiceLength(n.layer, n.dur);
       const env = envFor(n, t, len, bed);
@@ -646,15 +904,27 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
         o.connect(f);
         return o;
       };
-      const sources: SourceLike[] = [mk(tb.wave, 0)];
-      if (tb.partner) sources.push(mk(tb.partner.wave, tb.partner.detune));
+      const oscs: OscLike[] = [mk(tb.wave, 0)];
+      if (tb.partner) oscs.push(mk(tb.partner.wave, tb.partner.detune));
+      const arp = n.arp;
+      if (arp !== undefined && arp.length > 0) {
+        // A fast arpeggio on the one voice: the oscillators step through the notes together.
+        const sec = n.arpSec ?? len / arp.length;
+        for (const o of oscs) stepPitches(o, arp, sec, t, len, false);
+      }
+      const sources: SourceLike[] = oscs;
       f.connect(env);
-      launch(cls, sources, [f], env, motifBus, t, len);
+      launch(cls, sources, [f], env, motifBus, t, len, n.echo);
     },
     accentRoom(t: number, len: number, upcoming: readonly Span[]): number {
       if (disposed) return 0;
       pool.prune(ctx.currentTime);
       return accentRoomFor(pool.list(), upcoming, t, len);
+    },
+    setStepSec(sec: number): void {
+      if (disposed || longDelay === null || !(sec > 0) || sec === echoStep) return;
+      echoStep = sec;
+      longDelay.delayTime.setTargetAtTime(longEchoSec(sec), ctx.currentTime, 0.05);
     },
     setMaster(gain: number): void {
       if (disposed) return;

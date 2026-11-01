@@ -70,8 +70,10 @@ describe('music entry points', () => {
     const st = musicState();
     expect(st.playing).toBe(true);
     expect(st.voices).toBeGreaterThan(0);
-    expect(ctx.oscs.some((o) => o.type === 'sawtooth')).toBe(true);
-    expect(ctx.oscs.some((o) => o.type === 'square')).toBe(false);
+    // The default tune's chip pad (a pulse, a square on the fake context) sounds alone: no
+    // triangle bass yet at threat 0.
+    expect(ctx.oscs.some((o) => o.type === 'square')).toBe(true);
+    expect(ctx.oscs.some((o) => o.type === 'triangle')).toBe(false);
     stopMusic();
     expect(musicState().playing).toBe(false);
     expect(timer.live).toBe(0);
