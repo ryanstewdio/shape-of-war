@@ -4,6 +4,9 @@
 // indicator (V2-B) comes from 'hud:weapon' and is throttled here to the same 100 ms. The boss bar
 // (V3-A) comes from 'hud:boss' with the same throttle, appears on 'sim:bossEnter' and goes on
 // 'sim:bossDown'. Like the rest of the HUD it is plain divs inside a pointer-events: none root.
+// GW1: a drone indicator beside the weapon indicator ('fx:droneArm', 'hud:droneWeapon',
+// 'fx:droneExpire') and a combine flash with a "combined" caption on the weapon indicator
+// ('fx:weaponCombine'), both driven by the pure state machine in indicator.ts.
 import type { Bus, Events, WeaponKind } from '../core/events';
 import type { Insets, Rect } from '../input/types';
 import type { BossId, SuperKind } from '../levelgen/leveldef';
@@ -24,6 +27,15 @@ import {
   type PipState,
 } from './boss';
 import { el } from './dom';
+import {
+  combineView,
+  droneView,
+  flashGlow,
+  INDICATOR_START,
+  reduceIndicator,
+  type IndicatorEvent,
+  type IndicatorState,
+} from './indicator';
 import { formatInt, iconRun } from './format';
 import { aspectClass, type AspectClass, type HudBox, type HudFrame } from './hudFrame';
 import type { ObjectiveProgress } from './objective';
@@ -217,6 +229,14 @@ export interface Hud {
   setWeapon(p: HudWeapon): void;
   /** Hide the weapon indicator and forget the throttle: a new world starts on spread. */
   clearWeapon(): void;
+  /** Feed the drone and combine indicator one event and repaint it now. listen() calls it from the bus. */
+  indicate(e: IndicatorEvent): void;
+  /** Advance the indicator clock to now (capped per call). listen() calls it on every hud:score. */
+  tickIndicators(): void;
+  /** Hide the drone indicator and drop any combine caption: a new world has no drone. */
+  clearDrone(): void;
+  /** True while the drone indicator is up (fading included). */
+  droneShown(): boolean;
   /** Draw the boss bar for a hud:boss payload now, with no throttle. An undrawable payload hides it. */
   setBoss(p: HudBoss): void;
   /** Hide the boss bar and forget the throttle: a new world has no boss. */
@@ -234,7 +254,11 @@ export interface Hud {
    * false when there is no touch input (renderer failed), which hides the rings and pause.
    */
   layout(frame: HudFrame, buttons: boolean): void;
-  /** Subscribe to 'hud:score', 'hud:weapon', 'hud:boss', 'sim:bossEnter' and 'sim:bossDown'. Returns one unsubscribe function. */
+  /**
+   * Subscribe to 'hud:score', 'hud:weapon', 'hud:boss', 'sim:bossEnter', 'sim:bossDown',
+   * 'fx:droneArm', 'hud:droneWeapon', 'fx:droneExpire' and 'fx:weaponCombine'. Returns one
+   * unsubscribe function.
+   */
   listen(bus: Bus): () => void;
 }
 
@@ -280,6 +304,48 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   weaponBar.setAttribute('data-hud', 'weapon-bar');
   weaponFill.setAttribute('data-hud', 'weapon-fill');
   let gate: WeaponGate = { ...WEAPON_GATE_START };
+  // Drone indicator (GW1): mode name and a countdown bar beside the weapon indicator. Its
+  // opacity and flash follow the pure clock in indicator.ts; a short CSS transition smooths the
+  // 100 ms steps, as on the boss banner.
+  const droneLabel = el('div', 'sow-hud-item', '');
+  droneLabel.style.fontWeight = '600';
+  droneLabel.style.display = 'none';
+  droneLabel.style.transition = 'opacity 120ms linear, text-shadow 120ms linear';
+  droneLabel.setAttribute('data-hud', 'drone');
+  const droneBar = el('div', 'sow-hud-bar');
+  droneBar.style.boxSizing = 'border-box';
+  droneBar.style.display = 'none';
+  droneBar.style.transition = 'opacity 120ms linear';
+  droneBar.setAttribute('data-hud', 'drone-bar');
+  const droneFill = el('div', 'sow-hud-fill');
+  droneFill.setAttribute('data-hud', 'drone-fill');
+  droneBar.append(droneFill);
+  weaponLabel.setAttribute('data-note', '');
+  weaponLabel.style.transition = 'text-shadow 120ms linear';
+  let ind: IndicatorState = { ...INDICATOR_START };
+  let indLastMs = 0;
+  let weaponColourNow = '';
+  const paintIndicators = (): void => {
+    const d = droneView(ind);
+    const display = d.visible ? '' : 'none';
+    droneLabel.style.display = display;
+    droneBar.style.display = display;
+    if (d.visible) {
+      const op = String(Math.round(d.opacity * 100) / 100);
+      droneLabel.textContent = d.label;
+      droneLabel.style.color = d.colour;
+      droneLabel.style.opacity = op;
+      droneLabel.style.textShadow = flashGlow(d.colour, d.flash);
+      droneBar.style.opacity = op;
+      droneBar.style.borderColor = d.colour;
+      droneFill.style.background = d.colour;
+      droneFill.style.boxShadow = `0 0 ${Math.round(6 + 10 * d.flash)}px ${d.colour}`;
+      droneFill.style.width = `${Math.round(d.fraction * 1000) / 10}%`;
+    }
+    const c = combineView(ind);
+    weaponLabel.setAttribute('data-note', c.caption);
+    weaponLabel.style.textShadow = c.active && weaponColourNow !== '' ? flashGlow(weaponColourNow, c.flash) : '';
+  };
   // Boss bar (V3-A): name and phase pips on one row, a thick hit point bar under it. Hidden until a
   // boss enters. Plain divs like the weapon indicator, so it adds no pointer target.
   const bossNameEl = el('div', 'sow-hud-item', '');
@@ -361,7 +427,7 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   superName.style.fontWeight = '600';
   const superTip = el('div', 'sow-hud-item', superHint(0));
   superTip.style.opacity = '0.7';
-  root.append(bar, objLabel, score, mult, weaponBar, weaponLabel, par, bossBarEl, bossNameEl, bossPipsEl, bannerEl, lives, bombs, pause, bombRing, superRing, superName, superTip);
+  root.append(bar, objLabel, score, mult, weaponBar, weaponLabel, droneBar, droneLabel, par, bossBarEl, bossNameEl, bossPipsEl, bannerEl, lives, bombs, pause, bombRing, superRing, superName, superTip);
   parent.append(root);
   // On main the boss bar takes the level line's slot, so the line steps aside while a boss lives.
   const syncPar = (): void => {
@@ -400,6 +466,7 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
       const colour = weaponColour(p.kind);
       weaponLabel.textContent = v.label;
       weaponLabel.style.color = colour;
+      weaponColourNow = colour;
       weaponFill.style.background = colour;
       weaponFill.style.boxShadow = `0 0 6px ${colour}`;
       weaponFill.style.width = `${Math.round(v.fraction * 1000) / 10}%`;
@@ -409,6 +476,28 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
       weaponLabel.style.display = 'none';
       weaponBar.style.display = 'none';
     },
+    indicate(e) {
+      if (e.type === 'arm' || e.type === 'combine' || e.type === 'expire') {
+        // Start the clock at the event, so the flash or fade runs its full length from here.
+        if (ind.drone === null && ind.combo === null) indLastMs = now();
+      }
+      ind = reduceIndicator(ind, e);
+      if (e.type === 'combine' && weaponLabel.style.display !== 'none') weaponLabel.textContent = combineView(ind).name;
+      paintIndicators();
+    },
+    tickIndicators() {
+      const t = now();
+      const dt = (t - indLastMs) / 1000;
+      indLastMs = t;
+      if (ind.drone === null && ind.combo === null) return;
+      ind = reduceIndicator(ind, { type: 'tick', dt });
+      paintIndicators();
+    },
+    clearDrone() {
+      ind = reduceIndicator(ind, { type: 'clear' });
+      paintIndicators();
+    },
+    droneShown: () => ind.drone !== null,
     setBoss(p) {
       const v = bossView(p);
       bossUp = v.visible;
@@ -474,6 +563,8 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
       setBox(mult, B.mult, true);
       setBox(weaponLabel, B.weapon, true);
       setBox(weaponBar, B.weaponBar, false);
+      setBox(droneLabel, B.drone, true);
+      setBox(droneBar, B.droneBar, false);
       setBox(lives, B.lives, true);
       setBox(bombs, B.bombs, true);
       setBox(bar, B.bar, false);
@@ -504,7 +595,15 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
       const offScore = bus.on('hud:score', (p) => {
         hud.update(p);
         hud.tickBanner(); // the sim emits hud:score only while it steps, so a pause stops the fade
+        hud.tickIndicators(); // same clock for the drone countdown, its flash and fade, and the combine caption
       });
+      // Payload objects are reused by the sim: copy the fields into a fresh event.
+      const offArm = bus.on('fx:droneArm', (p) => hud.indicate({ type: 'arm', mode: p.mode, secondsLeft: p.secondsLeft }));
+      const offDroneHud = bus.on('hud:droneWeapon', (p) =>
+        hud.indicate({ type: 'droneHud', mode: p.mode, remaining: p.remaining, total: p.total }),
+      );
+      const offExpire = bus.on('fx:droneExpire', (p) => hud.indicate({ type: 'expire', mode: p.mode }));
+      const offCombine = bus.on('fx:weaponCombine', (p) => hud.indicate({ type: 'combine', kind: p.kind }));
       const offWeapon = bus.on('hud:weapon', (p) => {
         const g = weaponGate(gate, p, now());
         gate = g.gate;
@@ -538,6 +637,10 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
         offBoss();
         offEnter();
         offDown();
+        offArm();
+        offDroneHud();
+        offExpire();
+        offCombine();
       };
     },
   };

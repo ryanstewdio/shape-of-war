@@ -62,6 +62,28 @@ export const UI_CSS = `
 .sow-hud-fill { height: 100%; width: 0; background: hsl(95, 100%, 60%); box-shadow: 0 0 8px hsl(95, 100%, 55%); }
 .sow-hud-ring { position: absolute; border-radius: 50%; border: 2px solid hsla(190, 60%, 90%, 0.55);
   display: flex; align-items: center; justify-content: center; box-sizing: border-box; font-size: 16px; }
+.sow-hud-item[data-note]:not([data-note=""])::after { content: attr(data-note); margin-left: 0.4em;
+  font-size: 0.75em; font-weight: 500; letter-spacing: 0.02em; color: hsl(190, 60%, 92%); }
+.sow-screen.sow-menu { background: rgba(2, 4, 12, 0.38); }
+.sow-menu-panel { display: grid; box-sizing: border-box; align-items: center; justify-items: stretch;
+  background: rgba(2, 6, 16, 0.78); border: 2px solid hsl(185, 95%, 62%); border-radius: 14px;
+  outline: 2px solid hsla(300, 90%, 66%, 0.75); outline-offset: 5px;
+  box-shadow: 0 0 14px hsla(185, 95%, 55%, 0.65), inset 0 0 18px hsla(185, 95%, 55%, 0.22),
+    0 0 26px hsla(300, 90%, 60%, 0.35); }
+.sow-menu-panel .sow-title { margin: 0; text-align: center; white-space: nowrap; }
+.sow-menu-rows { display: flex; flex-direction: column; }
+.sow-btn.sow-menu-row { min-width: 0; width: 100%; padding: 0 16px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; background: rgba(6, 22, 40, 0.82); border: 2px solid hsl(185, 90%, 58%);
+  border-radius: 6px; box-shadow: 0 0 10px hsla(185, 90%, 55%, 0.55), inset 0 0 8px hsla(185, 90%, 55%, 0.25);
+  text-shadow: 0 0 6px hsla(185, 90%, 60%, 0.8); opacity: 0; animation: sow-row-in 260ms ease-out forwards; }
+.sow-btn.sow-menu-row.sow-focus { border-color: hsl(28, 100%, 62%); color: hsl(36, 100%, 88%);
+  box-shadow: 0 0 14px hsla(28, 100%, 58%, 0.8), inset 0 0 10px hsla(28, 100%, 58%, 0.35);
+  text-shadow: 0 0 8px hsla(28, 100%, 60%, 0.9); }
+.sow-menu-info { text-align: center; opacity: 0.85; white-space: pre-line; }
+.sow-menu-foot { text-align: center; opacity: 0.55; letter-spacing: 0.06em;
+  border-top: 1px solid hsla(185, 90%, 60%, 0.35); padding-top: 4px; }
+@keyframes sow-row-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .sow-btn.sow-menu-row { animation: none; opacity: 1; } }
 `;
 
 /** Insert the shared stylesheet once. */
