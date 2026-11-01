@@ -16,6 +16,9 @@ export const COOLDOWN = 0.4;
 export const SENSE_RADIUS = 140;
 export const SENSE_DOT = 0.8;
 
+/** Scratch for surface deltas. */
+const sd = { x: 0, y: 0 };
+
 /** Writes the unit dodge direction into w.vx, w.vy and returns true if a threatening bullet exists. */
 export function findThreat(w: World, id: number): boolean {
   const p = w.bullets;
@@ -26,8 +29,9 @@ export function findThreat(w: World, id: number): boolean {
     if (p.alive[i] !== 1) continue;
     const bx = p.x[i] ?? 0;
     const by = p.y[i] ?? 0;
-    const dx = ex - bx;
-    const dy = ey - by;
+    w.surface.delta(bx, by, ex, ey, sd);
+    const dx = sd.x;
+    const dy = sd.y;
     const d2 = dx * dx + dy * dy;
     if (d2 > r2 || d2 < 1e-9) continue;
     const vx = p.vx[i] ?? 0;

@@ -6,7 +6,7 @@
 // spawn rule's pull toward the arena centre.
 // Render contract: w.t is the phase in [0, CYCLE); during the warp (w.vx, w.vy) hold the
 // destination. gs(w).aux counts completed jumps.
-import { isInside } from '../arena';
+import { isInsideOn } from '../arena';
 import { enemySpeedScale, gs } from '../state';
 import { DEG, entityHash, seekShip } from '../steer';
 import { Kind, type World } from '../world';
@@ -47,7 +47,7 @@ export function chooseDestination(w: World, id: number, cycle: number): void {
     const off = ((k + 1) >> 1) * ROTATE_STEP * (k % 2 === 1 ? 1 : -1);
     const x = sx + Math.cos(base + off) * dist;
     const y = sy + Math.sin(base + off) * dist;
-    if (isInside(arena, x, y, r)) {
+    if (isInsideOn(w.surface, arena, x, y, r)) {
       w.vx[id] = x;
       w.vy[id] = y;
       return;
@@ -55,7 +55,7 @@ export function chooseDestination(w: World, id: number, cycle: number): void {
   }
   let x = sx + Math.cos(base) * dist;
   let y = sy + Math.sin(base) * dist;
-  for (let i = 0; i < 32 && !isInside(arena, x, y, r); i++) {
+  for (let i = 0; i < 32 && !isInsideOn(w.surface, arena, x, y, r); i++) {
     x *= 0.88;
     y *= 0.88;
   }

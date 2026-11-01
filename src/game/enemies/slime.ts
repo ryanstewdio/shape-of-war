@@ -46,11 +46,15 @@ export function dropSlime(w: World, owner: number, x: number, y: number): number
   return id;
 }
 
+/** Scratch for surface deltas. */
+const sd = { x: 0, y: 0 };
+
 /** True when the live ship overlaps the puddle at id. */
 export function overlapsShip(w: World, id: number): boolean {
   if (!w.ship.active) return false;
-  const dx = (w.x[0] ?? 0) - (w.x[id] ?? 0);
-  const dy = (w.y[0] ?? 0) - (w.y[id] ?? 0);
+  w.surface.delta(w.x[id] ?? 0, w.y[id] ?? 0, w.x[0] ?? 0, w.y[0] ?? 0, sd);
+  const dx = sd.x;
+  const dy = sd.y;
   const rr = (w.radius[id] ?? RADIUS) + SHIP_RADIUS;
   return dx * dx + dy * dy < rr * rr;
 }

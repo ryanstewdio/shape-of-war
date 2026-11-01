@@ -15,7 +15,7 @@ export const SHIELD_RADIUS = 26;
 
 /** True when a hit arriving from (px, py) lands on the shield (the front arc). */
 export function shieldBlocks(w: World, id: number, px: number, py: number): boolean {
-  return inFrontArc(w.x[id] ?? 0, w.y[id] ?? 0, w.rot[id] ?? 0, px, py, SHIELD_HALF_ARC);
+  return inFrontArc(w.x[id] ?? 0, w.y[id] ?? 0, w.rot[id] ?? 0, px, py, SHIELD_HALF_ARC, w.surface);
 }
 
 export function step(w: World, id: number, dt: number): void {

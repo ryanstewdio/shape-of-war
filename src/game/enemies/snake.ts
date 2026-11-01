@@ -51,6 +51,9 @@ export function spawnSnake(w: World, x: number, y: number, tele: number): number
   return head;
 }
 
+/** Scratch for surface deltas. */
+const sd = { x: 0, y: 0 };
+
 /** Place the slot's segments along its path history, SPACING apart, starting behind the head. */
 export function placeSegments(w: World, head: number, slot: number): void {
   const g = gs(w);
@@ -65,8 +68,9 @@ export function placeSegments(w: World, head: number, slot: number): void {
     idx = idx === 0 ? SNAKE_PATH - 1 : idx - 1;
     const qx = g.pathX[base + idx] ?? 0;
     const qy = g.pathY[base + idx] ?? 0;
-    const dx = qx - px;
-    const dy = qy - py;
+    w.surface.delta(px, py, qx, qy, sd);
+    const dx = sd.x;
+    const dy = sd.y;
     const d = Math.sqrt(dx * dx + dy * dy);
     while (seg < SNAKE_SEGMENTS && walked + d >= want) {
       const f = d > 1e-9 ? (want - walked) / d : 0;
@@ -84,7 +88,8 @@ export function placeSegments(w: World, head: number, slot: number): void {
 
 function setSeg(w: World, sid: number, head: number, x: number, y: number): void {
   if (sid <= 0 || w.alive[sid] !== 1 || w.kind[sid] !== Kind.SnakeBody || w.a[sid] !== head) return;
-  w.rot[sid] = Math.atan2(y - (w.y[sid] ?? 0), x - (w.x[sid] ?? 0));
+  w.surface.delta(w.x[sid] ?? 0, w.y[sid] ?? 0, x, y, sd);
+  w.rot[sid] = Math.atan2(sd.y, sd.x);
   w.x[sid] = x;
   w.y[sid] = y;
 }

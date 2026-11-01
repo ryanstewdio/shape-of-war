@@ -44,6 +44,9 @@ function dive(w: World, id: number, dt: number, scale: number): void {
   w.t[id] = hit || t >= DIVE_MAX_SEC ? 0 : t;
 }
 
+/** Scratch for surface deltas. */
+const sd = { x: 0, y: 0 };
+
 export function step(w: World, id: number, dt: number): void {
   const scale = enemySpeedScale(w);
   if (isDiving(w, id)) {
@@ -65,7 +68,8 @@ export function step(w: World, id: number, dt: number): void {
   const nd = d - radial > 0 ? d - radial : 0;
   const nth = theta + orbitDir(w, id) * angularSpeed(d) * scale * dt;
   moveTo(w, id, (w.x[0] ?? 0) + Math.cos(nth) * nd, (w.y[0] ?? 0) + Math.sin(nth) * nd);
-  const mx = (w.x[id] ?? 0) - x0;
-  const my = (w.y[id] ?? 0) - y0;
+  w.surface.delta(x0, y0, w.x[id] ?? 0, w.y[id] ?? 0, sd);
+  const mx = sd.x;
+  const my = sd.y;
   if (mx * mx + my * my > 1e-12) w.rot[id] = Math.atan2(my, mx);
 }

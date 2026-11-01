@@ -11,7 +11,7 @@
 // The pickup and the twin are stepped here (no registered behaviour), so nothing else changes.
 import { bus, DRONE_MODES, type DroneMode } from '../core/events';
 import { hash01 } from '../core/rng';
-import { confine, createConfineResult } from './arena';
+import { confineOn, createConfineResult } from './arena';
 import { BULLET_LIFE, BULLET_SPEED, spawnBullet, STYLE_RAPID } from './bullets';
 import { BOSS_DAMAGE } from './bosses/table';
 import { isBossTarget } from './bosses/core';
@@ -40,6 +40,9 @@ export const RAM_RETURN = 900;
 export const RAM_DAMAGE = 2;
 export const RAM_COOLDOWN = 1.2;
 
+/** Scratch for surface deltas; read both fields before the next call. */
+const sd = { x: 0, y: 0 };
+
 /** Nearest targetable enemy to (x, y) within range, excluding snake segments and wells. -1 if none. */
 export function nearestEnemy(w: World, x: number, y: number, range: number): number {
   let best = -1;
@@ -48,9 +51,8 @@ export function nearestEnemy(w: World, x: number, y: number, range: number): num
     if (!isTargetable(w, id) && !isBossTarget(w, id)) continue;
     const k = w.kind[id] ?? 0;
     if (k === Kind.SnakeBody || k === Kind.GravityWell) continue;
-    const dx = (w.x[id] ?? 0) - x;
-    const dy = (w.y[id] ?? 0) - y;
-    const d2 = dx * dx + dy * dy;
+    w.surface.delta(x, y, w.x[id] ?? 0, w.y[id] ?? 0, sd);
+    const d2 = sd.x * sd.x + sd.y * sd.y;
     if (d2 <= bestD) {
       bestD = d2;
       best = id;
@@ -79,8 +81,9 @@ function stepAttack(w: World, id: number, dt: number): void {
     g.droneCooldown = 0;
     return;
   }
-  const dx = (w.x[target] ?? 0) - x;
-  const dy = (w.y[target] ?? 0) - y;
+  w.surface.delta(x, y, w.x[target] ?? 0, w.y[target] ?? 0, sd);
+  const dx = sd.x;
+  const dy = sd.y;
   const d = Math.sqrt(dx * dx + dy * dy);
   if (d > 1e-6) spawnBullet(w.bullets, x, y, (dx / d) * BULLET_SPEED, (dy / d) * BULLET_SPEED, BULLET_LIFE);
   g.droneCooldown += 1 / ATTACK_RATE;
@@ -97,8 +100,9 @@ function stepCollect(w: World, id: number): void {
   const m2 = COLLECT_MAGNET * COLLECT_MAGNET;
   for (let i = 1; i < w.cap; i++) {
     if (w.alive[i] !== 1 || w.kind[i] !== Kind.Geom) continue;
-    const dx = x - (w.x[i] ?? 0);
-    const dy = y - (w.y[i] ?? 0);
+    w.surface.delta(w.x[i] ?? 0, w.y[i] ?? 0, x, y, sd);
+    const dx = sd.x;
+    const dy = sd.y;
     const d2 = dx * dx + dy * dy;
     if (d2 > m2 || d2 < 1e-9) continue;
     const d = Math.sqrt(d2);
@@ -109,8 +113,9 @@ function stepCollect(w: World, id: number): void {
 }
 
 function moveToward(w: World, id: number, tx: number, ty: number, speed: number, dt: number): number {
-  const dx = tx - (w.x[id] ?? 0);
-  const dy = ty - (w.y[id] ?? 0);
+  w.surface.delta(w.x[id] ?? 0, w.y[id] ?? 0, tx, ty, sd);
+  const dx = sd.x;
+  const dy = sd.y;
   const d = Math.sqrt(dx * dx + dy * dy);
   if (d < 1e-6) return 0;
   const s = Math.min(d, speed * dt);
@@ -356,7 +361,7 @@ const postRes = createConfineResult();
 /** The detach post: DETACH_POST from the ship along the aim (the facing if the stick is idle), inside the arena. */
 function setPost(w: World, s: DroneArmState): void {
   const a = w.ship.firing ? w.ship.aimAngle : (w.rot[0] ?? 0);
-  const r = confine(w.level.arena, (w.x[0] ?? 0) + Math.cos(a) * DETACH_POST, (w.y[0] ?? 0) + Math.sin(a) * DETACH_POST, def.radius, postRes);
+  const r = confineOn(w.surface, w.level.arena, (w.x[0] ?? 0) + Math.cos(a) * DETACH_POST, (w.y[0] ?? 0) + Math.sin(a) * DETACH_POST, def.radius, postRes);
   s.postX = r.x;
   s.postY = r.y;
 }
@@ -424,8 +429,9 @@ function stepDronePickup(w: World, dt: number): void {
   }
   w.t[id] = t;
   if (!w.ship.active) return;
-  const dx = (w.x[0] ?? 0) - (w.x[id] ?? 0);
-  const dy = (w.y[0] ?? 0) - (w.y[id] ?? 0);
+  w.surface.delta(w.x[id] ?? 0, w.y[id] ?? 0, w.x[0] ?? 0, w.y[0] ?? 0, sd);
+  const dx = sd.x;
+  const dy = sd.y;
   if (dx * dx + dy * dy > DRONE_PICKUP_COLLECT * DRONE_PICKUP_COLLECT) return;
   const mode = DRONE_MODES[w.a[id] ?? 0] ?? 'homing';
   const x = w.x[id] ?? 0;
@@ -439,8 +445,9 @@ function stepDronePickup(w: World, dt: number): void {
 function armedShot(w: World, x: number, y: number, mode: DroneMode): boolean {
   const target = nearestEnemy(w, x, y, ATTACK_RANGE);
   if (target < 0) return false;
-  const dx = (w.x[target] ?? 0) - x;
-  const dy = (w.y[target] ?? 0) - y;
+  w.surface.delta(x, y, w.x[target] ?? 0, w.y[target] ?? 0, sd);
+  const dx = sd.x;
+  const dy = sd.y;
   const d = Math.sqrt(dx * dx + dy * dy);
   if (d <= 1e-6) return false;
   const b = spawnBullet(w.bullets, x, y, (dx / d) * BULLET_SPEED, (dy / d) * BULLET_SPEED, BULLET_LIFE);

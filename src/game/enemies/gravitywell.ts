@@ -248,13 +248,15 @@ export function explode(w: World, well: number): void {
     if (w.alive[id] !== 1) continue;
     const k = w.kind[id] ?? 0;
     if (!isHostile(k) || k === Kind.GravityWell) continue;
-    const dx = (w.x[id] ?? 0) - x;
-    const dy = (w.y[id] ?? 0) - y;
+    w.surface.delta(x, y, w.x[id] ?? 0, w.y[id] ?? 0, sd);
+    const dx = sd.x;
+    const dy = sd.y;
     if (dx * dx + dy * dy <= r2) removeEntity(w, id);
   }
   if (w.ship.active && w.ship.invuln <= 0) {
-    const dx = (w.x[0] ?? 0) - x;
-    const dy = (w.y[0] ?? 0) - y;
+    w.surface.delta(x, y, w.x[0] ?? 0, w.y[0] ?? 0, sd);
+    const dx = sd.x;
+    const dy = sd.y;
     if (dx * dx + dy * dy <= r2) killShip(w);
   }
   emitKill(g, x, y, def.colour, Kind.GravityWell, well);
@@ -282,6 +284,9 @@ function pullExempt(w: World, id: number): boolean {
   return (k === Kind.Charger && isDashing(w, id)) || (k === Kind.Sower && isRoaming(w, id));
 }
 
+/** Scratch for surface deltas; read both fields before the next call. */
+const sd = { x: 0, y: 0 };
+
 /** One well: ship contact and pull, bullet hits and pull, enemy feeding and pull. */
 function stepOneWell(w: World, well: number, dt: number, blend: number, nova: boolean): void {
   const g = gs(w);
@@ -292,8 +297,9 @@ function stepOneWell(w: World, well: number, dt: number, blend: number, nova: bo
   const mult = nova ? NOVA_PULL_MULT : 1;
 
   if (w.ship.active) {
-    const dx = wx - (w.x[0] ?? 0);
-    const dy = wy - (w.y[0] ?? 0);
+    w.surface.delta(w.x[0] ?? 0, w.y[0] ?? 0, wx, wy, sd);
+    const dx = sd.x;
+    const dy = sd.y;
     const d = Math.sqrt(dx * dx + dy * dy);
     const touch = (w.radius[well] ?? 0) + SHIP_RADIUS;
     if (d < touch && w.ship.invuln <= 0) {
@@ -311,8 +317,9 @@ function stepOneWell(w: World, well: number, dt: number, blend: number, nova: bo
     // Orbit blades are placed from the ship: no pull, and they meet wells in orbitHits instead.
     const style = p.style[b] ?? STYLE_SPREAD;
     if (style === STYLE_ORBIT) continue;
-    const dx = wx - (p.x[b] ?? 0);
-    const dy = wy - (p.y[b] ?? 0);
+    w.surface.delta(p.x[b] ?? 0, p.y[b] ?? 0, wx, wy, sd);
+    const dx = sd.x;
+    const dy = sd.y;
     const d2 = dx * dx + dy * dy;
     if (d2 >= pr2) continue;
     const d = Math.sqrt(d2);
@@ -338,8 +345,9 @@ function stepOneWell(w: World, well: number, dt: number, blend: number, nova: bo
 
   for (let id = 1; id < w.cap; id++) {
     if (w.alive[id] !== 1 || !pulledByWell(w.kind[id] ?? 0) || (g.tele[id] ?? 0) > 0) continue;
-    const dx = wx - (w.x[id] ?? 0);
-    const dy = wy - (w.y[id] ?? 0);
+    w.surface.delta(w.x[id] ?? 0, w.y[id] ?? 0, wx, wy, sd);
+    const dx = sd.x;
+    const dy = sd.y;
     const d2 = dx * dx + dy * dy;
     if (d2 >= pr2) continue;
     const d = Math.sqrt(d2);
