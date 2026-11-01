@@ -2,6 +2,8 @@
 // emergence by wellArrive.ts emergeTrack) is tracked for its whole life and drawn with a white core
 // line down its body and a faint shimmer running along it, so it reads as different from a normal
 // snake. Pure state and maths only (no pixi.js, no PRNG); the renderer owns the Graphics.
+// GW4: the shimmer dots are replaced by NOVA_SNAKE_GLINTS gem glints (gemGlint.ts) travelling down
+// the body, each popping in and out with its own prismatic hue and white hot centre.
 
 function fin(v: number, d: number): number {
   return Number.isFinite(v) ? v : d;
@@ -17,6 +19,18 @@ export const NOVA_SNAKE_GLOW_HZ = 1.7;
 export const NOVA_SNAKE_CORE_W = 2;
 export const NOVA_SNAKE_CORE_A = 0.85;
 export const NOVA_SNAKE_GLOW_W = 7;
+/** GW4: gem glints travelling along the body at any time (3 to 5), and their peak arm length (u). */
+export const NOVA_SNAKE_GLINTS = 4;
+export const NOVA_SNAKE_GLINT_SIZE = 7;
+
+/**
+ * Pure: share along the body (0 head, 1 tail) of glint k at timeSec for head hash h: the glints are
+ * spread evenly down the body and travel tailward at NOVA_SNAKE_SHIMMER_HZ body lengths per second.
+ */
+export function novaSnakeGlintShare(timeSec: number, h: number, k: number): number {
+  const p = fin(timeSec, 0) * NOVA_SNAKE_SHIMMER_HZ + (k | 0) / NOVA_SNAKE_GLINTS + fin(h, 0);
+  return p - Math.floor(p);
+}
 
 export interface NovaSnakeState {
   /** Entity index of each tracked head, -1 for a free slot. */

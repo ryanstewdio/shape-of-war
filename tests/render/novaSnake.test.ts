@@ -99,3 +99,26 @@ describe('nova snake shimmer', () => {
     expect(body).not.toMatch(/new (Float32Array|Array)|\.clear\(/);
   });
 });
+
+describe('GW4 nova snake glints', () => {
+  it('3 to 5 glints spread down the body and travel tailward', async () => {
+    const m = await import('../../src/render/novaSnake');
+    expect(m.NOVA_SNAKE_GLINTS).toBeGreaterThanOrEqual(3);
+    expect(m.NOVA_SNAKE_GLINTS).toBeLessThanOrEqual(5);
+    const a = m.novaSnakeGlintShare(1, 0.3, 0);
+    const b = m.novaSnakeGlintShare(1.05, 0.3, 0);
+    expect(b).toBeGreaterThan(a);
+    const shares = new Set<string>();
+    for (let k = 0; k < m.NOVA_SNAKE_GLINTS; k++) shares.add(m.novaSnakeGlintShare(2, 0.1, k).toFixed(3));
+    expect(shares.size).toBe(m.NOVA_SNAKE_GLINTS);
+  });
+
+  it('the renderer draws glints, not the old dots, along nova snakes', () => {
+    const src = readFileSync(new URL('../../src/render/renderer.ts', import.meta.url), 'utf8');
+    const i = src.indexOf('function drawNovaSnakes(');
+    const body = src.slice(i, src.indexOf('\n  }\n', i));
+    expect(body).toMatch(/drawGlint\(/);
+    expect(body).toMatch(/NOVA_SNAKE_GLINTS/);
+    expect(body).not.toMatch(/novaSnakeDot\(/);
+  });
+});

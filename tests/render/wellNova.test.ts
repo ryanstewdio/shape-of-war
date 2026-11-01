@@ -8,6 +8,7 @@ import {
   CALM_RATE,
   createNovaState,
   NOVA_ADDED_PARTICLES_MAX,
+  NOVA_GLINTS,
   NOVA_CYCLE_SEC,
   NOVA_DRAWS_PER_WELL,
   NOVA_HUES,
@@ -196,7 +197,7 @@ describe('whirlpool budget and renderer', () => {
   it('60 to 90 dust motes, at most 96 particles in all, at most 3 gas layers, one draw per well', () => {
     expect(WHIRL_MOTES).toBeGreaterThanOrEqual(60);
     expect(WHIRL_MOTES).toBeLessThanOrEqual(90);
-    expect(novaAddedParticles()).toBe(WHIRL_MOTES + WHIRL_SPARKS + WHIRL_WISPS);
+    expect(novaAddedParticles()).toBe(WHIRL_MOTES + WHIRL_SPARKS + WHIRL_WISPS + NOVA_GLINTS);
     expect(WHIRL_GAS_LAYERS).toBeLessThanOrEqual(3);
     expect(novaAddedParticles()).toBeLessThanOrEqual(NOVA_ADDED_PARTICLES_MAX);
     expect(NOVA_ADDED_PARTICLES_MAX).toBe(96);
@@ -425,5 +426,28 @@ describe('GW3 fluid flow', () => {
       }
     }
     expect(checked).toBeGreaterThan(WHIRL_WISPS);
+  });
+});
+
+describe('GW4 nova glints and shader tier', () => {
+  it('glint spots stay inside the whirlpool and ride the flow', async () => {
+    const m = await import('../../src/render/wellNova');
+    const p = { x: 0, y: 0 };
+    for (let i = 0; i < 20; i++) {
+      m.novaGlintSpot(i / 20, (i * 7) % 20 / 20, 1.3, 4, 300, p);
+      const r = Math.hypot(p.x, p.y);
+      expect(r).toBeLessThanOrEqual(300 * m.NOVA_GLINT_U1 + 1e-6);
+      expect(r).toBeGreaterThanOrEqual(300 * m.whirlShare(m.NOVA_GLINT_U0) - 1e-6);
+    }
+    expect(m.NOVA_GLINTS).toBeGreaterThan(0);
+  });
+
+  it('the renderer uses the shader quad on Standard and High and the geometry on Low', () => {
+    const src = readFileSync(new URL('../../src/render/renderer.ts', import.meta.url), 'utf8');
+    const i = src.indexOf('function drawNova(');
+    const body = src.slice(i, src.indexOf('\n  }\n', i));
+    expect(body).toMatch(/fluidShaderOn\(getEffectsTier\(\)\)/);
+    expect(body).toMatch(/fluid\.set\(slot, fluidP\)/);
+    expect(body).toMatch(/drawGlint\(/);
   });
 });

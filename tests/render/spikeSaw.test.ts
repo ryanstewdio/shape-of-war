@@ -3,19 +3,25 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { SAW_SPIKE_MAX, SPIKE_LEN } from '../../src/game/weapons';
 import {
+  nearTooth,
   SAW_CHAIN_MAX,
+  SAW_SPARKS_MAX,
+  SAW_SPARKS_MIN,
   sawChain,
   sawChainAlpha,
+  sawSparkCount,
+  sawTrackGhost,
+  SPIKE_GHOST_GAP,
   SPIKE_GHOSTS,
   SPIKE_HALF,
   SPIKE_MAX,
   SPIKE_REST,
+  SPIKE_TIP,
   spikeDrawLen,
-  spikeGhost,
   spikeHalfWidth,
-  spikeSpin,
   spikeStretch,
   spikeTriangle,
+  toothTip,
   type SpikePose,
 } from '../../src/render/spikeSaw';
 
@@ -61,23 +67,71 @@ describe('spike saw', () => {
     expect(spikeHalfWidth(1)).toBeLessThan(SPIKE_HALF);
   });
 
-  it('ghosts sit behind the spin direction and only spread while stretched', () => {
-    const g: SpikePose = { x: 0, y: 0, vx: 0, vy: 0 };
-    // Ship at origin, spike at (50, 0) moving +y: clockwise on screen, spin +1.
-    expect(spikeSpin(0, 0, 50, 0, 0, 10)).toBe(1);
+  it('GW4 motion blur: ghosts slide back along the track, not round the ship, only while sawing', () => {
+    const g: SpikePose = { x: 0, y: 0 };
     expect(SPIKE_GHOSTS).toBe(2);
-    spikeGhost(0, 0, 50, 0, 0, 10, 1, 1, g);
-    expect(g.y).toBeLessThan(0);
-    expect(Math.hypot(g.x, g.y)).toBeCloseTo(50);
-    const g2: SpikePose = { x: 0, y: 0, vx: 0, vy: 0 };
-    spikeGhost(0, 0, 50, 0, 0, 10, 2, 1, g2);
-    expect(g2.y).toBeLessThan(g.y);
-    spikeGhost(0, 0, 50, 0, 0, 10, 1, 0, g);
+    // Tooth at (50, 0) travelling +y along its track: ghosts sit behind it on the same line.
+    sawTrackGhost(50, 0, 0, 1, 1, 1, g);
     expect(g.x).toBeCloseTo(50);
+    expect(g.y).toBeCloseTo(-SPIKE_GHOST_GAP);
+    const g2: SpikePose = { x: 0, y: 0 };
+    sawTrackGhost(50, 0, 0, 1, 2, 1, g2);
+    expect(g2.x).toBeCloseTo(50);
+    expect(g2.y).toBeCloseTo(-2 * SPIKE_GHOST_GAP);
+    // A straight slide: the ghost is not at the same distance from the ship as a turned copy would be.
+    expect(Math.hypot(g2.x, g2.y)).toBeGreaterThan(50);
+    // Unnormalised directions slide the same distance; saw level 0 stacks the ghost on the tooth.
+    sawTrackGhost(50, 0, 0, 10, 1, 1, g);
+    expect(g.y).toBeCloseTo(-SPIKE_GHOST_GAP);
+    sawTrackGhost(50, 0, 0, 1, 1, 0, g);
     expect(g.y).toBeCloseTo(0);
-    // Counter clockwise spin puts the ghost on the other side.
-    spikeGhost(0, 0, 50, 0, 0, -10, 1, 1, g);
-    expect(g.y).toBeGreaterThan(0);
+    sawTrackGhost(Number.NaN, 0, 0, 0, 1, 1, g);
+    expect(Number.isFinite(g.x)).toBe(true);
+  });
+
+  it('GW4 tooth tip: a smaller triangle at the tip, SPIKE_TIP of the way down each side', () => {
+    const tri = spikeTriangle(0, 0, 1, 0, 30, 4, new Float32Array(6));
+    const tip = toothTip(tri, new Float32Array(6));
+    expect(tip[0]).toBeCloseTo(15);
+    expect(tip[1]).toBeCloseTo(0);
+    expect(tip[2]).toBeCloseTo(15 - 30 * SPIKE_TIP);
+    expect(tip[3]).toBeCloseTo(4 * SPIKE_TIP);
+    expect(tip[5]).toBeCloseTo(-4 * SPIKE_TIP);
+  });
+
+  it('GW4 hit sparks: 2 to 4 per hit, only for hits near a tooth', () => {
+    const seen = new Set<number>();
+    for (let i = -5; i < 20; i++) {
+      const n = sawSparkCount(i);
+      expect(n).toBeGreaterThanOrEqual(SAW_SPARKS_MIN);
+      expect(n).toBeLessThanOrEqual(SAW_SPARKS_MAX);
+      seen.add(n);
+    }
+    expect(SAW_SPARKS_MIN).toBe(2);
+    expect(SAW_SPARKS_MAX).toBe(4);
+    expect(seen.size).toBe(3);
+    const xs = new Float32Array(16);
+    const ys = new Float32Array(16);
+    xs[8] = 100;
+    ys[8] = 0;
+    expect(nearTooth(110, 0, xs, ys, 8, 1, 20)).toBe(true);
+    expect(nearTooth(110, 0, xs, ys, 0, 1, 20)).toBe(false);
+    expect(nearTooth(200, 0, xs, ys, 8, 1, 20)).toBe(false);
+    expect(nearTooth(0, 0, xs, ys, 8, 0, 20)).toBe(false);
+  });
+
+  it('GW4 renderer: both rings are teeth, no near white chain, the bar is drawn in the weapon hue', () => {
+    const src = readFileSync(new URL('../../src/render/renderer.ts', import.meta.url), 'utf8');
+    expect(src).not.toMatch(/spikeMask\[i\] === 1/);
+    const i = src.indexOf('function drawSawChain(');
+    const body = src.slice(i, src.indexOf('\n  }\n', i));
+    expect(body).not.toMatch(/0xffffff/);
+    expect(body).toMatch(/color: sawTint/);
+    const t = src.indexOf('function drawSawTooth(');
+    const tooth = src.slice(t, src.indexOf('\n  }\n', t));
+    expect(tooth).toMatch(/sawTrackGhost\(/);
+    expect(tooth).not.toMatch(/circle\(/);
+    expect(src).toMatch(/sawSparks\(x, y\)/);
   });
 
   it('the renderer reads spikeLen for orbit spikes', () => {

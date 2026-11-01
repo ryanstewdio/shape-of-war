@@ -9,6 +9,10 @@
 // one shared Graphics. GW3 fluid: soft white gas fills the space between the bands (layered filled
 // spiral sectors, denser toward the core), the bands shear and wobble with low frequency noise,
 // wisps peel off the band edges and stretch along the flow, and motes carry slight turbulence.
+// GW4 fluid plus crystal: on Standard and High the gas, bands and wisps are one shader quad per nova
+// (wellFluid.ts, wellFluidView.ts); Low keeps this geometry path. On every tier the coloured spark
+// motes stay on top, steady, and the shimmer is NOVA_GLINTS gem glints (gemGlint.ts) popping in and
+// out on the flow.
 import type { Bus, EventKey } from '../core/events';
 import { hash01, hslToRgbInt } from './color';
 import { mixRgb } from './mapFx';
@@ -24,7 +28,7 @@ export const NOVA_SLOTS = 4;
 export const NOVA_WHITE: number = hslToRgbInt(0, 0, 0.95);
 /** Eruption flare: the whirlpool grows in over this many seconds. */
 export const NOVA_GROW_SEC = 0.35;
-/** Particles a nova may add in all (dust motes plus shimmer sparks), and its Graphics rebuilds per frame. */
+/** Particles a nova may add in all (dust motes, spark motes, wisps and glints), and its Graphics rebuilds per frame. */
 export const NOVA_ADDED_PARTICLES_MAX = 96;
 export const NOVA_DRAWS_PER_WELL = 1;
 
@@ -52,9 +56,14 @@ export const WHIRL_DASHES = 3;
 /** Dash length as a share of the rim to core path. */
 export const WHIRL_DASH_U = 0.14;
 /** Dust motes, multicolour shimmer sparks and peeling gas wisps per nova. */
-export const WHIRL_MOTES = 72;
+export const WHIRL_MOTES = 64;
 export const WHIRL_SPARKS = 16;
 export const WHIRL_WISPS = 8;
+/** GW4 gem glints per nova, their peak arm length (u) and the flow share band they pop in. */
+export const NOVA_GLINTS = 8;
+export const NOVA_GLINT_SIZE = 12;
+export const NOVA_GLINT_U0 = 0.12;
+export const NOVA_GLINT_U1 = 0.9;
 
 // GW3 fluid flow. The bands and motes ride one shear field per well: a phase offset that grows from
 // zero at the rim to WHIRL_SHEAR at the core and drifts with low frequency noise, so the inner flow
@@ -168,9 +177,23 @@ export function novaStreamColour(stops: Uint32Array, base: number, seq: number, 
   return novaColour(stops, base, u - fin(timeSec, 0) / NOVA_CYCLE_SEC, timeSec, shift);
 }
 
-/** Pure: particles one nova adds at most: the dust motes, the shimmer sparks and the wisps. */
+/** Pure: particles one nova adds at most: the dust motes, the spark motes, the wisps (Low) and the glints. */
 export function novaAddedParticles(): number {
-  return WHIRL_MOTES + WHIRL_SPARKS + WHIRL_WISPS;
+  return WHIRL_MOTES + WHIRL_SPARKS + WHIRL_WISPS + NOVA_GLINTS;
+}
+
+/**
+ * Pure: where a glint with hashed shares (a, b) sits in well id's flow at timeSec within reach,
+ * about the origin, written into out: flow share NOVA_GLINT_U0 to NOVA_GLINT_U1 from b, on the
+ * sheared spiral that starts at angle a x 2 pi, so it rides the flow for its short life.
+ */
+export function novaGlintSpot(a: number, b: number, timeSec: number, id: number, reach: number, out: { x: number; y: number }): { x: number; y: number } {
+  const u = NOVA_GLINT_U0 + (NOVA_GLINT_U1 - NOVA_GLINT_U0) * Math.max(0, Math.min(1, fin(b, 0)));
+  const r = whirlRadius(u, reach);
+  const an = whirlFlowAngle(u, timeSec, fin(a, 0) * Math.PI * 2, id);
+  out.x = Math.cos(an) * r;
+  out.y = Math.sin(an) * r;
+  return out;
 }
 
 export interface NovaState {
