@@ -94,6 +94,11 @@ export const BASE_PALETTE = {
    * second rim and the white core (bossShapes.ts), which a well never has at this scale.
    */
   bossRed: [4, 1.0, 0.62],
+  /**
+   * GW6 Tempestling: the Tempest red cooled. Hue moved 25 degrees toward the Tempest accent (cyan,
+   * the short way round, so 4 to 339), saturation x0.8 and lightness x0.9 of bossRed.
+   */
+  tempestling: [339, 0.8, 0.558],
   /** Tier 4 boss (Prism): a shimmering multicolour, so a base hue is only the fallback tint. */
   bossPrism: [190, 0.8, 0.7],
   /** Drone pickup (Kind.DronePickup). Placeholder, apart from the weapon pickup white. */

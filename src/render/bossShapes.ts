@@ -739,7 +739,7 @@ export function tempestlingSpec(tier: number): ShapeSpec {
   const R = tempestlingR();
   const w = 1.6 * tierWeight(tier);
   const hm = tierHaloMul(tier);
-  const c = bossColourOf(BOSS_TEMPEST);
+  const c: PaletteKey = 'tempestling';
   const streamers: ShapePrim[] = [1, -1].map((s) => ({
     t: 'line' as const,
     pts: [r2(0.15 * R), r2(s * TEMPEST_WING * R), r2(-1.05 * R), r2(s * 0.5 * R)],
