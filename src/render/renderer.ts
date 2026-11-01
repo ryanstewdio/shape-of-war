@@ -86,8 +86,9 @@ import {
 } from './particles';
 import { addRipple, stepRipples, traceRippledGrid, type Ripple } from './ripple';
 import { addShake, createShake, stepShake } from './shake';
-import { buildBloomSourceContext, buildGlowSourceContext, contextForSlot, rebuildShapeContexts } from './shapes';
+import { buildBloomSourceContext, buildContext, buildGlowSourceContext, contextForSlot, rebuildShapeContexts } from './shapes';
 import type { GraphicsContext } from 'pixi.js';
+import type { ShapeSpec } from './shapeSpecs';
 import { exposedBossSlot, MAX_SLOT, PICKUP_KIND, PICKUP_SPIN, pickupAlpha, specForSlot, visualSlot } from './shapeSpecs';
 import {
   ATLAS_CELLS,
@@ -96,6 +97,9 @@ import {
   BULLET_FRAMES,
   bulletStyleVisual,
   crescentPoints,
+  SPIKE_CODE,
+  spikePoints,
+  spikeVisual,
   PICKUP_BURST_COUNT,
   styleCode,
   visualForCode,
@@ -251,7 +255,7 @@ import {
   type WallFeature,
 } from './mapFx';
 import { burstBoss, burstSmall, emitBlinkStreak, emitDeflectSparks, emitEnemyTrail, emitGeomSparkle, emitNovaShimmer, trailsActive } from './particles';
-import { bossSlot, isFloorSlot, KIND_NUM, partSlot, partVisualSlot, specFor } from './shapeSpecs';
+import { bossSlot, DRONE_KIND_NUM, isFloorSlot, KIND_NUM, partSlot, partVisualSlot, specFor } from './shapeSpecs';
 // v31: Brood's split into Broodlings (sim:bossSplit): the green shard burst (bossSplit.ts).
 import {
   SPLIT_LIFE_MAX,
@@ -285,6 +289,23 @@ import { createBossView, readBoss, type BossView } from '../game/bosses/view';
 import { bossOpen as simBossOpen } from '../game/bosses/core';
 import { bossOf } from '../game/bosses/state';
 import { enemyBulletsOf } from '../game/enemyBullets';
+import { shieldOf, weaponState } from '../game/weapons';
+import { Detach, droneArm } from '../game/drones';
+import type { DroneMode } from '../core/events';
+import {
+  decoyPulse,
+  decoyTint,
+  dronePickupRot,
+  DRONE_MODE_LOOKS,
+  glyphDots,
+  glyphSegments,
+  GLYPH_HALF,
+  GLYPH_LIFT,
+  MODE_RING_R,
+  partJitter,
+  type DroneGlyph,
+} from './partLooks';
+import { NOVA_RADIUS, PULL_RADIUS, wellInNova } from '../game/enemies/gravitywell';
 import { BOSS_IDS } from '../levelgen/leveldef';
 import {
   approach,
@@ -319,6 +340,7 @@ import {
   bossBodyR,
   bossCoreFrac,
   EMBER_NOSE,
+  isBakedPart,
   isBroodlingPart,
   isTwinPart,
   MIRAGE_SHIELD,
@@ -431,8 +453,6 @@ import {
   crackEvent,
   FRAG_PTS,
   fragmentPts,
-  FRAGS_PER_STAGE,
-  GAPS_PER_STAGE,
   hitFlashAlpha,
   hitSparkCount,
   onBossCrack,
@@ -442,6 +462,9 @@ import {
   pieceDrift,
   pieceSpin,
   PIECE_LIFE,
+  PIECES_MAX,
+  newArcRange,
+  BREAK_SETTLE_SEC,
   resetBossCracks,
   stepBossCracks,
   type AccentPart,
@@ -457,17 +480,23 @@ import {
   windowWhite,
   type WindowRing,
 } from './bossIdentity';
-// Look v32: crack layout and damage maths, the Ember flame body, the nova colour cycle.
-import { dimRgb, FRACTURE_BRIGHTNESS, FRACTURE_ORIGIN_R, FRACTURE_PTS, fractureGrow, fracturePointAt, GAP_CUT, outlineFlicker, SCORCH_CUT, shoulderDim } from './bossDamage';
+// Look v33: damage by incompleteness (no dark paint), the Ember flame body, the nova colour cycle.
+import { DETACH_ARC, damageColours, damagedSpec, EDGE_SPAN, edgeFlicker, STUB_LEN, type DamageColours } from './bossDamage';
 import { EMBER_TONGUES, FLAME_BANDS, FLAME_STOP_COUNT, flameAt, flameColour, flameStops, flameTongue, TONGUE_FLOATS } from './emberFlame';
 import {
   createNovaState,
   NOVA_ARM_PTS,
   NOVA_ARMS,
+  NOVA_WHITE,
   NOVA_HUES,
-  novaColour,
   novaCycleStops,
-  novaHaloR,
+  novaStreamColour,
+  novaArmPulse,
+  novaCoreFlare,
+  novaRingR,
+  novaWhite,
+  NOVA_RING_ALPHA,
+  NOVA_RING_WIDTH,
   novaPulse,
   novaShift,
   NOVA_ORBITERS,
@@ -688,6 +717,15 @@ function makeBulletAtlas(app: Application): BulletAtlas {
   }
   g.poly(pts, true).stroke({ width: 4, color: 0xffffff, alpha: 0.28, join: 'round' });
   g.poly(pts, true).fill({ color: 0xffffff, alpha: 1 });
+  // Look v33 spike: a sharp triangle, nose toward +x, with a soft rim.
+  const sk = ATLAS_CELLS.spike;
+  const spk = spikePoints(14, 5);
+  for (let i = 0; i < spk.length; i += 2) {
+    spk[i] = (spk[i] ?? 0) + sk.x + sk.w / 2;
+    spk[i + 1] = (spk[i + 1] ?? 0) + sk.y + sk.h / 2;
+  }
+  g.poly(spk, true).stroke({ width: 3, color: 0xffffff, alpha: 0.3, join: 'miter' });
+  g.poly(spk, true).fill({ color: 0xffffff, alpha: 1 });
   const texture = app.renderer.generateTexture({
     target: g,
     frame: new Rectangle(0, 0, ATLAS_W, ATLAS_H),
@@ -1079,9 +1117,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let bossFlashAge = Number.POSITIVE_INFINITY;
   let bossSparkSeq = 0;
   const bossCracks = createBossCracks();
-  // v31: outline fragments, FRAGS_PER_STAGE per stage, each a short polyline (world units, relative
-  // to its centre, already rotated into the world) that drifts out, tumbles and fades.
-  const PIECES = FRAGS_PER_STAGE * 2;
+  // v33: outline fragments, one per removed arc, each a polyline (world units, relative to its
+  // centre, already rotated into the world) that drifts out, tumbles and fades in the boss colours.
+  const PIECES = PIECES_MAX;
   const pieceAge = new Float64Array(PIECES).fill(Number.POSITIVE_INFINITY);
   const pieceX = new Float64Array(PIECES);
   const pieceY = new Float64Array(PIECES);
@@ -1098,6 +1136,21 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const nova = createNovaState();
   const novaEm: { acc: number }[] = Array.from({ length: NOVA_SLOTS }, () => ({ acc: 0 }));
   const novaG = new Graphics({ label: 'wellNova' });
+  // Look v33: drone mode glyph over the drone and the thin mode ring round the ship, one Graphics
+  // rebuilt only while a drone mode is armed. Buzz scratch and the drawn drone and ship positions.
+  const droneFx = new Graphics({ label: 'droneMode' });
+  let droneFxShown = false;
+  let droneDecoyOut = false;
+  let droneDrawX = 0;
+  let droneDrawY = 0;
+  let droneDrawn = false;
+  let twinDrawX = 0;
+  let twinDrawY = 0;
+  let twinDrawn = false;
+  let shipDrawX = 0;
+  let shipDrawY = 0;
+  let shipDrawn = false;
+  const partJit = { x: 0, y: 0 };
   let novaShown = false;
   const winRing: WindowRing = { r: 0, alpha: 0, width: 0 };
   const BODIES = 3;
@@ -1109,10 +1162,16 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let bossSeen = false;
   const bossUnder = new Graphics({ label: 'bossUnder' });
   const bossOver = new Graphics({ label: 'bossOver' });
-  // Look v32: crack gaps, scorch and the stage 2 flicker take light away from the boss outline with
-  // the erase blend (no dark paint), drawn just before bossOver so the fracture glow sits on top.
-  const bossErase = new Graphics({ label: 'bossErase' });
-  bossErase.blendMode = 'erase';
+  // Look v33: the damaged boss body. A copy of the body context with the removed arcs cut out of
+  // the geometry (bossDamage.ts damagedSpec), and its glow texture, rebuilt only when the slot, the
+  // stage or the neon settings change. Keyed by slot x 3 + stage.
+  let dmgCtx: GraphicsContext | null = null;
+  let dmgTex: Texture | null = null;
+  let dmgKey = -1;
+  let dmgTexKey = -1;
+  let levelSeed = 0;
+  const dmgCol: DamageColours = { edge: 0xffffff, stub: 0xffffff, frag: 0xffffff };
+  const DAMAGE_ACCENT_PARTS: readonly AccentPart[] = ['core', 'rim', 'tips', 'axis', 'tail', 'turrets', 'pods', 'sparks', 'split', 'centre', 'coreA', 'coreB'];
   // Look v32 scratch: Ember flame tongues and stop colours, the nova cycle stops (no per frame allocation).
   const flamePts = new Float32Array(EMBER_TONGUES * TONGUE_FLOATS);
   const flameRgb = new Uint32Array(FLAME_STOP_COUNT);
@@ -1260,6 +1319,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const ringList: { x: number; y: number; age: number; colour: PaletteKey }[] = [];
   // Old shape contexts are freed after the next render, once no view batches from them.
   let retiredContexts: GraphicsContext[] = [];
+  /** Look v33: damaged boss glow textures replaced this frame, destroyed at the next draw. */
+  let retiredTextures: Texture[] = [];
 
   // v2 wave C enemy fx state, per entity slot: last drawn w.t (NaN until seen; the Blink arrival
   // and Slime splat edges read it) and a trail emitter (Swirl, Charger dash).
@@ -1362,8 +1423,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   }
 
   /** Capture one visual slot's sprite texture: blurred glow (fallback) or sharp core (bloom source). */
-  function makeKindTexture(slot: number, blurred: boolean): Texture {
-    const spec = specForSlot(slot);
+  function makeKindTexture(slot: number, blurred: boolean, override?: ShapeSpec): Texture {
+    const spec = override ?? specForSlot(slot);
     const g = new Graphics(blurred ? buildGlowSourceContext(spec, palette) : buildBloomSourceContext(spec, palette));
     if (blurred) g.filters = [new BlurFilter({ strength: 6, quality: 2 })];
     const r = spec.radius + (blurred ? GLOW_PAD : GLOW_PAD / 2);
@@ -1406,6 +1467,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       }
     }
     for (const t of old) t?.destroy(true);
+    if (dmgTex !== null) dmgTex.destroy(true);
+    dmgTex = null;
+    dmgTexKey = -1;
     glowTexturesDirty = false;
   }
 
@@ -1524,6 +1588,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       // Wave C: the Tempest dash ghosts share the exposed boss context, so they follow it too.
       for (const g of dashGhosts) if (g.view && g.slot >= 0) g.view.context = contextForSlot(g.slot);
       retiredContexts = retiredContexts.concat(old);
+      if (dmgCtx !== null) retiredContexts.push(dmgCtx);
+      dmgCtx = null;
+      dmgKey = -1;
       redrawWalls(r);
     },
     tint(): void {
@@ -1777,17 +1844,19 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const wa = Math.atan2(py - bossDrawY, px - bossDrawX);
     const rot = bossSeen ? (bodyRot[0] ?? 0) : bossView.rot;
     const s = stage >= 2 ? 2 : 1;
-    if (!crackEvent(bossCracks, s, wa - rot, bossIdx * 17 + s)) return;
-    // The outline pieces that fell out of this stage's gaps break away in the boss colour.
+    if (!crackEvent(bossCracks, s, wa - rot, ((levelSeed >>> 0) % 100003) * 13 + bossIdx * 17)) return;
+    // The outline pieces removed by this stage break away in the boss colours. At stage 2 the
+    // DETACH_ARC piece is the one whole section that drifts off.
     const outline = BOSS_OUTLINES[bossIdx];
     if (outline !== undefined) {
       const sc = bossSeen ? (bodyScale[0] ?? 1) : 1;
       const c = Math.cos(rot) * sc;
       const sn = Math.sin(rot) * sc;
-      for (let j = 0; j < FRAGS_PER_STAGE; j++) {
-        const k = (s - 1) * FRAGS_PER_STAGE + j;
-        const gi = ((s - 1) * GAPS_PER_STAGE + (j % GAPS_PER_STAGE)) * 2;
-        fragmentPts(outline, bossCracks.gaps[gi] ?? 0, (bossCracks.gaps[gi + 1] ?? 0.06) * 1.3, fragScratch, fragCentre);
+      const [k0, k1] = newArcRange(s);
+      for (let k = k0; k < k1 && k < PIECES; k++) {
+        const a0 = bossCracks.arcs[k * 2] ?? 0;
+        const a1 = bossCracks.arcs[k * 2 + 1] ?? 0;
+        fragmentPts(outline, (a0 + a1) / 2, (a1 - a0) / 2, fragScratch, fragCentre);
         const lx = fragCentre[0] ?? 0;
         const ly = fragCentre[1] ?? 0;
         const wx = lx * c - ly * sn;
@@ -1798,7 +1867,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         pieceY[k] = bossDrawY + wy;
         pieceDx[k] = wx / len;
         pieceDy[k] = wy / len;
-        pieceSpinDir[k] = (j & 1) === 0 ? 1 : -1;
+        pieceSpinDir[k] = k === DETACH_ARC ? 0 : (k & 1) === 0 ? 1 : -1;
         for (let q = 0; q < FRAG_PTS; q++) {
           const fx = fragScratch[q * 2] ?? 0;
           const fy = fragScratch[q * 2 + 1] ?? 0;
@@ -1882,6 +1951,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   /** Read the boss once per frame and ease its displayed openness. */
   function updateBoss(w: World, dt: number): void {
     bossReader(w, bossView);
+    levelSeed = w.level.seed;
     bossHitAge += dt;
     bossPhaseAge += dt;
     bossEdgeAge += dt;
@@ -2788,33 +2858,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     if (close) g.closePath();
   }
 
-  /**
-   * Add a fracture polygon (body radii) at the main body transform, grown share g out from its fan
-   * origin (ex, ey): every point is pulled toward it by g, so the front spreads in from the hit side.
-   */
-  function fracturePoly(g: Graphics, net: Float32Array, grow: number, ex: number, ey: number, x: number, y: number, rot: number, rs: number): void {
-    const c = Math.cos(rot) * rs;
-    const s = Math.sin(rot) * rs;
-    for (let k = 0; k < FRACTURE_PTS; k++) {
-      const q = fracturePointAt(k) * 2;
-      const lx = ex + ((net[q] ?? 0) - ex) * grow;
-      const ly = ey + ((net[q + 1] ?? 0) - ey) * grow;
-      const wx = x + lx * c - ly * s;
-      const wy = y + lx * s + ly * c;
-      if (k === 0) g.moveTo(wx, wy);
-      else g.lineTo(wx, wy);
-    }
-    // Close through the fan origin (the growth anchor), which keeps the polygon star shaped.
-    g.lineTo(x + ex * c - ey * s, y + ex * s + ey * c);
-    g.closePath();
-  }
-
   /** Add a short arc along the boss outline from a0 to a1 (local radians) at the body transform. */
   function outlineArc(g: Graphics, a0: number, a1: number, x: number, y: number, rot: number, sc: number): void {
     const p = BOSS_OUTLINES[bossIdx];
     if (p === undefined) return;
-    for (let q = 0; q <= 3; q++) {
-      const t = a0 + ((a1 - a0) * q) / 3;
+    for (let q = 0; q <= 6; q++) {
+      const t = a0 + ((a1 - a0) * q) / 6;
       const r = outlineRadius(p, t) * sc;
       const wx = x + Math.cos(t + rot) * r;
       const wy = y + Math.sin(t + rot) * r;
@@ -2823,62 +2872,82 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
   }
 
+  /** The damaged arc layout of slot at the current stage, as a ShapeSpec (pure, see damagedSpec). */
+  function damagedSpecFor(slot: number): ShapeSpec {
+    return damagedSpec(specForSlot(slot), bossCracks.arcs, bossCracks.arcCount);
+  }
+
   /**
-   * Look v32 battle damage in the boss palette, with no black or dark strokes. On the erase layer e:
-   * each gap cuts the neon outline out and dims its shoulders on an uneven flicker, the fill beside
-   * it scorches (loses alpha, so it goes see through, never black), and after stage 2 the whole
-   * outline flickers unevenly. On g, over the body: a soft fracture glow in the boss hue at 35
-   * percent brightness that spreads in from each hit side with a noisy, branching front.
+   * The boss body context for slot: the shared one before any crack, else the damaged copy with
+   * the removed arcs cut out of the geometry. Rebuilt only when the slot or stage changes.
    */
-  function drawDamage(g: Graphics, e: Graphics, hue: number, rs: number, lw: number, a: number, timeSec: number): void {
+  function bossBodyContext(slot: number): GraphicsContext {
+    if (bossCracks.stage < 1 || bossCracks.arcCount < 1) return contextForSlot(slot);
+    const key = slot * 3 + bossCracks.stage;
+    if (dmgCtx === null || dmgKey !== key) {
+      if (dmgCtx !== null) retiredContexts.push(dmgCtx);
+      dmgCtx = buildContext(damagedSpecFor(slot), currentRender, palette);
+      dmgKey = key;
+    }
+    return dmgCtx;
+  }
+
+  /** The boss glow texture for slot: shared before any crack, else the damaged copy's. */
+  function bossGlowTexture(slot: number): Texture {
+    if (bossCracks.stage < 1 || bossCracks.arcCount < 1) return glowTextureFor(slot);
+    const key = (slot * 3 + bossCracks.stage) * 2 + (bloomOn ? 1 : 0);
+    if (dmgTex === null || dmgTexKey !== key) {
+      const old = dmgTex;
+      dmgTex = makeKindTexture(slot, !bloomOn, damagedSpecFor(slot));
+      dmgTexKey = key;
+      // The sprite is reassigned to the new texture in the same frame, before any render.
+      if (old !== null) retiredTextures.push(old);
+    }
+    return dmgTex;
+  }
+
+  /**
+   * Look v33 battle damage over the damaged body (the removed arcs are already cut out of the body
+   * geometry, see bossBody). On g: the remaining outline for EDGE_SPAN either side of each gap,
+   * hue shifted toward the accent (dmgCol.edge) on an uneven flicker, and a short bright stub at
+   * each torn end in the boss primary at 1.3x (dmgCol.stub) that flares as the stage lands. Every
+   * colour is from damageColours, so nothing is darker than DAMAGE_MIN_L; no erase or dark fill.
+   */
+  function drawDamage(g: Graphics, rs: number, lw: number, a: number, timeSec: number): void {
     const st = bossCracks.stage;
-    if (st < 1) return;
+    const n = bossCracks.arcCount;
+    const outline = BOSS_OUTLINES[bossIdx];
+    if (st < 1 || n < 1 || outline === undefined) return;
     const x = bodyX[0] ?? 0;
     const y = bodyY[0] ?? 0;
     const rot = bodyRot[0] ?? 0;
     const sc = bodyScale[0] ?? 1;
-    const glow = dimRgb(hue, FRACTURE_BRIGHTNESS);
-    const ember = dimRgb(hue, FRACTURE_BRIGHTNESS * 1.7);
-    for (let s = 1; s <= st; s++) {
-      const net = s === 1 ? bossCracks.frac1 : bossCracks.frac2;
-      const grow = fractureGrow(s === 1 ? bossCracks.age1 : bossCracks.age2);
-      if (grow <= 0) continue;
-      const ang = s === 1 ? bossCracks.angle1 : bossCracks.angle2;
-      const ex = Math.cos(ang) * FRACTURE_ORIGIN_R;
-      const ey = Math.sin(ang) * FRACTURE_ORIGIN_R;
-      // Soft layers: the full front faint, a tighter inner body, a warm seam close to the hit.
-      fracturePoly(g, net, grow, ex, ey, x, y, rot, rs);
-      g.fill({ color: glow, alpha: 0.5 * a });
-      fracturePoly(g, net, grow * 0.68, ex, ey, x, y, rot, rs);
-      g.fill({ color: glow, alpha: 0.45 * a });
-      fracturePoly(g, net, grow * 0.32, ex, ey, x, y, rot, rs);
-      g.fill({ color: ember, alpha: 0.4 * a });
-    }
-    const outline = BOSS_OUTLINES[bossIdx];
-    const n = st * GAPS_PER_STAGE;
+    const flare = 1 + 0.8 * Math.max(0, 1 - bossCracks.age / BREAK_SETTLE_SEC);
     for (let k = 0; k < n; k++) {
-      const ga = bossCracks.gaps[k * 2] ?? 0;
-      const gh = bossCracks.gaps[k * 2 + 1] ?? 0.06;
-      // Shoulders: the line either side of the gap dims and flickers.
-      outlineArc(e, ga - gh * 2.6, ga + gh * 2.6, x, y, rot, sc);
-      e.stroke({ width: lw * 2.6, color: 0xffffff, alpha: shoulderDim(timeSec, k) * a });
-      // Core: the line drops out.
-      outlineArc(e, ga - gh, ga + gh, x, y, rot, sc);
-      e.stroke({ width: lw * 4, color: 0xffffff, alpha: GAP_CUT * a, cap: 'round' });
-      // Scorch: the fill just inside the gap loses alpha, softly.
-      if (outline !== undefined) {
-        const r = outlineRadius(outline, ga) * sc * 0.8;
-        const cx = x + Math.cos(ga + rot) * r;
-        const cy = y + Math.sin(ga + rot) * r;
-        e.circle(cx, cy, rs * 0.22).fill({ color: 0xffffff, alpha: SCORCH_CUT * 0.5 * a });
-        e.circle(cx, cy, rs * 0.12).fill({ color: 0xffffff, alpha: SCORCH_CUT * 0.6 * a });
+      const a0 = bossCracks.arcs[k * 2] ?? 0;
+      const a1 = bossCracks.arcs[k * 2 + 1] ?? 0;
+      // The outline beside each torn end shifts hue toward the accent and flickers.
+      outlineArc(g, a0 - EDGE_SPAN, a0, x, y, rot, sc);
+      g.stroke({ width: lw * 1.15, color: dmgCol.edge, alpha: edgeFlicker(timeSec, k * 2) * a, cap: 'round' });
+      outlineArc(g, a1, a1 + EDGE_SPAN, x, y, rot, sc);
+      g.stroke({ width: lw * 1.15, color: dmgCol.edge, alpha: edgeFlicker(timeSec, k * 2 + 1) * a, cap: 'round' });
+      // Torn ends: a short bright stub angled out of the line, like a snapped filament.
+      for (let e = 0; e < 2; e++) {
+        const t = e === 0 ? a0 : a1;
+        const r = outlineRadius(outline, t) * sc;
+        const ca = Math.cos(t + rot);
+        const sa = Math.sin(t + rot);
+        const ex = x + ca * r;
+        const ey = y + sa * r;
+        // Along the tangent into the gap, kinked outward.
+        const dir = e === 0 ? 1 : -1;
+        const tx = -sa * dir;
+        const ty = ca * dir;
+        const len = rs * STUB_LEN;
+        g.moveTo(ex, ey).lineTo(ex + (tx * 0.8 + ca * 0.6) * len, ey + (ty * 0.8 + sa * 0.6) * len);
+        g.stroke({ width: lw * 1.3, color: dmgCol.stub, alpha: Math.min(1, a * flare), cap: 'round' });
+        g.circle(ex, ey, lw * 0.9 * flare).fill({ color: dmgCol.stub, alpha: Math.min(1, 0.85 * a * flare) });
       }
-    }
-    // Stage 2: the whole outline drops in brightness on an uneven, noise driven beat.
-    const f = outlineFlicker(st, timeSec);
-    if (f > 0) {
-      outlinePath(e, x, y, rot, sc);
-      e.stroke({ width: lw * 2.4, color: 0xffffff, alpha: f * a });
     }
   }
 
@@ -2886,6 +2955,15 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   function accentOf(part: AccentPart): number {
     const t = bossAccent(bossIdx, part);
     return t === null ? -1 : accentRgb(t, palette);
+  }
+
+  /** The colour the damage edge shifts toward: the boss's first accent tone, else white. */
+  function damageAccent(hue: number): number {
+    for (const part of DAMAGE_ACCENT_PARTS) {
+      const c = accentOf(part);
+      if (c >= 0 && c !== hue) return c;
+    }
+    return 0xffffff;
   }
 
   /**
@@ -3017,9 +3095,6 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
   }
 
-  /** Segments per colour run along a nova arm. */
-  const NOVA_RUN = 2;
-
   /** Add points k0 to k1 of the arm buffer around (x, y) as one polyline. */
   function novaRun(g: Graphics, x: number, y: number, k0: number, k1: number): void {
     for (let k = k0; k <= k1; k++) {
@@ -3031,12 +3106,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   }
 
   /**
-   * Supernova wells (v31, look v32). Over 1 s after the eruption the well turns from its red into a
-   * shimmering multicolour state: a two arm spiral whose colour cycles through the hue ring along its
-   * length (one full cycle per 2 s), swirl points that pulse in brightness as they fall inward, a halo
-   * breathing between 1.0x and 1.15x of the pull radius, and the outward shimmer stream from the shared
-   * pool, coloured per particle from the same cycle. Every nova draws into one shared Graphics (one
-   * batch, normal blend), rebuilt only while a nova is live. Called per erupted well from drawEntities.
+   * Supernova wells (v31, look v33 GW1). After the eruption the well becomes a white tornado: a
+   * dense spiral of NOVA_ARMS near white arms turning at NOVA_SPIN with a brightness pulse, a core
+   * that flares white, neon flecks riding the arms, and the outward shimmer stream from the shared
+   * pool in every hue of the ring. The only ring is a thin faint white line at exactly the sim pull
+   * radius pullR, no pulse. Every nova draws into one shared Graphics (one batch, normal blend),
+   * rebuilt once per frame only while a nova is live. Called per erupted well from drawEntities.
    */
   function drawNova(slot: number, x: number, y: number, r: number, pullR: number, timeSec: number, dt: number): void {
     const g = novaG;
@@ -3045,38 +3120,72 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const shift = novaShift(age);
     const reach = r * NOVA_REACH * grow;
     const red = palette.red;
+    const white = novaWhite(red, shift);
     novaCycleStops(palette, novaStops);
-    // Breathing halo at the pull radius: two strokes, its colour sliding round the ring.
-    const hr = novaHaloR(timeSec, pullR);
-    const hc = novaColour(novaStops, red, 0, timeSec, shift);
-    g.circle(x, y, hr).stroke({ width: 5, color: hc, alpha: (0.12 + 0.08 * Math.sin(timeSec * 5.3)) * grow });
-    g.circle(x, y, hr).stroke({ width: 1.6, color: mixRgb(hc, 0xffffff, 0.3), alpha: (0.3 + 0.15 * Math.sin(timeSec * 3.1)) * grow });
-    // Spiral arms in short runs of NOVA_RUN segments, each run one colour step along the arm (about
-    // ten steps per arm, so the eight hue ring reads along it): a wide soft pass, then a hot core.
+    // The pull ring: a thin faint white line at exactly the sim pull radius, steady.
+    g.circle(x, y, novaRingR(pullR)).stroke({ width: NOVA_RING_WIDTH, color: NOVA_WHITE, alpha: NOVA_RING_ALPHA * grow });
+    // Tornado: NOVA_ARMS white arms, a soft wide pass then a bright core line, each arm pulsing.
     for (let arm = 0; arm < NOVA_ARMS; arm++) {
       novaSpiral(timeSec, arm, reach, novaArm);
-      for (let k0 = 0; k0 < NOVA_ARM_PTS - 1; k0 += NOVA_RUN) {
-        const k1 = Math.min(NOVA_ARM_PTS - 1, k0 + NOVA_RUN);
-        const u = (k0 + k1) / 2 / (NOVA_ARM_PTS - 1);
-        const c = novaColour(novaStops, red, u + arm * 0.5, timeSec, shift);
-        novaRun(g, x, y, k0, k1);
-        g.stroke({ width: 5, color: c, alpha: 0.35 * grow, cap: 'round' });
-        novaRun(g, x, y, k0, k1);
-        g.stroke({ width: 1.8, color: mixRgb(c, 0xffffff, 0.35), alpha: 0.9 * grow, cap: 'round' });
-      }
+      const p = novaArmPulse(timeSec, arm);
+      novaRun(g, x, y, 0, NOVA_ARM_PTS - 1);
+      g.stroke({ width: 4, color: white, alpha: 0.22 * p * grow, cap: 'round', join: 'round' });
+      novaRun(g, x, y, 0, NOVA_ARM_PTS - 1);
+      g.stroke({ width: 1.4, color: white, alpha: 0.85 * p * grow, cap: 'round', join: 'round' });
     }
-    // Hot core, tinted by the cycle as the shift completes.
-    const core = mixRgb(novaColour(novaStops, red, 0.5, timeSec * 0.5, shift), 0xffffff, 0.45);
-    g.circle(x, y, r * 0.45 * grow).fill({ color: core, alpha: 0.55 });
-    // Swirl points falling inward, each pulsing in brightness and coloured from the cycle.
+    // The core flares white.
+    const f = novaCoreFlare(age, timeSec);
+    g.circle(x, y, r * (0.5 + 0.25 * f) * grow).fill({ color: white, alpha: 0.35 * f });
+    g.circle(x, y, r * 0.3 * grow).fill({ color: 0xffffff, alpha: 0.6 + 0.4 * f });
+    // Flecks riding the arms inward, each a neon hue from the ring, twinkling.
     for (let k = 0; k < NOVA_ORBITERS; k++) {
       novaOrbiter(timeSec, k, reach, novaOrb);
-      const c = novaColour(novaStops, red, novaOrb.u + k / NOVA_ORBITERS, timeSec, shift);
+      const c = novaStreamColour(novaStops, red, k, timeSec, shift);
       const p = novaPulse(timeSec, k);
-      g.circle(x + novaOrb.x, y + novaOrb.y, 1.1 + novaOrb.u + p * 0.8).fill({ color: mixRgb(c, 0xffffff, 0.25 * p), alpha: novaOrb.a * p * grow });
+      g.circle(x + novaOrb.x, y + novaOrb.y, 1.2 + p).fill({ color: c, alpha: novaOrb.a * p * grow });
     }
     const em = novaEm[slot];
     if (em !== undefined) emitNovaShimmer(em, x, y, r, red, novaStops, shift, timeSec, dt);
+  }
+
+  /** Add one drone mode glyph centred at (x, y) to droneFx in colour c. */
+  function modeGlyph(glyph: DroneGlyph, x: number, y: number, c: number): void {
+    const g = droneFx;
+    if (glyph === 'dots') {
+      const d = glyphDots(GLYPH_HALF);
+      for (let k = 0; k + 1 < d.pts.length; k += 2) g.circle(x + (d.pts[k] ?? 0), y + (d.pts[k + 1] ?? 0), d.r);
+      g.fill({ color: c, alpha: 0.95 });
+      return;
+    }
+    const seg = glyphSegments(glyph, GLYPH_HALF);
+    for (let k = 0; k + 3 < seg.length; k += 4) {
+      g.moveTo(x + (seg[k] ?? 0), y + (seg[k + 1] ?? 0)).lineTo(x + (seg[k + 2] ?? 0), y + (seg[k + 3] ?? 0));
+    }
+    g.stroke({ width: 1.6, color: c, alpha: 0.95, cap: 'round', join: 'round' });
+  }
+
+  /**
+   * Look v33: while a drone mode is armed, its glyph (H, D, R or a doubled dot) floats above each
+   * drone in the mode colour and a thin ring in that colour circles the ship, so the arm is
+   * unmistakable. Cleared once when the mode ends.
+   */
+  function drawDroneMode(mode: DroneMode | null): void {
+    const g = droneFx;
+    if (mode === null || (!droneDrawn && !shipDrawn)) {
+      if (droneFxShown) {
+        g.clear();
+        droneFxShown = false;
+      }
+      return;
+    }
+    if (g.parent !== entities) entities.addChild(g);
+    g.clear();
+    droneFxShown = true;
+    const look = DRONE_MODE_LOOKS[mode];
+    const c = palette[look.key];
+    if (droneDrawn) modeGlyph(look.glyph, droneDrawX, droneDrawY - GLYPH_LIFT, c);
+    if (twinDrawn) modeGlyph(look.glyph, twinDrawX, twinDrawY - GLYPH_LIFT, c);
+    if (shipDrawn) g.circle(shipDrawX, shipDrawY, MODE_RING_R).stroke({ width: 1.2, color: c, alpha: 0.6 });
   }
 
   /**
@@ -3090,28 +3199,22 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const active = bossView.active && bossSeen;
     let piecesLive = false;
     for (let k = 0; k < PIECES; k++) if ((pieceAge[k] ?? Infinity) < PIECE_LIFE) piecesLive = true;
-    const e = bossErase;
     if (!active && !piecesLive) {
       if (bossOverShown) {
         g.clear();
         u.clear();
-        e.clear();
         bossOverShown = false;
       }
       return;
     }
     if (u.parent !== entities) entities.addChildAt(u, 0);
-    // The erase layer sits right under bossOver, both over every body.
-    const top = entities.children.length;
-    if (entities.children[top - 1] !== g || entities.children[top - 2] !== e) {
-      entities.addChild(e);
-      entities.addChild(g);
-    }
+    // bossOver sits over every body.
+    if (entities.children[entities.children.length - 1] !== g) entities.addChild(g);
     g.clear();
     u.clear();
-    e.clear();
     bossOverShown = true;
     const hue = palette[bossColourOf(bossIdx)];
+    damageColours(hue, damageAccent(hue), dmgCol);
     const hot = mixRgb(hue, 0xffffff, 0.6);
     const R = bossBodyR(bossIdx);
     const lw = BOSS_LINE * tierWeight(bossTier);
@@ -3164,7 +3267,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       }
       // Two tone accents, then the battle damage over them (the gaps cut both).
       drawAccents(g, rs, lw, bodyA, timeSec);
-      drawDamage(g, e, hue, rs, lw, bodyA, timeSec);
+      drawDamage(g, rs, lw, bodyA, timeSec);
       // Prism: the whole body runs to white with a contracting ring, then holds a white flash.
       if (bossIdx === BOSS_PRISM) {
         const wv = bossWin.known ? windowWhite(bossWin) : bossView.exposed === true ? 1 : 0;
@@ -3189,7 +3292,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         }
       }
     }
-    // Outline fragments drift outward, tumble and fade over 1.2 s, in the boss colour.
+    // Outline fragments drift 60 u outward, tumble (the detached section only slides) and fade over
+    // 1.5 s, in the boss colours: a soft primary line under a bright core.
     for (let k = 0; k < PIECES; k++) {
       const age = pieceAge[k] ?? Infinity;
       if (age >= PIECE_LIFE) continue;
@@ -3208,7 +3312,16 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         if (q === 0) g.moveTo(wx, wy);
         else g.lineTo(wx, wy);
       }
-      g.stroke({ width: lw, color: hue, alpha: a, cap: 'round' });
+      g.stroke({ width: lw * 2.4, color: dmgCol.frag, alpha: a * 0.35, cap: 'round', join: 'round' });
+      for (let q = 0; q < FRAG_PTS; q++) {
+        const fx = piecePts[(k * FRAG_PTS + q) * 2] ?? 0;
+        const fy = piecePts[(k * FRAG_PTS + q) * 2 + 1] ?? 0;
+        const wx = px + fx * c - fy * s;
+        const wy = py + fx * s + fy * c;
+        if (q === 0) g.moveTo(wx, wy);
+        else g.lineTo(wx, wy);
+      }
+      g.stroke({ width: lw * 1.1, color: dmgCol.stub, alpha: a, cap: 'round', join: 'round' });
     }
   }
 
@@ -3240,6 +3353,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       : 0xffffff;
     let live = 0;
     prismDrawn = false;
+    // Look v33 drone state for this frame (read only from the sim's drone arm).
+    const arm = droneArm(w);
+    droneDecoyOut = arm.mode === 'detach' && arm.detach === Detach.Out;
+    droneDrawn = false;
+    twinDrawn = false;
+    shipDrawn = false;
     bossSeen = false;
     bodyCount = 1;
     for (let i = 0; i < w.cap; i++) {
@@ -3279,6 +3398,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         viewTint[i] = -1;
         enemyPhase[i] = Number.NaN;
       }
+      // Look v33: a cracked boss draws its damaged body (arcs cut out of the geometry).
+      if (isBoss) {
+        const bc = bossBodyContext(slot);
+        if (v.context !== bc) v.context = bc;
+      }
       // Slime puddles sit on the floor layer, under every entity.
       const parent = isFloorSlot(slot) ? floor : entities;
       if (v.parent !== parent) parent.addChild(v);
@@ -3291,15 +3415,17 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       const baseTint = isPart
         ? isTwinPart(w.a[i] ?? 0)
           ? bossTint
-          : isBroodlingPart(w.a[i] ?? 0)
-            ? 0xffffff // the Broodling bakes its green and yellow (bossShapes.ts broodlingSpec)
+          : isBakedPart(w.a[i] ?? 0)
+            ? 0xffffff // Broodling, Hornet, Gravitant and Mirror bake their colours (bossShapes.ts)
             : bossPartTint(bossIdx, palette[bossColourOf(bossIdx)], palette)
         : isBoss
           ? bossTint
           : spec.tint === null
             ? 0xffffff
             : palette[spec.tint];
-      const tint = isAdd ? mixRgb(baseTint, palette.red, ADD_HUE_MIX) : baseTint;
+      // Look v33: the detach decoy drone pulses red orange while it is out, so the chase reads.
+      const decoy = kind === DRONE_KIND_NUM.drone && droneDecoyOut;
+      const tint = decoy ? decoyTint(palette.red, palette.orange, timeSec) : isAdd ? mixRgb(baseTint, palette.red, ADD_HUE_MIX) : baseTint;
       // The glow sprite takes the body tint, except the Prism: its halo follows the cycling hue.
       let glowTint = tint;
       if (viewTint[i] !== tint) {
@@ -3332,7 +3458,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         if (partType(a) === PART_POD && !isTwinPart(a) && !isBroodlingPart(a)) scale *= podPulse(timeSec, hash01(i));
       }
       // Pickups spin on the render clock (phase per slot) and blink in their last 2 s (w.t).
-      const rot = isPickup ? timeSec * PICKUP_SPIN + hash01(i) * Math.PI * 2 : (w.rot[i] ?? 0);
+      // Look v33: the drone pickup ring turns the other way to the weapon pickups.
+      const rot = isPickup
+        ? timeSec * PICKUP_SPIN + hash01(i) * Math.PI * 2
+        : kind === DRONE_KIND_NUM.dronePickup
+          ? dronePickupRot(timeSec, hash01(i))
+          : (w.rot[i] ?? 0);
       // Telegraphing enemies flash at 50 percent alpha (Swarm W3 request).
       // The boss has its own 2 s entrance telegraph (the ring and the body fade in), not the 0.6 s one.
       const teleNow = !isPickup && !isBoss && isTelegraphing(w, i);
@@ -3388,6 +3519,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         // Parts (pods, anchors, turrets) shake with the body, so the whole boss moves as one.
         ev.x += bossShake.x;
         ev.y += bossShake.y;
+        // Look v33: the Hornet buzzes (a render only jitter, hashed per slot).
+        partJitter(w.a[i] ?? 0, timeSec, hash01(i), partJit);
+        ev.x += partJit.x;
+        ev.y += partJit.y;
         if (isTwinPart(w.a[i] ?? 0)) {
           // The Twins second body fades in and out with the boss and burns like it once the pair is one.
           ev.alpha = bossView.active ? bossBodyAlpha(bossView.mode, bossView.modeT) : 1;
@@ -3426,6 +3561,26 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         ev.scaleY *= p;
         ev.glowMul *= mineGlow(p);
       }
+      if (decoy) {
+        const p = decoyPulse(timeSec);
+        ev.scaleX *= 1 + 0.25 * p;
+        ev.scaleY *= 1 + 0.25 * p;
+        ev.glowMul *= 1.2 + 0.6 * p;
+      }
+      // Look v33: remember where the drones and the ship drew, for the mode glyph and ring.
+      if (kind === DRONE_KIND_NUM.drone) {
+        droneDrawX = ev.x;
+        droneDrawY = ev.y;
+        droneDrawn = true;
+      } else if (kind === DRONE_KIND_NUM.droneTwin) {
+        twinDrawX = ev.x;
+        twinDrawY = ev.y;
+        twinDrawn = true;
+      } else if (i === 0 && kind === KIND_SHIP) {
+        shipDrawX = ev.x;
+        shipDrawY = ev.y;
+        shipDrawn = true;
+      }
       if (isAdd) {
         const p = addAngryPulse(timeSec, hash01(i));
         ev.scaleX *= addScale(p);
@@ -3438,7 +3593,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       if (kind === KIND_GRAVITY_WELL && novaLive) {
         const r = w.radius[i] ?? WELL_BASE_RADIUS;
         const slot = novaSlotFor(nova, i, w.x[i] ?? ev.x, w.y[i] ?? ev.y, r);
-        if (slot >= 0) drawNova(slot, ev.x, ev.y, r, wellPullRadius(r), timeSec, dt);
+        // The ring sits at exactly the sim pull radius of this well (nova radius once erupted).
+        if (slot >= 0) drawNova(slot, ev.x, ev.y, r, wellInNova(w, i) ? NOVA_RADIUS : PULL_RADIUS, timeSec, dt);
       }
       // Wells pull the lattice into a dimple (at most MAX_WELLS, read every frame).
       if (kind === KIND_GRAVITY_WELL && !teleNow && wellsSeen < MAX_WELLS && lattice.sim) {
@@ -3460,6 +3616,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         s.texture = glowTextureFor(slot);
         glowKind[i] = slot;
       }
+      if (isBoss) {
+        const bt = bossGlowTexture(slot);
+        if (s.texture !== bt) s.texture = bt;
+      }
       if (!s.visible) s.visible = true;
       s.tint = glowTint;
       const ga = glowAlpha * ev.alpha * ev.glowMul;
@@ -3470,6 +3630,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
     if (!prismDrawn && prismLayer) prismLayer.hide();
     drawBossIdentity(timeSec);
+    drawDroneMode(arm.mode);
     if (novaLive) stepNovaState(nova, dt);
     drawPops(dt);
     stats.entities = live;
@@ -3479,6 +3640,23 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
    * Bullet heads and attached trails by style, plus particle trails for styles 1 and 2.
    * (shipX, shipY) is the drawn ship position, the centre orbit blades turn around.
    */
+  /** Look v33: bullet ids of the orbit spikes this frame (1), from the shield hitter table. */
+  let spikeMask = new Uint8Array(0);
+
+  /** Mark the orbit spikes: hitters at or past ShieldSpec.blades in WeaponState.blades. */
+  function markSpikes(w: World): void {
+    const ws = weaponState(w);
+    const sh = shieldOf(ws.kind);
+    const cap = w.bullets.cap;
+    if (spikeMask.length < cap) spikeMask = new Uint8Array(cap);
+    else spikeMask.fill(0);
+    if (sh === null) return;
+    for (let k = sh.blades; k < sh.blades + sh.spikes && k < ws.blades.length; k++) {
+      const id = ws.blades[k] ?? -1;
+      if (id >= 0 && id < cap) spikeMask[id] = 1;
+    }
+  }
+
   function drawBullets(pool: BulletPoolLike | null, alpha: number, shipX: number, shipY: number, dt: number): void {
     if (!pool) {
       stats.bullets = 0;
@@ -3503,8 +3681,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         // containers for re-upload below.
         const st = style !== undefined ? (style[i] ?? 0) : 0;
         const h = homing !== undefined && homing[i] === 1;
-        const code = styleCode(st, h);
-        const vis = bulletStyleVisual(st, h);
+        // Look v33: orbit spikes (marked from the weapon state in draw) take the triangle frame.
+        const spike = st === 3 && !h && i < spikeMask.length && spikeMask[i] === 1;
+        const code = spike ? SPIKE_CODE : styleCode(st, h);
+        const vis = spike ? spikeVisual() : bulletStyleVisual(st, h);
         if (bulletCodeShown[i] !== code) {
           bulletCodeShown[i] = code;
           styleSlot(i, vis);
@@ -3597,6 +3777,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       hideComet();
     }
     lastFxSec = nowSec;
+    markSpikes(w);
     drawBullets(explicitBullets ?? bulletsFromWorld(w), a, shipX, shipY, fxDt);
     drawEnemyBullets(w, a, nowSec, fxDt);
     stepEffects(dt);
@@ -3611,6 +3792,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     stepParticles(dt);
     stats.particles = liveParticleCount();
     app.render();
+    if (retiredTextures.length > 0) {
+      for (const t of retiredTextures) t.destroy(true);
+      retiredTextures = [];
+    }
     if (retiredContexts.length > 0) {
       for (const c of retiredContexts) c.destroy();
       retiredContexts = [];

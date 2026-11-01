@@ -1,191 +1,232 @@
-// Look v32 boss battle damage: the pure crack layout (gaps and fracture polygon), the growth, the
-// gap shoulder flicker, the stage 2 outline flicker, and a guard that the damage draw paints no black.
-import { readFileSync } from 'node:fs';
+// Look v33 boss battle damage (GW1): damage by incompleteness. The arc table, the clip of the body
+// spec, the damage colours (never darker than DAMAGE_MIN_L), and source guards that no erase or
+// multiply blend exists in src/render and the damage draw uses only the damage colours.
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  createCrackLayout,
-  crackLayout,
-  dimRgb,
-  FLICKER_MAX,
-  FRACTURE_EDGE_R,
-  FRACTURE_GROW_SEC,
-  FRACTURE_MAX_R,
-  FRACTURE_ORIGIN_R,
-  FRACTURE_PTS,
-  fractureGrow,
-  fractureIsSimple,
-  fracturePointAt,
-  GAP_HALF,
-  GAP_SHOULDER_MAX,
-  GAP_SHOULDER_MIN,
-  GAPS_PER_STAGE,
+  arcShare,
+  BREAK_ARCS,
+  BREAK_ARCS_MAX,
+  BREAK_MIN_R,
+  BREAK_SHARE,
+  breakArcs,
+  brighten,
+  clipPrim,
+  DAMAGE_MIN_L,
+  damageColours,
+  damagedSpec,
+  DETACH_ARC,
+  EDGE_FLICKER,
+  EDGE_HUE_SHIFT,
+  edgeFlicker,
+  inArcs,
+  lightnessOf,
   noiseAt,
   NOISE_SIZE,
-  outlineFlicker,
-  shoulderDim,
+  rgbToHsl,
+  shiftHueToward,
+  specOuterRadius,
+  STUB_BRIGHT,
 } from '../../src/render/bossDamage';
+import { BOSS_COUNT, bossColourOf } from '../../src/render/bossLook';
+import { BOSS_SPECS, EXPOSED_BOSS_SPECS } from '../../src/render/bossShapes';
 import { hueDistance, hueOfRgb } from '../../src/render/emberFlame';
+import { PALETTE_KEYS, palette } from '../../src/render/neon';
+import type { ShapeSpec } from '../../src/render/shapeSpecs';
 
-const lay = (stage: number, seed: number, a: number) => crackLayout(stage, seed, a, createCrackLayout());
-
-/** Fan points (the polygon minus its two outline points) as radii from the hit edge point. */
-function fanDepths(frac: Float32Array, a: number): number[] {
-  const ex = Math.cos(a) * FRACTURE_ORIGIN_R;
-  const ey = Math.sin(a) * FRACTURE_ORIGIN_R;
-  const out: number[] = [];
-  for (let k = 2; k < FRACTURE_PTS; k++) out.push(Math.hypot((frac[k * 2] ?? 0) - ex, (frac[k * 2 + 1] ?? 0) - ey));
+const arcs = (stage: number, seed: number, off: number): Float32Array => {
+  const out = new Float32Array(BREAK_ARCS_MAX * 2);
+  breakArcs(stage, seed, off, out);
   return out;
+};
+
+/** Total stroked polyline length of a spec's stroked layers beyond rCut share of its radius. */
+function outerStrokeLength(spec: ShapeSpec): number {
+  const R = specOuterRadius(spec);
+  let len = 0;
+  for (const l of spec.layers) {
+    if (l.width <= 0) continue;
+    for (const p of l.prims) {
+      const runs = clipPrim(p, new Float32Array(0), 0, 0, R * 0.02);
+      for (const r of runs) {
+        for (let k = 2; k + 1 < r.length; k += 2) {
+          const mx = ((r[k] ?? 0) + (r[k - 2] ?? 0)) / 2;
+          const my = ((r[k + 1] ?? 0) + (r[k - 1] ?? 0)) / 2;
+          if (Math.hypot(mx, my) >= R * BREAK_MIN_R) len += Math.hypot((r[k] ?? 0) - (r[k - 2] ?? 0), (r[k + 1] ?? 0) - (r[k - 1] ?? 0));
+        }
+      }
+    }
+  }
+  return len;
 }
 
-describe('noise table', () => {
-  it('stays in 0 to 1, wraps, and varies smoothly', () => {
+describe('noise table (Ember flame)', () => {
+  it('stays in 0 to 1 and wraps', () => {
     for (let x = -5; x < 70; x += 0.37) {
       const v = noiseAt(x);
       expect(v).toBeGreaterThanOrEqual(0);
       expect(v).toBeLessThanOrEqual(1);
       expect(noiseAt(x + NOISE_SIZE)).toBeCloseTo(v, 5);
-      expect(Math.abs(noiseAt(x + 0.01) - v)).toBeLessThan(0.05);
     }
   });
 });
 
-describe('crack layout', () => {
-  it('is deterministic in stage, seed and angle, and the seed changes it', () => {
-    expect(Array.from(lay(1, 3, 0.7).frac)).toEqual(Array.from(lay(1, 3, 0.7).frac));
-    expect(Array.from(lay(1, 3, 0.7).gaps)).toEqual(Array.from(lay(1, 3, 0.7).gaps));
-    expect(Array.from(lay(1, 4, 0.7).frac)).not.toEqual(Array.from(lay(1, 3, 0.7).frac));
-  });
-
-  it('lays GAPS_PER_STAGE gaps, the first on the hit angle, the rest near it, widths in range', () => {
-    const l = lay(2, 9, 1.2);
-    expect(l.gaps.length).toBe(GAPS_PER_STAGE * 2);
-    expect(l.gaps[0]).toBeCloseTo(1.2);
-    for (let k = 0; k < GAPS_PER_STAGE; k++) {
-      expect(Math.abs((l.gaps[k * 2] ?? 0) - 1.2)).toBeLessThan(0.7);
-      expect(l.gaps[k * 2 + 1] ?? 0).toBeGreaterThanOrEqual(GAP_HALF[0] - 1e-6);
-      expect(l.gaps[k * 2 + 1] ?? 0).toBeLessThanOrEqual(GAP_HALF[1] + 1e-6);
+describe('break arc table', () => {
+  it('stage 1 removes about 20 percent and stage 2 about 40 percent of the turn', () => {
+    for (let seed = 0; seed < 40; seed++) {
+      expect(breakArcs(0, seed, 0, new Float32Array(BREAK_ARCS_MAX * 2))).toBe(0);
+      expect(arcShare(arcs(1, seed, 0.3), BREAK_ARCS[0])).toBeCloseTo(BREAK_SHARE[0], 5);
+      expect(arcShare(arcs(2, seed, 0.3), BREAK_ARCS[1])).toBeCloseTo(BREAK_SHARE[1], 5);
     }
   });
 
-  it('the fracture polygon starts on the outline either side of the hit and stays inside the body', () => {
-    for (let seed = 0; seed < 20; seed++) {
-      for (const stage of [1, 2]) {
-        const a = seed * 0.83;
-        const f = lay(stage, seed, a).frac;
-        for (const p of [0, 1]) {
-          expect(Math.hypot(f[p * 2] ?? 0, f[p * 2 + 1] ?? 0)).toBeCloseTo(FRACTURE_EDGE_R, 5);
-          const pa = Math.atan2(f[p * 2 + 1] ?? 0, f[p * 2] ?? 0);
-          expect(hueDistance((pa * 180) / Math.PI, (a * 180) / Math.PI)).toBeLessThan(30);
+  it('is deterministic per seed, varies with the seed, and arcs never overlap', () => {
+    expect(Array.from(arcs(2, 7, 1))).toEqual(Array.from(arcs(2, 7, 1)));
+    expect(Array.from(arcs(2, 8, 1))).not.toEqual(Array.from(arcs(2, 7, 1)));
+    for (let seed = 0; seed < 40; seed++) {
+      const a = arcs(2, seed, -0.4);
+      for (let k = 0; k + 1 < BREAK_ARCS_MAX; k++) expect(a[k * 2 + 1] ?? 0).toBeLessThan(a[(k + 1) * 2] ?? 0);
+      expect((a[(BREAK_ARCS_MAX - 1) * 2 + 1] ?? 0) - (a[0] ?? 0)).toBeLessThan(Math.PI * 2);
+    }
+  });
+
+  it('every stage 1 arc lies inside the same arc at stage 2', () => {
+    for (let seed = 0; seed < 40; seed++) {
+      const a1 = arcs(1, seed, 2);
+      const a2 = arcs(2, seed, 2);
+      for (let k = 0; k < BREAK_ARCS[0]; k++) {
+        expect(a2[k * 2] ?? 0).toBeLessThanOrEqual((a1[k * 2] ?? 0) + 1e-6);
+        expect(a2[k * 2 + 1] ?? 0).toBeGreaterThanOrEqual((a1[k * 2 + 1] ?? 0) - 1e-6);
+      }
+    }
+    expect(DETACH_ARC).toBeGreaterThanOrEqual(BREAK_ARCS[0]);
+    expect(DETACH_ARC).toBeLessThan(BREAK_ARCS[1]);
+  });
+
+  it('inArcs wraps angles', () => {
+    const a = new Float32Array([3.0, 3.4]);
+    expect(inArcs(3.2, a, 1)).toBe(true);
+    expect(inArcs(3.2 - Math.PI * 2, a, 1)).toBe(true);
+    expect(inArcs(0, a, 1)).toBe(false);
+  });
+});
+
+describe('damaged body spec', () => {
+  it('a circle loses the arcs and keeps the rest as open runs on the outline', () => {
+    const a = arcs(1, 3, 0);
+    const runs = clipPrim({ t: 'circle', r: 50 }, a, BREAK_ARCS[0], 30, 2);
+    expect(runs.length).toBe(BREAK_ARCS[0]);
+    for (const r of runs) {
+      for (let k = 0; k + 1 < r.length; k += 2) {
+        const x = r[k] ?? 0;
+        const y = r[k + 1] ?? 0;
+        expect(Math.abs(Math.hypot(x, y) - 50)).toBeLessThan(0.5);
+        expect(inArcs(Math.atan2(y, x), a, BREAK_ARCS[0])).toBe(false);
+      }
+    }
+  });
+
+  it('every boss silhouette loses close to the stage share of its outer outline', () => {
+    for (let b = 0; b < BOSS_COUNT; b++) {
+      for (const spec of [BOSS_SPECS[b * 3], EXPOSED_BOSS_SPECS[b * 3]]) {
+        if (spec === undefined) continue;
+        const full = outerStrokeLength(spec);
+        for (const stage of [1, 2]) {
+          const a = arcs(stage, b * 17, 0.5);
+          const lost = 1 - outerStrokeLength(damagedSpec(spec, a, BREAK_ARCS[stage - 1] ?? 3)) / full;
+          const want = BREAK_SHARE[stage - 1] ?? 0.2;
+          expect(lost, `boss ${b} stage ${stage}`).toBeGreaterThan(want * 0.5);
+          expect(lost, `boss ${b} stage ${stage}`).toBeLessThan(want * 1.8);
         }
-        for (let k = 2; k < FRACTURE_PTS; k++) expect(Math.hypot(f[k * 2] ?? 0, f[k * 2 + 1] ?? 0)).toBeLessThanOrEqual(FRACTURE_MAX_R + 1e-6);
       }
     }
   });
 
-  it('the polygon is simple (its edges never cross), so it fills cleanly', () => {
-    for (let seed = 0; seed < 30; seed++) {
-      expect(fractureIsSimple(lay(1, seed, seed * 1.1).frac, seed * 1.1), `stage 1 seed ${seed}`).toBe(true);
-      expect(fractureIsSimple(lay(2, seed, seed * 0.7).frac, seed * 0.7), `stage 2 seed ${seed}`).toBe(true);
+  it('keeps every fill at its normal alpha and colour, never a dark fill', () => {
+    for (let b = 0; b < BOSS_COUNT; b++) {
+      const spec = BOSS_SPECS[b * 3];
+      if (spec === undefined) continue;
+      const d = damagedSpec(spec, arcs(2, b, 0), BREAK_ARCS[1]);
+      const fills = (s: ShapeSpec): string[] => s.layers.filter((l) => l.fill > 0).map((l) => `${l.colour}:${l.fill}`);
+      expect(fills(d)).toEqual(fills(spec));
+      expect(specOuterRadius(d)).toBeLessThanOrEqual(specOuterRadius(spec) + 1e-6);
     }
-    expect(fracturePointAt(0)).toBe(0);
-    expect(fracturePointAt(1)).toBe(2);
-    expect(fracturePointAt(FRACTURE_PTS - 1)).toBe(1);
-  });
-
-  it('the front is noisy and branching, not a straight line or a smooth arc', () => {
-    for (let seed = 0; seed < 10; seed++) {
-      const a = 0.4 + seed;
-      const d = fanDepths(lay(1, seed, a).frac, a);
-      // Many turns in depth along the fan: a wandering edge.
-      let turns = 0;
-      for (let k = 1; k + 1 < d.length; k++) {
-        const s0 = Math.sign((d[k] ?? 0) - (d[k - 1] ?? 0));
-        const s1 = Math.sign((d[k + 1] ?? 0) - (d[k] ?? 0));
-        if (s0 !== 0 && s1 !== 0 && s0 !== s1) turns++;
-      }
-      expect(turns, `seed ${seed}`).toBeGreaterThanOrEqual(4);
-      // Fingers: the deepest point reaches well past the median depth.
-      const sorted = [...d].sort((x, y) => x - y);
-      const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
-      expect(Math.max(...d), `seed ${seed}`).toBeGreaterThan(median * 1.3);
-    }
-  });
-
-  it('stage 2 reaches deeper than stage 1', () => {
-    let deeper = 0;
-    for (let seed = 0; seed < 20; seed++) {
-      const m1 = Math.max(...fanDepths(lay(1, seed, 0).frac, 0));
-      const m2 = Math.max(...fanDepths(lay(2, seed, 0).frac, 0));
-      if (m2 > m1) deeper++;
-    }
-    expect(deeper).toBeGreaterThanOrEqual(16);
   });
 });
 
-describe('damage timing', () => {
-  it('the fracture grows from 0 to 1 over the grow time', () => {
-    expect(fractureGrow(0)).toBe(0);
-    expect(fractureGrow(FRACTURE_GROW_SEC / 2)).toBeGreaterThan(0.5);
-    expect(fractureGrow(FRACTURE_GROW_SEC)).toBe(1);
-    expect(fractureGrow(9)).toBe(1);
+describe('damage colours', () => {
+  it('no damage colour has HSL lightness under 30 percent, for every boss and palette key', () => {
+    const out = { edge: 0, stub: 0, frag: 0 };
+    const keys = [...PALETTE_KEYS];
+    for (let b = 0; b < BOSS_COUNT; b++) {
+      const p = palette[bossColourOf(b)];
+      for (const k of keys) {
+        damageColours(p, palette[k], out);
+        for (const c of [out.edge, out.stub, out.frag]) expect(lightnessOf(c)).toBeGreaterThanOrEqual(DAMAGE_MIN_L);
+      }
+      damageColours(0x101010, 0x000000, out);
+      for (const c of [out.edge, out.stub, out.frag]) expect(lightnessOf(c)).toBeGreaterThanOrEqual(DAMAGE_MIN_L);
+    }
   });
 
-  it('gap shoulders dim on an uneven flicker, never fully out and never fully lit', () => {
+  it('the edge shifts 25 degrees toward the accent and the stub is the primary at 1.3x', () => {
+    const red = 0xff2020;
+    const yellow = 0xffff20;
+    const e = shiftHueToward(red, yellow, EDGE_HUE_SHIFT);
+    expect(hueDistance(hueOfRgb(e), hueOfRgb(red))).toBeCloseTo(EDGE_HUE_SHIFT, -0.3);
+    expect(hueDistance(hueOfRgb(e), hueOfRgb(yellow))).toBeLessThan(hueDistance(hueOfRgb(red), hueOfRgb(yellow)));
+    const blue = 0x3060c0;
+    const s = brighten(blue, STUB_BRIGHT);
+    expect((s & 255) / (blue & 255)).toBeCloseTo(STUB_BRIGHT, 1);
+    expect(hueDistance(hueOfRgb(s), hueOfRgb(blue))).toBeLessThan(3);
+    expect(rgbToHsl(0xffffff)[2]).toBeCloseTo(1);
+  });
+
+  it('the edge flickers unevenly inside its range', () => {
     let lo = 1;
     let hi = 0;
     for (let t = 0; t < 4; t += 0.03) {
-      const v = shoulderDim(t, 1);
+      const v = edgeFlicker(t, 1);
       lo = Math.min(lo, v);
       hi = Math.max(hi, v);
-      expect(v).toBeGreaterThanOrEqual(GAP_SHOULDER_MIN - 1e-9);
-      expect(v).toBeLessThanOrEqual(GAP_SHOULDER_MAX + 1e-9);
+      expect(v).toBeGreaterThanOrEqual(EDGE_FLICKER[0] - 1e-9);
+      expect(v).toBeLessThanOrEqual(EDGE_FLICKER[1] + 1e-9);
     }
-    expect(hi - lo).toBeGreaterThan(0.2);
-  });
-
-  it('the whole outline flickers only after stage 2, unevenly, within its cap', () => {
-    const beats: number[] = [];
-    let on = 0;
-    let prev = 0;
-    for (let t = 0; t < 10; t += 1 / 60) {
-      expect(outlineFlicker(1, t)).toBe(0);
-      const f = outlineFlicker(2, t);
-      expect(f).toBeGreaterThanOrEqual(0);
-      expect(f).toBeLessThanOrEqual(FLICKER_MAX + 1e-9);
-      if (f > 0 && prev === 0) beats.push(t);
-      if (f > 0) on++;
-      prev = f;
-    }
-    // Some dropouts, mostly lit, and the gaps between dropouts are not all the same.
-    expect(beats.length).toBeGreaterThanOrEqual(5);
-    expect(on / 600).toBeLessThan(0.6);
-    const gaps = beats.slice(1).map((b, k) => b - (beats[k] ?? 0));
-    expect(Math.max(...gaps) - Math.min(...gaps)).toBeGreaterThan(0.1);
+    expect(hi - lo).toBeGreaterThan(0.3);
   });
 });
 
-describe('no black in the damage', () => {
-  it('the fracture colour is the boss hue at 35 percent brightness', () => {
-    const hue = 0x3a7bff;
-    const d = dimRgb(hue, 0.35);
-    expect(hueDistance(hueOfRgb(d), hueOfRgb(hue))).toBeLessThan(3);
-    expect((d & 255) / (hue & 255)).toBeCloseTo(0.35, 1);
-    expect(d).not.toBe(0);
+function tsFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const f of readdirSync(dir)) {
+    const p = join(dir, f);
+    if (statSync(p).isDirectory()) out.push(...tsFiles(p));
+    else if (p.endsWith('.ts')) out.push(p);
+  }
+  return out;
+}
+
+describe('no dark damage anywhere (source guards)', () => {
+  const root = new URL('../../src/render', import.meta.url).pathname;
+
+  it('no erase or multiply blend mode is used anywhere in src/render', () => {
+    for (const f of tsFiles(root)) {
+      const src = readFileSync(f, 'utf8');
+      expect(src, f).not.toMatch(/['"](erase|multiply)['"]/);
+      expect(src, f).not.toMatch(new RegExp(['BLEND', 'MODES'].join('_')));
+    }
   });
 
-  it('the renderer damage pass paints nothing black or toward black', () => {
-    const src = readFileSync(new URL('../../src/render/renderer.ts', import.meta.url), 'utf8');
+  it('the damage draw uses only the damage colours, no black, no fill inside the body', () => {
+    const src = readFileSync(join(root, 'renderer.ts'), 'utf8');
     const i = src.indexOf('function drawDamage(');
     expect(i).toBeGreaterThan(0);
     const body = src.slice(i, src.indexOf('\n  }\n', i));
-    expect(body).not.toMatch(/0x000000/);
-    expect(body).not.toMatch(/mixRgb\([^)]*0x0{6}/);
-    // Every colour in the pass is the boss hue family (glow, ember) or white on the erase layer,
-    // where the erase blend ignores the colour and uses only the alpha as the cut.
+    expect(body).not.toMatch(/0x0{6}/);
+    expect(body).not.toMatch(/dimRgb|mixRgb/);
     const colours = [...body.matchAll(/color: ([\w.]+)/g)].map((m) => m[1]);
-    expect(colours.length).toBeGreaterThan(4);
-    for (const c of colours) expect(['glow', 'ember', '0xffffff']).toContain(c);
-    // White is only ever drawn on the erase layer.
-    for (const m of body.matchAll(/(\w+)\.stroke\(\{[^}]*0xffffff/g)) expect(m[1]).toBe('e');
+    expect(colours.length).toBeGreaterThanOrEqual(3);
+    for (const c of colours) expect(['dmgCol.edge', 'dmgCol.stub']).toContain(c);
   });
 });

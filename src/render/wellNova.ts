@@ -1,12 +1,11 @@
-// Supernova well (v31, look v32). On 'sim:wellNova' a gravity well erupts: over 1 s it turns from its
-// red into a shimmering multicolour state. A two arm spiral whose colour cycles through the hue ring
-// along its length (one full cycle per 2 s), shimmer points spiralling inward that pulse in
-// brightness, a halo breathing between 1.0x and 1.15x of the pull radius, and a slow stream of
-// particles that drift outward and fade in 2 s (harmless, from the shared particle pool), each
-// coloured from the same cycle. Pure maths and small fixed state only; the renderer owns the
-// Graphics and the pool.
+// Supernova well (v31, look v33 GW1 "time bomb"). On 'sim:wellNova' a gravity well erupts into a
+// white tornado: a dense spiral of NOVA_ARMS arms in near white (hsl 0 0 95 percent, the Bulwark
+// shield white) turning at NOVA_SPIN with a brightness pulse, a core that flares white, and a stream
+// of shimmer particles flung outward from the core in all neon hues (one hue ring stop per particle
+// in turn), fading over 2 s. The only ring is a thin faint white line at exactly the sim pull radius,
+// with no pulse. Pure maths and small fixed state only; the renderer owns the Graphics and the pool.
 import type { Bus, EventKey } from '../core/events';
-import { hash01 } from './color';
+import { hash01, hslToRgbInt } from './color';
 import { mixRgb } from './mapFx';
 import type { PaletteKey } from './neon';
 import type { TrailSpec } from './particlePool';
@@ -17,40 +16,45 @@ function fin(v: number, d: number): number {
 
 /** Live novas at once (wells on screen are capped at 3; one spare). */
 export const NOVA_SLOTS = 4;
-/** Spiral arms, points per arm, the arm twist (radians from core to tip) and spin (rad/s). */
-export const NOVA_ARMS = 2;
-export const NOVA_ARM_PTS = 20;
-export const NOVA_TWIST = 3.4;
-export const NOVA_SPIN = 2.2;
-/** Spiral reach as a multiple of the well's drawn radius. */
-export const NOVA_REACH = 2.1;
-/** Shimmer points orbiting inward per nova and the seconds one takes from rim to core. */
-export const NOVA_ORBITERS = 24;
+/** Tornado arms, points per arm, the arm twist (radians from core to tip) and spin (rad/s). */
+export const NOVA_ARMS = 12;
+export const NOVA_ARM_PTS = 12;
+export const NOVA_TWIST = 4.4;
+export const NOVA_SPIN = 1.5;
+/** Tornado reach as a multiple of the well's drawn radius. */
+export const NOVA_REACH = 2.4;
+/** The tornado white: hsl 0 0 95 percent, like the Bulwark shield. */
+export const NOVA_WHITE: number = hslToRgbInt(0, 0, 0.95);
+/** Arm brightness pulse: rate (Hz) and range (alpha multiplier). */
+export const NOVA_PULSE_HZ = 1.6;
+export const NOVA_PULSE_RANGE: readonly [number, number] = [0.55, 1];
+/** Shimmer flecks riding the arms per nova and the seconds one takes from rim to core. */
+export const NOVA_ORBITERS = 12;
 export const NOVA_INFALL_SEC = 1.6;
-/** Outward drift stream: particles per second per nova, their life and speed range (u/s). */
-export const NOVA_EMIT_RATE = 14;
+/** Outward shimmer stream: particles per second per nova, their life and speed range (u/s). */
+export const NOVA_EMIT_RATE = 40;
 export const NOVA_DRIFT_LIFE = 2;
-export const NOVA_DRIFT_SPEED: readonly [number, number] = [16, 30];
-/** Steady state stream particles per nova (rate x life) must stay at or under this. */
-export const NOVA_PARTICLE_BUDGET = 32;
-/** Eruption flare: the spiral grows in over this many seconds. */
+export const NOVA_DRIFT_SPEED: readonly [number, number] = [60, 120];
+/** Steady state stream particles per nova (rate x life): 60 to 90, never more than this. */
+export const NOVA_PARTICLE_BUDGET = 90;
+/** Eruption flare: the tornado grows in over this many seconds. */
 export const NOVA_GROW_SEC = 0.35;
-/** Particles a nova may add in all (swirl points plus the steady stream), and its extra draws. */
+/** Particles a nova may add in all (flecks plus the steady stream), and its Graphics rebuilds per frame. */
 export const NOVA_ADDED_PARTICLES_MAX = 96;
 export const NOVA_DRAWS_PER_WELL = 1;
+/** Pull ring: line width (u) and alpha. Drawn at exactly the sim pull radius, no multiplier. */
+export const NOVA_RING_WIDTH = 1.2;
+export const NOVA_RING_ALPHA = 0.22;
 
-// Colour cycle (look v32)
+// Colour cycle
 
-/** The hue ring the nova cycles through: palette keys, so the cycle follows applyNeon. */
+/** The hue ring the shimmer cycles through: palette keys, so the cycle follows applyNeon. */
 export const NOVA_HUE_KEYS: readonly PaletteKey[] = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'magenta'];
 export const NOVA_HUES = NOVA_HUE_KEYS.length;
 /** One full trip round the hue ring per this many seconds. */
 export const NOVA_CYCLE_SEC = 2;
-/** The well turns from its red to the cycle over this many seconds after the eruption. */
+/** The well turns from its red to the tornado over this many seconds after the eruption. */
 export const NOVA_SHIFT_SEC = 1;
-/** Halo radius as a multiple of the nova pull radius: breathes between these, at NOVA_HALO_HZ. */
-export const NOVA_HALO_MUL: readonly [number, number] = [1, 1.15];
-export const NOVA_HALO_HZ = 0.9;
 
 /** Pure: the cycle stop colours under a palette, written into out (NOVA_HUES entries). */
 export function novaCycleStops(pal: Readonly<Record<PaletteKey, number>>, out: Uint32Array): Uint32Array {
@@ -85,21 +89,48 @@ export function novaColour(stops: Uint32Array, base: number, u: number, timeSec:
   return mixRgb(base, novaCycleColour(stops, u, timeSec), shift);
 }
 
-/** Pure: halo radius at timeSec for a pull radius, breathing between NOVA_HALO_MUL. */
-export function novaHaloR(timeSec: number, pullR: number): number {
-  const b = 0.5 + 0.5 * Math.sin(fin(timeSec, 0) * NOVA_HALO_HZ * Math.PI * 2);
-  return Math.max(0, fin(pullR, 0)) * (NOVA_HALO_MUL[0] + (NOVA_HALO_MUL[1] - NOVA_HALO_MUL[0]) * b);
+/** Pure: the pull ring radius: exactly the sim pull radius (no multiplier, no pulse). */
+export function novaRingR(pullR: number): number {
+  return Math.max(0, fin(pullR, 0));
 }
 
-/** Pure: brightness pulse 0.35 to 1 of swirl point k at timeSec (each point beats on its own). */
+/** Pure: arm brightness pulse within NOVA_PULSE_RANGE at timeSec; arms ripple out of phase. */
+export function novaArmPulse(timeSec: number, arm: number): number {
+  const t = fin(timeSec, 0);
+  const w = 0.5 + 0.5 * Math.sin(t * NOVA_PULSE_HZ * Math.PI * 2 + arm * 0.9);
+  return NOVA_PULSE_RANGE[0] + (NOVA_PULSE_RANGE[1] - NOVA_PULSE_RANGE[0]) * w;
+}
+
+/** Pure: brightness pulse 0.35 to 1 of fleck k at timeSec (each fleck beats on its own). */
 export function novaPulse(timeSec: number, k: number): number {
   const t = fin(timeSec, 0);
   return 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * (5 + (k % 5)) + k * 2.1));
 }
 
-/** Pure: stream particle seq's colour: its own place on the ring, sliding with the cycle. */
+/** Pure: core flare 0 to 1 at age seconds: a white burst at the eruption, then a quick heartbeat. */
+export function novaCoreFlare(age: number, timeSec: number): number {
+  const a = Math.max(0, fin(age, 0));
+  const burst = Math.exp(-a * 3);
+  const beat = 0.5 + 0.5 * Math.sin(fin(timeSec, 0) * 9);
+  return Math.min(1, 0.55 + 0.25 * beat + 0.45 * burst);
+}
+
+/** Pure: the hue ring stop index of shimmer particle seq: the ring in turn, so every hue shows. */
+export function novaShimmerHue(seq: number): number {
+  return (((seq | 0) % NOVA_HUES) + NOVA_HUES) % NOVA_HUES;
+}
+
+/** Pure: the tornado colour at the shift share: the well red turning to the tornado white. */
+export function novaWhite(base: number, shift: number): number {
+  return mixRgb(base, NOVA_WHITE, Math.max(0, Math.min(1, fin(shift, 1))));
+}
+
+/** Pure: stream particle seq's colour: its hue ring stop (sliding with the cycle) from the red. */
 export function novaStreamColour(stops: Uint32Array, base: number, seq: number, timeSec: number, shift: number): number {
-  return novaColour(stops, base, hash01(seq * 3 + 11), timeSec, shift);
+  const n = stops.length;
+  if (n === 0) return base;
+  const u = (novaShimmerHue(seq) + 0.5) / NOVA_HUES;
+  return novaColour(stops, base, u - fin(timeSec, 0) / NOVA_CYCLE_SEC, timeSec, shift);
 }
 
 /** Pure: particles one nova adds at most: the swirl points plus the steady outward stream. */
@@ -223,7 +254,7 @@ export function novaGrow(age: number): number {
 }
 
 /**
- * Pure: one spiral arm around the origin written into out (NOVA_ARM_PTS x, y pairs, arena units).
+ * Pure: one tornado arm around the origin written into out (NOVA_ARM_PTS x, y pairs, arena units).
  * Radius grows from the core to reach along the arm; the angle winds by NOVA_TWIST and the whole
  * spiral turns at NOVA_SPIN. Arms are spaced evenly. Writes in place; allocates nothing.
  */
@@ -232,8 +263,9 @@ export function novaSpiral(timeSec: number, arm: number, reach: number, out: Flo
   const R = Math.max(0, fin(reach, 0));
   for (let k = 0; k < NOVA_ARM_PTS; k++) {
     const u = k / (NOVA_ARM_PTS - 1);
-    const r = R * (0.12 + 0.88 * u);
-    const a = spin + u * NOVA_TWIST;
+    const r = R * (0.1 + 0.9 * u);
+    // The tornado tightens toward the core: the angle winds faster near the centre.
+    const a = spin + NOVA_TWIST * Math.sqrt(u);
     out[k * 2] = Math.cos(a) * r;
     out[k * 2 + 1] = Math.sin(a) * r;
   }
@@ -259,7 +291,8 @@ export function novaOrbiter(timeSec: number, k: number, reach: number, out: Orbi
   const ph = t / NOVA_INFALL_SEC + k / NOVA_ORBITERS;
   const u = 1 - (ph - Math.floor(ph));
   const r = Math.max(0, fin(reach, 0)) * (0.1 + 0.9 * u);
-  const a = k * 2.39996 + t * NOVA_SPIN + (1 - u) * NOVA_TWIST * 1.3;
+  // Each fleck rides one arm of the tornado as it falls inward.
+  const a = t * NOVA_SPIN + ((k % NOVA_ARMS) * Math.PI * 2) / NOVA_ARMS + NOVA_TWIST * Math.sqrt(u);
   out.x = Math.cos(a) * r;
   out.y = Math.sin(a) * r;
   out.u = u;
@@ -273,24 +306,24 @@ export function novaSteadyParticles(rate: number = NOVA_EMIT_RATE, life: number 
 }
 
 /**
- * Fill out with one outward drifting shimmer particle from a nova at (x, y) whose core radius is
- * r: it starts on the core edge, floats slowly outward with almost no drag and fades over 2 s.
- * Alternates hot pink and white by sequence. No damage: it is a render particle only.
+ * Fill out with one outward shimmer particle from a nova at (x, y) whose core radius is r: it starts
+ * near the core, is flung outward at NOVA_DRIFT_SPEED with a slight swirl and fades over 2 s. Even
+ * and odd sequences take colour a and b. No damage: it is a render particle only.
  */
-export function novaDriftParticle(out: TrailSpec, x: number, y: number, r: number, seq: number, pink: number, white: number): void {
-  const a = hash01(seq * 5 + 1) * Math.PI * 2;
-  const r0 = Math.max(0, r) * (0.4 + 0.5 * hash01(seq * 5 + 2));
+export function novaDriftParticle(out: TrailSpec, x: number, y: number, r: number, seq: number, a: number, b: number): void {
+  const ang = hash01(seq * 5 + 1) * Math.PI * 2;
+  const r0 = Math.max(0, r) * (0.2 + 0.5 * hash01(seq * 5 + 2));
   const sp = NOVA_DRIFT_SPEED[0] + (NOVA_DRIFT_SPEED[1] - NOVA_DRIFT_SPEED[0]) * hash01(seq * 5 + 3);
-  // A slight swirl: the velocity leans off radial so the stream curls with the spiral.
-  const va = a + 0.5;
-  out.x = x + Math.cos(a) * r0;
-  out.y = y + Math.sin(a) * r0;
+  // A slight swirl: the velocity leans off radial so the stream curls with the tornado.
+  const va = ang + 0.35;
+  out.x = x + Math.cos(ang) * r0;
+  out.y = y + Math.sin(ang) * r0;
   out.vx = Math.cos(va) * sp;
   out.vy = Math.sin(va) * sp;
-  out.life = NOVA_DRIFT_LIFE * (0.85 + 0.15 * hash01(seq * 5 + 4));
-  out.drag = 0.15;
-  out.colour = (seq & 1) === 0 ? pink : white;
-  out.size = 0.8;
+  out.life = NOVA_DRIFT_LIFE * (0.9 + 0.1 * hash01(seq * 5 + 4));
+  out.drag = 0.05;
+  out.colour = (seq & 1) === 0 ? a : b;
+  out.size = 0.9;
 }
 
 // Bus (coded against the event name; until Swarm's change lands the key is not in Events and

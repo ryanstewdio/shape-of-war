@@ -45,9 +45,9 @@ export const TAPER_TEX_H = 12;
 export const V1_TRAIL_TEX_LEN = 32;
 
 /** Attached trail lengths on standard and high, arena units, by frame (homing separate). */
-const TAPER_LEN = { dot: 84, rapid: 56, pierce: 120, orbit: 0, homing: 150 } as const;
+const TAPER_LEN = { dot: 84, rapid: 56, pierce: 120, orbit: 0, spike: 0, homing: 150 } as const;
 /** Attached trail thickness (scale on TAPER_TEX_H) by frame. */
-const TAPER_THICK = { dot: 0.85, rapid: 0.55, pierce: 0.8, orbit: 0, homing: 0.95 } as const;
+const TAPER_THICK = { dot: 0.85, rapid: 0.55, pierce: 0.8, orbit: 0, spike: 0, homing: 0.95 } as const;
 /** High spends more: longer trails. */
 const HIGH_LEN_MUL = 1.15;
 

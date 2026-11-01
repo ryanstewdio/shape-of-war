@@ -9,6 +9,9 @@ import {
   HOMING_TRAIL_LEN_U,
   SPREAD_TRAIL_LEN_U,
   SPREAD_TRAIL_THICK,
+  SPIKE_CODE,
+  spikePoints,
+  spikeVisual,
   styleCode,
   visualForCode,
   weaponTint,
@@ -155,6 +158,36 @@ describe('crescent blade', () => {
     const pts = crescentPoints(9, 4, 14);
     for (let i = 0; i < pts.length; i += 2) {
       expect(Math.hypot(pts[i] ?? 0, pts[i + 1] ?? 0)).toBeLessThanOrEqual(9 + 1e-6);
+    }
+  });
+});
+
+// Look v33 (GW1): orbit spikes draw as sharp triangles in the weapon hue, not as blades.
+describe('orbit spikes (look v33)', () => {
+  it('a spike has its own frame and code, the orbit hue and the radial turn, no trail', () => {
+    const v = spikeVisual();
+    expect(v.frame).toBe('spike');
+    expect(v.tint).toBe(bulletStyleVisual(3, false).tint);
+    expect(v.orient).toBe('radial');
+    expect(v.trailLenU).toBe(0);
+    expect(v.emitsTrail).toBe(false);
+    expect(visualForCode(SPIKE_CODE)).toBe(v);
+    for (let s = 0; s < 4; s++) {
+      expect(styleCode(s, false)).not.toBe(SPIKE_CODE);
+      expect(styleCode(s, true)).not.toBe(SPIKE_CODE);
+    }
+    expect(BULLET_FRAMES).toContain('spike');
+  });
+
+  it('the spike is a sharp triangle: a tip on +x and a notched base, inside its atlas cell', () => {
+    const p = spikePoints(14, 5);
+    expect(p.length).toBe(8);
+    expect(p[0]).toBe(7);
+    expect(p[1]).toBe(0);
+    const c = ATLAS_CELLS.spike;
+    for (let k = 0; k < p.length; k += 2) {
+      expect(Math.abs(p[k] ?? 0)).toBeLessThanOrEqual(c.w / 2);
+      expect(Math.abs(p[k + 1] ?? 0)).toBeLessThanOrEqual(c.h / 2);
     }
   });
 });

@@ -1,4 +1,5 @@
 // v31 supernova well: spiral geometry, inward shimmer, slot matching and the stream budget.
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { PARTICLE_CAP, TRAIL_SHED_FRAC, createParticlePool, emitTrail, type TrailSpec } from '../../src/render/particlePool';
 import { stepEmitter } from '../../src/render/trails';
@@ -15,7 +16,15 @@ import {
   novaColour,
   novaCycleColour,
   novaCycleStops,
-  novaHaloR,
+  novaArmPulse,
+  novaCoreFlare,
+  novaRingR,
+  novaShimmerHue,
+  novaWhite,
+  NOVA_DRIFT_SPEED,
+  NOVA_PULSE_RANGE,
+  NOVA_SPIN,
+  NOVA_WHITE,
   novaPulse,
   novaShift,
   novaStreamColour,
@@ -55,9 +64,11 @@ describe('nova spiral', () => {
   it('arms are evenly spaced and the spiral turns with time', () => {
     const a = novaSpiral(0, 0, 40, new Float32Array(NOVA_ARM_PTS * 2));
     const b = novaSpiral(0, 1, 40, new Float32Array(NOVA_ARM_PTS * 2));
-    expect(NOVA_ARMS).toBe(2);
-    expect(b[0] ?? 0).toBeCloseTo(-(a[0] ?? 0));
-    expect(b[1] ?? 0).toBeCloseTo(-(a[1] ?? 0));
+    expect(NOVA_ARMS).toBeGreaterThanOrEqual(10);
+    expect(NOVA_ARMS).toBeLessThanOrEqual(14);
+    // Arm 1 is arm 0 turned by one arm spacing.
+    const step = (Math.PI * 2) / NOVA_ARMS;
+    expect(Math.atan2(b[1] ?? 0, b[0] ?? 0)).toBeCloseTo(Math.atan2(Math.sin(Math.atan2(a[1] ?? 0, a[0] ?? 0) + step), Math.cos(Math.atan2(a[1] ?? 0, a[0] ?? 0) + step)));
     const later = novaSpiral(0.5, 0, 40, new Float32Array(NOVA_ARM_PTS * 2));
     expect(Math.abs((later[0] ?? 0) - (a[0] ?? 0))).toBeGreaterThan(0.1);
   });
@@ -107,20 +118,25 @@ describe('nova slots', () => {
 });
 
 describe('nova emitter budget', () => {
-  it('a nova keeps its steady stream under the per nova budget, 3 wells under 10 percent of the cap', () => {
+  it('a nova keeps 60 to 90 stream particles alive, at most 96 in all, 3 wells under 15 percent of the cap', () => {
     expect(novaSteadyParticles()).toBeLessThanOrEqual(NOVA_PARTICLE_BUDGET);
-    expect(novaSteadyParticles(NOVA_EMIT_RATE, NOVA_DRIFT_LIFE) * 3).toBeLessThan(PARTICLE_CAP * 0.1);
+    expect(novaSteadyParticles()).toBeGreaterThanOrEqual(60);
+    expect(novaSteadyParticles()).toBeLessThanOrEqual(90);
+    expect(novaAddedParticles()).toBeLessThanOrEqual(96);
+    expect(novaSteadyParticles(NOVA_EMIT_RATE, NOVA_DRIFT_LIFE) * 3).toBeLessThan(PARTICLE_CAP * 0.15);
   });
 
-  it('drift particles start near the core, float outward slowly, live about 2 s, alternate colours', () => {
+  it('shimmer particles start near the core, fly outward at 60 to 120 u/s, live about 2 s, alternate colours', () => {
     const t: TrailSpec = { x: 0, y: 0, vx: 0, vy: 0, life: 0, drag: 0, colour: 0 };
     for (let seq = 1; seq < 40; seq++) {
       novaDriftParticle(t, 10, 20, 24, seq, 0xff00aa, 0xffffff);
       expect(Math.hypot(t.x - 10, t.y - 20)).toBeLessThanOrEqual(24);
-      expect(Math.hypot(t.vx, t.vy)).toBeLessThanOrEqual(30 + 1e-6);
+      expect(Math.hypot(t.vx, t.vy)).toBeLessThanOrEqual(NOVA_DRIFT_SPEED[1] + 1e-6);
+      expect(Math.hypot(t.vx, t.vy)).toBeGreaterThanOrEqual(NOVA_DRIFT_SPEED[0] - 1e-6);
+      expect(NOVA_DRIFT_SPEED).toEqual([60, 120]);
       expect((t.x - 10) * t.vx + (t.y - 20) * t.vy).toBeGreaterThan(0);
       expect(t.life).toBeLessThanOrEqual(NOVA_DRIFT_LIFE);
-      expect(t.life).toBeGreaterThan(1.6);
+      expect(t.life).toBeGreaterThan(1.75);
       expect(t.colour).toBe((seq & 1) === 0 ? 0xff00aa : 0xffffff);
     }
   });
@@ -172,18 +188,10 @@ describe('nova colour cycle (look v32)', () => {
     expect(novaColour(stops, pal.red, 0.6, 0.2, 1)).toBe(novaCycleColour(stops, 0.6, 0.2));
   });
 
-  it('the halo breathes between 1.0x and 1.15x of the pull radius', () => {
-    let lo = Infinity;
-    let hi = 0;
-    for (let t = 0; t < 3; t += 0.01) {
-      const r = novaHaloR(t, 100);
-      lo = Math.min(lo, r);
-      hi = Math.max(hi, r);
-    }
-    expect(lo).toBeGreaterThanOrEqual(100 - 1e-6);
-    expect(hi).toBeLessThanOrEqual(115 + 1e-6);
-    expect(lo).toBeLessThan(101);
-    expect(hi).toBeGreaterThan(114);
+  it('the pull ring sits at exactly the pull radius with no pulse', () => {
+    expect(novaRingR(320)).toBe(320);
+    expect(novaRingR(400)).toBe(400);
+    expect(novaRingR(-3)).toBe(0);
   });
 
   it('swirl points pulse in brightness; stream particles take their own place on the cycle', () => {
@@ -195,7 +203,7 @@ describe('nova colour cycle (look v32)', () => {
     }
     const cols = new Set<number>();
     for (let seq = 1; seq <= 24; seq++) cols.add(novaStreamColour(stops, pal.red, seq, 0.5, 1));
-    expect(cols.size).toBeGreaterThanOrEqual(12);
+    expect(cols.size).toBeGreaterThanOrEqual(NOVA_HUES);
     expect(novaStreamColour(stops, pal.red, 5, 0.5, 0)).toBe(pal.red);
   });
 
@@ -204,5 +212,61 @@ describe('nova colour cycle (look v32)', () => {
     expect(novaAddedParticles()).toBeLessThanOrEqual(NOVA_ADDED_PARTICLES_MAX);
     expect(NOVA_ADDED_PARTICLES_MAX).toBe(96);
     expect(NOVA_DRAWS_PER_WELL).toBe(1);
+  });
+});
+
+// Look v33 (GW1): the white tornado time bomb.
+describe('nova tornado (look v33)', () => {
+  const pal = computePalette(neonParams(NEON_DEFAULT).saturation);
+  const stops = novaCycleStops(pal, new Uint32Array(NOVA_HUES));
+
+  it('the base white is hsl 0 0 95 percent and the well turns to it over the shift', () => {
+    expect(NOVA_WHITE).toBe(0xf2f2f2);
+    expect(novaWhite(pal.red, 0)).toBe(pal.red);
+    expect(novaWhite(pal.red, 1)).toBe(NOVA_WHITE);
+  });
+
+  it('turns at 1.5 rad/s: the arm pattern after one second is the start turned by 1.5 rad', () => {
+    expect(NOVA_SPIN).toBe(1.5);
+    const a = novaSpiral(0, 0, 40, new Float32Array(NOVA_ARM_PTS * 2));
+    const b = novaSpiral(1, 0, 40, new Float32Array(NOVA_ARM_PTS * 2));
+    const k = NOVA_ARM_PTS - 1;
+    const d = Math.atan2(b[k * 2 + 1] ?? 0, b[k * 2] ?? 0) - Math.atan2(a[k * 2 + 1] ?? 0, a[k * 2] ?? 0);
+    expect(Math.cos(d)).toBeCloseTo(Math.cos(1.5));
+    expect(Math.sin(d)).toBeCloseTo(Math.sin(1.5));
+  });
+
+  it('arms pulse in brightness within range and the core flares', () => {
+    const vals = Array.from({ length: 60 }, (_, i) => novaArmPulse(i / 30, 0));
+    expect(Math.min(...vals)).toBeGreaterThanOrEqual(NOVA_PULSE_RANGE[0] - 1e-9);
+    expect(Math.max(...vals)).toBeLessThanOrEqual(NOVA_PULSE_RANGE[1] + 1e-9);
+    expect(Math.max(...vals) - Math.min(...vals)).toBeGreaterThan(0.3);
+    expect(novaCoreFlare(0, 0)).toBeGreaterThan(novaCoreFlare(3, 0));
+    expect(novaCoreFlare(0, 0)).toBeLessThanOrEqual(1);
+  });
+
+  it('the shimmer cycles through all 8 neon hues in turn', () => {
+    expect(NOVA_HUES).toBeGreaterThanOrEqual(8);
+    const idx = new Set<number>();
+    for (let s = 0; s < NOVA_HUES; s++) idx.add(novaShimmerHue(s));
+    expect(idx.size).toBe(NOVA_HUES);
+    expect(novaShimmerHue(-1)).toBe(NOVA_HUES - 1);
+    const hues: number[] = [];
+    for (let s = 0; s < NOVA_HUES; s++) {
+      const c = novaStreamColour(stops, pal.red, s, 0.3, 1);
+      const h = hueOfRgb(c);
+      if (chromaOfRgb(c) > 0.3 && hues.every((x) => hueDistance(x, h) >= 15)) hues.push(h);
+    }
+    expect(hues.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it('the renderer draws one ring at exactly the pull radius, no pulse, and never clears per nova', () => {
+    const src = readFileSync(new URL('../../src/render/renderer.ts', import.meta.url), 'utf8');
+    const i = src.indexOf('function drawNova(');
+    const body = src.slice(i, src.indexOf('\n  }\n', i));
+    expect(body).not.toMatch(/novaHaloR|\.clear\(/);
+    expect(body).toMatch(/g\.circle\(x, y, novaRingR\(pullR\)\)/);
+    expect(NOVA_DRAWS_PER_WELL).toBe(1);
+    expect(src).toMatch(/wellInNova\(w, i\) \? NOVA_RADIUS : PULL_RADIUS/);
   });
 });
