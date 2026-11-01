@@ -9,8 +9,14 @@
 // fade (fluidPhaseWeights), so the shear never winds up without bound. The gas is densest near the
 // core, fades to nothing at the pull radius edge (fluidEdgeFade) and carries a bright core and thin
 // prismatic refraction fringes along the gas band edges in the palette hues.
+// GW5 galaxy: the flow runs at GALAXY_SPEED (1.3x angular speed and inward drift). The gas is
+// brighter and denser, a soft additive glow pass (a low frequency noise sample advected with the
+// gas) lifts the white without raising the alpha as much, a broad galactic core bulge sits under the
+// tight core, and GALAXY_ARMS log spiral arms of brighter gas (the same spiral the motes ride, turned
+// by uArm) carry dark dust lanes just off their crests.
 
 import type { EffectsTier } from './effects';
+import { GALAXY_ARMS, GALAXY_SPEED, WHIRL_CW, WHIRL_TWIST } from './wellNova';
 
 /** Pure: Standard and High draw the nova gas with the shader quad; Low keeps the geometry path. */
 export function fluidShaderOn(tier: EffectsTier): boolean {
@@ -46,11 +52,23 @@ export const FLUID_CORE = 0.16;
 /** Refraction fringe half width (in noise value) and its strength. */
 export const FLUID_FRINGE_W = 0.022;
 export const FLUID_FRINGE_A = 0.32;
+/** GW5: flow speed multiplier on the angular speed and the inward drift (1.3x GW4). */
+export const FLUID_SPEED = GALAXY_SPEED;
+/** GW5: galactic core bulge radius share and strength. */
+export const FLUID_BULGE = 0.3;
+export const FLUID_BULGE_A = 0.42;
+/** GW5: soft additive glow pass strength and its noise scale (x the gas noise frequency). */
+export const FLUID_GLOW_A = 0.34;
+export const FLUID_GLOW_SCALE = 0.42;
+/** GW5: arm brightening, the dust lane depth, and the lane offset (rad of arm phase) behind the crest. */
+export const FLUID_ARM_A = 0.55;
+export const FLUID_LANE = 0.72;
+export const FLUID_LANE_OFF = 1.15;
 
 /** Pure: angular speed (rad/s, positive is clockwise on screen) at radius share u for a spin. */
 export function fluidOmega(u: number, spin = 1): number {
   const c = Math.max(0, Math.min(1, fin(u, 1)));
-  return FLUID_CW * fin(spin, 1) * (FLUID_OMEGA_BASE + FLUID_OMEGA_RISE / (c + FLUID_OMEGA_SOFT));
+  return FLUID_CW * FLUID_SPEED * fin(spin, 1) * (FLUID_OMEGA_BASE + FLUID_OMEGA_RISE / (c + FLUID_OMEGA_SOFT));
 }
 
 /** Pure: the angle gas at (theta, share u) had tau seconds ago (turned back against the flow). */
@@ -60,7 +78,7 @@ export function fluidSourceAngle(theta: number, u: number, tau: number, spin = 1
 
 /** Pure: the radius share gas at share u had tau seconds ago (it drifts inward, so it was further out). */
 export function fluidSourceRadius(u: number, tau: number): number {
-  return Math.max(0, fin(u, 0)) * Math.exp(FLUID_DRIFT * Math.max(0, fin(tau, 0)));
+  return Math.max(0, fin(u, 0)) * Math.exp(FLUID_DRIFT * FLUID_SPEED * Math.max(0, fin(tau, 0)));
 }
 
 /** Pure: edge fade 1 inside FLUID_EDGE0, smoothly to 0 at the pull radius (share 1) and beyond. */
@@ -111,7 +129,7 @@ function glf(v: number): string {
 }
 
 /** The uniforms the fluid shader declares (all f32 or vec3 f32). */
-export const FLUID_UNIFORMS: readonly string[] = ['uTime', 'uRadius', 'uSpin', 'uSeed', 'uAlpha', 'uCore', 'uGlow', 'uWhite', 'uHue0', 'uHue1', 'uHue2', 'uHue3'];
+export const FLUID_UNIFORMS: readonly string[] = ['uTime', 'uRadius', 'uSpin', 'uSeed', 'uAlpha', 'uCore', 'uGlow', 'uWhite', 'uHue0', 'uHue1', 'uHue2', 'uHue3', 'uArm'];
 
 /**
  * Vertex shader: the quad's corners are the unit square -1 to 1 (the mesh scale is the reach), passed
@@ -153,6 +171,7 @@ uniform vec3 uHue0;
 uniform vec3 uHue1;
 uniform vec3 uHue2;
 uniform vec3 uHue3;
+uniform float uArm;
 
 float hash12(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -182,16 +201,17 @@ float fbm(vec2 p) {
     return s / ${glf(1 - Math.pow(0.5, FLUID_OCTAVES))};
 }
 
-float layer(vec2 q, float r, float tau, float salt) {
-    float w = uSpin * (${glf(FLUID_OMEGA_BASE)} + ${glf(FLUID_OMEGA_RISE)} / (r + ${glf(FLUID_OMEGA_SOFT)}));
+vec2 layer(vec2 q, float r, float tau, float salt) {
+    float w = ${glf(FLUID_SPEED)} * uSpin * (${glf(FLUID_OMEGA_BASE)} + ${glf(FLUID_OMEGA_RISE)} / (r + ${glf(FLUID_OMEGA_SOFT)}));
     float ang = ${glf(-FLUID_CW)} * w * tau;
     float c = cos(ang);
     float s = sin(ang);
-    float k = exp(${glf(FLUID_DRIFT)} * tau);
+    float k = exp(${glf(FLUID_DRIFT * FLUID_SPEED)} * tau);
     vec2 src = vec2(c * q.x - s * q.y, s * q.x + c * q.y) * k;
     vec2 p = src * (uRadius / ${glf(FLUID_SCALE)}) + vec2(uSeed * 17.0 + salt * 31.7, uSeed * 5.3 - salt * 13.1);
     vec2 warp = vec2(vnoise(p * 0.7 + 3.1), vnoise(p * 0.7 - 7.7)) - 0.5;
-    return fbm(p + ${glf(FLUID_WARP)} * 2.0 * warp);
+    float glow = vnoise(p * ${glf(FLUID_GLOW_SCALE)} + warp + 5.3);
+    return vec2(fbm(p + ${glf(FLUID_WARP)} * 2.0 * warp), glow);
 }
 
 vec3 hueRing(float h) {
@@ -213,21 +233,36 @@ void main(void) {
     float f2 = fract(ph + 0.5);
     float w1 = 1.0 - abs(2.0 * f1 - 1.0);
     float w2 = 1.0 - w1;
-    float n1 = layer(vPos, r, f1 * ${glf(FLUID_CYCLE)}, floor(ph));
-    float n2 = layer(vPos, r, f2 * ${glf(FLUID_CYCLE)}, floor(ph + 0.5) + 0.5);
+    vec2 l1 = layer(vPos, r, f1 * ${glf(FLUID_CYCLE)}, floor(ph));
+    vec2 l2 = layer(vPos, r, f2 * ${glf(FLUID_CYCLE)}, floor(ph + 0.5) + 0.5);
+    float wn = sqrt(w1 * w1 + w2 * w2);
     // Variance keeping cross fade, so the gas keeps its contrast mid fade.
-    float n = 0.5 + ((n1 - 0.5) * w1 + (n2 - 0.5) * w2) / sqrt(w1 * w1 + w2 * w2);
+    float n = 0.5 + ((l1.x - 0.5) * w1 + (l2.x - 0.5) * w2) / wn;
+    float gl = 0.5 + ((l1.y - 0.5) * w1 + (l2.y - 0.5) * w2) / wn;
     float edge = 1.0 - smoothstep(${glf(FLUID_EDGE0)}, 1.0, r);
-    float dens = 1.0 - 0.65 * r;
-    float gas = smoothstep(0.4, 0.78, n);
-    float fil = smoothstep(0.7, 0.92, n) * (1.0 - r);
-    float aGas = (0.1 + 0.5 * gas + 0.35 * fil) * dens * edge * (0.75 + 0.5 * uGlow);
+    float dens = 1.0 - 0.6 * r;
+    // Galaxy arms: the motes' log spiral turned by uArm, roughened by the gas noise.
+    float th = atan(vPos.y, vPos.x);
+    float sr = max(r, ${glf(0.12)});
+    float armPh = ${glf(GALAXY_ARMS)} * (th - uArm - ${glf(WHIRL_CW * WHIRL_TWIST)} * log(1.0 / sr)) + (n - 0.5) * 1.6;
+    float arm = smoothstep(0.35, 1.0, 0.5 + 0.5 * cos(armPh)) * smoothstep(0.08, 0.3, r);
+    float lane = smoothstep(0.7, 1.0, 0.5 + 0.5 * cos(armPh + ${glf(FLUID_LANE_OFF)})) * (1.0 - arm) * smoothstep(0.14, 0.4, r);
+    float gas = smoothstep(0.36, 0.74, n);
+    float fil = smoothstep(0.66, 0.9, n) * (1.0 - r);
+    float aGas = (0.16 + 0.6 * gas + 0.42 * fil + ${glf(FLUID_ARM_A)} * arm * (0.5 + gas)) * dens * edge * (0.8 + 0.5 * uGlow);
+    aGas *= 1.0 - ${glf(FLUID_LANE)} * lane;
+    // Soft additive glow pass: low frequency gas light, more colour than cover.
+    float glow = smoothstep(0.3, 0.85, gl) * (0.55 + 0.45 * arm) * dens * edge * ${glf(FLUID_GLOW_A)} * (0.6 + 0.4 * uGlow);
     float fr = (1.0 - smoothstep(0.0, ${glf(FLUID_FRINGE_W)}, abs(n - 0.56))) * edge * (0.35 + 0.65 * r);
     float hue = fract(n * 3.0 + atan(vPos.y, vPos.x) * 0.1592 + uTime * 0.25);
     float aFr = fr * ${glf(FLUID_FRINGE_A)} * uGlow;
     float aCore = exp(-r * r / ${glf(FLUID_CORE * FLUID_CORE)}) * uCore;
-    vec3 rgb = uWhite * aGas + hueRing(hue) * aFr + vec3(aCore);
-    float a = clamp(aGas + aFr + aCore, 0.0, 1.0);
-    finalColor = vec4(min(rgb, vec3(a)), a) * uAlpha;
+    float aBulge = exp(-r * r / ${glf(FLUID_BULGE * FLUID_BULGE)}) * ${glf(FLUID_BULGE_A)} * (0.6 + 0.4 * uCore);
+    vec3 rgb = uWhite * (aGas + aBulge) + hueRing(hue) * aFr + vec3(aCore);
+    float a = clamp(aGas + aFr + aCore + aBulge, 0.0, 1.0);
+    // Premultiplied out: the glow adds light (rgb above alpha blends additively) for half its cover.
+    rgb = min(rgb, vec3(a)) + (uWhite * 0.6 + 0.4) * glow;
+    a = clamp(a + 0.5 * glow, 0.0, 1.0);
+    finalColor = vec4(min(rgb, vec3(1.0)), a) * uAlpha;
 }
 `;

@@ -194,13 +194,13 @@ describe('whirlpool geometry', () => {
 });
 
 describe('whirlpool budget and renderer', () => {
-  it('60 to 90 dust motes, at most 96 particles in all, at most 3 gas layers, one draw per well', () => {
-    expect(WHIRL_MOTES).toBeGreaterThanOrEqual(60);
-    expect(WHIRL_MOTES).toBeLessThanOrEqual(90);
+  it('GW5: about 2x the GW4 dust (120 to 140 motes), at most 192 particles in all, at most 3 gas layers, one draw per well', () => {
+    expect(WHIRL_MOTES).toBeGreaterThanOrEqual(120);
+    expect(WHIRL_MOTES).toBeLessThanOrEqual(140);
     expect(novaAddedParticles()).toBe(WHIRL_MOTES + WHIRL_SPARKS + WHIRL_WISPS + NOVA_GLINTS);
     expect(WHIRL_GAS_LAYERS).toBeLessThanOrEqual(3);
     expect(novaAddedParticles()).toBeLessThanOrEqual(NOVA_ADDED_PARTICLES_MAX);
-    expect(NOVA_ADDED_PARTICLES_MAX).toBe(96);
+    expect(NOVA_ADDED_PARTICLES_MAX).toBe(192);
     expect(NOVA_DRAWS_PER_WELL).toBe(1);
   });
 

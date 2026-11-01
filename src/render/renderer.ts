@@ -332,16 +332,20 @@ import {
   createNovaSnakeState,
   NOVA_SNAKE_CORE_A,
   NOVA_SNAKE_CORE_W,
+  createRibbonPt,
   NOVA_SNAKE_GLINT_SIZE,
   NOVA_SNAKE_GLINTS,
   NOVA_SNAKE_GLOW_W,
   NOVA_SNAKE_TRACK,
+  NOVA_STREAM_GLINT_SIZE,
+  NOVA_STREAM_GLINTS,
+  NOVA_STREAM_RANGE,
+  novaRibbonAt,
   novaSnakeCount,
-  novaSnakeGlintShare,
   novaSnakeGlow,
   novaSnakeMark,
   novaSnakeSweep,
-  polyAt,
+  novaStreamAt,
 } from './novaSnake';
 import { BOSS_IDS } from '../levelgen/leveldef';
 import {
@@ -536,6 +540,11 @@ import {
   novaColour,
   novaGlintSpot,
   novaGrow,
+  GALAXY_ARMS,
+  GALAXY_SPEED,
+  galaxyArmBase,
+  galaxyArmUniform,
+  galaxyTwinkle,
   novaShift,
   NOVA_GLINT_SIZE,
   NOVA_GLINTS,
@@ -1286,6 +1295,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const novaSnakes = createNovaSnakeState();
   const snakePts = new Float32Array((SNAKE_SEGMENTS + 1) * 2);
   const snakeDot = { x: 0, y: 0 };
+  const ribbonPt = createRibbonPt();
   const stormG = new Graphics({ label: 'tempestling' });
   // Look GW2: well arrival and snake emergence state, the chainsaw layer and the boss shell.
   const arrive = createArriveState();
@@ -1315,6 +1325,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     hue1: 0xffffff,
     hue2: 0xffffff,
     hue3: 0xffffff,
+    arm: 0,
   };
   const glint = createGlint();
   const glintPts = new Float32Array(GLINT_STAR_PTS * 2);
@@ -3393,6 +3404,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     novaCycleStops(palette, novaStops);
     const f = novaCoreFlare(age, timeSec);
     const shader = fluidShaderOn(getEffectsTier());
+    // GW5 galaxy: every tier flows at GALAXY_SPEED; the arms start at a hashed angle per well.
+    const rate = GALAXY_SPEED;
+    const armBase = galaxyArmBase(id);
     if (shader) {
       // GW4: Standard and High draw the gas as one shader quad sized to the pull radius.
       fluidP.x = x;
@@ -3409,19 +3423,20 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       fluidP.hue1 = palette.magenta;
       fluidP.hue2 = palette.yellow;
       fluidP.hue3 = palette.blue;
+      fluidP.arm = galaxyArmUniform(timeSec, armBase, rate);
       fluid.set(slot, fluidP);
     } else {
       // Low keeps the GW3 geometry: gas sectors trailing each band, one fill per layer.
       for (let L = 0; L < WHIRL_GAS_LAYERS; L++) {
         for (let b = 0; b < WHIRL_BANDS; b++) {
-          whirlGasSector(timeSec, b, WHIRL_BANDS, L, reach, id, gasPts);
+          whirlGasSector(timeSec, b, WHIRL_BANDS, L, reach, id, gasPts, rate);
           gasRun(g, x, y);
         }
         g.fill({ color: white, alpha: whirlGasAlpha(L) * grow });
       }
       // Bands: three layered passes, wide and faint to thin and bright, then dashes sliding down.
       for (let b = 0; b < WHIRL_BANDS; b++) {
-        whirlBand(timeSec, b, WHIRL_BANDS, reach, novaArm, 1, id);
+        whirlBand(timeSec, b, WHIRL_BANDS, reach, novaArm, rate, id);
         novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
         g.stroke({ width: reach * 0.09, color: white, alpha: 0.07 * grow, cap: 'round', join: 'round' });
         novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
@@ -3430,11 +3445,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         g.stroke({ width: 1.6, color: white, alpha: 0.45 * grow, cap: 'round', join: 'round' });
         const base = (b * Math.PI * 2) / WHIRL_BANDS;
         for (let d = 0; d < WHIRL_DASHES; d++) {
-          const u0 = whirlDashU(timeSec, b, d);
+          const u0 = whirlDashU(timeSec, b, d, rate);
           for (let q = 0; q < 4; q++) {
             const u = Math.min(1, u0 + (WHIRL_DASH_U * q) / 3);
-            const rr = whirlFlowRadius(u, reach, timeSec, id, b);
-            const an = whirlFlowAngle(u, timeSec, base, id);
+            const rr = whirlFlowRadius(u, reach, timeSec, id, b, rate);
+            const an = whirlFlowAngle(u, timeSec, base, id, rate);
             if (q === 0) g.moveTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
             else g.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
           }
@@ -3443,7 +3458,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       }
       // Wisps peel off the band edges and stretch along the flow.
       for (let k = 0; k < WHIRL_WISPS; k++) {
-        const wa = whirlWisp(timeSec, id, k, reach, wispPts);
+        const wa = whirlWisp(timeSec, id, k, reach, wispPts, rate);
         if (wa <= 0.01) continue;
         for (let q = 0; q < WHIRL_WISP_PTS; q++) {
           const px = x + (wispPts[q * 2] ?? 0);
@@ -3456,12 +3471,18 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       // The core flares white (the shader draws its own core on the other tiers).
       g.circle(x, y, r * 1.5 * grow).fill({ color: white, alpha: 0.18 * f });
     }
-    // Dust: motes in four brightness buckets, one fill each.
+    // Star dust: motes (most on the arms, streaming along them) with tiny twinkles, in four
+    // brightness buckets, one fill each. Low keeps half the GW5 count (the GW4 count).
+    const moteN = shader ? WHIRL_MOTES : WHIRL_MOTES >> 1;
     for (let k = 0; k < WHIRL_MOTES; k++) {
-      whirlMote(timeSec, id, k, reach, novaMote);
+      if (k >= moteN) {
+        motePts[k * 3 + 2] = 0;
+        continue;
+      }
+      whirlMote(timeSec, id, k, reach, novaMote, rate, GALAXY_ARMS, armBase);
       motePts[k * 3] = x + novaMote.x;
       motePts[k * 3 + 1] = y + novaMote.y;
-      motePts[k * 3 + 2] = novaMote.a;
+      motePts[k * 3 + 2] = novaMote.a * galaxyTwinkle(id, k, timeSec);
     }
     for (let bk = 0; bk < 4; bk++) {
       const lo = bk / 4;
@@ -3478,14 +3499,14 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
     // The coloured spark motes stay on top of the gas, steady (the glints are the shimmer now).
     for (let k = 0; k < WHIRL_SPARKS; k++) {
-      whirlMote(timeSec, id + 7919, k, reach, novaMote);
+      whirlMote(timeSec, id + 7919, k, reach, novaMote, rate);
       const c = novaStreamColour(novaStops, red, k, timeSec, shift);
       g.circle(x + novaMote.x, y + novaMote.y, 1.8).fill({ color: c, alpha: Math.min(1, novaMote.a * 1.4) * grow });
     }
     // GW4 crystal shimmer: gem glints pop in and out on the flow, prismatic with a white hot centre.
     for (let k = 0; k < NOVA_GLINTS; k++) {
       glintAt(id * 13 + 1, k, timeSec, glint);
-      novaGlintSpot(glint.a, glint.b, timeSec, id, reach, glintPt);
+      novaGlintSpot(glint.a, glint.b, timeSec, id, reach, glintPt, rate);
       drawGlint(g, x + glintPt.x, y + glintPt.y, glintSize(NOVA_GLINT_SIZE, glint.flare) * grow, glint.rot, novaColour(novaStops, red, glint.hue, 0, shift), glint.flare * grow);
     }
     g.circle(x, y, r * (0.6 + 0.25 * f) * grow).fill({ color: white, alpha: 0.45 * f });
@@ -3560,8 +3581,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
 
   /**
    * GW3 nova snakes: every tracked snake (it crawled out of a well) draws a faint white shimmer band
-   * and a white core line through its head and segments, with NOVA_SNAKE_GLINTS gem glints travelling
-   * down the body (GW4), on the shared well layer.
+   * and a white core line through its head and segments, with a ribbon of NOVA_SNAKE_GLINTS gem glints
+   * orbiting it in a loose helix and, near its well, NOVA_STREAM_GLINTS glints streaming from the
+   * whirlpool to the head (GW5), on the shared well layer.
    */
   function drawNovaSnakes(w: World, alpha: number, timeSec: number): void {
     if (novaSnakeCount(novaSnakes) === 0) return;
@@ -3592,14 +3614,32 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         if (pass === 0) g.stroke({ width: NOVA_SNAKE_GLOW_W, color: NOVA_WHITE, alpha: novaSnakeGlow(timeSec, h), cap: 'round', join: 'round' });
         else g.stroke({ width: NOVA_SNAKE_CORE_W, color: 0xffffff, alpha: NOVA_SNAKE_CORE_A, cap: 'round', join: 'round' });
       }
-      // GW4: gem glints travel down the body (the shimmer), each popping with its own hue.
+      // GW5: a ribbon of gem glints orbits the head and body in a loose helix, drifting tailward.
       novaCycleStops(palette, novaStops);
       for (let d = 0; d < NOVA_SNAKE_GLINTS; d++) {
-        const p = novaSnakeGlintShare(timeSec, h, d);
-        polyAt(snakePts, n, p, snakeDot);
+        novaRibbonAt(snakePts, n, timeSec, h, d, ribbonPt);
         glintAt(head * 31 + 7, d, timeSec, glint);
-        const body = Math.sin(Math.PI * p);
-        drawGlint(g, snakeDot.x, snakeDot.y, glintSize(NOVA_SNAKE_GLINT_SIZE, glint.flare), glint.rot, novaColour(novaStops, 0xffffff, glint.hue, 0, 1), (0.35 + 0.65 * glint.flare) * (0.4 + 0.6 * body));
+        const front = 0.55 + 0.45 * (0.5 + 0.5 * ribbonPt.depth);
+        const tail = 1 - 0.5 * ribbonPt.p;
+        drawGlint(g, ribbonPt.x, ribbonPt.y, glintSize(NOVA_SNAKE_GLINT_SIZE, glint.flare) * (0.75 + 0.25 * front), glint.rot, novaColour(novaStops, 0xffffff, glint.hue, 0, 1), (0.4 + 0.6 * glint.flare) * front * tail);
+      }
+      // GW5: near its well a stream of glints flows from the whirlpool to the head.
+      const well = st.snakeWell[slot] ?? -1;
+      if (well >= 0 && w.alive[well] === 1 && w.kind[well] === KIND_GRAVITY_WELL) {
+        const wx = interp(w.prevX[well] ?? 0, w.x[well] ?? 0, alpha);
+        const wy = interp(w.prevY[well] ?? 0, w.y[well] ?? 0, alpha);
+        const hx = snakePts[0] ?? 0;
+        const hy = snakePts[1] ?? 0;
+        const ddx = hx - wx;
+        const ddy = hy - wy;
+        if (ddx * ddx + ddy * ddy < NOVA_STREAM_RANGE * NOVA_STREAM_RANGE) {
+          for (let d = 0; d < NOVA_STREAM_GLINTS; d++) {
+            const sa = novaStreamAt(wx, wy, hx, hy, timeSec, h, d, snakeDot);
+            if (sa <= 0.02) continue;
+            glintAt(head * 31 + 911, d, timeSec, glint);
+            drawGlint(g, snakeDot.x, snakeDot.y, glintSize(NOVA_STREAM_GLINT_SIZE, glint.flare), glint.rot, novaColour(novaStops, 0xffffff, glint.hue, 0, 1), (0.45 + 0.55 * glint.flare) * sa);
+          }
+        }
       }
     }
   }

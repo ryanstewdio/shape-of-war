@@ -101,10 +101,8 @@ describe('nova snake shimmer', () => {
 });
 
 describe('GW4 nova snake glints', () => {
-  it('3 to 5 glints spread down the body and travel tailward', async () => {
+  it('the ribbon glint slots spread down the body and travel tailward', async () => {
     const m = await import('../../src/render/novaSnake');
-    expect(m.NOVA_SNAKE_GLINTS).toBeGreaterThanOrEqual(3);
-    expect(m.NOVA_SNAKE_GLINTS).toBeLessThanOrEqual(5);
     const a = m.novaSnakeGlintShare(1, 0.3, 0);
     const b = m.novaSnakeGlintShare(1.05, 0.3, 0);
     expect(b).toBeGreaterThan(a);

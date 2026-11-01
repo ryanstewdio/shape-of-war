@@ -20,6 +20,7 @@ function makeUniforms(): UniformGroup<{
   uHue1: { value: Float32Array; type: 'vec3<f32>' };
   uHue2: { value: Float32Array; type: 'vec3<f32>' };
   uHue3: { value: Float32Array; type: 'vec3<f32>' };
+  uArm: { value: number; type: 'f32' };
 }> {
   return new UniformGroup({
     uTime: { value: 0, type: 'f32' },
@@ -34,6 +35,7 @@ function makeUniforms(): UniformGroup<{
     uHue1: { value: new Float32Array(3), type: 'vec3<f32>' },
     uHue2: { value: new Float32Array(3), type: 'vec3<f32>' },
     uHue3: { value: new Float32Array(3), type: 'vec3<f32>' },
+    uArm: { value: 0, type: 'f32' },
   });
 }
 
@@ -57,6 +59,8 @@ export interface FluidQuadParams {
   hue1: number;
   hue2: number;
   hue3: number;
+  /** GW5: arm 0's rim angle this frame (rad, 0 to 2 pi; galaxyArmUniform). */
+  arm: number;
 }
 
 export interface WellFluidView {
@@ -117,6 +121,7 @@ export function createWellFluidView(): WellFluidView {
     u.uAlpha = p.alpha;
     u.uCore = p.core;
     u.uGlow = p.glow;
+    u.uArm = p.arm;
     rgbUnit(p.white, u.uWhite);
     rgbUnit(p.hue0, u.uHue0);
     rgbUnit(p.hue1, u.uHue1);

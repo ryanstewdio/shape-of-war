@@ -13,6 +13,9 @@
 // (wellFluid.ts, wellFluidView.ts); Low keeps this geometry path. On every tier the coloured spark
 // motes stay on top, steady, and the shimmer is NOVA_GLINTS gem glints (gemGlint.ts) popping in and
 // out on the flow.
+// GW5 galaxy: the nova flow runs at GALAXY_SPEED (1.3x, core and rim, every tier), the gas gathers
+// into GALAXY_ARMS log spiral arms that turn with the flow (galaxyArmAngle), and twice the star
+// dust: most motes start on an arm so they stream along it (whirlMote with arms), with a twinkle.
 import type { Bus, EventKey } from '../core/events';
 import { hash01, hslToRgbInt } from './color';
 import { mixRgb } from './mapFx';
@@ -29,7 +32,7 @@ export const NOVA_WHITE: number = hslToRgbInt(0, 0, 0.95);
 /** Eruption flare: the whirlpool grows in over this many seconds. */
 export const NOVA_GROW_SEC = 0.35;
 /** Particles a nova may add in all (dust motes, spark motes, wisps and glints), and its Graphics rebuilds per frame. */
-export const NOVA_ADDED_PARTICLES_MAX = 96;
+export const NOVA_ADDED_PARTICLES_MAX = 192;
 export const NOVA_DRAWS_PER_WELL = 1;
 
 // Whirlpool flow. A point at radius share u (0 core, 1 rim) sits at radius
@@ -56,7 +59,7 @@ export const WHIRL_DASHES = 3;
 /** Dash length as a share of the rim to core path. */
 export const WHIRL_DASH_U = 0.14;
 /** Dust motes, multicolour shimmer sparks and peeling gas wisps per nova. */
-export const WHIRL_MOTES = 64;
+export const WHIRL_MOTES = 128;
 export const WHIRL_SPARKS = 16;
 export const WHIRL_WISPS = 8;
 /** GW4 gem glints per nova, their peak arm length (u) and the flow share band they pop in. */
@@ -101,6 +104,66 @@ export const CALM_BANDS = 2;
 export const CALM_MOTES = 10;
 export const CALM_REACH = 2.2;
 export const CALM_RATE = 0.3;
+
+// GW5 galaxy
+
+/** Nova flow rate: 1.3x the GW4 flow at the core and the rim (the calm swirl keeps its own rate). */
+export const GALAXY_SPEED = 1.3;
+/** Logarithmic spiral arms of brighter gas (2 to 4), dust lanes between them. */
+export const GALAXY_ARMS = 3;
+/** Share of the dust motes that start on an arm (the rest fill the disc). */
+export const GALAXY_ARM_SHARE = 0.75;
+/** Angular spread (rad, full width) of the arm motes about the arm crest. */
+export const GALAXY_ARM_SPREAD = 0.5;
+/** Mote twinkle clock (Hz, base) and depth (share of the alpha). */
+export const GALAXY_TWINKLE_HZ = 2.3;
+export const GALAXY_TWINKLE = 0.45;
+
+/** Pure: the fixed start angle (rad, 0 to 2 pi) of well id's first arm (hash01, never the PRNG). */
+export function galaxyArmBase(id: number): number {
+  return hash01(((id | 0) * 5179 + 71) | 0) * Math.PI * 2;
+}
+
+/**
+ * Pure: the angle of arm j's crest at radius share s (WHIRL_CORE to 1, s = r / reach) at timeSec:
+ * the same log spiral as the motes, turning rigidly at WHIRL_SPIN x rate, so motes started on the
+ * arm stay on it as they fall in. The shader draws the same arms (uArm is this at s = 1, j = 0).
+ */
+export function galaxyArmAngle(j: number, s: number, timeSec: number, base: number, rate = GALAXY_SPEED, arms = GALAXY_ARMS): number {
+  const sh = Math.max(WHIRL_CORE, Math.min(1, fin(s, 1)));
+  const n = Math.max(1, arms | 0);
+  return fin(base, 0) + ((j | 0) * Math.PI * 2) / n + WHIRL_CW * (WHIRL_SPIN * fin(rate, 1) * fin(timeSec, 0) + WHIRL_TWIST * Math.log(1 / sh));
+}
+
+/** Pure: the arm rotation uniform: arm 0's rim angle at timeSec wrapped to 0 to 2 pi (keeps the GPU trig small). */
+export function galaxyArmUniform(timeSec: number, base: number, rate = GALAXY_SPEED): number {
+  const a = galaxyArmAngle(0, 1, timeSec, base, rate);
+  const t = Math.PI * 2;
+  return a - Math.floor(a / t) * t;
+}
+
+/**
+ * Pure: the arm crest strength 0 to 1 at angle theta and radius share s: 1 on an arm crest, 0 midway
+ * between arms, the same profile the shader uses before its noise.
+ */
+export function galaxyArmWave(theta: number, s: number, timeSec: number, base: number, rate = GALAXY_SPEED, arms = GALAXY_ARMS): number {
+  const n = Math.max(1, arms | 0);
+  const d = fin(theta, 0) - galaxyArmAngle(0, s, timeSec, base, rate, n);
+  return 0.5 + 0.5 * Math.cos(n * d);
+}
+
+/** Pure: twinkle multiplier (1 - GALAXY_TWINKLE to 1) of mote k of well id at timeSec. */
+export function galaxyTwinkle(id: number, k: number, timeSec: number): number {
+  const h = hash01(((id | 0) * 337 + (k | 0) * 59 + 3) | 0);
+  const w = Math.sin(fin(timeSec, 0) * GALAXY_TWINKLE_HZ * (1 + 1.7 * h) * Math.PI * 2 + h * 40);
+  const sharp = w > 0 ? w * w * w * w : 0;
+  return 1 - GALAXY_TWINKLE + GALAXY_TWINKLE * sharp;
+}
+
+/** Pure: true when mote k starts on an arm (GALAXY_ARM_SHARE of the motes, spread evenly). */
+export function galaxyArmMote(k: number): boolean {
+  return (k | 0) % 4 !== 3;
+}
 
 // Colour cycle
 
@@ -187,10 +250,10 @@ export function novaAddedParticles(): number {
  * about the origin, written into out: flow share NOVA_GLINT_U0 to NOVA_GLINT_U1 from b, on the
  * sheared spiral that starts at angle a x 2 pi, so it rides the flow for its short life.
  */
-export function novaGlintSpot(a: number, b: number, timeSec: number, id: number, reach: number, out: { x: number; y: number }): { x: number; y: number } {
+export function novaGlintSpot(a: number, b: number, timeSec: number, id: number, reach: number, out: { x: number; y: number }, rate = 1): { x: number; y: number } {
   const u = NOVA_GLINT_U0 + (NOVA_GLINT_U1 - NOVA_GLINT_U0) * Math.max(0, Math.min(1, fin(b, 0)));
   const r = whirlRadius(u, reach);
-  const an = whirlFlowAngle(u, timeSec, fin(a, 0) * Math.PI * 2, id);
+  const an = whirlFlowAngle(u, timeSec, fin(a, 0) * Math.PI * 2, id, rate);
   out.x = Math.cos(an) * r;
   out.y = Math.sin(an) * r;
   return out;
@@ -491,15 +554,20 @@ export interface Mote {
  * Pure: mote k of well id at timeSec within reach, about the origin. Each mote falls from the rim
  * to the core over WHIRL_INFALL_SEC / rate on its own log spiral (a streamline of the sheared flow)
  * with a little turbulence, then respawns at the rim. The phase and the spiral's start angle come
- * from hash01 of the id and k (no PRNG).
+ * from hash01 of the id and k (no PRNG). GW5: with arms > 0 a galaxyArmMote starts on one of the
+ * arms (base armBase, see galaxyArmAngle) within GALAXY_ARM_SPREAD, so it streams along that arm.
  */
-export function whirlMote(timeSec: number, id: number, k: number, reach: number, out: Mote, rate = 1): Mote {
+export function whirlMote(timeSec: number, id: number, k: number, reach: number, out: Mote, rate = 1, arms = 0, armBase = 0): Mote {
   const seed = (id | 0) * 977 + (k | 0) * 131;
   const t = fin(timeSec, 0);
   const rt = fin(rate, 1);
   const ph = (t * rt) / WHIRL_INFALL_SEC + hash01(seed + 1);
   const u = 1 - (ph - Math.floor(ph));
-  const base = hash01(seed + 2) * Math.PI * 2;
+  const na = arms | 0;
+  const base =
+    na > 0 && galaxyArmMote(k)
+      ? fin(armBase, 0) + (((k | 0) % na) * Math.PI * 2) / na + (hash01(seed + 2) - 0.5) * GALAXY_ARM_SPREAD
+      : hash01(seed + 2) * Math.PI * 2;
   const tc = WHIRL_TURB_HZ * rt * t;
   const r = whirlRadius(u, reach) * (0.94 + 0.08 * hash01(seed + 3)) * (1 + WHIRL_TURB_R * flowNoise(seed + 5, tc * 1.2));
   const a = whirlFlowAngle(u, t, base, id, rt) + WHIRL_TURB_A * flowNoise(seed + 7, tc);

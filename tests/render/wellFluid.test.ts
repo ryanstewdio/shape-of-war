@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   FLUID_CW,
+  FLUID_SPEED,
   FLUID_FRAGMENT,
   FLUID_UNIFORMS,
   FLUID_VERTEX,
@@ -18,9 +19,10 @@ import {
 import { turnsClockwise } from '../../src/render/wellNova';
 
 describe('fluid flow helpers', () => {
-  it('angular speed rises toward the core: 1 rad/s at the edge, about 4.7 near the core', () => {
-    expect(fluidOmega(1)).toBeCloseTo(1, 5);
-    expect(fluidOmega(0.12)).toBeCloseTo(4.7, 1);
+  it('angular speed rises toward the core: GW5 1.3x, 1.3 rad/s at the edge, about 6.1 near the core', () => {
+    expect(FLUID_SPEED).toBe(1.3);
+    expect(fluidOmega(1)).toBeCloseTo(1.3, 5);
+    expect(fluidOmega(0.12)).toBeCloseTo(4.7 * 1.3, 1);
     let prev = fluidOmega(1);
     for (let u = 0.95; u >= 0; u -= 0.05) {
       const w = fluidOmega(u);
@@ -28,7 +30,7 @@ describe('fluid flow helpers', () => {
       prev = w;
     }
     expect(Number.isFinite(fluidOmega(0))).toBe(true);
-    expect(fluidOmega(1, 2)).toBeCloseTo(2, 5);
+    expect(fluidOmega(1, 2)).toBeCloseTo(2.6, 5);
   });
 
   it('turns clockwise on screen with y down', () => {
