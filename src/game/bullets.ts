@@ -1,7 +1,8 @@
 // Player bullet pool (docs/03 section 5, docs/01 section 4.2). Separate SoA pool. When full,
 // the new shot is dropped (03 section 5; docs/01 says oldest removed, see hand-off).
+import type { Surface } from '../core/surface';
 import type { ArenaDef } from '../levelgen/leveldef';
-import { confine, createConfineResult } from './arena';
+import { confine, confineOn, createConfineResult } from './arena';
 import type { World } from './world';
 
 export const BULLET_CAP = 512;
@@ -217,8 +218,11 @@ export function recordHit(p: BulletPool, id: number, e: number): boolean {
 /**
  * Integrate, age and remove bullets that expire or touch a wall or obstacle. Style 0 is the v1
  * path. Orbit blades (style 3) are skipped: weapons.ts places them from the ship each step.
+ * With a surface that wraps u (cylinder) there is no u wall: bullets die on the rims, obstacles or
+ * at life 0, and their x is canonicalised across the seam. Without a surface the flat v1 path runs.
  */
-export function stepBulletPool(p: BulletPool, arena: ArenaDef, dt: number): void {
+export function stepBulletPool(p: BulletPool, arena: ArenaDef, dt: number, surface?: Surface): void {
+  const wrapped = surface !== undefined && surface.topology.wrapU;
   for (let i = 0; i < p.cap; i++) {
     if (p.alive[i] !== 1) continue;
     const style = p.style[i] ?? 0;
@@ -238,10 +242,14 @@ export function stepBulletPool(p: BulletPool, arena: ArenaDef, dt: number): void
     p.x[i] = nx;
     p.y[i] = ny;
     const r = style === STYLE_SPREAD ? BULLET_RADIUS : styleRadius(style);
-    if (confine(arena, nx, ny, r, hitScratch).hit) killBullet(p, i);
+    if (wrapped) {
+      const c = confineOn(surface, arena, nx, ny, r, hitScratch);
+      if (c.hit) killBullet(p, i);
+      else p.x[i] = c.x;
+    } else if (confine(arena, nx, ny, r, hitScratch).hit) killBullet(p, i);
   }
 }
 
 export function stepBullets(w: World, dt: number): void {
-  stepBulletPool(w.bullets, w.level.arena, dt);
+  stepBulletPool(w.bullets, w.level.arena, dt, w.surface);
 }

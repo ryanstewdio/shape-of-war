@@ -1,5 +1,8 @@
 // Uniform spatial hash grid (docs/03 section 4). Cell 64 arena units. Rebuilt every sim step
 // with a counting sort into flat typed arrays: no Maps, no per step allocation.
+// V3-H C0: a grid built with wrapU (cylinder) takes the column index modulo cols, neighbour queries
+// wrap across the u seam and distances use the shortest wrapped offset. Flat grids are unchanged.
+import { wrapDelta } from '../core/surface';
 
 /** Structural view of the entity store, so this module does not depend on world.ts. */
 export interface GridEntities {
@@ -21,12 +24,26 @@ export interface Grid {
   cellItems: Int32Array; // entity ids sorted by cell
   cellOf: Int32Array; // per entity cell index, -1 if dead
   fill: Int32Array; // scratch cursor per cell, reused by rebuild
+  /** True when columns wrap (cylinder). cols * CELL then equals spanU exactly. */
+  wrapU: boolean;
+  /** u period in arena units when wrapU, else the arena width. */
+  spanU: number;
 }
 
-export function createGrid(arenaW: number, arenaH: number, cap: number): Grid {
-  const cols = Math.ceil(arenaW / CELL) + 1;
+/**
+ * Flat grids pad one extra cell per axis and clamp. A wrapU grid needs arenaW to be a multiple of
+ * CELL (Foundry guarantees it for cylinder levels) so the cells tile the seam exactly; a dev build
+ * throws otherwise, production rounds the column count up.
+ */
+export function createGrid(arenaW: number, arenaH: number, cap: number, wrapU = false): Grid {
+  if (wrapU && arenaW % CELL !== 0 && isDev()) {
+    throw new Error(`cylinder width ${arenaW} is not a multiple of the ${CELL} u hash cell`);
+  }
+  const cols = wrapU ? Math.max(1, Math.ceil(arenaW / CELL)) : Math.ceil(arenaW / CELL) + 1;
   const rows = Math.ceil(arenaH / CELL) + 1;
   return {
+    wrapU,
+    spanU: arenaW,
     cols,
     rows,
     originX: -arenaW / 2,
@@ -38,10 +55,49 @@ export function createGrid(arenaW: number, arenaH: number, cap: number): Grid {
   };
 }
 
+function isDev(): boolean {
+  const env = (import.meta as { env?: { DEV?: boolean } }).env;
+  return env?.DEV !== false;
+}
+
+/** Unclamped, unwrapped column index. */
+function rawCellX(g: Grid, x: number): number {
+  return Math.floor((x - g.originX) / CELL);
+}
+
 function cellX(g: Grid, x: number): number {
-  const c = Math.floor((x - g.originX) / CELL);
+  const c = rawCellX(g, x);
+  if (g.wrapU) return ((c % g.cols) + g.cols) % g.cols;
   return c < 0 ? 0 : c >= g.cols ? g.cols - 1 : c;
 }
+
+/** Shortest offset from the query point to entity x along u. */
+function offX(g: Grid, ex: number, x: number): number {
+  return g.wrapU ? wrapDelta(ex - x, g.spanU) : ex - x;
+}
+
+/**
+ * Column range for a query: flat clamps both ends; wrapU returns raw ends capped to one full turn,
+ * mapped per column with wrapCol, so no column is visited twice.
+ */
+function colRange(g: Grid, x: number, pad: number, out: Int32Array): void {
+  if (!g.wrapU) {
+    out[0] = cellX(g, x - pad);
+    out[1] = cellX(g, x + pad);
+    return;
+  }
+  const a = rawCellX(g, x - pad);
+  let b = rawCellX(g, x + pad);
+  if (b - a >= g.cols) b = a + g.cols - 1;
+  out[0] = a;
+  out[1] = b;
+}
+
+function wrapCol(g: Grid, c: number): number {
+  return g.wrapU ? ((c % g.cols) + g.cols) % g.cols : c;
+}
+
+const cols2 = new Int32Array(2);
 
 function cellY(g: Grid, y: number): number {
   const c = Math.floor((y - g.originY) / CELL);
@@ -86,18 +142,19 @@ export function queryCircle(
   r: number,
   fn: (id: number) => void,
 ): void {
-  const x0 = cellX(g, x - r - CELL / 2);
-  const x1 = cellX(g, x + r + CELL / 2);
+  colRange(g, x, r + CELL / 2, cols2);
+  const x0 = cols2[0] ?? 0;
+  const x1 = cols2[1] ?? 0;
   const y0 = cellY(g, y - r - CELL / 2);
   const y1 = cellY(g, y + r + CELL / 2);
   for (let cy = y0; cy <= y1; cy++) {
     for (let cx = x0; cx <= x1; cx++) {
-      const c = cy * g.cols + cx;
+      const c = cy * g.cols + wrapCol(g, cx);
       const end = g.cellStart[c + 1] ?? 0;
       for (let k = g.cellStart[c] ?? 0; k < end; k++) {
         const id = g.cellItems[k] ?? 0;
         if (w.alive[id] !== 1) continue;
-        const dx = (w.x[id] ?? 0) - x;
+        const dx = offX(g, w.x[id] ?? 0, x);
         const dy = (w.y[id] ?? 0) - y;
         const rr = r + (w.radius[id] ?? 0);
         if (dx * dx + dy * dy <= rr * rr) fn(id);
@@ -116,18 +173,19 @@ export function queryCircleInto(
   out: Int32Array,
 ): number {
   let n = 0;
-  const x0 = cellX(g, x - r - CELL / 2);
-  const x1 = cellX(g, x + r + CELL / 2);
+  colRange(g, x, r + CELL / 2, cols2);
+  const x0 = cols2[0] ?? 0;
+  const x1 = cols2[1] ?? 0;
   const y0 = cellY(g, y - r - CELL / 2);
   const y1 = cellY(g, y + r + CELL / 2);
   for (let cy = y0; cy <= y1; cy++) {
     for (let cx = x0; cx <= x1; cx++) {
-      const c = cy * g.cols + cx;
+      const c = cy * g.cols + wrapCol(g, cx);
       const end = g.cellStart[c + 1] ?? 0;
       for (let k = g.cellStart[c] ?? 0; k < end; k++) {
         const id = g.cellItems[k] ?? 0;
         if (w.alive[id] !== 1) continue;
-        const dx = (w.x[id] ?? 0) - x;
+        const dx = offX(g, w.x[id] ?? 0, x);
         const dy = (w.y[id] ?? 0) - y;
         const rr = r + (w.radius[id] ?? 0);
         if (dx * dx + dy * dy <= rr * rr) {

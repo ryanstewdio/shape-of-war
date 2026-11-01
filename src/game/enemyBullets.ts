@@ -5,7 +5,7 @@
 // v2.1 (the Off invariant). No PRNG here: ids come from the free stack, timing from the caller.
 // stepEnemyBullets allocates nothing.
 import type { ThrustRow } from '../core/physics';
-import { confine, createConfineResult } from './arena';
+import { confineOn, createConfineResult } from './arena';
 import { killShip } from './player';
 import { SHIP_RADIUS } from './ship';
 import { gs } from './state';
@@ -133,6 +133,7 @@ function killEnemyBullet(p: EnemyBulletPool, id: number): void {
 }
 
 const wallScratch = createConfineResult();
+const toShip = { x: 0, y: 0 };
 
 /**
  * Advance charge, motion and life, and test the ship. A charging bullet stays at the muzzle and
@@ -143,6 +144,7 @@ export function stepEnemyBullets(w: World, dt: number): void {
   const p = pools.get(w);
   if (p === undefined || p.liveCount === 0) return;
   const arena = w.level.arena;
+  const surface = w.surface;
   for (let i = 0; i < p.cap; i++) {
     if (p.alive[i] !== 1) continue;
     let move = dt;
@@ -162,18 +164,21 @@ export function stepEnemyBullets(w: World, dt: number): void {
       continue;
     }
     p.life[i] = life;
-    const nx = (p.x[i] ?? 0) + (p.vx[i] ?? 0) * move;
+    let nx = (p.x[i] ?? 0) + (p.vx[i] ?? 0) * move;
     const ny = (p.y[i] ?? 0) + (p.vy[i] ?? 0) * move;
+    const r = p.radius[i] ?? ENEMY_BULLET_RADIUS;
+    const c = confineOn(surface, arena, nx, ny, r, wallScratch);
+    if (!c.hit) nx = c.x; // flat: c.x === nx; cylinder: wrapped across the seam
     p.x[i] = nx;
     p.y[i] = ny;
-    const r = p.radius[i] ?? ENEMY_BULLET_RADIUS;
-    if (confine(arena, nx, ny, r, wallScratch).hit) {
+    if (c.hit) {
       killEnemyBullet(p, i);
       continue;
     }
     if (!w.ship.active) continue;
-    const dx = nx - (w.x[0] ?? 0);
-    const dy = ny - (w.y[0] ?? 0);
+    surface.delta(w.x[0] ?? 0, w.y[0] ?? 0, nx, ny, toShip);
+    const dx = toShip.x;
+    const dy = toShip.y;
     const reach = r + SHIP_RADIUS;
     if (dx * dx + dy * dy >= reach * reach) continue;
     // Consumed either way, so none overlaps the ship when invulnerability ends.

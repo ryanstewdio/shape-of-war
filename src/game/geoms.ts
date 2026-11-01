@@ -56,6 +56,9 @@ function removeOldestGeom(w: World): boolean {
   return true;
 }
 
+/** Scratch for surface deltas. */
+const gd = { x: 0, y: 0 };
+
 export function step(w: World, id: number, dt: number): void {
   const t = (w.t[id] ?? 0) + dt;
   if (t >= GEOM_LIFE) {
@@ -65,8 +68,9 @@ export function step(w: World, id: number, dt: number): void {
   w.t[id] = t;
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
-  const dx = (w.x[0] ?? 0) - x;
-  const dy = (w.y[0] ?? 0) - y;
+  w.surface.delta(x, y, w.x[0] ?? 0, w.y[0] ?? 0, gd);
+  const dx = gd.x;
+  const dy = gd.y;
   const d2 = dx * dx + dy * dy;
   if (w.ship.active && d2 < MAGNET_RADIUS * MAGNET_RADIUS && d2 > 1e-9) {
     const d = Math.sqrt(d2);
@@ -98,8 +102,9 @@ export function collectNear(w: World, x: number, y: number, radius: number): num
   const r2 = radius * radius;
   for (let i = 1; i < w.cap; i++) {
     if (w.alive[i] !== 1 || w.kind[i] !== Kind.Geom) continue;
-    const dx = (w.x[i] ?? 0) - x;
-    const dy = (w.y[i] ?? 0) - y;
+    w.surface.delta(x, y, w.x[i] ?? 0, w.y[i] ?? 0, gd);
+    const dx = gd.x;
+    const dy = gd.y;
     if (dx * dx + dy * dy <= r2) {
       collectGeom(w, i);
       n++;

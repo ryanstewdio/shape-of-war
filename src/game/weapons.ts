@@ -12,6 +12,7 @@
 // directions at 80 u and 100 u. GW3 chainsaw bar: while the saw level is above 0 both ring tracks bend
 // out toward the aim into a bar (outer tip 320 u, inner 208 u), so the spinning spikes run out along
 // one side of the bar, round the tip and back along the other, like a chain.
+import type { Surface } from '../core/surface';
 import { bus, type BaseWeaponKind, type ComboKind, type WeaponKind } from '../core/events';
 import { hash01 } from '../core/rng';
 import {
@@ -420,13 +421,36 @@ export function sawHitDamage(w: World): number {
   return n;
 }
 
+/** Scratch for capsuleHits surface deltas. */
+const capD = { x: 0, y: 0 };
+
 /**
  * Pure: true when a circle (px, py, pr) touches the capsule centred on (cx, cy) along unit tangent
- * (tx, ty), half length half, radius r.
+ * (tx, ty), half length half, radius r. With a surface the offset is the shortest one across seams;
+ * without one it is the flat offset (identical to flat surface.delta).
  */
-export function capsuleHits(px: number, py: number, pr: number, cx: number, cy: number, tx: number, ty: number, half: number, r: number): boolean {
-  const dx = px - cx;
-  const dy = py - cy;
+export function capsuleHits(
+  px: number,
+  py: number,
+  pr: number,
+  cx: number,
+  cy: number,
+  tx: number,
+  ty: number,
+  half: number,
+  r: number,
+  surface?: Surface,
+): boolean {
+  let dx: number;
+  let dy: number;
+  if (surface !== undefined) {
+    surface.delta(cx, cy, px, py, capD);
+    dx = capD.x;
+    dy = capD.y;
+  } else {
+    dx = px - cx; // flat offset
+    dy = py - cy;
+  }
   let u = dx * tx + dy * ty;
   if (u > half) u = half;
   else if (u < -half) u = -half;

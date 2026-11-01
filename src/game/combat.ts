@@ -21,6 +21,9 @@ import { moveTo } from './steer';
 import { bulletRadiusOf, capsuleHits, SAW_AT, SWEEP_MAX, SAW_COOL_MULT, sawHitDamage, sawPowered, shieldOf, SPIKE_PIERCE, SPIKE_RADIUS, weaponState } from './weapons';
 import { Kind, type World } from './world';
 
+/** Scratch for surface deltas in this module. Read both fields before the next delta call. */
+const dd = { x: 0, y: 0 };
+
 const hits = new Int32Array(64);
 
 /** Fill the reused kill payload and emit 'fx:kill'. kind and id name the entity that died. */
@@ -247,8 +250,9 @@ export function orbitHits(w: World, dt: number): void {
     if (b < 0 || p.alive[b] !== 1 || p.style[b] !== STYLE_ORBIT) continue;
     const bx = p.x[b] ?? 0;
     const by = p.y[b] ?? 0;
-    const ex = bx - (p.prevX[b] ?? bx);
-    const ey = by - (p.prevY[b] ?? by);
+    w.surface.delta(p.prevX[b] ?? bx, p.prevY[b] ?? by, bx, by, dd);
+    const ex = dd.x;
+    const ey = dd.y;
     const seg = Math.sqrt(ex * ex + ey * ey);
     let tx: number;
     let ty: number;
@@ -269,7 +273,7 @@ export function orbitHits(w: World, dt: number): void {
       tx = l > 1e-9 ? vx / l : -Math.sin(a);
       ty = l > 1e-9 ? vy / l : Math.cos(a);
     }
-    if (boss > 0 && capsuleHits(w.x[boss] ?? 0, w.y[boss] ?? 0, w.radius[boss] ?? 0, cx, cy, tx, ty, half, r)) {
+    if (boss > 0 && capsuleHits(w.x[boss] ?? 0, w.y[boss] ?? 0, w.radius[boss] ?? 0, cx, cy, tx, ty, half, r, w.surface)) {
       // Against a boss body a hitter rests 0.25 s (boss rule 8), its shield cooldown otherwise.
       damageBoss(w, BOSS_DAMAGE.orbit, bx, by);
       s.bladeCool[i] = ORBIT_BOSS_COOLDOWN;
@@ -283,7 +287,7 @@ export function orbitHits(w: World, dt: number): void {
     for (let j = 0; j < n && struck < most; j++) {
       const id = hits[j] ?? 0;
       if (id === 0) continue;
-      if (!capsuleHits(w.x[id] ?? 0, w.y[id] ?? 0, w.radius[id] ?? 0, cx, cy, tx, ty, half, r)) continue;
+      if (!capsuleHits(w.x[id] ?? 0, w.y[id] ?? 0, w.radius[id] ?? 0, cx, cy, tx, ty, half, r, w.surface)) continue;
       if (w.kind[id] === Kind.BossPart) {
         p.lastHit[b] = id;
         damageBossPart(w, id, BOSS_DAMAGE.orbit, bx, by);
@@ -344,8 +348,9 @@ export function separate(w: World, dt: number): void {
     for (let i = 0; i < n; i++) {
       const o = hits[i] ?? 0;
       if (o === id || w.kind[o] !== k) continue;
-      let dx = x - (w.x[o] ?? 0);
-      let dy = y - (w.y[o] ?? 0);
+      w.surface.delta(w.x[o] ?? 0, w.y[o] ?? 0, x, y, dd);
+      let dx = dd.x;
+      let dy = dd.y;
       let d = Math.sqrt(dx * dx + dy * dy);
       if (d < 1e-6) {
         // Exactly stacked: split by id order.
