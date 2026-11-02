@@ -20,7 +20,8 @@ const HALF = W / 2;
 const RIM = GEN.arena.height / 2;
 
 function game(): World {
-  const level: LevelDef = { ...GEN, waves: { ...GEN.waves, waves: [], loopFromIndex: -1, loopPeriodSec: 0 }, hazards: { wells: [], spawners: [] }, drone: 'collect' };
+  // Obstacles cleared: drum maps (foundry-drum-maps) put barriers on this level; the test is about the seam.
+  const level: LevelDef = { ...GEN, arena: { ...GEN.arena, obstacles: [] }, waves: { ...GEN.waves, waves: [], loopFromIndex: -1, loopPeriodSec: 0 }, hazards: { wells: [], spawners: [] }, drone: 'collect' };
   const { w } = makeGame(level);
   setInvulnerable(w, true);
   w.ship.invuln = 1e9;
