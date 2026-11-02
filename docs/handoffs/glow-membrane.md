@@ -15,7 +15,7 @@ src/render/membrane.ts, src/render/grid.ts, src/render/renderer.ts, tests/render
 tests/render/membrane.test.ts, 9 tests (style split, colour lift, ripple bounds, dash, samples, overlap, flash).
 
 ## Test and build
-See the final status in the session message. Perf test "200 levels under 350 ms" may fail in this VM.
+Full npm test: 3956 passed, 2 failed (files in tests/levelgen, slow under load; v2enemies passes alone, the second not individually confirmed, likely the 350 ms generator perf test). npm run build: pass. Banned API grep and dash grep: empty.
 
 ## Risks
 - Renderer is not exercised headlessly: the membrane draw is verified by typecheck and build only.
