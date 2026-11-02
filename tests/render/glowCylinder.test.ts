@@ -293,7 +293,7 @@ describe('G9 tilt scene: drum drawn Graphics are left alone on the drum, project
 
   it('the renderer lists the well layer, the snake glints and the saw as drum drawn', () => {
     const src = readFileSync(new URL('../../src/render/renderer.ts', import.meta.url), 'utf8');
-    expect(src).toMatch(/drumDrawn: \[sawG, novaG, snakeG\]/);
+    expect(src).toMatch(/drumDrawn: \[sawG, novaG, snakeG,/);
     // The camera u moves before any draw, so pen and scene pass agree on it.
     const i = src.indexOf('function draw(w: World');
     const body = src.slice(i, src.indexOf('\n  }\n', i));

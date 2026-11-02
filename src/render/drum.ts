@@ -254,6 +254,11 @@ export function drumULines(d: Drum, spacing: number, front: number[], back: numb
 export function drumRectSegs(d: Drum, x0: number, y0: number, w: number, h: number, front: number[], back: number[]): void {
   front.length = 0;
   back.length = 0;
+  drumRectSegsInto(d, x0, y0, w, h, front, back);
+}
+
+/** As drumRectSegs, appending to the lists instead of clearing them (every obstacle into one pair). */
+export function drumRectSegsInto(d: Drum, x0: number, y0: number, w: number, h: number, front: number[], back: number[]): void {
   const n = Math.max(1, Math.ceil((w * RING_STEPS) / d.width));
   const x1 = x0 + w;
   const y1 = y0 + h;
@@ -273,4 +278,16 @@ function seg(d: Drum, ua: number, va: number, ub: number, vb: number, front: num
   drumProject(ua, va, 0, d, pa);
   drumProject(ub, vb, 0, d, pb);
   list.push(pa.x, pa.y, pb.x, pb.y);
+}
+
+/**
+ * G10 perf: camera u bucket for caching what the drum draws of static geometry (obstacle outlines,
+ * the low tier u lines). While camU stays inside one bucket the cached drawing is kept; the error
+ * is at most one bucket of u, about pi x DRUM_CAM_BUCKET_U screen units at the front centre.
+ */
+export const DRUM_CAM_BUCKET_U = 0.25;
+
+/** Pure: the bucket index of a camera u. */
+export function drumCamBucket(camU: number, bucket: number = DRUM_CAM_BUCKET_U): number {
+  return Math.round(camU / (bucket > 0 ? bucket : DRUM_CAM_BUCKET_U));
 }

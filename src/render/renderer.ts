@@ -32,6 +32,7 @@ import {
   BlurFilter,
   Container,
   Graphics,
+  Matrix,
   Mesh,
   MeshGeometry,
   Particle,
@@ -82,13 +83,26 @@ import {
   penOwnerLineTo,
   penOwnerMoveTo,
   penStroke,
+  backCulled,
+  createPenTrace,
+  penFillTrace,
+  penOwnerMatrix,
+  penStrokeTrace,
+  traceArc,
+  traceLine,
+  tracePoint,
+  traceRay,
+  traceReset,
+  traceRing,
   type DrumPen,
+  type PenAffine,
+  type PenTrace,
 } from './drumPen';
 // G6 tilt-depth: the pseudo 3D volume under and over the entity views while the tilt is on.
 import { volumeShapeOf, type VolumeShape } from './volume';
 import { createVolumeView } from './volumeView';
 // D13 phase C1: cylinder levels draw as a neon drum (drum.ts). Flat levels never touch it.
-import { BACK_ALPHA, drumCamera, drumProjectNodes, drumRectSegs, drumULines, fitDrum, followCamU, interpWrap, makeDrum, ringArcs, unwrapNear, type Drum } from './drum';
+import { BACK_ALPHA, drumCamBucket, drumCamera, drumProjectNodes, drumRectSegsInto, drumULines, fitDrum, followCamU, interpWrap, makeDrum, ringArcs, unwrapNear, type Drum } from './drum';
 import {
   backingSize,
   bloomResolution,
@@ -762,6 +776,8 @@ const GEN_TEX_RES = 2;
 const SHAKE_PAD_PX = 20;
 const RING_SPEED = 1700; // arena units per second
 const RING_LIFE = 0.6; // seconds
+/** G10: samples per Tempestling swirl arc on the drum (pixi's arc is used off it). */
+const STORM_ARC_STEPS = 6;
 const MAX_RINGS = 4;
 /** Blink arrival and Slime splat flashes live at once. */
 const MAX_POPS = 16;
@@ -1254,6 +1270,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const drumObsBack: number[] = [];
   let drumObsCrisp: WallPass[] = [];
   let drumObsSoft: WallPass[] = [];
+  // G10 perf: camera u buckets of the last obstacle and low tier grid build (NaN forces a rebuild).
+  let drumObsKey = Number.NaN;
+  let drumGridKey = Number.NaN;
+  const obsStroke = { width: 1, color: 0xffffff, alpha: 1, cap: 'round' as const, join: 'round' as const };
   let cometU = 0;
   let cometUPrimed = false;
   /** Render interpolation of an x (u) coordinate: the short way across the seam on a cylinder. */
@@ -1344,6 +1364,22 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const wellPen = createDrumPen();
   const snakePen = createDrumPen();
   const sawPen = createDrumPen();
+  // G10 drum lines: every remaining free form layer draws through the drum the same way. Lines on
+  // the surface (Charger lanes, chevrons and streaks, shock rings, wall flashes) are sampled every
+  // DRUM_SAMPLE_U and projected per sample; marks round one entity (pops, Blink and Slime rings,
+  // drone glyphs, Tempestling arcs) attach to that owner; the boss identity layers follow the boss.
+  const fxPen = createDrumPen();
+  const fxGlowPen = createDrumPen();
+  const ringPen = createDrumPen();
+  const ringGlowPen = createDrumPen();
+  const flashPen = createDrumPen();
+  const dronePen = createDrumPen();
+  const stormPen = createDrumPen();
+  const bossPen = createDrumPen();
+  const bossAff: PenAffine = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
+  let bossAttached = false;
+  const bossMatrix = new Matrix();
+  const fxTrace: PenTrace = createPenTrace(64);
   let snakeShown = false;
   const stormG = new Graphics({ label: 'tempestling' });
   // Look GW2: well arrival and snake emergence state, the chainsaw layer and the boss shell.
@@ -1453,8 +1489,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       { layer: enemyBulletLayer.layer.container, scale: true },
     ],
     freeform: [rings, ringGlow, enemyFx, enemyFxGlow, wallFlash, sawG, novaG, snakeG, stormG, droneFx, bossUnder, bossOver],
-    // G9: these draw through the drum themselves (drumPen.ts), owner by owner.
-    drumDrawn: [sawG, novaG, snakeG],
+    // G9 and G10: every free form layer draws through the drum itself (drumPen.ts), owner by owner
+    // or sample by sample, so the drum pass never linearises one. The tilt pass still projects them.
+    drumDrawn: [sawG, novaG, snakeG, rings, ringGlow, enemyFx, enemyFxGlow, wallFlash, stormG, droneFx, bossUnder, bossOver],
   });
   // Look v33: the damaged boss body. A copy of the body context with the removed arcs cut out of
   // the geometry (bossDamage.ts damagedSpec), and its glow texture, rebuilt only when the slot, the
@@ -1818,6 +1855,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   function redrawDrumObstacles(r: Readonly<NeonRender>): void {
     drumObsCrisp = wallPasses(r.innerAlpha, r.wallWidthMul, fit.scale, 'crisp');
     drumObsSoft = wallPasses(r.innerAlpha, r.wallWidthMul, fit.scale, 'bloom');
+    drumObsKey = Number.NaN;
+    drumGridKey = Number.NaN;
     const on = drum !== null && arena.obstacles.length > 0;
     if (!on && drumObs.visible) {
       drumObs.clear();
@@ -1830,24 +1869,36 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   function strokeSegs(g: Graphics, segs: readonly number[], width: number, alpha: number): void {
     if (segs.length < 4) return;
     for (let i = 0; i + 3 < segs.length; i += 4) g.moveTo(segs[i] ?? 0, segs[i + 1] ?? 0).lineTo(segs[i + 2] ?? 0, segs[i + 3] ?? 0);
-    g.stroke({ width, color: palette.grid, alpha, cap: 'round', join: 'round' });
+    const st = obsStroke;
+    st.width = width;
+    st.color = palette.grid;
+    st.alpha = alpha;
+    g.stroke(st);
   }
 
-  /** Cylinder with obstacles, per frame: every obstacle outline through the drum, back half dimmed. */
+  /**
+   * Cylinder with obstacles: every obstacle outline through the drum, back half dimmed. G10 perf:
+   * rebuilt only when the camera u leaves its bucket (drum.ts drumCamBucket) or the look changes,
+   * all obstacles in one front and one back list so each pass is one stroke, and back passes that
+   * would show below BACK_CULL_A are skipped.
+   */
   function drawDrumObstacles(d: Drum): void {
     if (!drumObs.visible) return;
+    const key = drumCamBucket(d.camU);
+    if (key === drumObsKey) return;
+    drumObsKey = key;
     drumObs.clear();
     drumObsGlow.clear();
-    for (const o of arena.obstacles) {
-      drumRectSegs(d, o.cx - o.w / 2, o.cy - o.h / 2, o.w, o.h, drumObsFront, drumObsBack);
-      for (const pass of drumObsCrisp) {
-        strokeSegs(drumObs, drumObsBack, pass.width, pass.alpha * BACK_ALPHA);
-        strokeSegs(drumObs, drumObsFront, pass.width, pass.alpha);
-      }
-      for (const pass of drumObsSoft) {
-        strokeSegs(drumObsGlow, drumObsBack, pass.width, pass.alpha * BACK_ALPHA);
-        strokeSegs(drumObsGlow, drumObsFront, pass.width, pass.alpha);
-      }
+    drumObsFront.length = 0;
+    drumObsBack.length = 0;
+    for (const o of arena.obstacles) drumRectSegsInto(d, o.cx - o.w / 2, o.cy - o.h / 2, o.w, o.h, drumObsFront, drumObsBack);
+    for (const pass of drumObsCrisp) {
+      if (!backCulled(pass.alpha)) strokeSegs(drumObs, drumObsBack, pass.width, pass.alpha * BACK_ALPHA);
+      strokeSegs(drumObs, drumObsFront, pass.width, pass.alpha);
+    }
+    for (const pass of drumObsSoft) {
+      if (!backCulled(pass.alpha)) strokeSegs(drumObsGlow, drumObsBack, pass.width, pass.alpha * BACK_ALPHA);
+      strokeSegs(drumObsGlow, drumObsFront, pass.width, pass.alpha);
     }
   }
 
@@ -2945,6 +2996,16 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const f = 1 - r.age / RING_LIFE;
         const rad = 20 + r.age * RING_SPEED;
         const color = palette[r.colour];
+        if (drum) {
+          // G10: a shock ring is a circle on the surface, sampled round its centre through the drum.
+          penBegin(ringPen, rings, drum);
+          penBegin(ringGlowPen, ringGlow, drum);
+          traceRing(ringPen, traceReset(fxTrace), r.x, r.y, rad);
+          penStrokeTrace(ringPen, fxTrace, 26 * f, color, 0.25 * f);
+          penStrokeTrace(ringPen, fxTrace, 6, color, f);
+          if (bloomOn) penStrokeTrace(ringGlowPen, fxTrace, 12, color, f);
+          continue;
+        }
         rings.circle(r.x, r.y, rad).stroke({ width: 26 * f, color, alpha: 0.25 * f });
         rings.circle(r.x, r.y, rad).stroke({ width: 6, color, alpha: f });
         if (bloomOn) ringGlow.circle(r.x, r.y, rad).stroke({ width: 12, color, alpha: f });
@@ -2994,6 +3055,19 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       const feat = features[f.feature];
       if (fa <= 0 || !feat) continue;
       any = true;
+      if (drum) {
+        // G10: the flash lies on the wall, sampled along it through the drum.
+        penBegin(flashPen, wallFlash, drum);
+        const t = traceReset(fxTrace);
+        if (feat.t === 'seg') {
+          const dx = feat.x2 - feat.x1;
+          const dy = feat.y2 - feat.y1;
+          traceLine(flashPen, t, feat.x1 + dx * f.s0, feat.y1 + dy * f.s0, feat.x1 + dx * f.s1, feat.y1 + dy * f.s1);
+        } else traceArc(flashPen, t, feat.cx, feat.cy, feat.r, f.s0, f.s1);
+        penStrokeTrace(flashPen, t, (WALL_GLOW_PX * 2) / s, colour, fa * 0.4, 'round');
+        penStrokeTrace(flashPen, t, (WALL_LINE_PX * 2) / s, colour, fa, 'round');
+        continue;
+      }
       for (let pass = 0; pass < 2; pass++) {
         if (feat.t === 'seg') {
           const dx = feat.x2 - feat.x1;
@@ -3035,21 +3109,50 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   // Per entity draw values for the v2 kinds, written by applyEnemyContract (no allocation).
   const ev = { x: 0, y: 0, alpha: 1, scaleX: 1, scaleY: 1, rot: 0, glowMul: 1 };
 
-  /** One fx line: halo and core on the crisp layer, plus a copy in the bloom layer. */
-  function fxLine(x1: number, y1: number, x2: number, y2: number, width: number, colour: number, a: number): void {
+  /** The fx pens for this frame (the identity off the drum). */
+  function fxPens(): void {
+    penBegin(fxPen, enemyFx, drum);
+    penBegin(fxGlowPen, enemyFxGlow, drum);
+  }
+
+  /** Stroke the traced fx line: halo and core on the crisp layer, plus a copy in the bloom layer. */
+  function fxStrokeTrace(t: PenTrace, width: number, colour: number, a: number, join: 'round' | 'miter' = 'miter'): void {
+    fxPens();
     const halo = currentRender.haloAlpha * a;
-    if (halo > 0) enemyFx.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: width * currentRender.haloWidthMul, color: colour, alpha: halo, cap: 'round' });
-    enemyFx.moveTo(x1, y1).lineTo(x2, y2).stroke({ width, color: colour, alpha: a, cap: 'round' });
-    if (bloomOn) enemyFxGlow.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: width * 2, color: colour, alpha: a, cap: 'round' });
+    if (halo > 0) penStrokeTrace(fxPen, t, width * currentRender.haloWidthMul, colour, halo, 'round', join);
+    penStrokeTrace(fxPen, t, width, colour, a, 'round', join);
+    if (bloomOn) penStrokeTrace(fxGlowPen, t, width * 2, colour, a, 'round', join);
     enemyFxDirty = true;
   }
 
-  /** One fx circle outline, same three passes as fxLine. */
+  /** One fx line on the surface (sampled through the drum on a cylinder), three passes. */
+  function fxLine(x1: number, y1: number, x2: number, y2: number, width: number, colour: number, a: number): void {
+    fxPens();
+    traceLine(fxPen, traceReset(fxTrace), x1, y1, x2, y2);
+    fxStrokeTrace(fxTrace, width, colour, a);
+  }
+
+  /** One fx ray on the surface: from (x, y) along (dx, dy), distances d0 to d1, three passes. */
+  function fxRay(x: number, y: number, dx: number, dy: number, d0: number, d1: number, width: number, colour: number, a: number): void {
+    fxPens();
+    traceRay(fxPen, traceReset(fxTrace), x, y, dx, dy, d0, d1);
+    fxStrokeTrace(fxTrace, width, colour, a);
+  }
+
+  /** One fx circle outline round an owner at (x, y) (it attaches to the owner on the drum), same three passes. */
   function fxCircle(x: number, y: number, r: number, width: number, colour: number, a: number): void {
+    fxPens();
     const halo = currentRender.haloAlpha * a;
-    if (halo > 0) enemyFx.circle(x, y, r).stroke({ width: width * currentRender.haloWidthMul, color: colour, alpha: halo });
-    enemyFx.circle(x, y, r).stroke({ width, color: colour, alpha: a });
-    if (bloomOn) enemyFxGlow.circle(x, y, r).stroke({ width: width * 2, color: colour, alpha: a });
+    if (halo > 0) {
+      penCircle(penOwner(fxPen, x, y), x, y, r);
+      penStroke(fxPen, width * currentRender.haloWidthMul, colour, halo);
+    }
+    penCircle(penOwner(fxPen, x, y), x, y, r);
+    penStroke(fxPen, width, colour, a);
+    if (bloomOn) {
+      penCircle(penOwner(fxGlowPen, x, y), x, y, r);
+      penStroke(fxGlowPen, width * 2, colour, a);
+    }
     enemyFxDirty = true;
   }
 
@@ -3063,22 +3166,20 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const colour = palette.charger;
     const nx = -dy * CHARGER_LANE_HALF;
     const ny = dx * CHARGER_LANE_HALF;
-    const x0 = x + dx * 16;
-    const y0 = y + dy * 16;
+    // G10: every part is a line on the surface, sampled from the Charger along the dash direction
+    // (drumPen.ts traceRay), so on a cylinder the lane bends round the drum and turns with it.
+    fxPens();
+    if (len > 16) {
+      const t = traceReset(fxTrace);
+      traceRay(fxPen, t, x + nx, y + ny, dx, dy, 16, len);
+      traceRay(fxPen, t, x - nx, y - ny, dx, dy, len, 16);
+      penFillTrace(fxPen, t, colour, CHARGER_LANE_FILL * la);
+      fxRay(x + nx, y + ny, dx, dy, 16, len, 1.4, colour, la * 0.75);
+      fxRay(x - nx, y - ny, dx, dy, 16, len, 1.4, colour, la * 0.75);
+    }
+    fxRay(x, y, dx, dy, 16, len, 2, colour, la);
     const x1 = x + dx * len;
     const y1 = y + dy * len;
-    if (len > 16) {
-      enemyFx
-        .moveTo(x0 + nx, y0 + ny)
-        .lineTo(x1 + nx, y1 + ny)
-        .lineTo(x1 - nx, y1 - ny)
-        .lineTo(x0 - nx, y0 - ny)
-        .closePath()
-        .fill({ color: colour, alpha: CHARGER_LANE_FILL * la });
-      fxLine(x0 + nx, y0 + ny, x1 + nx, y1 + ny, 1.4, colour, la * 0.75);
-      fxLine(x0 - nx, y0 - ny, x1 - nx, y1 - ny, 1.4, colour, la * 0.75);
-    }
-    fxLine(x0, y0, x1, y1, 2, colour, la);
     fxLine(x1 + nx, y1 + ny, x1 - nx, y1 - ny, 2.4, colour, la);
     const n = chargerChevrons(len);
     const cs = CHARGER_CHEVRON_SIZE;
@@ -3090,11 +3191,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       const py = y + dy * d;
       const bx = px - dx * cs;
       const by = py - dy * cs;
-      enemyFx
-        .moveTo(bx - dy * cs, by + dx * cs)
-        .lineTo(px, py)
-        .lineTo(bx + dy * cs, by - dx * cs)
-        .stroke({ width: 2, color: colour, alpha: la, cap: 'round', join: 'round' });
+      const t = traceReset(fxTrace);
+      tracePoint(fxPen, t, bx - dy * cs, by + dx * cs);
+      tracePoint(fxPen, t, px, py);
+      tracePoint(fxPen, t, bx + dy * cs, by - dx * cs);
+      penStrokeTrace(fxPen, t, 2, colour, la, 'round', 'round');
     }
     enemyFxDirty = true;
   }
@@ -3123,7 +3224,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         drawChargerLane(ev.x, ev.y, dx, dy, len, la, t);
       } else if (chargerDashing(t) && trailsActive()) {
         const len = chargerStreakLen(t);
-        if (len > 4) fxLine(ev.x - dx * 8, ev.y - dy * 8, ev.x - dx * len, ev.y - dy * len, 4, palette.charger, 0.7 * chargerStreak(t));
+        if (len > 4) fxRay(ev.x, ev.y, dx, dy, -8, -len, 4, palette.charger, 0.7 * chargerStreak(t));
         if (trails && em) emitEnemyTrail(em, CHARGER_DASH_TRAIL_RATE, ev.x, ev.y, vx, vy, ENEMY_TRAIL_CHARGER, palette.charger, dt);
       } else if (em) em.acc = 0;
     } else if (kind === KIND_NUM.blink) {
@@ -3698,18 +3799,21 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     if (stormG.parent !== entities || (last !== stormG && last !== bossOver)) entities.addChild(stormG);
     const c = palette.tempestling;
     const hot = 0xffffff;
+    // G10: each Tempestling's arcs and edge attach to it on the drum (the identity off it).
+    const sp = penBegin(stormPen, stormG, drum);
     for (let k = 0; k < stormCount; k++) {
       const x = stormX[k] ?? 0;
       const y = stormY[k] ?? 0;
       const R = stormR[k] ?? 0;
       const a = stormA[k] ?? 1;
       const h = stormH[k] ?? 0;
+      penOwner(sp, x, y);
       for (let j = 0; j < TEMPESTLING_SWIRL_ARCS; j++) {
         const s0 = tempestlingSwirl(timeSec, h, j);
         const rr = R * (TEMPESTLING_SWIRL_R + 0.08 * j);
         stormArc(x, y, rr, s0, s0 + TEMPESTLING_SWIRL_LEN);
       }
-      stormG.stroke({ width: 1.8, color: c, alpha: 0.6 * a, cap: 'round' });
+      penStroke(sp, 1.8, c, 0.6 * a, 'round');
       // Leading edge: wing, nose, wing of the kite turned to the move direction.
       const L = stormLead[k] ?? 0;
       const cl = Math.cos(L);
@@ -3717,14 +3821,13 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       const nx = 1.7 * R;
       const bx = 0.15 * R;
       const by = 0.72 * R;
-      stormG.moveTo(x + cl * bx - sl * by, y + sl * bx + cl * by)
-        .lineTo(x + cl * nx, y + sl * nx)
-        .lineTo(x + cl * bx + sl * by, y + sl * bx - cl * by);
-      stormG.stroke({ width: 4.5, color: c, alpha: 0.35 * a, join: 'miter' });
-      stormG.moveTo(x + cl * bx - sl * by, y + sl * bx + cl * by)
-        .lineTo(x + cl * nx, y + sl * nx)
-        .lineTo(x + cl * bx + sl * by, y + sl * bx - cl * by);
-      stormG.stroke({ width: 2, color: hot, alpha: 0.95 * a, join: 'miter' });
+      for (let pass = 0; pass < 2; pass++) {
+        penMoveTo(sp, x + cl * bx - sl * by, y + sl * bx + cl * by);
+        penLineTo(sp, x + cl * nx, y + sl * nx);
+        penLineTo(sp, x + cl * bx + sl * by, y + sl * bx - cl * by);
+        if (pass === 0) penStroke(sp, 4.5, c, 0.35 * a, 'butt', 'miter');
+        else penStroke(sp, 2, hot, 0.95 * a, 'butt', 'miter');
+      }
     }
   }
 
@@ -3788,8 +3891,17 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
 
   /** Add an arc (a0 to a1, clockwise on screen) round (x, y) to the Tempestling layer as its own subpath. */
   function stormArc(x: number, y: number, r: number, a0: number, a1: number): void {
-    stormG.moveTo(x + Math.cos(a0) * r, y + Math.sin(a0) * r);
-    stormG.arc(x, y, r, a0, a1);
+    if (!drum) {
+      stormG.moveTo(x + Math.cos(a0) * r, y + Math.sin(a0) * r);
+      stormG.arc(x, y, r, a0, a1);
+      return;
+    }
+    // G10: on the drum the arc is sampled round its owner (set by drawTempestlings).
+    for (let q = 0; q <= STORM_ARC_STEPS; q++) {
+      const t = a0 + ((a1 - a0) * q) / STORM_ARC_STEPS;
+      if (q === 0) penMoveTo(stormPen, x + Math.cos(t) * r, y + Math.sin(t) * r);
+      else penLineTo(stormPen, x + Math.cos(t) * r, y + Math.sin(t) * r);
+    }
   }
 
   /** Look GW2: a calm small swirl at a well before its nova, so the nova is a clear escalation. */
@@ -3877,18 +3989,20 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
 
   /** Add one drone mode glyph centred at (x, y) to droneFx in colour c. */
   function modeGlyph(glyph: DroneGlyph, x: number, y: number, c: number): void {
-    const g = droneFx;
+    // G10: the glyph attaches to its drone on the drum (the identity off it).
+    const g = penOwner(penBegin(dronePen, droneFx, drum), x, y);
     if (glyph === 'dots') {
       const d = glyphDots(GLYPH_HALF);
-      for (let k = 0; k + 1 < d.pts.length; k += 2) g.circle(x + (d.pts[k] ?? 0), y + (d.pts[k + 1] ?? 0), d.r);
-      g.fill({ color: c, alpha: 0.95 });
+      for (let k = 0; k + 1 < d.pts.length; k += 2) penCircle(g, x + (d.pts[k] ?? 0), y + (d.pts[k + 1] ?? 0), d.r);
+      penFill(g, c, 0.95);
       return;
     }
     const seg = glyphSegments(glyph, GLYPH_HALF);
     for (let k = 0; k + 3 < seg.length; k += 4) {
-      g.moveTo(x + (seg[k] ?? 0), y + (seg[k + 1] ?? 0)).lineTo(x + (seg[k + 2] ?? 0), y + (seg[k + 3] ?? 0));
+      penMoveTo(g, x + (seg[k] ?? 0), y + (seg[k + 1] ?? 0));
+      penLineTo(g, x + (seg[k + 2] ?? 0), y + (seg[k + 3] ?? 0));
     }
-    g.stroke({ width: 1.6, color: c, alpha: 0.95, cap: 'round', join: 'round' });
+    penStroke(g, 1.6, c, 0.95, 'round', 'round');
   }
 
   /**
@@ -3912,7 +4026,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const c = palette[look.key];
     if (droneDrawn) modeGlyph(look.glyph, droneDrawX, droneDrawY - GLYPH_LIFT, c);
     if (twinDrawn) modeGlyph(look.glyph, twinDrawX, twinDrawY - GLYPH_LIFT, c);
-    if (shipDrawn) g.circle(shipDrawX, shipDrawY, MODE_RING_R).stroke({ width: 1.2, color: c, alpha: 0.6 });
+    if (shipDrawn) {
+      const sp = penOwner(penBegin(dronePen, droneFx, drum), shipDrawX, shipDrawY);
+      penCircle(sp, shipDrawX, shipDrawY, MODE_RING_R);
+      penStroke(sp, 1.2, c, 0.6);
+    }
   }
 
   /**
@@ -3974,6 +4092,34 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   }
 
   /**
+   * G10: the boss identity layers are drawn round the boss in arena units. On the drum both get
+   * the boss body's billboard transform (drumPen.ts penOwnerMatrix: its screen point, depth scale,
+   * mirror and back half alpha), so they sit on the body exactly as its view does. Off the drum
+   * they go back to the identity once, and the tilt pass projects them as before.
+   */
+  function attachBossLayers(g: Graphics, u: Graphics): void {
+    if (drum) {
+      const a = penOwnerMatrix(penOwner(penBegin(bossPen, g, drum), bodyX[0] ?? 0, bodyY[0] ?? 0), bossAff);
+      bossMatrix.set(bossAff.a, bossAff.b, bossAff.c, bossAff.d, bossAff.tx, bossAff.ty);
+      g.setFromMatrix(bossMatrix);
+      u.setFromMatrix(bossMatrix);
+      g.alpha = a;
+      u.alpha = a;
+      bossAttached = true;
+      return;
+    }
+    if (!bossAttached) return;
+    for (const l of [g, u]) {
+      l.position.set(0, 0);
+      l.scale.set(1, 1);
+      l.rotation = 0;
+      l.skew.set(0, 0);
+      l.alpha = 1;
+    }
+    bossAttached = false;
+  }
+
+  /**
    * G3C boss identity pass, after the bodies: the tier 3 dark red halo (under) and slow red pulse,
    * the Twins survivor flare, the 60 ms white hit flash, the Prism run to white and window ring, the
    * kept cracks and the broken pieces. Two Graphics, rebuilt only while a boss or a piece shows.
@@ -3998,6 +4144,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     g.clear();
     u.clear();
     bossOverShown = true;
+    attachBossLayers(g, u);
     const hue = palette[bossColourOf(bossIdx)];
     damageColours(hue, damageAccent(hue), dmgCol);
     const hot = mixRgb(hue, 0xffffff, 0.6);
@@ -4743,7 +4890,14 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     stepParticles(dt);
     stats.particles = liveParticleCount();
     if (drum) {
-      if (!latticeActive) redrawGrid();
+      if (!latticeActive) {
+        // G10 perf: the low tier u lines only move when the camera u leaves its bucket.
+        const gk = drumCamBucket(drum.camU);
+        if (gk !== drumGridKey || gridRippling) {
+          drumGridKey = gk;
+          redrawGrid();
+        }
+      }
       drawDrumObstacles(drum);
       projectDrumFrame(drum);
       app.render();
