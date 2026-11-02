@@ -27,7 +27,8 @@ const HEX_NX = [COS30, 0, -COS30, -COS30, 0, COS30];
 const HEX_NY = [0.5, 1, 0.5, -0.5, -1, -0.5];
 
 /**
- * Confine a circle at (x, y) with radius r. Returns `out` (a shared object by default; copy the
+ * Confine a circle at (x, y) with radius r. passMembrane true (enemies only) ignores membrane
+ * obstacles; by default a membrane is a wall like any other obstacle. Returns `out` (a shared object by default; copy the
  * fields before the next call). Safe to call with any finite input.
  */
 export function confine(
@@ -36,6 +37,7 @@ export function confine(
   y: number,
   r: number,
   out: ConfineResult = shared,
+  passMembrane = false,
 ): ConfineResult {
   out.x = x;
   out.y = y;
@@ -57,7 +59,7 @@ export function confine(
       for (let pass = 0; pass < 2; pass++) {
         for (let i = 0; i < arena.obstacles.length; i++) {
           const o = arena.obstacles[i];
-          if (o !== undefined) pushOutOfBox(o, r, out);
+          if (o !== undefined && !(passMembrane && o.membrane === true)) pushOutOfBox(o, r, out);
         }
         confineRect(arena.width / 2, arena.height / 2, r, out);
       }
@@ -72,6 +74,7 @@ export function confine(
  * that wraps u there is no u wall: only the rims at v = plus or minus H/2 confine (minus r), every
  * arena shape is treated as that band, obstacles push with the shortest wrapped offset, and the
  * result x is canonicalised into [-W/2, W/2). hit and the normal ignore the wrap itself.
+ * passMembrane as in confine.
  */
 export function confineOn(
   surface: Surface,
@@ -80,8 +83,9 @@ export function confineOn(
   y: number,
   r: number,
   out: ConfineResult = shared,
+  passMembrane = false,
 ): ConfineResult {
-  if (!surface.topology.wrapU) return confine(arena, x, y, r, out);
+  if (!surface.topology.wrapU) return confine(arena, x, y, r, out, passMembrane);
   const W = surface.width;
   const hy = Math.max(0, surface.height / 2 - r);
   out.x = x;
@@ -90,7 +94,7 @@ export function confineOn(
     for (let pass = 0; pass < 2; pass++) {
       for (let i = 0; i < arena.obstacles.length; i++) {
         const o = arena.obstacles[i];
-        if (o !== undefined) pushOutOfBoxWrapped(o, r, W, out);
+        if (o !== undefined && !(passMembrane && o.membrane === true)) pushOutOfBoxWrapped(o, r, W, out);
       }
       if (out.y > hy) out.y = hy;
       else if (out.y < -hy) out.y = -hy;
@@ -249,4 +253,25 @@ const scratch = createConfineResult();
 export function isInsideOn(surface: Surface, arena: ArenaDef, x: number, y: number, r: number): boolean {
   if (!surface.topology.wrapU) return isInside(arena, x, y, r);
   return !confineOn(surface, arena, x, y, r, scratch).hit;
+}
+
+/**
+ * True when a circle at (x, y) with radius r overlaps a membrane obstacle (the box seen at its
+ * nearest u image on a wrapping surface). No allocation.
+ */
+export function overlapsMembrane(surface: Surface, arena: ArenaDef, x: number, y: number, r: number): boolean {
+  const obs = arena.obstacles;
+  const wrap = surface.topology.wrapU;
+  for (let i = 0; i < obs.length; i++) {
+    const o = obs[i];
+    if (o === undefined || o.membrane !== true) continue;
+    const lx = wrap ? wrapDelta(x - o.cx, surface.width) : x - o.cx;
+    const ly = y - o.cy;
+    const hw = o.w / 2;
+    const hh = o.h / 2;
+    const dx = lx < -hw ? lx + hw : lx > hw ? lx - hw : 0;
+    const dy = ly < -hh ? ly + hh : ly > hh ? ly - hh : 0;
+    if (dx * dx + dy * dy < r * r || (dx === 0 && dy === 0)) return true;
+  }
+  return false;
 }

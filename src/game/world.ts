@@ -1,5 +1,6 @@
 // Entity store (docs/03 section 3). Struct of arrays, fixed capacity, ship is id 0, free list
 // stack. stepWorld allocates nothing.
+import type { Difficulty } from '../core/difficulty';
 import { mulberry32, type Rng } from '../core/rng';
 import { makeSurface, type Surface } from '../core/surface';
 import type { InputState } from '../input/types';
@@ -7,6 +8,8 @@ import type { LevelDef } from '../levelgen/leveldef';
 import { confineOn, createConfineResult } from './arena';
 import { createBulletPool, stepBullets, type BulletPool } from './bullets';
 import { createGrid, rebuild, type Grid } from './collide';
+import { createDrift, stepDrift, type DriftState } from './drift';
+import { hasMembrane, membraneMove } from './membrane';
 import { createShipState, respawnShip, SHIP_RADIUS, stepShip, type ShipState } from './ship';
 
 export const enum Kind {
@@ -78,6 +81,12 @@ export interface World {
   tick: number;
   /** V3-H C0: the play surface from level.surface (default flat). Read it through surfaceOf. */
   surface: Surface;
+  /** Release polish: the run's difficulty (GameOptions.difficulty). Read the table via difficultyOf. */
+  difficulty: Difficulty;
+  /** Release polish: open drum drift (docs/14 item 8). Inactive off cylinder or with obstacles. */
+  drift: DriftState;
+  /** Release polish: true when any obstacle is a membrane (docs/14 item 9). */
+  membranes: boolean;
 }
 
 /** Per kind behaviour. Swarm registers one per enemy kind in W2. */
@@ -90,7 +99,7 @@ export function registerBehaviour(kind: Kind, fn: EntityStep | null): void {
   behaviours[kind] = fn;
 }
 
-export function createWorld(level: LevelDef, capacity: number = ENTITY_CAP): World {
+export function createWorld(level: LevelDef, capacity: number = ENTITY_CAP, difficulty: Difficulty = 'normal'): World {
   const surface = makeSurface(level.surface ?? 'flat', level.arena.width, level.arena.height);
   const cap = Math.max(1, Math.floor(capacity));
   const free = new Int32Array(cap);
@@ -123,6 +132,9 @@ export function createWorld(level: LevelDef, capacity: number = ENTITY_CAP): Wor
     time: 0,
     tick: 0,
     surface,
+    difficulty,
+    drift: createDrift(level),
+    membranes: hasMembrane(level.arena),
   };
   w.kind[0] = Kind.Ship;
   w.radius[0] = SHIP_RADIUS;
@@ -218,7 +230,9 @@ const bounce = createConfineResult();
 export function driftEntity(w: World, id: number, dt: number): void {
   let vx = w.vx[id] ?? 0;
   let vy = w.vy[id] ?? 0;
-  const res = confineOn(w.surface, w.level.arena, (w.x[id] ?? 0) + vx * dt, (w.y[id] ?? 0) + vy * dt, w.radius[id] ?? 0, bounce);
+  const res = w.membranes
+    ? membraneMove(w, id, (w.x[id] ?? 0) + vx * dt, (w.y[id] ?? 0) + vy * dt, bounce)
+    : confineOn(w.surface, w.level.arena, (w.x[id] ?? 0) + vx * dt, (w.y[id] ?? 0) + vy * dt, w.radius[id] ?? 0, bounce);
   if (res.hit) {
     const into = vx * res.nx + vy * res.ny;
     if (into < 0) {
@@ -243,6 +257,7 @@ export function stepWorld(w: World, dt: number, input: InputState): void {
     else driftEntity(w, id, dt);
   }
   stepBullets(w, dt);
+  if (w.drift.active) stepDrift(w, dt);
   wrapWorld(w);
   rebuild(w.grid, w);
   w.time += dt;

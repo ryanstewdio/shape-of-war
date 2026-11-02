@@ -188,6 +188,7 @@ describe('B9 no Swarm state slows an unhit ship', () => {
       const flat: LevelDef = { ...def, arena: { ...def.arena, obstacles: [] }, hazards: { ...def.hazards, wells: [] } };
       const w = createGame(flat, { vibrate: () => undefined });
       setInvulnerable(w, true);
+      w.drift.active = false; // obstacles removed makes drum levels open: drift is not Swarm state (drift.test.ts)
       respawnShip(w);
       // 0.5 s from the centre fits inside the smallest arena (700 u circle, radius 350).
       expect(runRight(w, 60)).toBeCloseTo(210, 2);

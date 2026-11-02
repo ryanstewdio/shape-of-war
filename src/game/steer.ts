@@ -6,15 +6,16 @@ import { wrapAngle } from '../core/math';
 import { hash01 } from '../core/rng';
 import type { Surface } from '../core/surface';
 import { confineOn, createConfineResult } from './arena';
+import { membraneMove } from './membrane';
 import type { World } from './world';
 
 const res = createConfineResult();
 /** Scratch for surface deltas. Read both fields before the next delta call. */
 const d2 = { x: 0, y: 0 };
 
-/** Move id to (nx, ny), confined to the arena and obstacles (slides along walls). */
+/** Move id to (nx, ny), confined to the arena and obstacles (slides along walls; enemies squeeze through membranes). */
 export function moveTo(w: World, id: number, nx: number, ny: number): void {
-  const r = confineOn(w.surface, w.level.arena, nx, ny, w.radius[id] ?? 0, res);
+  const r = w.membranes ? membraneMove(w, id, nx, ny, res) : confineOn(w.surface, w.level.arena, nx, ny, w.radius[id] ?? 0, res);
   w.x[id] = r.x;
   w.y[id] = r.y;
 }
@@ -112,7 +113,7 @@ export const DEG = Math.PI / 180;
 
 /** Like moveTo, but returns true when the arena or an obstacle stopped the move (a wall hit). */
 export function moveToHit(w: World, id: number, nx: number, ny: number): boolean {
-  const r = confineOn(w.surface, w.level.arena, nx, ny, w.radius[id] ?? 0, res);
+  const r = w.membranes ? membraneMove(w, id, nx, ny, res) : confineOn(w.surface, w.level.arena, nx, ny, w.radius[id] ?? 0, res);
   w.x[id] = r.x;
   w.y[id] = r.y;
   return r.hit;
