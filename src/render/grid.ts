@@ -3,7 +3,7 @@ import type { Graphics } from 'pixi.js';
 import type { ArenaDef } from '../levelgen/leveldef';
 import { gridSegments, hexagonPoints } from './gridGeom';
 import type { Camera } from './project';
-import { obstaclePolys, outlinePoints, projectFlat } from './tiltGeom';
+import { LIP_POST_ALPHA, LIP_TOP_ALPHA, lipPosts, obstaclePolys, outlinePoints, projectFlat, projectLifted, WALL_LIP } from './tiltGeom';
 
 /**
  * Line widths in device independent (CSS) px; divided by the world scale so they stay constant
@@ -95,14 +95,22 @@ export function drawWalls(g: Graphics, arena: ArenaDef, colour: number, passes: 
  */
 export function drawWallsProjected(g: Graphics, arena: ArenaDef, colour: number, passes: readonly WallPass[], cam: Camera): void {
   g.clear();
-  const outline = projectFlat(outlinePoints(arena), cam);
-  const obstacles = obstaclePolys(arena).map((o) => projectFlat(o, cam));
+  const flat = [outlinePoints(arena), ...obstaclePolys(arena)];
+  const floorLines = flat.map((o) => projectFlat(o, cam));
+  // G6 tilt-depth: a short raised lip (WALL_LIP toward the viewer) with a top edge and posts at
+  // the corners, on the arena wall and every obstacle. Built on tilt, arena or neon change only.
+  const tops = flat.map((o) => projectLifted(o, WALL_LIP, cam));
+  const posts = flat.map((o) => lipPosts(o));
   for (const pass of passes) {
-    g.poly(outline, true);
-    g.stroke({ width: pass.width, color: colour, alpha: pass.alpha, join: 'round' });
-    for (const o of obstacles) {
-      g.poly(o, true);
+    for (let k = 0; k < flat.length; k++) {
+      const base = floorLines[k] ?? [];
+      const top = tops[k] ?? [];
+      g.poly(base, true);
       g.stroke({ width: pass.width, color: colour, alpha: pass.alpha, join: 'round' });
+      for (const i of posts[k] ?? []) g.moveTo(base[i * 2] ?? 0, base[i * 2 + 1] ?? 0).lineTo(top[i * 2] ?? 0, top[i * 2 + 1] ?? 0);
+      g.stroke({ width: pass.width, color: colour, alpha: pass.alpha * LIP_POST_ALPHA, cap: 'round' });
+      g.poly(top, true);
+      g.stroke({ width: pass.width, color: colour, alpha: pass.alpha * LIP_TOP_ALPHA, join: 'round' });
     }
   }
 }

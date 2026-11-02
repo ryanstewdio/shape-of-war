@@ -68,3 +68,48 @@ export function projectFlat(pts: readonly number[], cam: Camera): number[] {
   }
   return out;
 }
+
+/** G6 tilt-depth: wall lip height in arena units (raised toward the viewer, screen up). */
+export const WALL_LIP = 14;
+/** Lip edge alpha (share of the wall pass alpha) and top edge alpha share. */
+export const LIP_POST_ALPHA = 0.4;
+export const LIP_TOP_ALPHA = 0.8;
+/** A lip post stands where the outline turns by more than this (radians). */
+export const LIP_TURN = 0.35;
+
+/** Pure: project a flat [x, y, ...] list lifted to height z. Returns a new list. */
+export function projectLifted(pts: readonly number[], z: number, cam: Camera): number[] {
+  const out = new Array<number>(pts.length);
+  const p: Projected = { x: 0, y: 0, s: 1 };
+  for (let i = 0; i + 1 < pts.length; i += 2) {
+    project(pts[i] ?? 0, pts[i + 1] ?? 0, z, cam, p);
+    out[i] = p.x;
+    out[i + 1] = p.y;
+  }
+  return out;
+}
+
+/**
+ * Pure: the outline point indices that get a lip post (the short edge joining the floor line to the
+ * top edge): every corner that turns by more than LIP_TURN, or, for smooth outlines with fewer than
+ * four corners, eight evenly spaced points.
+ */
+export function lipPosts(pts: readonly number[]): number[] {
+  const n = pts.length >> 1;
+  const out: number[] = [];
+  if (n < 3) return out;
+  for (let i = 0; i < n; i++) {
+    const a = (i + n - 1) % n;
+    const b = (i + 1) % n;
+    const ax = (pts[i * 2] ?? 0) - (pts[a * 2] ?? 0);
+    const ay = (pts[i * 2 + 1] ?? 0) - (pts[a * 2 + 1] ?? 0);
+    const bx = (pts[b * 2] ?? 0) - (pts[i * 2] ?? 0);
+    const by = (pts[b * 2 + 1] ?? 0) - (pts[i * 2 + 1] ?? 0);
+    const turn = Math.abs(Math.atan2(ax * by - ay * bx, ax * bx + ay * by));
+    if (turn > LIP_TURN) out.push(i);
+  }
+  if (out.length >= 4) return out;
+  const even: number[] = [];
+  for (let k = 0; k < 8; k++) even.push(Math.floor((k * n) / 8));
+  return even;
+}

@@ -70,6 +70,9 @@ import { GRID_SPACING } from './gridGeom';
 import { cameraFor, fitProjected, parseTiltKnob, projectNodes, TILT_DEG, type Camera } from './project';
 import { getTilt, setTilt, type TiltLevel } from './tilt';
 import { createTiltScene } from './tiltScene';
+// G6 tilt-depth: the pseudo 3D volume under and over the entity views while the tilt is on.
+import { volumeShapeOf, type VolumeShape } from './volume';
+import { createVolumeView } from './volumeView';
 // D13 phase C1: cylinder levels draw as a neon drum (drum.ts). Flat levels never touch it.
 import { BACK_ALPHA, drumCamera, drumProjectNodes, drumRectSegs, drumULines, fitDrum, followCamU, interpWrap, makeDrum, ringArcs, unwrapNear, type Drum } from './drum';
 import {
@@ -339,21 +342,13 @@ import {
   createNovaSnakeState,
   NOVA_SNAKE_CORE_A,
   NOVA_SNAKE_CORE_W,
-  createRibbonPt,
-  NOVA_SNAKE_GLINT_SIZE,
-  NOVA_SNAKE_GLINTS,
+  NOVA_SNAKE_GLINTS_MAX,
   NOVA_SNAKE_GLOW_W,
   NOVA_SNAKE_TRACK,
-  NOVA_STREAM_GLINT_SIZE,
-  NOVA_STREAM_GLINTS,
-  NOVA_STREAM_RANGE,
-  novaRibbonAt,
   novaSnakeCount,
   novaSnakeGlow,
-  novaSnakeMark,
-  novaSnakeSweep,
-  novaStreamAt,
 } from './novaSnake';
+import { GLINT_STRIDE, novaSnakeBody, novaSnakeGlints, novaSnakeSync } from './novaSnakeLive';
 import { BOSS_IDS } from '../levelgen/leveldef';
 import {
   approach,
@@ -1327,8 +1322,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   // GW3 nova snakes: tracked heads and one body polyline scratch (head plus segments).
   const novaSnakes = createNovaSnakeState();
   const snakePts = new Float32Array((SNAKE_SEGMENTS + 1) * 2);
-  const snakeDot = { x: 0, y: 0 };
-  const ribbonPt = createRibbonPt();
+  // G6 item j: one snake's glint draw list (novaSnakeLive.ts) and the layer it paints on, over the
+  // entity views so no later created body view can cover a glint.
+  const snakeGlints = new Float32Array(NOVA_SNAKE_GLINTS_MAX * GLINT_STRIDE);
+  const snakeG = new Graphics({ label: 'novaSnakeGlints' });
+  let snakeShown = false;
   const stormG = new Graphics({ label: 'tempestling' });
   // Look GW2: well arrival and snake emergence state, the chainsaw layer and the boss shell.
   const arrive = createArriveState();
@@ -1379,6 +1377,22 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let shellDropRot = 0;
   lines.addChildAt(sawG, lines.getChildIndex(bullets) + 1);
   lines.addChildAt(fluid.layer, lines.getChildIndex(entities));
+  // G6 tilt-depth: side faces under the entity views, highlights over them (projected already, so
+  // they are not in the tilt scene pass). Hidden and never drawn while the tilt is off.
+  const volume = createVolumeView();
+  lines.addChildAt(volume.under, lines.getChildIndex(entities));
+  lines.addChildAt(volume.over, lines.getChildIndex(entities) + 1);
+  /** Volume outline per visual slot, made on first sight (undefined: not made yet, null: none). */
+  const volumeShapes: (VolumeShape | null | undefined)[] = [];
+  let volumeOn = false;
+  function volumeShapeFor(slot: number): VolumeShape | null {
+    let v = volumeShapes[slot];
+    if (v === undefined) {
+      v = volumeShapeOf(specForSlot(slot), slot === KIND_GRAVITY_WELL);
+      volumeShapes[slot] = v;
+    }
+    return v;
+  }
   // Look v33: drone mode glyph over the drone and the thin mode ring round the ship, one Graphics
   // rebuilt only while a drone mode is armed. Buzz scratch and the drawn drone and ship positions.
   const droneFx = new Graphics({ label: 'droneMode' });
@@ -1420,7 +1434,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       { layer: cueLayer.container, scale: true },
       { layer: enemyBulletLayer.layer.container, scale: true },
     ],
-    freeform: [rings, ringGlow, enemyFx, enemyFxGlow, wallFlash, sawG, novaG, stormG, droneFx, bossUnder, bossOver],
+    freeform: [rings, ringGlow, enemyFx, enemyFxGlow, wallFlash, sawG, novaG, snakeG, stormG, droneFx, bossUnder, bossOver],
   });
   // Look v33: the damaged boss body. A copy of the body context with the removed arcs cut out of
   // the geometry (bossDamage.ts damagedSpec), and its glow texture, rebuilt only when the slot, the
@@ -3693,64 +3707,52 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
    * GW3 nova snakes: every tracked snake (it crawled out of a well) draws a faint white shimmer band
    * and a white core line through its head and segments, with a ribbon of NOVA_SNAKE_GLINTS gem glints
    * orbiting it in a loose helix and, near its well, NOVA_STREAM_GLINTS glints streaming from the
-   * whirlpool to the head (GW5), on the shared well layer.
+   * whirlpool to the head (GW5). G6 item j: the body and the glint list come from novaSnakeLive.ts
+   * (the same code the real game test runs); the band and core line stay on the shared well layer,
+   * the glints paint on their own layer over the entity views.
    */
   function drawNovaSnakes(w: World, alpha: number, timeSec: number): void {
     if (novaSnakeCount(novaSnakes) === 0) return;
     const g = wellLayer();
     const st = gs(w);
+    if (snakeG.parent !== lines || lines.getChildIndex(snakeG) !== lines.getChildIndex(entities) + 1) lines.addChildAt(snakeG, lines.getChildIndex(entities) + 1);
+    snakeShown = true;
+    novaCycleStops(palette, novaStops);
     for (let k = 0; k < NOVA_SNAKE_TRACK; k++) {
       const head = novaSnakes.head[k] ?? -1;
       if (head < 0) continue;
       const slot = w.a[head] ?? -1;
       if (slot < 0 || slot >= SNAKE_SLOTS) continue;
-      snakePts[0] = ix(w.prevX[head] ?? 0, w.x[head] ?? 0, alpha);
-      snakePts[1] = interp(w.prevY[head] ?? 0, w.y[head] ?? 0, alpha);
-      let n = 1;
-      for (let sgi = 0; sgi < SNAKE_SEGMENTS; sgi++) {
-        const sid = st.snakeSegs[slot * SNAKE_SEGMENTS + sgi] ?? -1;
-        if (sid < 0 || w.alive[sid] !== 1 || w.a[sid] !== head) continue;
-        // Cylinder: each segment at its image nearest the one before, so the body never spans the seam.
-        snakePts[n * 2] = unwrapNear(snakePts[n * 2 - 2] ?? 0, ix(w.prevX[sid] ?? 0, w.x[sid] ?? 0, alpha), wrapW);
-        snakePts[n * 2 + 1] = interp(w.prevY[sid] ?? 0, w.y[sid] ?? 0, alpha);
-        n++;
-      }
-      if (n < 2) continue;
+      const n = novaSnakeBody(w, st, head, SNAKE_SEGMENTS, alpha, wrapW, snakePts);
+      if (n < 1) continue;
       const h = hash01(head);
-      for (let pass = 0; pass < 2; pass++) {
-        for (let q = 0; q < n; q++) {
-          if (q === 0) g.moveTo(snakePts[0] ?? 0, snakePts[1] ?? 0);
-          else g.lineTo(snakePts[q * 2] ?? 0, snakePts[q * 2 + 1] ?? 0);
-        }
-        if (pass === 0) g.stroke({ width: NOVA_SNAKE_GLOW_W, color: NOVA_WHITE, alpha: novaSnakeGlow(timeSec, h), cap: 'round', join: 'round' });
-        else g.stroke({ width: NOVA_SNAKE_CORE_W, color: 0xffffff, alpha: NOVA_SNAKE_CORE_A, cap: 'round', join: 'round' });
-      }
-      // GW5: a ribbon of gem glints orbits the head and body in a loose helix, drifting tailward.
-      novaCycleStops(palette, novaStops);
-      for (let d = 0; d < NOVA_SNAKE_GLINTS; d++) {
-        novaRibbonAt(snakePts, n, timeSec, h, d, ribbonPt);
-        glintAt(head * 31 + 7, d, timeSec, glint);
-        const front = 0.55 + 0.45 * (0.5 + 0.5 * ribbonPt.depth);
-        const tail = 1 - 0.5 * ribbonPt.p;
-        drawGlint(g, ribbonPt.x, ribbonPt.y, glintSize(NOVA_SNAKE_GLINT_SIZE, glint.flare) * (0.75 + 0.25 * front), glint.rot, novaColour(novaStops, 0xffffff, glint.hue, 0, 1), (0.4 + 0.6 * glint.flare) * front * tail);
-      }
-      // GW5: near its well a stream of glints flows from the whirlpool to the head.
-      const well = st.snakeWell[slot] ?? -1;
-      if (well >= 0 && w.alive[well] === 1 && w.kind[well] === KIND_GRAVITY_WELL) {
-        const wx = unwrapNear(snakePts[0] ?? 0, ix(w.prevX[well] ?? 0, w.x[well] ?? 0, alpha), wrapW);
-        const wy = interp(w.prevY[well] ?? 0, w.y[well] ?? 0, alpha);
-        const hx = snakePts[0] ?? 0;
-        const hy = snakePts[1] ?? 0;
-        const ddx = hx - wx;
-        const ddy = hy - wy;
-        if (ddx * ddx + ddy * ddy < NOVA_STREAM_RANGE * NOVA_STREAM_RANGE) {
-          for (let d = 0; d < NOVA_STREAM_GLINTS; d++) {
-            const sa = novaStreamAt(wx, wy, hx, hy, timeSec, h, d, snakeDot);
-            if (sa <= 0.02) continue;
-            glintAt(head * 31 + 911, d, timeSec, glint);
-            drawGlint(g, snakeDot.x, snakeDot.y, glintSize(NOVA_STREAM_GLINT_SIZE, glint.flare), glint.rot, novaColour(novaStops, 0xffffff, glint.hue, 0, 1), (0.45 + 0.55 * glint.flare) * sa);
+      if (n >= 2) {
+        for (let pass = 0; pass < 2; pass++) {
+          for (let q = 0; q < n; q++) {
+            if (q === 0) g.moveTo(snakePts[0] ?? 0, snakePts[1] ?? 0);
+            else g.lineTo(snakePts[q * 2] ?? 0, snakePts[q * 2 + 1] ?? 0);
           }
+          if (pass === 0) g.stroke({ width: NOVA_SNAKE_GLOW_W, color: NOVA_WHITE, alpha: novaSnakeGlow(timeSec, h), cap: 'round', join: 'round' });
+          else g.stroke({ width: NOVA_SNAKE_CORE_W, color: 0xffffff, alpha: NOVA_SNAKE_CORE_A, cap: 'round', join: 'round' });
         }
+      }
+      // GW5: the ribbon round the body and, near its well, the stream from the whirlpool.
+      const well = st.snakeWell[slot] ?? -1;
+      const hasWell = well >= 0 && w.alive[well] === 1 && w.kind[well] === KIND_GRAVITY_WELL;
+      const wx = hasWell ? unwrapNear(snakePts[0] ?? 0, ix(w.prevX[well] ?? 0, w.x[well] ?? 0, alpha), wrapW) : 0;
+      const wy = hasWell ? interp(w.prevY[well] ?? 0, w.y[well] ?? 0, alpha) : 0;
+      const c = novaSnakeGlints(snakePts, n, head, h, timeSec, hasWell, wx, wy, snakeGlints);
+      for (let q = 0; q < c; q++) {
+        const o = q * GLINT_STRIDE;
+        drawGlint(
+          snakeG,
+          snakeGlints[o] ?? 0,
+          snakeGlints[o + 1] ?? 0,
+          snakeGlints[o + 2] ?? 0,
+          snakeGlints[o + 3] ?? 0,
+          novaColour(novaStops, 0xffffff, snakeGlints[o + 4] ?? 0, 0, 1),
+          snakeGlints[o + 5] ?? 0,
+        );
       }
     }
   }
@@ -4082,9 +4084,14 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       novaG.clear();
       novaShown = false;
     }
+    if (snakeShown) {
+      snakeG.clear();
+      snakeShown = false;
+    }
     fluid.hideAll();
     stormCount = 0;
-    if (novaSnakeCount(novaSnakes) > 0) novaSnakeSweep(novaSnakes, w.alive, w.kind, w.t, KIND_SNAKE_HEAD);
+    // G6 item j: nova snakes come from the sim's ownership table every frame, not an event match.
+    novaSnakeSync(novaSnakes, w, gs(w), SNAKE_SLOTS, KIND_SNAKE_HEAD);
     if (enemyFxDirty) {
       enemyFx.clear();
       enemyFxGlow.clear();
@@ -4103,6 +4110,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       : 0xffffff;
     let live = 0;
     prismDrawn = false;
+    // G6 tilt-depth: volumes only while a flat level is tilted; Off (and the drum) never draw any.
+    volumeOn = cam.on && drum === null;
+    if (volumeOn) volume.begin(cam);
+    else volume.off();
     // Look v33 drone state for this frame (read only from the sim's drone arm).
     const arm = droneArm(w);
     droneDecoyOut = arm.mode === 'detach' && arm.detach === Detach.Out;
@@ -4357,7 +4368,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         if (slot >= 0) drawNova(slot, i, ev.x, ev.y, r, wellInNova(w, i) ? NOVA_RADIUS : PULL_RADIUS, timeSec);
         else if (!teleNow) drawCalmSwirl(i, ev.x, ev.y, r, timeSec);
       }
-      if (kind === KIND_SNAKE_HEAD && emergeLive && emergeTrack(emerge, i, ev.x, ev.y) >= 0) novaSnakeMark(novaSnakes, i, w.t[i] ?? 0);
+      // The emergence trail follows its snake; whether a snake is a nova snake is novaSnakeSync's call.
+      if (kind === KIND_SNAKE_HEAD && emergeLive) emergeTrack(emerge, i, ev.x, ev.y);
       // Wells pull the lattice into a dimple (at most MAX_WELLS, read every frame).
       if (kind === KIND_GRAVITY_WELL && !teleNow && wellsSeen < MAX_WELLS && lattice.sim) {
         addForce(lattice.sim, ev.x, ev.y, wellPullRadius(w.radius[i] ?? 0), WELL_PULL_ACCEL);
@@ -4367,6 +4379,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       v.rotation = ev.rot;
       v.scale.set(ev.scaleX, ev.scaleY);
       if (v.alpha !== ev.alpha) v.alpha = ev.alpha;
+      if (volumeOn && parent === entities) {
+        const vs = volumeShapeFor(slot);
+        if (vs) volume.add(vs, ev.x, ev.y, ev.scaleX, ev.rot, tint !== 0xffffff ? tint : vs.colour !== null ? palette[vs.colour] : 0xffffff, ev.alpha);
+      }
 
       let s = glowViews[i];
       if (!s) {

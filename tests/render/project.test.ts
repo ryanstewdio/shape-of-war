@@ -32,16 +32,16 @@ function reference(x: number, y: number, z: number, deg: number, H: number): { x
 }
 
 describe('tilt levels', () => {
-  it('off, low 12 deg, high 22 deg; default off', () => {
-    expect(TILT_DEG).toEqual({ off: 0, low: 12, high: 22 });
+  it('off, low 7 deg, high 13 deg; default off', () => {
+    expect(TILT_DEG).toEqual({ off: 0, low: 7, high: 13 });
     expect(getTilt()).toBe('off');
     setTilt('high');
     expect(getTilt()).toBe('high');
     setTilt('off');
     expect(getTilt()).toBe('off');
     expect(cameraFor('off', 1000).on).toBe(false);
-    expect(cameraFor('low', 1000).deg).toBe(12);
-    expect(cameraFor('high', 1000).deg).toBe(22);
+    expect(cameraFor('low', 1000).deg).toBe(7);
+    expect(cameraFor('high', 1000).deg).toBe(13);
   });
 });
 
@@ -72,9 +72,9 @@ describe('project', () => {
     }
   });
 
-  it('matches known points at 12 and 22 deg', () => {
+  it('matches known points at 7, 13 and 22 deg', () => {
     const H = 1100;
-    for (const deg of [12, 22]) {
+    for (const deg of [7, 13, 22]) {
       const cam = makeCamera(deg, H);
       const o = P();
       for (const [x, y, z] of [
@@ -102,7 +102,7 @@ describe('project', () => {
   });
 
   it('the far wall (top) is smaller and higher than the near wall', () => {
-    for (const deg of [12, 22]) {
+    for (const deg of [7, 13, 22]) {
       const cam = makeCamera(deg, 1000);
       const top = P();
       const bottom = P();

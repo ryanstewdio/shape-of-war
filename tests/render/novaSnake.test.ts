@@ -89,10 +89,12 @@ describe('nova snake shimmer', () => {
     expect(polyAt(pts, 0, 0.5, o)).toEqual({ x: 0, y: 0 });
   });
 
-  it('the renderer marks emerged heads, sweeps once per frame and draws on the well layer', () => {
+  it('the renderer syncs nova snakes from the sim once per frame and draws on the well layer', () => {
     const src = readFileSync(new URL('../../src/render/renderer.ts', import.meta.url), 'utf8');
-    expect(src).toMatch(/emergeTrack\(emerge, i, ev\.x, ev\.y\) >= 0\) novaSnakeMark\(/);
-    expect((src.match(/novaSnakeSweep\(/g) ?? []).length).toBe(1);
+    // G6 item j: sim ownership (snakeWell), not the emergence match, decides a nova snake.
+    expect((src.match(/novaSnakeSync\(novaSnakes, w, gs\(w\), SNAKE_SLOTS, KIND_SNAKE_HEAD\)/g) ?? []).length).toBe(1);
+    expect(src).not.toMatch(/novaSnakeMark\(/);
+    expect(src).toMatch(/if \(kind === KIND_SNAKE_HEAD && emergeLive\) emergeTrack\(emerge, i, ev\.x, ev\.y\);/);
     const i = src.indexOf('function drawNovaSnakes(');
     const body = src.slice(i, src.indexOf('\n  }\n', i));
     expect(body).toMatch(/wellLayer\(\)/);
@@ -116,7 +118,8 @@ describe('GW4 nova snake glints', () => {
     const i = src.indexOf('function drawNovaSnakes(');
     const body = src.slice(i, src.indexOf('\n  }\n', i));
     expect(body).toMatch(/drawGlint\(/);
-    expect(body).toMatch(/NOVA_SNAKE_GLINTS/);
     expect(body).not.toMatch(/novaSnakeDot\(/);
+    const live = readFileSync(new URL('../../src/render/novaSnakeLive.ts', import.meta.url), 'utf8');
+    expect(live).toMatch(/NOVA_SNAKE_GLINTS/);
   });
 });

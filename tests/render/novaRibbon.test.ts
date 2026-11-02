@@ -148,11 +148,16 @@ describe('renderer wiring', () => {
     const src = readFileSync(new URL('../../src/render/renderer.ts', import.meta.url), 'utf8');
     const i = src.indexOf('function drawNovaSnakes(');
     const b = src.slice(i, src.indexOf('\n  }\n', i));
-    expect(b).toMatch(/novaRibbonAt\(snakePts, n, timeSec, h, d, ribbonPt\)/);
-    expect(b).toMatch(/novaStreamAt\(/);
-    expect(b).toMatch(/NOVA_STREAM_RANGE \* NOVA_STREAM_RANGE/);
+    // G6 item j: the body and the glint list come from novaSnakeLive.ts; the renderer only paints.
+    expect(b).toMatch(/novaSnakeBody\(w, st, head, SNAKE_SEGMENTS, alpha, wrapW, snakePts\)/);
+    expect(b).toMatch(/novaSnakeGlints\(snakePts, n, head, h, timeSec, hasWell, wx, wy, snakeGlints\)/);
     expect(b).toMatch(/st\.snakeWell\[slot\]/);
-    expect((b.match(/glintAt\(/g) ?? []).length).toBe(2);
+    expect(b).toMatch(/drawGlint\(/);
     expect(b).not.toMatch(/new |\[\]|\.clear\(/);
+    const live = readFileSync(new URL('../../src/render/novaSnakeLive.ts', import.meta.url), 'utf8');
+    expect(live).toMatch(/novaRibbonAt\(/);
+    expect(live).toMatch(/novaStreamAt\(/);
+    expect(live).toMatch(/NOVA_STREAM_RANGE \* NOVA_STREAM_RANGE/);
+    expect((live.match(/glintAt\(/g) ?? []).length).toBe(2);
   });
 });

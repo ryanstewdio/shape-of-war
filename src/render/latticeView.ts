@@ -57,6 +57,7 @@ import {
 } from './lattice/sim';
 import { BACK_ALPHA, drumProjectNodes, type Drum } from './drum';
 import { projectNodes, type Camera } from './project';
+import { FADE_TEXEL, writeFadeUv } from './lattice/depthFade';
 
 // Vertex colour line shader. Written in the GLSL style pixi's own programs use: no version line,
 // so GlProgram adds the WebGL1 defines (in, out, finalColor) and it compiles on both contexts.
@@ -262,6 +263,14 @@ function makeGlassTexture(): Texture {
   return new Texture({ source, label: 'drum-glass' });
 }
 
+/** Two texels, premultiplied: white at FADE_TEXEL (far) and opaque white (near), for the tilt depth fade. */
+function makeFadeTexture(): Texture {
+  const b = Math.round(255 * FADE_TEXEL);
+  const resource = new Uint8Array([b, b, b, b, 255, 255, 255, 255]);
+  const source = new BufferImageSource({ resource, width: 2, height: 1, alphaMode: 'premultiplied-alpha', scaleMode: 'linear', label: 'tilt-fade' });
+  return new Texture({ source, label: 'tilt-fade' });
+}
+
 /** Create the lattice and dust views. dotTexture is a small soft dot (one source for all motes). */
 export function createLatticeView(dotTexture: Texture): LatticeView {
   const lines = new Container({ label: 'lattice' });
@@ -283,6 +292,8 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   let camera: Camera | null = null;
   let drum: Drum | null = null;
   let glassTex: Texture | null = null;
+  let fadeTex: Texture | null = null;
+  let layoutNow: LatticeLayout | null = null;
   let lift: Float32Array = new Float32Array(0);
   const motes: Dust = createDust();
   const items: Particle[] = [];
@@ -308,6 +319,8 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   function build(arena: ArenaDef, spacing: number): void {
     clear();
     const layout = buildLattice(arena, spacing);
+    layoutNow = layout;
+    arenaNow = arena;
     gpu = makeGpu(layout, arena, colour, heatShader);
     gpu.majorEcho.position.set(pixel, pixel);
     lines.addChild(gpu.minor, gpu.major, gpu.majorEcho);
@@ -318,16 +331,23 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     ambient = createAmbient(layout);
     lift = new Float32Array(layout.count);
     if (camera || drum) setZEnabled(sim, true);
-    if (drum) applyLineTexture();
+    if (drum || camera) applyLineTexture();
   }
 
-  /** Glass texture on the line meshes while a drum is set, the white texel otherwise. */
+  /** Glass texture on the line meshes while a drum is set, the depth fade under tilt, the white texel otherwise. */
   function applyLineTexture(): void {
     if (!gpu) return;
     let t: Texture = Texture.WHITE;
     if (drum) {
       glassTex ??= makeGlassTexture();
       t = glassTex;
+    } else if (camera && layoutNow && arenaNow) {
+      // Tilt: each node's u picks its depth fade, written once here from the rest positions.
+      fadeTex ??= makeFadeTexture();
+      t = fadeTex;
+      const uv = gpu.uvBuf.data;
+      if (uv instanceof Float32Array) writeFadeUv(uv, layoutNow.restY, layoutNow.count, arenaNow.height, camera);
+      gpu.uvBuf.update();
     } else {
       // Back to the flat path: every vertex samples the white texel again.
       const uv = gpu.uvBuf.data;
@@ -402,6 +422,7 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     camera = next;
     // Either way the next frame rewrites every node (flat or projected) once.
     if (sim) setZEnabled(sim, camera !== null || drum !== null);
+    if (!drum) applyLineTexture();
   }
 
   function setDrum(d: Drum | null): void {
@@ -493,6 +514,8 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
       clear();
       glassTex?.destroy(true);
       glassTex = null;
+      fadeTex?.destroy(true);
+      fadeTex = null;
       lines.destroy({ children: true });
       glow.destroy({ children: true });
       heatShader.destroy();
