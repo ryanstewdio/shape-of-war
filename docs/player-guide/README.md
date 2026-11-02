@@ -1,10 +1,18 @@
 # Shape of War player guide
 
-Describes main at 13b7d96a1a067c61bfbaf8887fa96eb4dde807c2 (version v2.0.0), written 2026-10-29.
+Describes main at 91c49c84d1a90baa12a99b01df5ab1213b483466 (version v3), written 2026-11-02. Sections other than "Changed in this version" and the changelog still describe v2.0.0 (13b7d96) and are not yet rewritten for v3.
 
 ## Changed in this version
 
-First edition.
+v3 since v2.0.0. Numbers for the new items are in the game, not yet in the sections below.
+
+- **Bosses, every 5th level (5 to 50), one per level.** Warden (5): a shell blocks shots until the core opens after each ring. Brood (10): destroy its three pods, then the core opens. Spindle (15): two sweep arms with gaps, fires pellets. Ember (20): fires fans, hittable only when stunned or resting. Mirage (25): shots count only through its turning open arc. Gravitas (30): destroy three anchors to stop the pull and open it. Bastion (35): four corner turrets, kill two to hit the core. Tempest (40): laps the arena, hittable on its lap and rest. Twins (45): two bodies joined by a lethal tether. Prism (50): shield with a white damage window. A bomb staggers a boss.
+- **Weapon combining.** Pick up a second weapon type and the two merge for the pair's effect. The six pairs: Hail (spread and rapid), Trident (spread and pierce), Halo (spread and orbit), Needle (rapid and pierce), Whirl (rapid and orbit), Eclipse (pierce and orbit).
+- **Drone pickups.** A teal ring arms your drone for 20 s in one of four modes: homing shots, detach (the drone holds a post as a decoy), rapid fire, or double (a second drone joins).
+- **Chainsaw.** With orbit, hold your aim and the blade bar extends into a spinning saw.
+- **Wells and nova snakes.** Gravity wells now arrive during play, not only at the start. Snakes can go nova with a multicolour burst.
+- **Settings additions.** 3D tilt (Off, Low, High), Effects and Music sliders and tiers as in v2, with more level tunes, boss battle tracks and three rotating menu themes.
+- **Cylinder levels.** From level 11, non boss levels may be a cylinder: the arena wraps left to right and is drawn as a neon drum.
 
 ![Every shape in the game](img/shapes/_all.svg)
 
@@ -849,3 +857,4 @@ The filter opens from 450 Hz on an empty arena to 5.5 kHz at full threat, and fu
 | v1.0.0 (4fbdaf7) | 2026-10-28 | First release: Adventure and Endless; Grunt, Wanderer, Weaver, Pinwheel, Dart, Snake, Spawner and gravity wells; three drones and three supers; neon slider and settings; results and high scores; installable and offline. Device gate G4 passed | No guide yet |
 | v1.1.0 (e231b6d) | 2026-10-28 | Gravity well pull retuned (zero at the rim, up to 160 u/s at the core, fades fast on leaving). Main screen HUD bands measured so the arena is larger. Device gate G5 passed | No guide yet |
 | 13b7d96 (v2.0.0) | 2026-10-29 | v2: space physics; weapon pickups (rapid, pierce, orbit); Charger, Bulwark, Blink, Swirl, Sower and Splime, plus Mine and Slime; deforming grid, trails, wall effects and effects tiers; generative music with enemy layers, kill notes, hit ticks and the shield deflect sound and spark | First edition |
+| v3 (91c49c8) | 2026-11-02 | Ten bosses every 5th level; weapon combos; drone pickups; chainsaw; wells arriving in play; nova snakes; 3D tilt setting; more music and menu themes; cylinder levels | Changed in this version rewritten; header updated |
