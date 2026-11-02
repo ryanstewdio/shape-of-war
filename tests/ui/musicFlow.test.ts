@@ -292,7 +292,7 @@ describe('main.ts wiring', () => {
 
   it('the Music slider calls the wireMusic port and the engine, and boot pushes through the same settings effect', () => {
     expect(code).toMatch(/setMusicVolume: \(v\) => \{[^}]*setMusicEngineVolume\(v\);[^}]*wireMusicPort\(v\);/);
-    expect(code).toMatch(/const wireMusicPort = \(volume: number\): void => \{[^}]*wireMusic\(bus, \{ volume \}\)/);
+    expect(code).toMatch(/const wireMusicPort = \(volume: number\): void => \{[^}]*wireMusic\(bus, \{ volume, menuStore: \{ load: loadMenuTheme, save: saveMenuTheme \} \}\)/);
     expect(code).toMatch(/const applyEffectsTier = \(tier: EffectsTierSetting\): void => setEffectsTier\(tier\);/);
     expect(code).toMatch(/setEffectsTier: \(tier\) => applyEffectsTier\(tier\)/);
   });
