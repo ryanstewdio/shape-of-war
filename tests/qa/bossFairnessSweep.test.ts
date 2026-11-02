@@ -29,6 +29,7 @@ import { countWaveEnemies } from '../../src/game/spawner';
 import { gs } from '../../src/game/state';
 import { ENTITY_CAP, Kind } from '../../src/game/world';
 import type { BossId } from '../../src/levelgen/leveldef';
+import { legacyBossHp } from '../game/bossHelpers';
 import { BOSS_IDS, DT, SESSION_STEPS, bossLevelFor, idleInput, playerInput, recToInput } from './bossHarness';
 
 afterEach(() => bus.clear());
@@ -51,6 +52,8 @@ interface Tally {
   maxWave: number;
   maxEntities: number;
   bossDownTick: number;
+  /** Share of the boss bar taken by the session end (the HUD readout, split parts included); 1 when defeated. */
+  bossLost: number;
 }
 
 /** [mode, hash01 seed] of every session a boss plays. */
@@ -63,13 +66,19 @@ const SESSIONS: readonly (readonly [mode: number, seed: number])[] = [
   [3, 6],
 ];
 
+/** The sessions of the kill path sweep: the strafing shooter and the chaser that bombs and supers. */
+const KILL_SESSIONS: readonly (readonly [mode: number, seed: number])[] = [
+  [0, 7],
+  [2, 5],
+];
+
 function sweepOne(id: BossId, mode: number, seed: number): Tally {
   const level = bossLevelFor(id);
   const tier = level.boss?.tier ?? 1;
   const w = createGame(level, { vibrate: () => undefined });
   const bs = bossOf(w);
   if (bs === null) throw new Error('no boss state for ' + id);
-  const t: Tally = { violations: [], births: 0, markers: 0, deaths: 0, respawnTicks: 0, maxHazards: 0, maxAdds: 0, maxParts: 0, maxBullets: 0, maxWave: 0, maxEntities: 0, bossDownTick: -1 };
+  const t: Tally = { violations: [], births: 0, markers: 0, deaths: 0, respawnTicks: 0, maxHazards: 0, maxAdds: 0, maxParts: 0, maxBullets: 0, maxWave: 0, maxEntities: 0, bossDownTick: -1, bossLost: 0 };
   const bad = (step: number, msg: string): void => {
     if (t.violations.length < 12) t.violations.push(id + ' mode ' + String(mode) + ' seed ' + String(seed) + ' tick ' + String(step) + ': ' + msg);
   };
@@ -82,6 +91,7 @@ function sweepOne(id: BossId, mode: number, seed: number): Tally {
   let enteringAtDeath = false;
   let bossXAtDeath = 0;
   let bossYAtDeath = 0;
+  let twinFellAtDeath = 0;
   for (let step = 0; step < SESSION_STEPS; step++) {
     const livesBefore = gs(w).lives;
     const invBefore = w.ship.invuln;
@@ -159,6 +169,7 @@ function sweepOne(id: BossId, mode: number, seed: number): Tally {
       bossXAtDeath = boss > 0 ? (w.x[boss] ?? 0) : 0;
       bossYAtDeath = boss > 0 ? (w.y[boss] ?? 0) : 0;
       enteringAtDeath = bs.viewMode === 0;
+      twinFellAtDeath = bs.t2;
     }
     if (respawning && !w.ship.active) {
       t.respawnTicks++;
@@ -173,6 +184,14 @@ function sweepOne(id: BossId, mode: number, seed: number): Tally {
         hpAtDeath = Math.min(hpAtDeath, hp);
         // The entrance slide is not an attack and keeps running, so a ship that died during the
         // entrance sees the boss keep moving until the slide ends.
+        // Twins: a bullet in flight may fell the front body during the delay; the boss entity then
+        // takes the standing second body's place (twins.ts afterDamage). That is a relocation to a
+        // body that did not move, not a move, so the check restarts from the survivor.
+        if (id === 'twins' && bs.t2 !== twinFellAtDeath) {
+          twinFellAtDeath = bs.t2;
+          bossXAtDeath = w.x[boss] ?? 0;
+          bossYAtDeath = w.y[boss] ?? 0;
+        }
         if (!enteringAtDeath && (w.x[boss] !== bossXAtDeath || w.y[boss] !== bossYAtDeath)) bad(step, 'boss moved during the respawn delay');
       }
     } else if (w.ship.active) {
@@ -180,6 +199,8 @@ function sweepOne(id: BossId, mode: number, seed: number): Tally {
     }
     if (t.bossDownTick < 0 && bs.status === 'defeated') t.bossDownTick = step;
   }
+  const bar = bs.hudEv;
+  t.bossLost = bs.status === 'defeated' ? 1 : bar.maxHp > 0 ? 1 - bar.hp / bar.maxHp : 0;
   return t;
 }
 
@@ -200,17 +221,40 @@ describe('fairness sweep: every boss, 60 s, six fuzzed sessions each (rules 5 an
     expect(tallies.flatMap((x) => x.violations)).toEqual([]);
   });
 
-  it('is not vacuous: hazards were born, ships died and respawned, markers and boss kills happened, caps were reached', () => {
+  it('is not vacuous: hazards were born, ships died and respawned, markers happened, bosses were hurt, caps were reached', () => {
     expect(all.length).toBe(BOSS_IDS.length * SESSIONS.length);
     const sum = (f: (x: Tally) => number): number => all.reduce((s, x) => s + f(x), 0);
     expect(sum((x) => x.births)).toBeGreaterThan(500);
     expect(sum((x) => x.deaths)).toBeGreaterThan(100);
     expect(sum((x) => x.respawnTicks)).toBeGreaterThan(1000);
     expect(sum((x) => x.markers)).toBeGreaterThan(0);
-    expect(all.filter((x) => x.bossDownTick >= 0).length).toBeGreaterThan(5);
+    // Release polish (docs/14 item 7): fights last 210 to 260 s, so a 60 s session no longer kills a
+    // boss. The sessions must still hurt it (measured: 16 of 60 take a fifth of the bar); the kill
+    // path is swept on the legacy hit points below.
+    expect(all.filter((x) => x.bossLost >= 0.2).length).toBeGreaterThan(10);
+    expect(Math.max(...all.map((x) => x.bossLost))).toBeLessThan(1);
     expect(Math.max(...all.map((x) => x.maxHazards))).toBe(MAX_HAZARDS);
     expect(Math.max(...all.map((x) => x.maxParts))).toBe(MAX_PARTS);
     expect(Math.max(...all.map((x) => x.maxBullets))).toBeGreaterThan(0);
     expect(Math.max(...all.map((x) => x.maxAdds))).toBeGreaterThan(0);
+  });
+});
+
+// The kill path under the same rules. On the GW6 hit points (legacyBossHp, restored after this
+// describe) the shooter and the bombing chaser kill bosses inside 60 s, as the sweep did before
+// release polish; every tick of the kill and the steps after it still obey rules 5 and 6.
+describe('fairness sweep, kill path: every boss on its legacy hit points, 60 s, shooter and chaser', { timeout: 300_000 }, () => {
+  legacyBossHp();
+  const kills: Tally[] = [];
+
+  it.each(BOSS_IDS.map((id) => [id]))('%s: no violation while it is killed', (id: BossId) => {
+    const tallies = KILL_SESSIONS.map(([mode, seed]) => sweepOne(id, mode, seed));
+    kills.push(...tallies);
+    expect(tallies.flatMap((x) => x.violations)).toEqual([]);
+  });
+
+  it('is not vacuous: bosses died inside the sessions', () => {
+    expect(kills.length).toBe(BOSS_IDS.length * KILL_SESSIONS.length);
+    expect(kills.filter((x) => x.bossDownTick >= 0).length).toBeGreaterThan(5);
   });
 });

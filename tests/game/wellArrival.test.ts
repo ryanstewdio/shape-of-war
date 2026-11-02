@@ -30,6 +30,7 @@ import {
 import { Kind, type World } from '../../src/game/world';
 import { generateLevel } from '../../src/levelgen/generator';
 import type { LevelDef } from '../../src/levelgen/leveldef';
+import { earlyBoss } from './bossHelpers';
 import { DT, idle, put, quietLevel } from './helpers';
 
 afterEach(() => {
@@ -191,7 +192,9 @@ describe('arrivals in the sim', () => {
       for (let level = 5; level <= 30; level++) {
         const d = generateLevel(seed, level);
         if (d.boss !== undefined && d.hazards.wells.length > 0) {
-          def = d;
+          // Release polish (docs/14 item 7): the boss enters at 240 s; bring it in at the old 20 s
+          // so the 70 s run covers arrivals that fall due while it lives.
+          def = earlyBoss(d);
           break;
         }
       }

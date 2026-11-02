@@ -22,6 +22,13 @@ import { DT, idle } from './helpers';
 
 afterEach(() => bus.clear());
 
+// Release polish (docs/14 item 7): the boss enters at 240 s and objectives run 300 to 360 s, so the
+// budgets cover the long level (the old 200 s and 300 s caps were sized for a boss at about 10 s).
+const HOLD_BUDGET_SEC = 480;
+const KILL_BUDGET_SEC = 600;
+/** A long real level is about 50 000 steps; the default 5 s test timeout is too short. */
+const LONG_TEST_MS = 60_000;
+
 /** One step of a gunner who pops pods and lands 30 tenths a step on an exposed core. */
 function fire(w: World): void {
   const s = bossOf(w);
@@ -54,7 +61,7 @@ describe('a boss level completes when the boss dies at success', () => {
         g.invulnerable = true;
         meetTargets(w);
         let i = 0;
-        for (; i < 120 * 200 && !bossHolding(w); i++) {
+        for (; i < 120 * HOLD_BUDGET_SEC && !bossHolding(w); i++) {
           stepGame(w, DT, idle());
           meetTargets(w);
         }
@@ -66,7 +73,7 @@ describe('a boss level completes when the boss dies at success', () => {
         expect(overs).toHaveLength(0);
         let downAt = -1;
         let t = 0;
-        for (let k = 0; k < 120 * 300 && g.outcome === 'running'; k++) {
+        for (let k = 0; k < 120 * KILL_BUDGET_SEC && g.outcome === 'running'; k++) {
           fire(w);
           if (downAt < 0 && !bossPending(w)) downAt = t;
           stepGame(w, DT, idle());
@@ -76,14 +83,14 @@ describe('a boss level completes when the boss dies at success', () => {
         expect(g.outcome).toBe('won');
         expect(t - downAt).toBeLessThanOrEqual(1);
         expect(overs).toEqual([g.score]);
-      });
+      }, LONG_TEST_MS);
     }
   }
 });
 
 describe('the objective clock', () => {
   it('pauses for each respawn delay while w.time runs on', () => {
-    const def = generateLevel(2, 10); // survive 70 s, brood
+    const def = generateLevel(2, 10); // long survive level, brood
     expect(def.objective.kind).toBe('survive');
     const w = createGame(def);
     for (let i = 0; i < 120 * 5; i++) stepGame(w, DT, idle());
@@ -101,7 +108,7 @@ describe('the objective clock', () => {
     g.invulnerable = true;
     const dur = def.objective.kind === 'survive' ? def.objective.durationSec : 0;
     // Kill the boss as soon as it can be hit.
-    for (let i = 0; i < 120 * 200 && bossPending(w); i++) {
+    for (let i = 0; i < 120 * HOLD_BUDGET_SEC && bossPending(w); i++) {
       fire(w);
       stepGame(w, DT, idle());
     }
@@ -109,5 +116,5 @@ describe('the objective clock', () => {
     expect(objectiveClock(w)).toBeLessThan(dur);
     // The step that killed the boss already evaluated the objective: the level is won.
     expect(g.outcome).toBe('won');
-  });
+  }, LONG_TEST_MS);
 });

@@ -169,18 +169,25 @@ describe('v2 enemy stage', { timeout: 60_000 }, () => {
     });
 
     it('rosters keep 3 to 6 distinct kinds with grunt, the v1 band size, and cover the waves', () => {
+      // One expect over the whole sweep, as below: release polish long levels (docs/14 item 7) carry
+      // several times the wave entries, and an expect per entry took 45 s alone and timed out in the
+      // full suite. The same rules, collected as failure rows.
+      const bad: string[] = [];
       for (const b of BAND_LIST) {
         const size = BANDS[b].rosterSize;
         for (const d of sweep(b)) {
           const kinds = d.roster.map((e) => e.kind);
-          expect(kinds).toContain('grunt');
-          expect(new Set(kinds).size).toBe(kinds.length);
-          expect(kinds.length).toBeGreaterThanOrEqual(Math.max(3, size.min));
-          expect(kinds.length).toBeLessThanOrEqual(Math.min(6, size.max));
-          expect(kinds.filter(isV2).length).toBeLessThanOrEqual(V2_ROSTER_SLOTS[b]);
-          for (const w of d.waves.waves) for (const e of w.entries) expect(kinds).toContain(e.kind);
+          const at = `band ${b} seed ${d.seed} level ${d.levelIndex}: `;
+          if (!kinds.includes('grunt')) bad.push(at + 'no grunt');
+          if (new Set(kinds).size !== kinds.length) bad.push(at + 'repeated kind');
+          if (kinds.length < Math.max(3, size.min)) bad.push(at + `${kinds.length} kinds, under the minimum`);
+          if (kinds.length > Math.min(6, size.max)) bad.push(at + `${kinds.length} kinds, over the maximum`);
+          if (kinds.filter(isV2).length > V2_ROSTER_SLOTS[b]) bad.push(at + 'too many v2 kinds');
+          const inRoster = new Set<string>(kinds);
+          for (const w of d.waves.waves) for (const e of w.entries) if (!inRoster.has(e.kind)) bad.push(at + `wave names ${e.kind}, not in the roster`);
         }
       }
+      expect(bad.slice(0, 5)).toEqual([]);
     });
 
     it('no roster or wave ever names a hazard: every name is an EnemyKind, never mine or slime', () => {

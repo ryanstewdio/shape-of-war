@@ -122,7 +122,7 @@ describe('expected duration over 500 seeds (default config)', () => {
       if (e.length > 0 || def.retries !== 0 || def.generatorVersion !== GENERATOR_VERSION_V5) bad.push(`seed ${seed} level ${n}: ${e.join('; ')} r${String(def.retries)}`);
     }
     expect(bad.slice(0, 5)).toEqual([]);
-  });
+  }, 60_000); // validating 500 long levels takes about 5.5 s on the cloud VM, over the 5 s default
 });
 
 /** Spawns per second over [a, b). */

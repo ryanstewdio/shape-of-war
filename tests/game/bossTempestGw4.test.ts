@@ -20,6 +20,7 @@ import { Kind, type World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
 import { generateLevel } from '../../src/levelgen/generator';
 import { stateHash } from './bossGw2Helpers';
+import { earlyBoss } from './bossHelpers';
 import { DT, idle } from './helpers';
 
 afterEach(() => {
@@ -39,7 +40,7 @@ function bossState(w: World): BossState {
 
 /** The real level 40 game, played until the Tempest is past its entrance, then cracked to its split. */
 function splitLevel40(seed: number): World {
-  const def = generateLevel(seed, 40);
+  const def = earlyBoss(generateLevel(seed, 40));
   expect(def.boss?.id).toBe('tempest');
   const w = createGame({ ...def, drone: 'collect' }); // no drone shot touches the parts
   gs(w).invulnerable = true;

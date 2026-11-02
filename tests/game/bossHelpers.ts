@@ -2,12 +2,13 @@
 import { TURRET_SHIELD } from '../../src/game/bosses/bastion';
 import { bossHittable, damageBossPart } from '../../src/game/bosses/core';
 import { bossOf, type BossState } from '../../src/game/bosses/state';
-import { afterAll, beforeAll } from 'vitest';
+import { afterAll, beforeAll, expect } from 'vitest';
 import { BOSS_TABLE } from '../../src/game/bosses/table';
 import { stepGame, type GameOptions } from '../../src/game/game';
 import { gs } from '../../src/game/state';
 import { Kind, type World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
+import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC } from '../../src/levelgen/boss';
 import type { BossId, LevelDef } from '../../src/levelgen/leveldef';
 import { DT, idle, makeGame, quietLevel } from './helpers';
 
@@ -133,4 +134,17 @@ export function park(w: World, x: number, y: number): void {
   w.prevY[0] = y;
   w.vx[0] = 0;
   w.vy[0] = 0;
+}
+
+/**
+ * A real generated level with its boss brought in at BOSS_LEVEL_AT_SEC (20 s, the entrance before
+ * release polish), the way the dev ?boss path brings a boss in early (main.ts arms it at 10 s,
+ * armBossFromSpec). Release polish (docs/14 item 7) moved the generated
+ * entrance to BOSS_LONG_LEVEL_AT_SEC (240 s); tests of a boss mechanic on the real floor and waves
+ * use this so they do not play four minutes of waves first. The boss row, tier and hpMul are kept.
+ */
+export function earlyBoss(def: LevelDef): LevelDef {
+  if (def.boss === undefined) throw new Error('not a boss level');
+  expect(def.boss.atSec).toBe(BOSS_LONG_LEVEL_AT_SEC);
+  return { ...def, boss: { ...def.boss, atSec: BOSS_LEVEL_AT_SEC } };
 }
