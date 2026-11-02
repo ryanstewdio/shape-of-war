@@ -47,7 +47,7 @@ import { registerParticleStress } from '../core/debug';
 import { bus } from '../core/events';
 import { gameState, isTelegraphing, telegraphLeft } from '../game/game';
 import type { World } from '../game/world';
-import type { ArenaDef, LevelDef } from '../levelgen/leveldef';
+import type { ArenaDef, LevelDef, Obstacle } from '../levelgen/leveldef';
 import { geomAlpha, invulnAlpha } from './blink';
 import { hash01 } from './color';
 import {
@@ -68,7 +68,19 @@ import {
 import { wrapCoord } from '../core/surface';
 import { GRID_SPACING } from './gridGeom';
 // Wave V3-G: render only tilt (project.ts, tiltScene.ts). Off takes the v3 path untouched.
-import { cameraFor, fitProjected, parseTiltKnob, projectNodes, TILT_DEG, type Camera } from './project';
+import { cameraFor, fitProjected, parseTiltKnob, project, projectNodes, TILT_DEG, type Camera, type Projected } from './project';
+import {
+  MEMBRANE_FILL_ALPHA,
+  MEMBRANE_FLASH_FILL,
+  circleOverlapsObstacle,
+  dashOn,
+  liftColour,
+  membraneObstacles,
+  membraneRipple,
+  membraneSamples,
+  solidObstacles,
+  stepFlash,
+} from './membrane';
 import { getTilt, setTilt, type TiltLevel } from './tilt';
 import { createTiltScene } from './tiltScene';
 import {
@@ -102,7 +114,7 @@ import {
 import { volumeShapeOf, type VolumeShape } from './volume';
 import { createVolumeView } from './volumeView';
 // D13 phase C1: cylinder levels draw as a neon drum (drum.ts). Flat levels never touch it.
-import { BACK_ALPHA, drumCamBucket, drumCamera, drumProjectNodes, drumRectSegsInto, drumULines, fitDrum, followCamU, interpWrap, makeDrum, ringArcs, unwrapNear, type Drum } from './drum';
+import { BACK_ALPHA, drumCamBucket, drumCamera, drumProject, drumProjectNodes, drumRectSegsInto, drumULines, fitDrum, followCamU, interpWrap, makeDrum, ringArcs, unwrapNear, type Drum, type DrumPoint } from './drum';
 import {
   backingSize,
   bloomResolution,
@@ -364,7 +376,7 @@ import {
   type DroneGlyph,
 } from './partLooks';
 import { NOVA_RADIUS, PULL_RADIUS, wellInNova } from '../game/enemies/gravitywell';
-import { gs, SNAKE_SEGMENTS, SNAKE_SLOTS } from '../game/state';
+import { gs, isHostile, SNAKE_SEGMENTS, SNAKE_SLOTS } from '../game/state';
 // GW3: nova snakes keep a white core line and a faint shimmer for their whole life.
 import {
   createNovaSnakeState,
@@ -1134,6 +1146,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const drumObsGlow = new Graphics({ label: 'drumObsGlow' });
   drumObs.visible = false;
   drumObsGlow.visible = false;
+  // Glow-membrane: translucent shimmering bars (Obstacle.membrane), redrawn per frame for the ripple.
+  const membraneG = new Graphics({ label: 'membrane' });
+  membraneG.visible = false;
   const glowSprites = new Container({ label: 'glowSprites' });
   const entities = new Container({ label: 'entities' });
   const atlas = makeBulletAtlas(app);
@@ -1230,7 +1245,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const cueBuf = createSpriteBuf(EXPOSE_SPRITE_CAP);
 
   bloomLayer.addChild(lattice.glow, wallGlow, drumObsGlow, wallPulse, wallFlash, comets, glowSprites, particles, trails, pulseLayer, enemyFxGlow, ringGlow);
-  lines.addChild(walls, drumObs, floor, hazardLayer.container, enemyFx, entities, cueLayer.container, bullets, enemyBulletLayer.layer.container, rings);
+  lines.addChild(walls, drumObs, membraneG, floor, hazardLayer.container, enemyFx, entities, cueLayer.container, bullets, enemyBulletLayer.layer.container, rings);
   gridLayer.addChild(lattice.dust, grid, lattice.lines);
   world.addChild(gridLayer, bloomLayer, lines);
   app.stage.addChild(world, sticks);
@@ -1838,7 +1853,126 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     else drawWalls(g, arena, colour, passes);
   }
 
+  // Glow-membrane. All scratch is preallocated: no per frame allocation.
+  let membraneObs: Obstacle[] = [];
+  let membraneFlash = new Float32Array(0);
+  let membraneHitS = new Float32Array(0);
+  const mbEdgeA = new Float32Array(98);
+  const mbEdgeB = new Float32Array(98);
+  const mbPt: Projected = { x: 0, y: 0, s: 1 };
+  const mbDrumPt: DrumPoint = { x: 0, y: 0, s: 1, a: 1, m: 1 };
+  const mbStroke = { width: 1, color: 0xffffff, alpha: 1, cap: 'round' as const, join: 'round' as const };
+  let mbX = 0;
+  let mbY = 0;
+  let mbBack = 1;
+
+  function refreshMembranes(): void {
+    membraneObs = membraneObstacles(arena);
+    membraneFlash = new Float32Array(membraneObs.length);
+    membraneHitS = new Float32Array(membraneObs.length);
+    membraneG.visible = membraneObs.length > 0;
+    if (!membraneG.visible) membraneG.clear();
+  }
+
+  /** Arena point to the same space the walls draw in (flat, tilt or drum). */
+  function mbMap(x: number, y: number): void {
+    if (drum) {
+      drumProject(x, y, 0, drum, mbDrumPt);
+      mbX = mbDrumPt.x;
+      mbY = mbDrumPt.y;
+      mbBack = mbDrumPt.a === 1 ? 1 : BACK_ALPHA;
+    } else if (cam.on) {
+      project(x, y, 0, cam, mbPt);
+      mbX = mbPt.x;
+      mbY = mbPt.y;
+      mbBack = 1;
+    } else {
+      mbX = x;
+      mbY = y;
+      mbBack = 1;
+    }
+  }
+
+  function drawMembranes(w: World, timeSec: number, dt: number): void {
+    if (!membraneG.visible) return;
+    const g = membraneG;
+    g.clear();
+    const colour = liftColour(palette.grid);
+    const lineW = (WALL_LINE_PX * currentRender.wallWidthMul) / Math.max(fit.scale, 0.01);
+    const shift = Math.floor(timeSec * 1.5);
+    for (let k = 0; k < membraneObs.length; k++) {
+      const o = membraneObs[k];
+      if (!o) continue;
+      let hit = false;
+      for (let i = 0; i < w.cap && !hit; i++) {
+        if (w.alive[i] !== 1 || !isHostile(w.kind[i] ?? 0)) continue;
+        const ex = w.x[i] ?? 0;
+        const ey = w.y[i] ?? 0;
+        if (circleOverlapsObstacle(o, ex, ey, w.radius[i] ?? 0)) {
+          hit = true;
+          membraneHitS[k] = o.h >= o.w ? ey - o.cy : ex - o.cx;
+        }
+      }
+      const flash = stepFlash(membraneFlash[k] ?? 0, dt, hit);
+      membraneFlash[k] = flash;
+      const vertical = o.h >= o.w;
+      const len = vertical ? o.h : o.w;
+      const thick = vertical ? o.w : o.h;
+      const n = membraneSamples(len);
+      const s0 = (vertical ? o.cy : o.cx) - len / 2;
+      const phase = hash01(k + 1) * Math.PI * 2;
+      // Two long edges, rippled across the bar.
+      for (let i = 0; i <= n; i++) {
+        const s = s0 + (len * i) / n;
+        const rip = membraneRipple(s, timeSec, phase);
+        const c = vertical ? o.cx : o.cy;
+        const aOff = c - thick / 2 + rip;
+        const bOff = c + thick / 2 + rip;
+        mbMap(vertical ? aOff : s, vertical ? s : aOff);
+        mbEdgeA[2 * i] = mbX;
+        mbEdgeA[2 * i + 1] = mbY;
+        mbMap(vertical ? bOff : s, vertical ? s : bOff);
+        mbEdgeB[2 * i] = mbX;
+        mbEdgeB[2 * i + 1] = mbY;
+      }
+      mbMap(o.cx, o.cy);
+      const back = mbBack;
+      g.moveTo(mbEdgeA[0] ?? 0, mbEdgeA[1] ?? 0);
+      for (let i = 1; i <= n; i++) g.lineTo(mbEdgeA[2 * i] ?? 0, mbEdgeA[2 * i + 1] ?? 0);
+      for (let i = n; i >= 0; i--) g.lineTo(mbEdgeB[2 * i] ?? 0, mbEdgeB[2 * i + 1] ?? 0);
+      g.closePath();
+      g.fill({ color: colour, alpha: (MEMBRANE_FILL_ALPHA + MEMBRANE_FLASH_FILL * flash * 0.4) * back });
+      // Brightened patch around the overlapping enemy, brief.
+      if (flash > 0.01) {
+        const hs = (membraneHitS[k] ?? 0) + (vertical ? o.cy : o.cx);
+        const lo = Math.max(0, Math.min(n, Math.floor(((hs - 30 - s0) / len) * n)));
+        const hi = Math.max(0, Math.min(n, Math.ceil(((hs + 30 - s0) / len) * n)));
+        if (hi > lo) {
+          g.moveTo(mbEdgeA[2 * lo] ?? 0, mbEdgeA[2 * lo + 1] ?? 0);
+          for (let i = lo + 1; i <= hi; i++) g.lineTo(mbEdgeA[2 * i] ?? 0, mbEdgeA[2 * i + 1] ?? 0);
+          for (let i = hi; i >= lo; i--) g.lineTo(mbEdgeB[2 * i] ?? 0, mbEdgeB[2 * i + 1] ?? 0);
+          g.closePath();
+          g.fill({ color: 0xffffff, alpha: MEMBRANE_FLASH_FILL * flash * back });
+        }
+      }
+      // Dashed outline: both long edges by sample, plus the two ends.
+      const st = mbStroke;
+      st.width = lineW * (1 + flash);
+      st.color = colour;
+      st.alpha = Math.min(1, 0.7 + 0.3 * flash) * back;
+      for (let i = 0; i < n; i++) {
+        if (!dashOn(i, shift)) continue;
+        g.moveTo(mbEdgeA[2 * i] ?? 0, mbEdgeA[2 * i + 1] ?? 0).lineTo(mbEdgeA[2 * i + 2] ?? 0, mbEdgeA[2 * i + 3] ?? 0);
+        g.moveTo(mbEdgeB[2 * i] ?? 0, mbEdgeB[2 * i + 1] ?? 0).lineTo(mbEdgeB[2 * i + 2] ?? 0, mbEdgeB[2 * i + 3] ?? 0);
+      }
+      g.moveTo(mbEdgeA[0] ?? 0, mbEdgeA[1] ?? 0).lineTo(mbEdgeB[0] ?? 0, mbEdgeB[1] ?? 0);
+      g.moveTo(mbEdgeA[2 * n] ?? 0, mbEdgeA[2 * n + 1] ?? 0).lineTo(mbEdgeB[2 * n] ?? 0, mbEdgeB[2 * n + 1] ?? 0);
+      g.stroke(st);
+    }
+  }
+
   function redrawWalls(r: Readonly<NeonRender>): void {
+    refreshMembranes();
     wallsTo(walls, palette.grid, wallPasses(r.innerAlpha, r.wallWidthMul, fit.scale, 'crisp'));
     wallsTo(wallGlow, palette.grid, wallPasses(r.innerAlpha, r.wallWidthMul, fit.scale, 'bloom'));
     // Pulse layer: white geometry, coloured per frame by tint and driven by alpha. A wide soft
@@ -1891,7 +2025,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     drumObsGlow.clear();
     drumObsFront.length = 0;
     drumObsBack.length = 0;
-    for (const o of arena.obstacles) drumRectSegsInto(d, o.cx - o.w / 2, o.cy - o.h / 2, o.w, o.h, drumObsFront, drumObsBack);
+    for (const o of solidObstacles(arena)) drumRectSegsInto(d, o.cx - o.w / 2, o.cy - o.h / 2, o.w, o.h, drumObsFront, drumObsBack);
     for (const pass of drumObsCrisp) {
       if (!backCulled(pass.alpha)) strokeSegs(drumObs, drumObsBack, pass.width, pass.alpha * BACK_ALPHA);
       strokeSegs(drumObs, drumObsFront, pass.width, pass.alpha);
@@ -4888,6 +5022,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     if (lattice.dust.visible) lattice.dustFrame(fxDt, nowSec);
     governLattice(dt, now / 1000);
     stepParticles(dt);
+    drawMembranes(w, nowSec, fxDt);
     stats.particles = liveParticleCount();
     if (drum) {
       if (!latticeActive) {
