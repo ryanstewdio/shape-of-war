@@ -18,10 +18,12 @@ const CASES: readonly { level: number; kind: EnemyKind; hash: string }[] = [
   { level: 6, kind: 'charger', hash: '93A4C56E' },
   { level: 7, kind: 'swirl', hash: 'CC6859DC' },
   { level: 9, kind: 'splime', hash: '5BD14124' },
-  // D13 C0: seed 42 level 16 is now a cylinder level (was D736C51F flat at 374a7b9).
-  { level: 16, kind: 'bulwark', hash: '712BC1C1' },
-  // D13 C0: seed 42 level 17 is now a cylinder level too (was 43CADCE4 flat at 374a7b9).
-  { level: 17, kind: 'blink', hash: 'BCC2F1B8' },
+  // D13 C0: seed 42 level 16 is now a cylinder level (was D736C51F flat at 374a7b9). Drum-maps:
+  // a pillars drum (was 712BC1C1 open drum at 8d5c989).
+  { level: 16, kind: 'bulwark', hash: 'F383CDC7' },
+  // D13 C0: seed 42 level 17 is now a cylinder level too (was 43CADCE4 flat at 374a7b9). Drum-maps:
+  // a pillars drum (was BCC2F1B8 open drum at 8d5c989).
+  { level: 17, kind: 'blink', hash: 'F9779FC2' },
   { level: 31, kind: 'sower', hash: '66AF8BD7' },
 ];
 

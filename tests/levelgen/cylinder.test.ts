@@ -37,7 +37,7 @@ const fold = (h: number, hash: string, i: number): number => fmix32((h ^ parseIn
 const hex = (h: number): string => h.toString(16).toUpperCase().padStart(8, '0');
 const ids = (errs: readonly string[]): string[] => errs.map((e) => e.slice(0, e.indexOf(':')));
 
-/** Seed 42 level 16: a cylinder level with the default config (reported for the device check). */
+/** Seed 42 level 16: a cylinder level with the default config (pillars drum since drum-maps; was 712BC1C1 open). */
 const CYL_SEED = 42;
 const CYL_LEVEL = 16;
 
@@ -172,7 +172,7 @@ describe('generator surface choice', () => {
     const d = generateLevel(CYL_SEED, CYL_LEVEL);
     expect(d.surface).toBe('cylinder');
     expect(generateLevel(CYL_SEED, CYL_LEVEL)).toEqual(d);
-    expect(levelHash(d)).toBe('712BC1C1');
+    expect(levelHash(d)).toBe('F383CDC7');
     expectCylinder(d);
     expect(generateLevel(CYL_SEED, CYL_LEVEL, V3_GEN_CONFIG).surface).toBe('flat');
   });

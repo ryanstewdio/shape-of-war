@@ -105,6 +105,8 @@ import {
   roundCanonX,
 } from './cylinder';
 import type { SurfaceKind } from '../core/surface';
+import { applyDrumPattern, pickDrumPattern } from './drum';
+import type { DrumPattern } from './drum';
 import { ALL_ENEMY_KINDS, V2_ENEMY_SALT, V2_SPAWN_UNIT, planV2Roster, swapGroupKind, v2GroupCount } from './v2enemies';
 
 /** Stage salts, docs/02 section 2. */
@@ -243,6 +245,33 @@ export function generateCylinderArena(r: Rng, band: Band): ArenaDef {
 export function pickSurface(seed: number, levelIndex: number, cfg: GenConfig): SurfaceKind {
   if (!cfg.enableCylinder || !cylinderEligible(levelIndex)) return 'flat';
   return chance(mulberry32(deriveSeed(seed, SURFACE_SALT)), CYLINDER_CHANCE) ? 'cylinder' : 'flat';
+}
+
+/**
+ * The surface stream positioned after its cylinder draw, with the drum pattern drawn next. Null
+ * for a flat level (no draw beyond pickSurface's). Layout draws continue on the returned stream.
+ */
+function drumDraw(seed: number, levelIndex: number, cfg: GenConfig): { pattern: DrumPattern; r: Rng } | null {
+  if (pickSurface(seed, levelIndex, cfg) !== 'cylinder') return null;
+  const r = mulberry32(deriveSeed(seed, SURFACE_SALT));
+  r();
+  return { pattern: pickDrumPattern(r), r };
+}
+
+/** Drum layout of level n (seed is the level seed): a DrumPattern on a cylinder level, else null. */
+export function drumPatternFor(seed: number, levelIndex: number, cfg: GenConfig = DEFAULT_GEN_CONFIG): DrumPattern | null {
+  return drumDraw(seed, levelIndex, cfg)?.pattern ?? null;
+}
+
+/**
+ * Cylinder arena of a level: the C0 arena from the arena stream (height, width, open drum
+ * obstacles), then the drum pattern laid out from the surface stream. seed is the level seed, so a
+ * re-derive keeps the pattern and its draws while the arena stream redraws the size.
+ */
+function cylinderArena(seed: number, levelIndex: number, cfg: GenConfig, arenaRng: Rng, band: Band): ArenaDef {
+  const base = generateCylinderArena(arenaRng, band);
+  const d = drumDraw(seed, levelIndex, cfg);
+  return d === null ? base : applyDrumPattern(base, d.pattern, d.r);
 }
 
 /** docs/02 section 6.2. Per attempt draws: orientation, length, cx, cy. Stops at the first exhausted obstacle. */
@@ -775,7 +804,7 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   // D13: the surface stream is separate, so drawing it here moves no draw of any flat level.
   const surface = pickSurface(seed, levelIndex, cfg);
   const cyl = surface === 'cylinder';
-  const arena = cyl ? generateCylinderArena(stream(s, SALT.arena), band) : generateArena(stream(s, SALT.arena), band);
+  const arena = cyl ? cylinderArena(seed, levelIndex, cfg, stream(s, SALT.arena), band) : generateArena(stream(s, SALT.arena), band);
   const v1Roster = generateRoster(stream(s, SALT.roster), band, cfg);
   const loadout = stream(s, SALT.loadout);
   const drone = pickAllowed(loadout, DRONE_KINDS, b.droneWeights, cfg.drones, 'attack');

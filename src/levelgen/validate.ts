@@ -39,7 +39,17 @@ import type {
   WaveSchedule,
 } from './leveldef';
 import { ALL_ENEMY_KINDS, isV2Kind } from './v2enemies';
-import { CYLINDER_WIDTH_STEP, cylDist, cylObstacleDistance, cylinderEligible, insideRims } from './cylinder';
+import {
+  CYLINDER_MAX_OBSTACLES,
+  CYLINDER_WIDTH_STEP,
+  cylDist,
+  cylObstacleDistance,
+  cylObstacleGap,
+  cylinderEligible,
+  drumConnected,
+  insideRims,
+  seamJoined,
+} from './cylinder';
 
 // Constants shared with the W2 generator. docs/02 sections 6, 7, 8, 9, 11.
 export const ARENA_MIN_HEIGHT = 700;
@@ -55,6 +65,8 @@ export const OBSTACLE_EDGE_GAP = 80;
 export const OBSTACLE_PAIR_GAP = 80;
 export const MAX_OBSTACLES = 3;
 export const CONNECT_CELL = 20;
+/** A6 on a cylinder: wrapped flood cell, divides every width that is a multiple of 64. */
+export const DRUM_CONNECT_CELL = 16;
 export const CONNECT_CLEARANCE = 12; // ship radius 10 plus 2
 export const CONNECT_MIN_FRACTION = 0.85;
 export const ENTRY_EDGE_MARGIN = 40;
@@ -654,7 +666,7 @@ function checkWaves(c: Collector, ws: WaveSchedule, arena: ArenaDef, roster: rea
   });
 }
 
-function checkArena(c: Collector, arena: ArenaDef): void {
+function checkArena(c: Collector, arena: ArenaDef, cylinder = false): void {
   c.check('A1', (report) => {
     const { shape, width: w, height: h } = arena;
     if (!ARENA_SHAPES.includes(shape)) report(`unknown arena shape ${String(shape)}`);
@@ -680,36 +692,49 @@ function checkArena(c: Collector, arena: ArenaDef): void {
     if (s.x !== 0 || s.y !== 0) report(`spawnPoint (${s.x}, ${s.y}) is not (0, 0)`);
     if (!insideArena(arena, s, SPAWN_INSIDE_MARGIN)) report(`spawnPoint not inside arena with margin ${SPAWN_INSIDE_MARGIN}`);
   });
+  // A3 to A6 on a cylinder (D13 drum layouts): distances and gaps wrap in u, the edge gap applies to
+  // the rims only with every bar inside the canonical u range, up to CYLINDER_MAX_OBSTACLES bars,
+  // the two halves of a bar cut at the seam count as one wall, and A6 is a wrapped flood fill.
+  // Lazy so a malformed arena is reported by the check wrapper instead of throwing here.
+  const wOf = (): number => arena.width;
   c.check('A3', (report) => {
+    const W = wOf();
     arena.obstacles.forEach((o, i) => {
-      const d = obstaclePointDistance(o, arena.spawnPoint);
+      const d = cylinder ? cylObstacleDistance(o, arena.spawnPoint, W) : obstaclePointDistance(o, arena.spawnPoint);
       if (d < OBSTACLE_SPAWN_CLEAR) report(`obstacle ${i} spawn clearance ${f1(d)} < ${OBSTACLE_SPAWN_CLEAR}`);
     });
   });
   c.check('A4', (report) => {
+    const W = wOf();
     const n = arena.obstacles.length;
+    const max = cylinder ? CYLINDER_MAX_OBSTACLES : MAX_OBSTACLES;
     if (arena.shape === 'rectObstacles') {
-      if (n < 1 || n > MAX_OBSTACLES) report(`rectObstacles has ${n} obstacles, want 1 to ${MAX_OBSTACLES}`);
+      if (n < 1 || n > max) report(`rectObstacles has ${n} obstacles, want 1 to ${max}`);
     } else if (n !== 0) {
       report(`${arena.shape} has ${n} obstacles, want 0`);
     }
+    const within = (p: Vec2): boolean =>
+      cylinder ? Math.abs(p.x) <= W / 2 + EPS && Math.abs(p.y) <= arena.height / 2 - OBSTACLE_EDGE_GAP + EPS : insideArena(arena, p, OBSTACLE_EDGE_GAP);
     arena.obstacles.forEach((o, i) => {
       if (!(o.w > 0 && o.h > 0)) report(`obstacle ${i} size ${o.w} x ${o.h} not positive`);
-      if (!obstacleCorners(o).every((p) => insideArena(arena, p, OBSTACLE_EDGE_GAP))) {
+      if (!obstacleCorners(o).every(within)) {
         report(`obstacle ${i} outside arena bounds margin ${OBSTACLE_EDGE_GAP}`);
       }
     });
   });
   c.check('A5', (report) => {
+    const W = wOf();
     arena.obstacles.forEach((a, i) => {
       arena.obstacles.slice(i + 1).forEach((b, k) => {
-        const g = obstacleGap(a, b);
+        if (cylinder && seamJoined(a, b, W)) return;
+        const g = cylinder ? cylObstacleGap(a, b, W) : obstacleGap(a, b);
         if (g < OBSTACLE_PAIR_GAP) report(`obstacles ${i} and ${i + k + 1} gap ${f1(g)} < ${OBSTACLE_PAIR_GAP}`);
       });
     });
   });
   c.check('A6', (report) => {
-    if (!isArenaConnected(arena)) report('walls seal part of the arena (not connected from spawn)');
+    const ok = cylinder ? drumConnected(arena, DRUM_CONNECT_CELL, CONNECT_CLEARANCE) : isArenaConnected(arena);
+    if (!ok) report('walls seal part of the arena (not connected from spawn)');
   });
   c.check('A7', (report) => {
     const r = arena.cornerRadius;
@@ -859,7 +884,7 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
     if (def.seed !== want) report(`seed ${def.seed} !== levelSeed(runSeed, levelIndex) ${want}`);
     if (def.band !== band) report(`band ${def.band} !== bandOf(${def.levelIndex}) ${band}`);
   });
-  checkArena(c, def.arena);
+  checkArena(c, def.arena, def.surface === 'cylinder');
   checkRoster(c, def.roster, band);
   checkSpeed(c, def.speedScale, def.levelIndex);
   checkObjective(c, def, band);
