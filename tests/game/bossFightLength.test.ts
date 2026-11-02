@@ -1,16 +1,18 @@
-// Fight length (docs/12 D5, G3A paste). A scripted fight: a gunner who lands the docs/13 open
-// fire figure (18 spread hits a second, 180 tenths a second, half of 36 bullets) whenever the core
-// is exposed, and pops one Brood pod every POD_REACTION seconds while pods live. It measures the
-// seconds from the end of the entrance to the kill, windows included. Calibration from Ryan's G3A
-// paste: Warden measured here was "about right"; Brood and Spindle were "too short". Targets: Brood
-// 35 to 50 s, Spindle about 25 percent longer than its G3A build (22.2 s here at 400 hit points).
+// Fight length (docs/12 D5, G3A paste; release polish item 7). A scripted fight: a gunner who lands
+// the docs/13 open fire figure (18 spread hits a second, 180 tenths a second, half of 36 bullets)
+// whenever the core is exposed, pops one part every POD_REACTION seconds while a breakable part
+// lives (Brood pods, Gravitas anchors, Bastion turrets, Prism pods and nodes, Mirage mirrors), and
+// after a split keeps the same fire on the body parts one at a time. It measures the seconds from
+// the end of the entrance to the kill, windows included. Release polish: every boss at Normal on
+// its own campaign level (Warden 5 to Prism 50), attack rotation on, lasts 210 to 260 s (Ryan:
+// "at least 3.5 minutes of boss fighting"). Before it Warden ran about 60 s, Brood 37, Spindle 28.
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
 import { damageBoss, damageBossPart, livePart } from '../../src/game/bosses/core';
-import { MAX_PARTS } from '../../src/game/bosses/table';
+import { bossNominalLevel, MAX_PARTS } from '../../src/game/bosses/table';
 import { PartType } from '../../src/game/bosses/types';
 import { stepGame } from '../../src/game/game';
-import type { BossId } from '../../src/levelgen/leveldef';
+import { BOSS_IDS, type BossId } from '../../src/levelgen/leveldef';
 import { bs, bossGame, enter, park } from './bossHelpers';
 import { DT, idle } from './helpers';
 
@@ -18,11 +20,13 @@ afterEach(() => bus.clear());
 
 const OPEN_FIRE = 180;
 const POD_REACTION = 0.5;
-/** Spindle's fight at G3A (build 3a2bb86, 400 hit points) on this same script. */
-const SPINDLE_G3A_SEC = 22.2;
+const MIN_SEC = 210;
+const MAX_SEC = 260;
 
+/** Seconds from the end of the entrance to the kill on the script, Infinity past 400 s. */
 function fightSeconds(id: BossId): number {
-  const w = bossGame(id, { lives: 99 });
+  const level = bossNominalLevel(BOSS_IDS.indexOf(id));
+  const w = bossGame(id, { lives: 99, levelIndex: level }, {}, true, 0.25, true);
   park(w, 500, 300);
   enter(w);
   const s = bs(w);
@@ -32,10 +36,10 @@ function fightSeconds(id: BossId): number {
     let pod = -1;
     for (let k = 0; k < MAX_PARTS && pod < 0; k++) {
       const p = livePart(w, s, k);
-      if (p > 0 && w.a[p] !== PartType.Broodling) pod = p;
+      // A Twin is the second body (its hits come off the shared bar), not a part to pop.
+      if (p > 0 && w.a[p] !== PartType.Broodling && w.a[p] !== PartType.Twin) pod = p;
     }
     if (s.split) {
-      // After Brood's split the gunner keeps the same fire on the Broodlings (perfect aim), one at a time.
       acc += OPEN_FIRE * DT;
       const n = Math.floor(acc);
       let target = -1;
@@ -57,7 +61,8 @@ function fightSeconds(id: BossId): number {
       acc += OPEN_FIRE * DT;
       const n = Math.floor(acc);
       if (n > 0) {
-        damageBoss(w, n, 0, 0);
+        // Hits land on the body centre (inside Mirage's open arc whenever it is open).
+        damageBoss(w, n, w.x[s.id] ?? 0, w.y[s.id] ?? 0);
         acc -= n;
       }
     }
@@ -67,28 +72,20 @@ function fightSeconds(id: BossId): number {
   return Infinity;
 }
 
-describe('fight length at open fire', () => {
-  const warden = fightSeconds('warden');
-  const brood = fightSeconds('brood');
-  const spindle = fightSeconds('spindle');
+describe('fight length at open fire, Normal, each boss on its own level', () => {
+  const secs = new Map<BossId, number>();
+  for (const id of BOSS_IDS) secs.set(id, fightSeconds(id));
 
-  it('reports the three tier 1 fights', () => {
-    console.info(`fight seconds: warden ${warden.toFixed(1)}, brood ${brood.toFixed(1)}, spindle ${spindle.toFixed(1)}`);
-    expect(Number.isFinite(warden)).toBe(true);
+  it('reports the ten fights', () => {
+    console.info(`fight seconds: ${BOSS_IDS.map((id) => `${id} ${(secs.get(id) ?? 0).toFixed(1)}`).join(', ')}`);
+    expect(secs.size).toBe(10);
   });
 
-  it('brood lasts 35 to 50 s', () => {
-    expect(brood).toBeGreaterThanOrEqual(35);
-    expect(brood).toBeLessThanOrEqual(50);
-  });
-
-  it('spindle lasts about 25 percent longer than at G3A', () => {
-    expect(spindle / SPINDLE_G3A_SEC).toBeGreaterThanOrEqual(1.2);
-    expect(spindle / SPINDLE_G3A_SEC).toBeLessThanOrEqual(1.32);
-  });
-
-  it('warden, harder since GW2 (520 hits, fairness target 4 of 5), lasts 50 to 75 s', () => {
-    expect(warden).toBeGreaterThanOrEqual(50);
-    expect(warden).toBeLessThanOrEqual(75);
-  });
+  for (const id of BOSS_IDS) {
+    it(`${id} lasts ${MIN_SEC} to ${MAX_SEC} s`, () => {
+      const t = secs.get(id) ?? 0;
+      expect(t).toBeGreaterThanOrEqual(MIN_SEC);
+      expect(t).toBeLessThanOrEqual(MAX_SEC);
+    });
+  }
 });

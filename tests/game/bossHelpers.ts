@@ -2,6 +2,7 @@
 import { TURRET_SHIELD } from '../../src/game/bosses/bastion';
 import { bossHittable, damageBossPart } from '../../src/game/bosses/core';
 import { bossOf, type BossState } from '../../src/game/bosses/state';
+import { afterAll, beforeAll } from 'vitest';
 import { BOSS_TABLE } from '../../src/game/bosses/table';
 import { stepGame, type GameOptions } from '../../src/game/game';
 import { gs } from '../../src/game/state';
@@ -19,9 +20,48 @@ export function breakTurret(w: World, p: number, amount: number): void {
   damageBossPart(w, p, amount, w.x[p] ?? 0, w.y[p] ?? 0);
 }
 
+/** Hit points of every row before release polish item 7 (the GW6 table the mechanics tests were tuned on). */
+export const LEGACY_BOSS_HP: Readonly<Record<BossId, number>> = {
+  warden: 520,
+  brood: 400,
+  spindle: 500,
+  ember: 600,
+  mirage: 640,
+  gravitas: 700,
+  bastion: 1242,
+  tempest: 1138.5,
+  twins: 1000,
+  prism: 1000,
+};
+
+/**
+ * Pin LEGACY_BOSS_HP in BOSS_TABLE for the enclosing describe (or file), restored after it. For
+ * mechanics tests that count exact tenths, thresholds and split shares on the old rows; vitest gives
+ * every test file its own module copy, so the pin never leaks into another file.
+ */
+export function legacyBossHp(): void {
+  const saved: Partial<Record<BossId, number>> = {};
+  beforeAll(() => {
+    for (const id of Object.keys(LEGACY_BOSS_HP) as BossId[]) {
+      saved[id] = BOSS_TABLE[id].hp;
+      BOSS_TABLE[id].hp = LEGACY_BOSS_HP[id];
+    }
+  });
+  afterAll(() => {
+    for (const id of Object.keys(saved) as BossId[]) BOSS_TABLE[id].hp = saved[id] ?? BOSS_TABLE[id].hp;
+  });
+}
+
+/**
+ * Level index the boss tests play at unless a patch says otherwise: level 20 is the 100 percent
+ * point of the release polish level scale, so mechanics tests measure the table values as they are.
+ */
+export const BOSS_TEST_LEVEL = 20;
+
 /** A quiet rect level (1400 x 900, no waves) carrying boss id with its entrance at atSec. */
 export function bossLevel(id: BossId, patch: Partial<LevelDef> = {}, atSec = 0.25): LevelDef {
   return quietLevel({
+    levelIndex: BOSS_TEST_LEVEL,
     boss: { id, tier: BOSS_TABLE[id].tier, atSec, hpMul: 1 },
     objective: { kind: 'survive', durationSec: 900 },
     ...patch,
@@ -30,12 +70,22 @@ export function bossLevel(id: BossId, patch: Partial<LevelDef> = {}, atSec = 0.2
 
 /**
  * Game on bossLevel. The ship is vulnerable unless shield is true (the stress scene flag). The drone
- * defaults to Collect so no drone shot changes the boss's hit points behind a test's back.
+ * defaults to Collect so no drone shot changes the boss's hit points behind a test's back. The
+ * attack rotation is off unless rotation is true, so a test of one attack counts that attack only.
  */
-export function bossGame(id: BossId, patch: Partial<LevelDef> = {}, opts: GameOptions = {}, shield = true, atSec = 0.25): World {
+export function bossGame(
+  id: BossId,
+  patch: Partial<LevelDef> = {},
+  opts: GameOptions = {},
+  shield = true,
+  atSec = 0.25,
+  rotation = false,
+): World {
   const lvl = bossLevel(id, patch, atSec);
-  const w = makeGame({ drone: 'collect', ...patch, boss: lvl.boss, objective: lvl.objective }, opts).w;
+  const w = makeGame({ drone: 'collect', levelIndex: lvl.levelIndex, ...patch, boss: lvl.boss, objective: lvl.objective }, opts).w;
   gs(w).invulnerable = shield;
+  const st = bossOf(w);
+  if (st !== null) st.rotOn = rotation;
   return w;
 }
 

@@ -20,7 +20,8 @@ import { countWaveEnemies, TELEGRAPH_SEC } from '../spawner';
 import { gs, spawnFromDef } from '../state';
 import { angleBetween, distBetween, moveTo } from '../steer';
 import { Kind, spawn, type World } from '../world';
-import type { BossSpec } from '../../levelgen/leveldef';
+import { difficultyOf } from '../difficulty';
+import { BOSS_IDS, type BossSpec } from '../../levelgen/leveldef';
 import {
   circlesOverlap,
   clampLaneHalfWidth,
@@ -32,11 +33,14 @@ import {
   wrapPi,
 } from './kit';
 import { setShield } from './shield';
+import { resetRotation, stepRotation } from './rotation';
 import { cancelVolley, stepVolleyLaunch } from './shots';
 import { armState, bossOf, type BossState } from './state';
 import {
+  armourFor,
   BOSS_DAMAGE,
   BOSS_HUD_INTERVAL,
+  bossNominalLevel,
   BOSS_REWARD_GEOMS,
   CRACK_AT,
   DETONATE_BOSS_FRACTION,
@@ -46,6 +50,7 @@ import {
   ENTRANCE_SEC,
   HAZARD,
   HORNET,
+  levelAttackScale,
   MAX_ADDS,
   MAX_HORNETS,
   MAX_HAZARDS,
@@ -105,7 +110,43 @@ export function bossBonusAwarded(w: World): number {
   return bs === null || bs.status !== 'defeated' ? 0 : bs.bonus;
 }
 
-/** True while the boss attacks 30 percent faster (alive 90 s, or the hold). */
+/**
+ * Pure: the level a boss scales with. A campaign level uses its index; Endless (index 0 or less)
+ * uses the boss's first pass level. loop is true from the second pass of the list (hpMul above 1).
+ */
+export function bossScaleLevel(levelIndex: number, id: BossSpec['id']): number {
+  return levelIndex > 0 ? levelIndex : bossNominalLevel(BOSS_IDS.indexOf(id));
+}
+
+/**
+ * Set the release polish scaling on a boss about to spawn: the level attack scale (bullet speed),
+ * the cadence (level scale times the difficulty's bossScale) and the armour from hit points times
+ * hpMul times bossScale past the Int16 store. Returns the stored maximum hit points.
+ */
+export function applyBossScaling(w: World, bs: BossState, bossScale: number): number {
+  const scale = Number.isFinite(bossScale) && bossScale > 0 ? bossScale : 1;
+  const loop = bs.spec.hpMul > 1;
+  bs.levelScale = levelAttackScale(bossScaleLevel(w.level.levelIndex, bs.spec.id), loop);
+  bs.cadence = bs.levelScale * scale;
+  const mul = bs.spec.hpMul * scale;
+  bs.armour = armourFor(bs.row, mul);
+  bs.dmgAcc = 0;
+  return maxHpFor(bs.row, mul);
+}
+
+/** Attack time for step time dt: the enrage rate (boss rule 10) times the boss's cadence. */
+export function bossAdt(w: World, bs: BossState, dt: number): number {
+  const enraged = bs.hold || bs.age >= ENRAGE_AFTER_SEC;
+  return (enraged ? dt * ENRAGE_RATE : dt) * bs.cadence;
+}
+
+/** Pure: whole tenths an armoured hit of amount lands, given the carried fraction acc. */
+export function armouredTenths(amount: number, armour: number, acc: number): number {
+  if (!(armour > 1)) return amount;
+  return Math.floor(acc + amount / armour + 1e-9);
+}
+
+/** True while the boss attacks 30 percent faster (alive ENRAGE_AFTER_SEC, or the hold). */
 export function bossEnraged(w: World): boolean {
   const bs = bossOf(w);
   return bs !== null && bs.status === 'alive' && (bs.hold || bs.age >= ENRAGE_AFTER_SEC);
@@ -189,8 +230,9 @@ function spawnBoss(w: World, bs: BossState): boolean {
   zeroExtras(w, id);
   w.radius[id] = r;
   w.rot[id] = wrapPi(a + Math.PI);
-  bs.maxHp = maxHpFor(bs.row, bs.spec.hpMul);
+  bs.maxHp = applyBossScaling(w, bs, difficultyOf(w).bossScale);
   w.hp[id] = bs.maxHp;
+  resetRotation(bs);
   bs.id = id;
   bs.status = 'alive';
   bs.mode = BossMode.Entering;
@@ -272,6 +314,7 @@ export function stepBossSchedule(w: World, dt: number): void {
   } else {
     bs.modeT += dt;
   }
+  stepRotation(w, bs, dt);
   stepExposed(bs, dt);
   stepWindowLead(bs, dt);
   stepVolleyLaunch(w, bs); // fx:bossShot at launch (shooters only; no op with no volley charging)
@@ -322,8 +365,7 @@ export function stepBossEntity(w: World, id: number, dt: number): void {
     bs.phaseT = bs.phaseT - dt > 0 ? bs.phaseT - dt : 0;
     return;
   }
-  const enraged = bs.hold || bs.age >= ENRAGE_AFTER_SEC;
-  bs.def.step(w, id, bs, dt, enraged ? dt * ENRAGE_RATE : dt);
+  bs.def.step(w, id, bs, dt, bossAdt(w, bs, dt));
 }
 
 /** Kind.BossPart step: a pulse clock only. The boss positions its parts. Orphans are removed. */
@@ -586,7 +628,8 @@ export function damageBoss(w: World, amount: number, hx: number, hy: number, ign
     return false;
   }
   const clamp = bs.def.clampDamage;
-  const amt = clamp === undefined ? Math.round(dmg) : Math.round(clamp(w, id, bs, Math.round(dmg)));
+  const raw = ignoreShield ? Math.round(dmg) : armourHit(bs, Math.round(dmg));
+  const amt = clamp === undefined ? raw : Math.round(clamp(w, id, bs, raw));
   const left = (w.hp[id] ?? 0) - (amt > 0 ? amt : 0);
   const hp = left > 0 ? left : 0;
   w.hp[id] = hp;
@@ -599,6 +642,15 @@ export function damageBoss(w: World, amount: number, hx: number, hy: number, ign
   syncBossPhase(w, bs, bs.id);
   checkCracks(w, bs, bs.id);
   return false;
+}
+
+/** Whole tenths an armoured hit of amount lands; the fraction carries to the next hit. */
+function armourHit(bs: BossState, amount: number): number {
+  if (!(bs.armour > 1) || !(amount > 0)) return amount;
+  const n = armouredTenths(amount, bs.armour, bs.dmgAcc);
+  bs.dmgAcc += amount / bs.armour - n;
+  if (bs.dmgAcc < 0) bs.dmgAcc = 0;
+  return n;
 }
 
 /**
@@ -651,7 +703,8 @@ export function damageBossPart(w: World, id: number, amount: number, hx: number,
     return false;
   }
   const prev = w.hp[id] ?? 0;
-  const amt = Math.round(amount);
+  // A split boss's body parts carry the core's armour (Tempestlings, Broodlings, Gravitants).
+  const amt = guard !== null && guard.split && isBodyPart(w.a[id] ?? -1) ? armourHit(guard, Math.round(amount)) : Math.round(amount);
   const hp = prev - amt;
   w.hp[id] = hp;
   const bs = bossOf(w);
@@ -706,6 +759,7 @@ export function bossOnShipDeath(w: World): void {
   bs.stagger = 0;
   bs.phaseT = 0;
   bs.retry = 0;
+  resetRotation(bs);
   if (bs.mode !== BossMode.Entering && !bs.split) bs.def.reset(w, bs.id, bs, false); // a split boss has no body to restart
 }
 

@@ -706,7 +706,7 @@ export function fireDashFan(w: World, bs: BossState, id: number, dashHeading: nu
   const spread = TEMPESTLING.fanSpreadDeg * DEG;
   let firstId = -1;
   for (let k = 0; k < n; k++) {
-    const b = spawnEnemyBullet(w, mx, my, fanHeading(c, k, n, spread), TEMPESTLING.fanSpeed, ENEMY_BULLET_RADIUS, tier, tele);
+    const b = spawnEnemyBullet(w, mx, my, fanHeading(c, k, n, spread), TEMPESTLING.fanSpeed * bs.levelScale, ENEMY_BULLET_RADIUS, tier, tele);
     if (firstId < 0) firstId = b;
   }
   if (firstId >= 0) {
@@ -730,7 +730,7 @@ export function stepTempestling(w: World, id: number, dt: number): void {
   if (k < 0) return;
   const o = k * SLOT;
   const ab = bs.abl;
-  const adt = tempestlingAdt(dt, bossEnraged(w));
+  const adt = tempestlingAdt(dt, bossEnraged(w)) * bs.cadence;
   let state = (ab[o + MOVE] ?? 0) as TempestMove;
   if (state === TempestMove.Windup && !markerAlive(w, bs, ab[o + MARK] ?? -1) && markerClearedEarly(ab[o + TIMER] ?? 0)) {
     // The marker was cleared (bomb, ship death): no unmarked dash, back to the chase.

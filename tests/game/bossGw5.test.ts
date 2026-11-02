@@ -38,7 +38,7 @@ import { gs } from '../../src/game/state';
 import { Kind, type World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
 import { generateLevel } from '../../src/levelgen/generator';
-import { breakTurret, bs, bossGame, enter, park, run } from './bossHelpers';
+import { breakTurret, bs, bossGame, enter, park, run, LEGACY_BOSS_HP } from './bossHelpers';
 import { stateHash } from './bossGw2Helpers';
 import { DT, idle } from './helpers';
 
@@ -61,6 +61,7 @@ function splitLevel40(seed: number): World {
   expect(def.boss?.id).toBe('tempest');
   const w = createGame({ ...def, drone: 'collect' });
   gs(w).invulnerable = true;
+  bossState(w).rotOn = false; // the fan mechanic alone (release polish attack rotation off)
   const input = idle();
   let id = -1;
   for (let i = 0; i < 120 * 120 && id < 0; i++) {
@@ -69,6 +70,9 @@ function splitLevel40(seed: number): World {
   }
   expect(id).toBeGreaterThan(0);
   const s = bossState(w);
+  // GW5 numbers as tuned: the release polish level 40 scale (1.1) is covered by bossScale tests.
+  s.cadence = 1;
+  s.levelScale = 1;
   w.hp[id] = Math.floor(s.maxHp * CRACK_AT[1]) + 5;
   damageBoss(w, 10, w.x[id] ?? 0, w.y[id] ?? 0, true);
   expect(s.split).toBe(true);
@@ -90,7 +94,7 @@ describe('tempest gw5 numbers', () => {
     expect(dashEveryFor(1)).toBeCloseTo(6 / 1.2, 9);
     expect(dashEveryFor(2)).toBeCloseTo(5 / 1.2, 9);
     expect(dashEveryFor(3)).toBeCloseTo(4 / 1.2, 9);
-    expect(BOSS_TABLE.tempest.hp).toBeCloseTo(1035 * 1.1, 9);
+    expect(LEGACY_BOSS_HP.tempest).toBeCloseTo(1035 * 1.1, 9); // release polish raised the row (bossScale tests)
     expect(TEMPEST.firstDash).toBe(4);
   });
 
@@ -217,7 +221,7 @@ describe('bastion gw5 numbers', () => {
     expect(BASTION.regenAboveShare).toBe(0.33);
     expect(regenAllowed(3400, 10000, 2)).toBe(true);
     expect(regenAllowed(3300, 10000, 2)).toBe(false);
-    expect(BOSS_TABLE.bastion.hp).toBeCloseTo(1080 * 1.15, 9);
+    expect(LEGACY_BOSS_HP.bastion).toBeCloseTo(1080 * 1.15, 9); // release polish raised the row (bossScale tests)
   });
 
   it('phase 3: 8 Hornets in two bursts of 4 inside the pool cap, sweep 20 percent faster', () => {

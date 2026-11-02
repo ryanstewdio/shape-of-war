@@ -9,7 +9,7 @@ import { dropRingActive, dropRingHeading, ringEvery } from '../../src/game/bosse
 import { enemyBulletsOf } from '../../src/game/enemyBullets';
 import { stepGame } from '../../src/game/game';
 import type { World } from '../../src/game/world';
-import { bs, bossGame, enter, park, run } from './bossHelpers';
+import { bs, bossGame, enter, park, run, LEGACY_BOSS_HP } from './bossHelpers';
 import { stateHash } from './bossGw2Helpers';
 import { DT, idle } from './helpers';
 
@@ -48,7 +48,7 @@ function liveBullets(w: World): number[] {
 
 describe('warden GW2 numbers', () => {
   it('HP 520, 10 Hornets in a pool of 10 at 300 u/s, rings 3.7 s and 2.8 s, 2.0 s shield window', () => {
-    expect(BOSS_TABLE.warden.hp).toBe(520);
+    expect(LEGACY_BOSS_HP.warden).toBe(520); // release polish raised the row (bossScale tests)
     expect(MAX_HORNETS).toBe(10);
     expect(WARDEN_SHIELD.hornetsMin).toBe(10);
     expect(WARDEN_SHIELD.hornetsMax).toBe(10);

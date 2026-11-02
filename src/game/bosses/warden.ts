@@ -182,7 +182,7 @@ function fireDropRing(w: World, id: number, bs: BossState): void {
   let firstId = -1;
   for (let k = 0; k < n; k++) {
     const a = dropRingHeading(a0, k, n);
-    const b = spawnEnemyBullet(w, x + Math.cos(a) * r, y + Math.sin(a) * r, a, WARDEN_SHIELD.dropRingSpeed, ENEMY_BULLET_RADIUS, bs.row.tier, tele);
+    const b = spawnEnemyBullet(w, x + Math.cos(a) * r, y + Math.sin(a) * r, a, WARDEN_SHIELD.dropRingSpeed * bs.levelScale, ENEMY_BULLET_RADIUS, bs.row.tier, tele);
     if (firstId < 0) firstId = b;
   }
   if (firstId >= 0) {

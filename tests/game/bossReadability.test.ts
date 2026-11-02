@@ -11,8 +11,11 @@ import { BASTION, PRISM } from '../../src/game/bosses/table';
 import { stepGame } from '../../src/game/game';
 import { SHIP_RADIUS } from '../../src/game/ship';
 import { Kind, type World } from '../../src/game/world';
-import { breakTurret, bs, bossGame, enter, park, run } from './bossHelpers';
+import { breakTurret, bs, bossGame, enter, park, run, legacyBossHp } from './bossHelpers';
 import { DT, idle } from './helpers';
+
+// Mechanics tuned on the GW6 hit points (release polish raised the rows; bossFightLength covers them).
+legacyBossHp();
 
 afterEach(() => bus.clear());
 

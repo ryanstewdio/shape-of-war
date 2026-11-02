@@ -17,18 +17,24 @@ export interface BossRow {
   colour: PaletteKey;
 }
 
-/** All ten rows of the docs/13 roster. Wave A builds the first three behaviours. */
+/**
+ * All ten rows of the docs/13 roster. Release polish (item 7): hit points raised so each fight at
+ * Normal on its own level lasts 210 to 260 s on the bossFightLength script (about 235 s; damage
+ * windows unchanged). Before: warden 520, brood 400, spindle 500, ember 600, mirage 640, gravitas
+ * 700, bastion 1242, tempest 1138.5, twins 1000, prism 1000. Rows past the Int16 store (BOSS_HP_MAX
+ * tenths) keep the bar at the cap and turn the rest into armour (armourFor).
+ */
 export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
-  warden: { tier: 1, hp: 520, phases: 2, radius: 56, colour: 'bossBlue' },
-  brood: { tier: 1, hp: 400, phases: 2, radius: 52, colour: 'bossGreen' },
-  spindle: { tier: 1, hp: 500, phases: 2, radius: 48, colour: 'bossYellow' },
-  ember: { tier: 2, hp: 600, phases: 3, radius: 44, colour: 'bossOrange' },
-  mirage: { tier: 2, hp: 640, phases: 3, radius: 50, colour: 'bossMagenta' },
-  gravitas: { tier: 2, hp: 700, phases: 3, radius: 60, colour: 'bossViolet' },
-  bastion: { tier: 3, hp: 1242, phases: 3, radius: 70, colour: 'bossRed' },
-  tempest: { tier: 3, hp: 1138.5, phases: 3, radius: 46, colour: 'bossRed' },
-  twins: { tier: 3, hp: 1000, phases: 2, radius: 44, colour: 'bossRed' },
-  prism: { tier: 4, hp: 1000, phases: 4, radius: 90, colour: 'bossPrism' },
+  warden: { tier: 1, hp: 1840, phases: 2, radius: 56, colour: 'bossBlue' },
+  brood: { tier: 1, hp: 2900, phases: 2, radius: 52, colour: 'bossGreen' },
+  spindle: { tier: 1, hp: 4227, phases: 2, radius: 48, colour: 'bossYellow' },
+  ember: { tier: 2, hp: 2289, phases: 3, radius: 44, colour: 'bossOrange' },
+  mirage: { tier: 2, hp: 4237, phases: 3, radius: 50, colour: 'bossMagenta' },
+  gravitas: { tier: 2, hp: 5430, phases: 3, radius: 60, colour: 'bossViolet' },
+  bastion: { tier: 3, hp: 3730, phases: 3, radius: 70, colour: 'bossRed' },
+  tempest: { tier: 3, hp: 3586, phases: 3, radius: 46, colour: 'bossRed' },
+  twins: { tier: 3, hp: 4227, phases: 2, radius: 44, colour: 'bossRed' },
+  prism: { tier: 4, hp: 1314, phases: 4, radius: 90, colour: 'bossPrism' },
 };
 
 /** Damage per hit against a boss or a boss part, in tenths of a hit (boss rule 8). */
@@ -58,8 +64,11 @@ export const ENTRANCE_SEC = 2.0;
 export const STAGGER_SEC = 1.5;
 /** Phase change pause: no attacks while the phase flash plays. */
 export const PHASE_CHANGE_SEC = 1.0;
-/** Enrage after this long alive (boss rule 10), or at once in the hold state. */
-export const ENRAGE_AFTER_SEC = 90;
+/**
+ * Enrage after this long alive (boss rule 10), or at once in the hold state. Release polish: 240 s
+ * (90 before), so a 3.5 to 4 minute fight is not enraged for most of its length.
+ */
+export const ENRAGE_AFTER_SEC = 240;
 /** Attack clock multiplier while enraged: 30 percent faster. */
 export const ENRAGE_RATE = 1.3;
 /** Share of the wave schedule kept while an Adventure boss lives (boss rule 4). */
@@ -680,7 +689,81 @@ export function spindleArmRate(): number {
 
 /** Pure: stored maximum hit points for a row and an hpMul, in tenths, clamped to the Int16 range. */
 export function maxHpFor(row: BossRow, hpMul: number): number {
+  const v = fullHpFor(row, hpMul);
+  return v > BOSS_HP_MAX ? BOSS_HP_MAX : v;
+}
+
+/** Pure: maximum hit points for a row and an hpMul in tenths, before the Int16 clamp (at least 1). */
+export function fullHpFor(row: BossRow, hpMul: number): number {
   const mul = Number.isFinite(hpMul) && hpMul > 0 ? hpMul : 1;
   const v = Math.round(row.hp * 10 * mul);
-  return v > BOSS_HP_MAX ? BOSS_HP_MAX : v < 1 ? 1 : v;
+  return v < 1 ? 1 : v;
 }
+
+/**
+ * Pure: armour for a row and an hpMul. Hit points past the Int16 store become armour instead: every
+ * hit on the core (and on a split boss's body parts) is divided by it, so the fight lasts as long
+ * as the full hit points say while the bar keeps its stored scale. 1 when nothing is clamped.
+ */
+export function armourFor(row: BossRow, hpMul: number): number {
+  const full = fullHpFor(row, hpMul);
+  return full > BOSS_HP_MAX ? full / BOSS_HP_MAX : 1;
+}
+
+/**
+ * Boss scaling with the level (release polish item 7). Attack cadence and bullet speed are
+ * 75 percent of the table at level 5, rise linearly to 100 percent at level 20 and on to
+ * 115 percent at level 50; later levels and every loop of the list (hpMul above 1) stay at 115.
+ */
+export const BOSS_LEVEL_SCALE = {
+  startLevel: 5,
+  start: 0.75,
+  midLevel: 20,
+  mid: 1,
+  topLevel: 50,
+  top: 1.15,
+} as const;
+
+/** Pure: the attack scale (cadence and bullet speed) for a level index and a loop flag. */
+export function levelAttackScale(level: number, loop: boolean): number {
+  const s = BOSS_LEVEL_SCALE;
+  if (loop || !(level < s.topLevel)) return s.top;
+  if (!(level > s.startLevel)) return s.start;
+  if (level <= s.midLevel) return s.start + ((s.mid - s.start) * (level - s.startLevel)) / (s.midLevel - s.startLevel);
+  return s.mid + ((s.top - s.mid) * (level - s.midLevel)) / (s.topLevel - s.midLevel);
+}
+
+/** Campaign level of each boss on the first pass of the list (level 5, 10, ..., 50). */
+export function bossNominalLevel(order: number): number {
+  return 5 * (order + 1);
+}
+
+/**
+ * Attack rotation (release polish item 7: long fights stay varied). On top of its signature attack
+ * every boss fires a bullet volley every everyByTier seconds of attack time, cycling three patterns
+ * in a fixed order (aimed fan, radial burst, pincer), so no pattern repeats twice in a row. Each
+ * phase past the first is one escalation: one more bullet per side of the pattern and phaseRate
+ * shorter gaps. Speeds are scaled with the level and clamped to ENEMY_BULLET_SPEED_MAX.
+ */
+export const ROTATION = {
+  patterns: 3,
+  /** Seconds of attack time between volleys, by tier 1 to 4. */
+  everyByTier: [6.5, 6, 5.5, 5] as readonly number[],
+  /** First volley this long after the entrance ends (and after a ship respawn). */
+  firstSec: 4,
+  /** Gap divisor per phase past the first: every / (1 + phaseRate * (phase - 1)). */
+  phaseRate: 0.12,
+  speed: 190,
+  /** Pattern 0, aimed fan: fanBase bullets plus one per phase past the first, at most SHOT_VOLLEY_MAX. */
+  fanBase: 3,
+  fanSpreadDeg: 14,
+  /** Pattern 1, radial burst: burstBase bullets plus burstPerPhase per phase, the ship midway between two. */
+  burstBase: 8,
+  burstPerPhase: 2,
+  /** Pattern 2, pincer: pairs either side of the ship's bearing, the first at pincerDeg, then pincerStepDeg apart. */
+  pincerPairs: 1,
+  pincerDeg: 24,
+  pincerStepDeg: 16,
+  /** Recent patterns kept in BossState.rotLog (tests read it). */
+  logSize: 32,
+} as const;

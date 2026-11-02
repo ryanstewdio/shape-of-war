@@ -15,9 +15,9 @@
 import { bus } from '../../core/events';
 import { angleBetween, distBetween, moveHeading, moveTo, targetOf } from '../steer';
 import { Kind, type World } from '../world';
-import { bossEnraged, clearHazards, countParts, crackBody, HAZARD_OVERLAP, livePart, setPullStrength, spawnPart, spawnPull, spawnRing } from './core';
+import { bossAdt, clearHazards, countParts, crackBody, HAZARD_OVERLAP, livePart, setPullStrength, spawnPart, spawnPull, spawnRing } from './core';
 import { bossOf, type BossState } from './state';
-import { ENRAGE_RATE, GRAVITANT, GRAVITAS, HAZARD_RECHECK_SEC, MAX_PARTS } from './table';
+import { GRAVITANT, GRAVITAS, HAZARD_RECHECK_SEC, MAX_PARTS } from './table';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
 import { removeEntity } from '../remove';
 
@@ -253,7 +253,7 @@ export function stepGravitant(w: World, id: number, dt: number): void {
     if (lead < 0) lead = p;
   }
   if (lead !== id) return;
-  const adt = bossEnraged(w) ? dt * ENRAGE_RATE : dt;
+  const adt = bossAdt(w, bs, dt);
   const t = targetOf(w, id);
   const tx = w.x[t] ?? 0;
   const ty = w.y[t] ?? 0;

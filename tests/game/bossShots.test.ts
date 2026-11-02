@@ -36,8 +36,11 @@ import { setShipSpace, SHIP_RADIUS } from '../../src/game/ship';
 import { gs } from '../../src/game/state';
 import type { World } from '../../src/game/world';
 import type { BossId } from '../../src/levelgen/leveldef';
-import { bs, bossGame, enter, park, run } from './bossHelpers';
+import { bs, bossGame, enter, park, run, legacyBossHp } from './bossHelpers';
 import { DT, idle, makeGame } from './helpers';
+
+// Mechanics tuned on the GW6 hit points (release polish raised the rows; bossFightLength covers them).
+legacyBossHp();
 
 afterEach(() => bus.clear());
 

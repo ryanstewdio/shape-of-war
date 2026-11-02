@@ -12,7 +12,7 @@ import { HazardType } from '../../src/game/bosses/types';
 import { stepGame } from '../../src/game/game';
 import { Kind, type World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
-import { bs, bossGame, enter, park } from './bossHelpers';
+import { bs, bossGame, enter, park, LEGACY_BOSS_HP } from './bossHelpers';
 import { stateHash } from './bossGw2Helpers';
 import { DT, idle } from './helpers';
 
@@ -108,7 +108,7 @@ function trace(secs: number): Trace {
 
 describe('tempest gw3 pure rules', () => {
   it('big Tempest hit points plus 15 then 10 percent (GW5), speed ratio 1.4, full rate, flanks a quarter turn apart (GW6)', () => {
-    expect(BOSS_TABLE.tempest.hp).toBe(Math.round(900 * 1.15) * 1.1); // GW5: plus 10 percent
+    expect(LEGACY_BOSS_HP.tempest).toBe(Math.round(900 * 1.15) * 1.1); // GW5: plus 10 percent (release polish raised the row)
     expect(tempestlingSpeed()).toBe(TEMPESTLING.chaseSpeed); // GW4: 165 u/s (1.4x the lap speed before)
     expect(TEMPESTLING.rate).toBe(1);
     expect(TEMPESTLING.dashSpeed).toBe(462); // GW5: 420 before

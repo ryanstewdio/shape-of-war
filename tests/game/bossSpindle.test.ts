@@ -8,8 +8,11 @@ import { hazardTelegraph, sweepGap } from '../../src/game/bosses/kit';
 import { armsFor, liveSweep } from '../../src/game/bosses/spindle';
 import { BOSS_SHOTS, SPINDLE, spindleArmRate } from '../../src/game/bosses/table';
 import { stepGame } from '../../src/game/game';
-import { bs, bossGame, enter, park, run } from './bossHelpers';
+import { bs, bossGame, enter, park, run, legacyBossHp } from './bossHelpers';
 import { DT, idle } from './helpers';
+
+// Mechanics tuned on the GW6 hit points (release polish raised the rows; bossFightLength covers them).
+legacyBossHp();
 
 afterEach(() => bus.clear());
 
