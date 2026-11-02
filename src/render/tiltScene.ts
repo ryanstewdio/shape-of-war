@@ -22,6 +22,9 @@
 // (update) on project and again on restore, so the GPU never keeps a projected value.
 // G9: free form Graphics listed in drumDrawn (the well layer, the snake glints, the chainsaw) are
 // drawn through the drum owner by owner (drumPen.ts), so the drum pass leaves them alone.
+// G10: every free form Graphics the renderer lists is now drum drawn (lines on the surface sampled
+// per point, marks attached to their owner, the boss layers on the boss billboard transform), so on
+// a cylinder the linearised drumFree path only runs for a free form layer a caller does not mark.
 import { Matrix, Point, type Container, type Graphics, type IParticle, type ParticleContainer } from 'pixi.js';
 import { drumAffineAt, drumProject, type Drum, type DrumPoint } from './drum';
 import { affineAt, project, type Affine, type Camera, type Projected } from './project';
