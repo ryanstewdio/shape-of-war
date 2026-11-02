@@ -3,6 +3,7 @@ import type { Graphics } from 'pixi.js';
 import type { ArenaDef } from '../levelgen/leveldef';
 import { gridSegments, hexagonPoints } from './gridGeom';
 import type { Camera } from './project';
+import { solidObstacles } from './membrane';
 import { LIP_POST_ALPHA, LIP_TOP_ALPHA, lipPosts, obstaclePolys, outlinePoints, projectFlat, projectLifted, WALL_LIP } from './tiltGeom';
 
 /**
@@ -82,7 +83,7 @@ export function drawWalls(g: Graphics, arena: ArenaDef, colour: number, passes: 
   for (const pass of passes) {
     traceOutline(g, arena);
     g.stroke({ width: pass.width, color: colour, alpha: pass.alpha, join: 'round' });
-    for (const o of arena.obstacles) {
+    for (const o of solidObstacles(arena)) {
       g.rect(o.cx - o.w / 2, o.cy - o.h / 2, o.w, o.h);
       g.stroke({ width: pass.width, color: colour, alpha: pass.alpha, join: 'round' });
     }
@@ -95,7 +96,7 @@ export function drawWalls(g: Graphics, arena: ArenaDef, colour: number, passes: 
  */
 export function drawWallsProjected(g: Graphics, arena: ArenaDef, colour: number, passes: readonly WallPass[], cam: Camera): void {
   g.clear();
-  const flat = [outlinePoints(arena), ...obstaclePolys(arena)];
+  const flat = [outlinePoints(arena), ...obstaclePolys({ ...arena, obstacles: solidObstacles(arena) })];
   const floorLines = flat.map((o) => projectFlat(o, cam));
   // G6 tilt-depth: a short raised lip (WALL_LIP toward the viewer) with a top edge and posts at
   // the corners, on the arena wall and every obstacle. Built on tilt, arena or neon change only.
