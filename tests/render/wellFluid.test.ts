@@ -91,12 +91,12 @@ describe('fluid flow helpers', () => {
 });
 
 describe('GW6 compact disc', () => {
-  it('draws the gas disc at 65 percent of the pull radius with a faint 15 percent haze beyond', () => {
+  it('draws the gas disc at 65 percent of the pull radius over one continuous faint haze (G9: no step at the rim)', () => {
     expect(WHIRL_VISUAL).toBe(0.65);
     expect(FLUID_VISUAL).toBe(0.65);
     expect(FLUID_HAZE).toBe(0.15);
-    expect(fluidHaze(0.5)).toBe(0);
-    expect(fluidHaze(0.65)).toBe(0);
+    expect(fluidHaze(0.5)).toBeCloseTo(0.15, 6);
+    expect(fluidHaze(0.65)).toBeCloseTo(0.15, 6);
     expect(fluidHaze(0.66)).toBeGreaterThan(0.14);
     expect(fluidHaze(0.66)).toBeLessThanOrEqual(0.15);
     expect(fluidHaze(0.8)).toBeLessThan(fluidHaze(0.7));
