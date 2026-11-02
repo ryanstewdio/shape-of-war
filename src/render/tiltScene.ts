@@ -20,6 +20,8 @@
 // rotation and the x scale sign (the back half is mirrored). Particle alpha goes through the
 // packed colour. Containers whose vertex or colour data is static are marked for a full upload
 // (update) on project and again on restore, so the GPU never keeps a projected value.
+// G9: free form Graphics listed in drumDrawn (the well layer, the snake glints, the chainsaw) are
+// drawn through the drum owner by owner (drumPen.ts), so the drum pass leaves them alone.
 import { Matrix, Point, type Container, type Graphics, type IParticle, type ParticleContainer } from 'pixi.js';
 import { drumAffineAt, drumProject, type Drum, type DrumPoint } from './drum';
 import { affineAt, project, type Affine, type Camera, type Projected } from './project';
@@ -39,6 +41,11 @@ export interface TiltSceneSpec {
   readonly particles: readonly ParticleLayerSpec[];
   /** Graphics drawn in arena units; skipped as billboards even when a billboard parent holds them. */
   readonly freeform: readonly Graphics[];
+  /**
+   * G9: free form Graphics the renderer draws already through the drum (drumPen.ts) on cylinder
+   * levels. The drum pass leaves them alone; the tilt pass still projects them like any free form.
+   */
+  readonly drumDrawn?: readonly Graphics[];
 }
 
 export interface TiltScene {
@@ -68,6 +75,7 @@ export function scaleColourAlpha(color: number, k: number): number {
 
 export function createTiltScene(spec: TiltSceneSpec): TiltScene {
   const freeSet = new Set<Container>(spec.freeform);
+  const drumDrawn = new Set<Container>(spec.drumDrawn ?? []);
   let buf = new Float64Array(1024);
   let used = 0;
   let projected = false;
@@ -193,7 +201,8 @@ export function createTiltScene(spec: TiltSceneSpec): TiltScene {
     const o = used;
     used += D_FREE;
     buf[o] = 0;
-    if (!g.visible) return;
+    // Drawn through the drum already: one linearised transform would stretch and drift it.
+    if (!g.visible || drumDrawn.has(g)) return;
     const b = g.bounds;
     if (b.isEmpty()) return;
     g.updateLocalTransform();

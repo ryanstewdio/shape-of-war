@@ -71,12 +71,34 @@ export const FLUID_HAZE = WHIRL_HAZE;
 /** GW6: gas and glow brightness multiplier inside the smaller disc (same noise, denser light). */
 export const FLUID_BRIGHT = 1.18;
 
-/** Pure: haze alpha outside the visual disc at quad radius share r (0 inside the disc, FLUID_HAZE just outside, 0 at the pull radius). */
+/**
+ * G9: the quad is fully transparent from this share of its half size out, at least 10 percent inside
+ * its own bounds, so no pixel near the quad edge (or its rasterised border) ever carries light.
+ */
+export const FLUID_CLEAR = 0.86;
+
+function smooth(e0: number, e1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Pure: haze alpha at quad radius share r. G9: one continuous envelope under the gas, no step: a
+ * flat FLUID_HAZE inside the visual disc (where the gas fades out over it), easing smoothly to 0 at
+ * FLUID_CLEAR, 0 beyond. The GW6 haze started at FLUID_HAZE just outside the disc, where the gas had
+ * already faded to 0, so a dark ring sat at the disc rim with a lit band out to the quad edge: the
+ * hard edged silhouette circle of the G9 report.
+ */
 export function fluidHaze(r: number): number {
-  const c = fin(r, 1);
-  if (c <= FLUID_VISUAL || c >= 1) return 0;
-  const v = (c - FLUID_VISUAL) / (1 - FLUID_VISUAL);
-  return FLUID_HAZE * (1 - v * v * (3 - 2 * v));
+  const c = Math.abs(fin(r, 1));
+  if (c >= FLUID_CLEAR) return 0;
+  return FLUID_HAZE * (1 - smooth(FLUID_VISUAL, FLUID_CLEAR, c));
+}
+
+/** Pure: the gas edge fade at quad radius share r: 1 well inside the disc, 0 at its rim and beyond (the shader's edge term). */
+export function fluidGasEdge(r: number): number {
+  const q = Math.abs(fin(r, 1)) / FLUID_VISUAL;
+  return 1 - smooth(FLUID_EDGE0, 1, q);
 }
 
 /** Pure: angular speed (rad/s, positive is clockwise on screen) at radius share u for a spin. */
@@ -154,22 +176,27 @@ export const FLUID_VERTEX = `
 in vec2 aPosition;
 
 out vec2 vPos;
+out float vAlpha;
 
 uniform mat3 uProjectionMatrix;
 uniform mat3 uWorldTransformMatrix;
 uniform vec4 uWorldColorAlpha;
 uniform mat3 uTransformMatrix;
+uniform vec4 uColor;
 
 void main(void) {
     mat3 mvp = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;
     gl_Position = vec4((mvp * vec3(aPosition, 1.0)).xy, 0.0, 1.0);
     vPos = aPosition;
+    // The mesh alpha (the drum's back half dims it like every other billboard).
+    vAlpha = uColor.a * uWorldColorAlpha.a;
 }
 `;
 
 /** Fragment shader: polar domain warped flow noise, premultiplied alpha out. */
 export const FLUID_FRAGMENT = `
 in vec2 vPos;
+in float vAlpha;
 
 out vec4 finalColor;
 
@@ -238,15 +265,17 @@ vec3 hueRing(float h) {
 
 void main(void) {
     float r0 = length(vPos);
-    if (r0 >= 1.0) {
+    // G9: fully transparent from FLUID_CLEAR out, well inside the quad's own bounds.
+    if (r0 >= ${glf(FLUID_CLEAR)}) {
         finalColor = vec4(0.0);
         return;
     }
-    // GW6: the disc is the inner share of the quad; outside it only a faint haze hints the pull area.
-    if (r0 > ${glf(FLUID_VISUAL)}) {
-        float hv = (r0 - ${glf(FLUID_VISUAL)}) / ${glf(1 - FLUID_VISUAL)};
-        float ha = ${glf(FLUID_HAZE)} * (1.0 - hv * hv * (3.0 - 2.0 * hv));
-        finalColor = vec4(uWhite * ha, ha) * uAlpha;
+    float ka = clamp(uAlpha * vAlpha, 0.0, 1.0);
+    // G9: one continuous haze envelope (fluidHaze): flat under the disc, easing to 0 at FLUID_CLEAR.
+    float ha = ${glf(FLUID_HAZE)} * (1.0 - smoothstep(${glf(FLUID_VISUAL)}, ${glf(FLUID_CLEAR)}, r0));
+    vec4 haze = vec4(uWhite * ha, ha);
+    if (r0 >= ${glf(FLUID_VISUAL)}) {
+        finalColor = haze * ka;
         return;
     }
     vec2 q = vPos / ${glf(FLUID_VISUAL)};
@@ -286,6 +315,8 @@ void main(void) {
     // Premultiplied out: the glow adds light (rgb above alpha blends additively) for half its cover.
     rgb = min(rgb, vec3(a)) + (uWhite * 0.6 + 0.4) * glow;
     a = clamp(a + 0.5 * glow, 0.0, 1.0);
-    finalColor = vec4(min(rgb, vec3(1.0)), a) * uAlpha;
+    // Premultiplied "over" of the gas on the haze, so the disc rim meets the haze with no seam.
+    vec4 gasC = vec4(min(rgb, vec3(1.0)), a);
+    finalColor = (gasC + haze * (1.0 - a)) * ka;
 }
 `;

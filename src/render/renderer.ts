@@ -70,6 +70,20 @@ import { GRID_SPACING } from './gridGeom';
 import { cameraFor, fitProjected, parseTiltKnob, projectNodes, TILT_DEG, type Camera } from './project';
 import { getTilt, setTilt, type TiltLevel } from './tilt';
 import { createTiltScene } from './tiltScene';
+import {
+  createDrumPen,
+  penBegin,
+  penCircle,
+  penClose,
+  penFill,
+  penLineTo,
+  penMoveTo,
+  penOwner,
+  penOwnerLineTo,
+  penOwnerMoveTo,
+  penStroke,
+  type DrumPen,
+} from './drumPen';
 // G6 tilt-depth: the pseudo 3D volume under and over the entity views while the tilt is on.
 import { volumeShapeOf, type VolumeShape } from './volume';
 import { createVolumeView } from './volumeView';
@@ -1326,6 +1340,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   // entity views so no later created body view can cover a glint.
   const snakeGlints = new Float32Array(NOVA_SNAKE_GLINTS_MAX * GLINT_STRIDE);
   const snakeG = new Graphics({ label: 'novaSnakeGlints' });
+  // G9 drum attachment pens (drumPen.ts): the well layer, the snake glints and the chainsaw.
+  const wellPen = createDrumPen();
+  const snakePen = createDrumPen();
+  const sawPen = createDrumPen();
   let snakeShown = false;
   const stormG = new Graphics({ label: 'tempestling' });
   // Look GW2: well arrival and snake emergence state, the chainsaw layer and the boss shell.
@@ -1435,6 +1453,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       { layer: enemyBulletLayer.layer.container, scale: true },
     ],
     freeform: [rings, ringGlow, enemyFx, enemyFxGlow, wallFlash, sawG, novaG, snakeG, stormG, droneFx, bossUnder, bossOver],
+    // G9: these draw through the drum themselves (drumPen.ts), owner by owner.
+    drumDrawn: [sawG, novaG, snakeG],
   });
   // Look v33: the damaged boss body. A copy of the body context with the removed arcs cut out of
   // the geometry (bossDamage.ts damagedSpec), and its glow texture, rebuilt only when the slot, the
@@ -3473,34 +3493,35 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   }
 
   /** Add points k0 to k1 of the band buffer around (x, y) as one polyline. */
-  function novaRun(g: Graphics, x: number, y: number, k0: number, k1: number): void {
+  function novaRun(g: DrumPen, x: number, y: number, k0: number, k1: number): void {
     for (let k = k0; k <= k1; k++) {
       const px = x + (novaArm[k * 2] ?? 0);
       const py = y + (novaArm[k * 2 + 1] ?? 0);
-      if (k === k0) g.moveTo(px, py);
-      else g.lineTo(px, py);
+      if (k === k0) penMoveTo(g, px, py);
+      else penLineTo(g, px, py);
     }
   }
 
   /** The shared well layer (whirlpools, calm swirls, arrivals, emergences), shown on first use this frame. */
-  function wellLayer(): Graphics {
+  function wellLayer(): DrumPen {
     if (!novaShown) {
       novaShown = true;
       if (novaG.parent !== entities) entities.addChild(novaG);
     }
-    return novaG;
+    // G9: on a cylinder every point goes through the drum from its owner (drumPen.ts).
+    return penBegin(wellPen, novaG, drum);
   }
 
   /** Add the gas sector outline in gasPts around (x, y) as one closed polygon. */
-  function gasRun(g: Graphics, x: number, y: number): void {
+  function gasRun(g: DrumPen, x: number, y: number): void {
     const n = WHIRL_GAS_PTS * 2;
     for (let k = 0; k < n; k++) {
       const px = x + (gasPts[k * 2] ?? 0);
       const py = y + (gasPts[k * 2 + 1] ?? 0);
-      if (k === 0) g.moveTo(px, py);
-      else g.lineTo(px, py);
+      if (k === 0) penMoveTo(g, px, py);
+      else penLineTo(g, px, py);
     }
-    g.closePath();
+    penClose(g);
   }
 
   /**
@@ -3516,7 +3537,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
    * glints draw on top on every tier.
    */
   function drawNova(slot: number, id: number, x: number, y: number, r: number, pullR: number, timeSec: number): void {
-    const g = wellLayer();
+    const g = penOwner(wellLayer(), x, y);
     const age = nova.age[slot] ?? 0;
     const grow = novaGrow(age);
     const shift = novaShift(age);
@@ -3556,17 +3577,17 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
           whirlGasSector(timeSec, b, WHIRL_BANDS, L, vis, id, gasPts, rate);
           gasRun(g, x, y);
         }
-        g.fill({ color: white, alpha: whirlGasAlpha(L) * grow });
+        penFill(g, white, whirlGasAlpha(L) * grow);
       }
       // Bands: three layered passes, wide and faint to thin and bright, then dashes sliding down.
       for (let b = 0; b < WHIRL_BANDS; b++) {
         whirlBand(timeSec, b, WHIRL_BANDS, vis, novaArm, rate, id);
         novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
-        g.stroke({ width: vis * 0.09, color: white, alpha: 0.07 * grow, cap: 'round', join: 'round' });
+        penStroke(g, vis * 0.09, white, 0.07 * grow, 'round', 'round');
         novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
-        g.stroke({ width: vis * 0.035, color: white, alpha: 0.16 * grow, cap: 'round', join: 'round' });
+        penStroke(g, vis * 0.035, white, 0.16 * grow, 'round', 'round');
         novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
-        g.stroke({ width: 1.6, color: white, alpha: 0.45 * grow, cap: 'round', join: 'round' });
+        penStroke(g, 1.6, white, 0.45 * grow, 'round', 'round');
         const base = (b * Math.PI * 2) / WHIRL_BANDS;
         for (let d = 0; d < WHIRL_DASHES; d++) {
           const u0 = whirlDashU(timeSec, b, d, rate);
@@ -3574,10 +3595,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
             const u = Math.min(1, u0 + (WHIRL_DASH_U * q) / 3);
             const rr = whirlFlowRadius(u, vis, timeSec, id, b, rate);
             const an = whirlFlowAngle(u, timeSec, base, id, rate);
-            if (q === 0) g.moveTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
-            else g.lineTo(x + Math.cos(an) * rr, y + Math.sin(an) * rr);
+            if (q === 0) penMoveTo(g, x + Math.cos(an) * rr, y + Math.sin(an) * rr);
+            else penLineTo(g, x + Math.cos(an) * rr, y + Math.sin(an) * rr);
           }
-          g.stroke({ width: 2.6, color: 0xffffff, alpha: (0.3 + 0.6 * (1 - u0)) * grow, cap: 'round', join: 'round' });
+          penStroke(g, 2.6, 0xffffff, (0.3 + 0.6 * (1 - u0)) * grow, 'round', 'round');
         }
       }
       // Wisps peel off the band edges and stretch along the flow.
@@ -3587,13 +3608,14 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         for (let q = 0; q < WHIRL_WISP_PTS; q++) {
           const px = x + (wispPts[q * 2] ?? 0);
           const py = y + (wispPts[q * 2 + 1] ?? 0);
-          if (q === 0) g.moveTo(px, py);
-          else g.lineTo(px, py);
+          if (q === 0) penMoveTo(g, px, py);
+          else penLineTo(g, px, py);
         }
-        g.stroke({ width: 3.2, color: white, alpha: wa * grow, cap: 'round', join: 'round' });
+        penStroke(g, 3.2, white, wa * grow, 'round', 'round');
       }
       // The core flares white (the shader draws its own core on the other tiers).
-      g.circle(x, y, r * 1.5 * grow).fill({ color: white, alpha: 0.18 * f });
+      penCircle(g, x, y, r * 1.5 * grow);
+      penFill(g, white, 0.18 * f);
     }
     // Star dust: motes (most on the arms, streaming along them) with tiny twinkles, in four
     // brightness buckets, one fill each. Low keeps half the GW5 count (the GW4 count).
@@ -3615,17 +3637,18 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       for (let k = 0; k < WHIRL_MOTES; k++) {
         const ma = motePts[k * 3 + 2] ?? 0;
         if (ma > lo && ma <= hi) {
-          g.circle(motePts[k * 3] ?? 0, motePts[k * 3 + 1] ?? 0, 1 + 1.4 * hi);
+          penCircle(g, motePts[k * 3] ?? 0, motePts[k * 3 + 1] ?? 0, 1 + 1.4 * hi);
           any = true;
         }
       }
-      if (any) g.fill({ color: white, alpha: ((lo + hi) / 2) * grow });
+      if (any) penFill(g, white, ((lo + hi) / 2) * grow);
     }
     // The coloured spark motes stay on top of the gas, steady (the glints are the shimmer now).
     for (let k = 0; k < WHIRL_SPARKS; k++) {
       whirlMote(timeSec, id + 7919, k, vis, novaMote, rate);
       const c = novaStreamColour(novaStops, red, k, timeSec, shift);
-      g.circle(x + novaMote.x, y + novaMote.y, 1.8).fill({ color: c, alpha: Math.min(1, novaMote.a * 1.4) * grow });
+      penCircle(g, x + novaMote.x, y + novaMote.y, 1.8);
+      penFill(g, c, Math.min(1, novaMote.a * 1.4) * grow);
     }
     // GW4 crystal shimmer: gem glints pop in and out on the flow, prismatic with a white hot centre.
     for (let k = 0; k < NOVA_GLINTS; k++) {
@@ -3633,28 +3656,30 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       novaGlintSpot(glint.a, glint.b, timeSec, id, vis, glintPt, rate);
       drawGlint(g, x + glintPt.x, y + glintPt.y, glintSize(NOVA_GLINT_SIZE, glint.flare) * grow, glint.rot, novaColour(novaStops, red, glint.hue, 0, shift), glint.flare * grow);
     }
-    g.circle(x, y, r * (0.6 + 0.25 * f) * grow).fill({ color: white, alpha: 0.45 * f });
-    g.circle(x, y, r * 0.32 * grow).fill({ color: 0xffffff, alpha: 0.7 + 0.3 * f });
+    penCircle(g, x, y, r * (0.6 + 0.25 * f) * grow);
+    penFill(g, white, 0.45 * f);
+    penCircle(g, x, y, r * 0.32 * grow);
+    penFill(g, 0xffffff, 0.7 + 0.3 * f);
   }
 
   /** GW4: one gem glint: a sharp 4 point star in its hue with a white hot centre star. */
-  function drawGlint(g: Graphics, x: number, y: number, size: number, rot: number, colour: number, a: number): void {
+  function drawGlint(g: DrumPen, x: number, y: number, size: number, rot: number, colour: number, a: number): void {
     if (a <= 0.01 || size <= 0.2) return;
     glintStar(x, y, size, rot, glintPts);
     glintRun(g);
-    g.fill({ color: colour, alpha: Math.min(1, a) });
+    penFill(g, colour, Math.min(1, a));
     glintStar(x, y, size * GLINT_CORE, rot, glintPts);
     glintRun(g);
-    g.fill({ color: 0xffffff, alpha: Math.min(1, a * 1.1) });
+    penFill(g, 0xffffff, Math.min(1, a * 1.1));
   }
 
   /** Add the star outline in glintPts as one closed polygon (no array allocation). */
-  function glintRun(g: Graphics): void {
+  function glintRun(g: DrumPen): void {
     for (let k = 0; k < GLINT_STAR_PTS; k++) {
-      if (k === 0) g.moveTo(glintPts[0] ?? 0, glintPts[1] ?? 0);
-      else g.lineTo(glintPts[k * 2] ?? 0, glintPts[k * 2 + 1] ?? 0);
+      if (k === 0) penMoveTo(g, glintPts[0] ?? 0, glintPts[1] ?? 0);
+      else penLineTo(g, glintPts[k * 2] ?? 0, glintPts[k * 2 + 1] ?? 0);
     }
-    g.closePath();
+    penClose(g);
   }
 
   /**
@@ -3729,11 +3754,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       if (n >= 2) {
         for (let pass = 0; pass < 2; pass++) {
           for (let q = 0; q < n; q++) {
-            if (q === 0) g.moveTo(snakePts[0] ?? 0, snakePts[1] ?? 0);
-            else g.lineTo(snakePts[q * 2] ?? 0, snakePts[q * 2 + 1] ?? 0);
+            // G9: every body point is its own owner (each segment draws where its entity view draws).
+            if (q === 0) penOwnerMoveTo(g, snakePts[0] ?? 0, snakePts[1] ?? 0);
+            else penOwnerLineTo(g, snakePts[q * 2] ?? 0, snakePts[q * 2 + 1] ?? 0);
           }
-          if (pass === 0) g.stroke({ width: NOVA_SNAKE_GLOW_W, color: NOVA_WHITE, alpha: novaSnakeGlow(timeSec, h), cap: 'round', join: 'round' });
-          else g.stroke({ width: NOVA_SNAKE_CORE_W, color: 0xffffff, alpha: NOVA_SNAKE_CORE_A, cap: 'round', join: 'round' });
+          if (pass === 0) penStroke(g, NOVA_SNAKE_GLOW_W, NOVA_WHITE, novaSnakeGlow(timeSec, h), 'round', 'round');
+          else penStroke(g, NOVA_SNAKE_CORE_W, 0xffffff, NOVA_SNAKE_CORE_A, 'round', 'round');
         }
       }
       // GW5: the ribbon round the body and, near its well, the stream from the whirlpool.
@@ -3741,11 +3767,14 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       const hasWell = well >= 0 && w.alive[well] === 1 && w.kind[well] === KIND_GRAVITY_WELL;
       const wx = hasWell ? unwrapNear(snakePts[0] ?? 0, ix(w.prevX[well] ?? 0, w.x[well] ?? 0, alpha), wrapW) : 0;
       const wy = hasWell ? interp(w.prevY[well] ?? 0, w.y[well] ?? 0, alpha) : 0;
+      // G9: Ryan dropped the snake glints; on the drum they are not drawn at all (no cheap owner).
+      if (drum) continue;
       const c = novaSnakeGlints(snakePts, n, head, h, timeSec, hasWell, wx, wy, snakeGlints);
+      const sp = penOwner(penBegin(snakePen, snakeG, null), 0, 0);
       for (let q = 0; q < c; q++) {
         const o = q * GLINT_STRIDE;
         drawGlint(
-          snakeG,
+          sp,
           snakeGlints[o] ?? 0,
           snakeGlints[o + 1] ?? 0,
           snakeGlints[o + 2] ?? 0,
@@ -3765,21 +3794,21 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
 
   /** Look GW2: a calm small swirl at a well before its nova, so the nova is a clear escalation. */
   function drawCalmSwirl(id: number, x: number, y: number, r: number, timeSec: number): void {
-    const g = wellLayer();
+    const g = penOwner(wellLayer(), x, y);
     const reach = r * CALM_REACH;
     const col = mixRgb(palette.red, NOVA_WHITE, 0.35);
     for (let b = 0; b < CALM_BANDS; b++) {
       whirlBand(timeSec, b, CALM_BANDS, reach, novaArm, CALM_RATE, id);
       novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
-      g.stroke({ width: 3, color: col, alpha: 0.12, cap: 'round', join: 'round' });
+      penStroke(g, 3, col, 0.12, 'round', 'round');
       novaRun(g, x, y, 0, WHIRL_BAND_PTS - 1);
-      g.stroke({ width: 1, color: col, alpha: 0.3, cap: 'round', join: 'round' });
+      penStroke(g, 1, col, 0.3, 'round', 'round');
     }
     for (let k = 0; k < CALM_MOTES; k++) {
       whirlMote(timeSec, id, k, reach, novaMote, CALM_RATE);
-      g.circle(x + novaMote.x, y + novaMote.y, 1.1);
+      penCircle(g, x + novaMote.x, y + novaMote.y, 1.1);
     }
-    g.fill({ color: col, alpha: 0.45 });
+    penFill(g, col, 0.45);
   }
 
   /** Look GW2: arrival rings converging on new wells and the snake emergence bursts and trails. */
@@ -3795,17 +3824,21 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const p = arriveProgress(age, T);
         const fl = arriveFlash(age, T);
         const fade = age < T ? 1 : fl;
+        penOwner(g, x, y);
         if (fade > 0) {
-          g.circle(x, y, arriveRadius(p)).stroke({ width: 1.2, color: NOVA_WHITE, alpha: (0.12 + 0.3 * p) * fade });
+          penCircle(g, x, y, arriveRadius(p));
+          penStroke(g, 1.2, NOVA_WHITE, (0.12 + 0.3 * p) * fade);
           for (let d = 0; d < ARRIVE_DOTS; d++) {
             arriveDot(arrive.id[k] ?? 0, d, p, dustPt);
-            g.circle(x + dustPt.x, y + dustPt.y, 1 + dustPt.a);
+            penCircle(g, x + dustPt.x, y + dustPt.y, 1 + dustPt.a);
           }
-          g.fill({ color: NOVA_WHITE, alpha: (0.3 + 0.65 * p) * fade });
+          penFill(g, NOVA_WHITE, (0.3 + 0.65 * p) * fade);
         }
         if (fl > 0) {
-          g.circle(x, y, 24 * (1 + 1.6 * (1 - fl))).fill({ color: 0xffffff, alpha: 0.55 * fl });
-          g.circle(x, y, 24 * (1.4 + 2.2 * (1 - fl))).stroke({ width: 3, color: NOVA_WHITE, alpha: fl });
+          penCircle(g, x, y, 24 * (1 + 1.6 * (1 - fl)));
+          penFill(g, 0xffffff, 0.55 * fl);
+          penCircle(g, x, y, 24 * (1.4 + 2.2 * (1 - fl)));
+          penStroke(g, 3, NOVA_WHITE, fl);
         }
       }
     }
@@ -3818,8 +3851,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const y = emerge.y[k] ?? 0;
         const fl = emergeFlash(age);
         const ta = emergeTrailAlpha(age);
-        g.circle(x, y, 10 + 18 * fl).fill({ color: 0xffffff, alpha: 0.9 * fl });
-        g.circle(x, y, emergeRing(age)).stroke({ width: 3, color: NOVA_WHITE, alpha: 0.8 * ta });
+        penOwner(g, x, y);
+        penCircle(g, x, y, 10 + 18 * fl);
+        penFill(g, 0xffffff, 0.9 * fl);
+        penCircle(g, x, y, emergeRing(age));
+        penStroke(g, 3, NOVA_WHITE, 0.8 * ta);
         const n = emerge.count[k] ?? 0;
         if (n >= 2) {
           const base = k * EMERGE_TRAIL * 2;
@@ -3827,11 +3863,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
             for (let q = 0; q < n; q++) {
               const px = emerge.trail[base + q * 2] ?? x;
               const py = emerge.trail[base + q * 2 + 1] ?? y;
-              if (q === 0) g.moveTo(px, py);
-              else g.lineTo(px, py);
+              // Each trail point is its own owner, so the trail bends round the drum.
+              if (q === 0) penOwnerMoveTo(g, px, py);
+              else penOwnerLineTo(g, px, py);
             }
-            if (pass === 0) g.stroke({ width: 7, color: NOVA_WHITE, alpha: 0.22 * ta, cap: 'round', join: 'round' });
-            else g.stroke({ width: 2.2, color: 0xffffff, alpha: 0.85 * ta, cap: 'round', join: 'round' });
+            if (pass === 0) penStroke(g, 7, NOVA_WHITE, 0.22 * ta, 'round', 'round');
+            else penStroke(g, 2.2, 0xffffff, 0.85 * ta, 'round', 'round');
           }
         }
       }
@@ -4456,30 +4493,30 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const t = chainOrder[s % n] ?? 0;
         const px = chainX[o + t] ?? 0;
         const py = chainY[o + t] ?? 0;
-        if (s === 0) sawG.moveTo(px, py);
-        else sawG.lineTo(px, py);
+        if (s === 0) penMoveTo(sawPen, px, py);
+        else penLineTo(sawPen, px, py);
       }
       // GW4: the bar is a glowing outline in the weapon hue (the near white line closed round the
       // ship read as a white backdrop): a wide soft glow pass, then a thin bright line.
-      sawG.stroke({ width: SAW_BAR_GLOW_W, color: sawTint, alpha: a * 0.35, cap: 'round', join: 'round' });
+      penStroke(sawPen, SAW_BAR_GLOW_W, sawTint, a * 0.35, 'round', 'round');
       for (let s = 0; s <= segs; s++) {
         const t = chainOrder[s % n] ?? 0;
         const px = chainX[o + t] ?? 0;
         const py = chainY[o + t] ?? 0;
-        if (s === 0) sawG.moveTo(px, py);
-        else sawG.lineTo(px, py);
+        if (s === 0) penMoveTo(sawPen, px, py);
+        else penLineTo(sawPen, px, py);
       }
-      sawG.stroke({ width: SAW_BAR_LINE_W, color: sawTint, alpha: Math.min(1, a * 1.6), cap: 'round', join: 'round' });
+      penStroke(sawPen, SAW_BAR_LINE_W, sawTint, Math.min(1, a * 1.6), 'round', 'round');
       sawShown = true;
     }
   }
 
-  /** Add one triangle from t (sawTri or sawTip) to sawG. */
+  /** Add one triangle from t (sawTri or sawTip) to sawG, attached to the ship through the drum. */
   function sawPoly(t: Float32Array = sawTri): void {
-    sawG.moveTo(t[0] ?? 0, t[1] ?? 0)
-      .lineTo(t[2] ?? 0, t[3] ?? 0)
-      .lineTo(t[4] ?? 0, t[5] ?? 0)
-      .closePath();
+    penMoveTo(sawPen, t[0] ?? 0, t[1] ?? 0);
+    penLineTo(sawPen, t[2] ?? 0, t[3] ?? 0);
+    penLineTo(sawPen, t[4] ?? 0, t[5] ?? 0);
+    penClose(sawPen);
   }
 
   /**
@@ -4497,18 +4534,18 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         sawTrackGhost(x, y, vx, vy, k, sawLevel, sawGhost);
         spikeTriangle(sawGhost.x, sawGhost.y, vx, vy, len, half, sawTri);
         sawPoly();
-        sawG.fill({ color: tint, alpha: (SPIKE_GHOST_ALPHA[k - 1] ?? 0) * sawLevel });
+        penFill(sawPen, tint, (SPIKE_GHOST_ALPHA[k - 1] ?? 0) * sawLevel);
       }
     }
     spikeTriangle(x, y, vx, vy, len, half, sawTri);
     sawPoly();
-    sawG.fill({ color: tint, alpha: 0.95 });
+    penFill(sawPen, tint, 0.95);
     sawPoly();
     // Metallic edge: a lighter rim in the hue (not white), brighter as the tooth stretches.
-    sawG.stroke({ width: 1 + 0.6 * st, color: mixRgb(tint, 0xffffff, 0.25 + 0.2 * st), alpha: 0.85, join: 'miter' });
+    penStroke(sawPen, 1 + 0.6 * st, mixRgb(tint, 0xffffff, 0.25 + 0.2 * st), 0.85, 'butt', 'miter');
     toothTip(sawTri, sawTip);
     sawPoly(sawTip);
-    sawG.fill({ color: 0xffffff, alpha: 0.75 + 0.25 * st });
+    penFill(sawPen, 0xffffff, 0.75 + 0.25 * st);
   }
 
   /** GW4: a saw hit (fx:hit on a tooth while the saw runs) throws 2 to 4 sparks in the weapon hue. */
@@ -4541,6 +4578,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       sawG.clear();
       sawShown = false;
     }
+    // G9: the teeth and the chain are attached to the ship. On the drum each point goes through the
+    // drum from the ship's current position, its offset scaled by the ship's depth (the bar keeps its
+    // flat size and stays on the surface); flat and tilted levels draw unchanged.
+    penOwner(penBegin(sawPen, sawG, drum), shipX, shipY);
     const spikeLen = pool.spikeLen;
     const spikePh = pool.phase;
     chainN[0] = 0;
@@ -4659,17 +4700,19 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     fxHalo(currentRender, bloomOn, halo);
     tierHalo(halo, bossTier, haloBoss);
     resetSpriteBuf(hazardBuf);
+    const shipX = ix(w.prevX[0] ?? 0, w.x[0] ?? 0, a);
+    const shipY = interp(w.prevY[0] ?? 0, w.y[0] ?? 0, a);
+    // G9: the camera u moves before anything is drawn, so every layer drawn through the drum
+    // (drumPen.ts) uses the same camera u as the scene pass that projects the entity views.
+    if (drum && w.alive[0] === 1) {
+      drum.camU = followCamU(drum.camU, shipX, drumSnap ? Number.POSITIVE_INFINITY : fxDt, drum.width);
+      drumSnap = false;
+    }
     drawEntities(w, a, nowSec, fxDt);
     drawHazards(nowSec);
     drawGhost();
     drawDashGhosts();
     drawBossCue();
-    const shipX = ix(w.prevX[0] ?? 0, w.x[0] ?? 0, a);
-    const shipY = interp(w.prevY[0] ?? 0, w.y[0] ?? 0, a);
-    if (drum && w.alive[0] === 1) {
-      drum.camU = followCamU(drum.camU, shipX, drumSnap ? Number.POSITIVE_INFINITY : fxDt, drum.width);
-      drumSnap = false;
-    }
     // Ship trail: reads the sim velocity, writes only render particles and the comet ribbon.
     if (w.alive[0] === 1 && shipActive(w)) {
       const svx = w.vx[0] ?? 0;

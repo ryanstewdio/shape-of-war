@@ -126,7 +126,8 @@ describe('spike saw', () => {
     const i = src.indexOf('function drawSawChain(');
     const body = src.slice(i, src.indexOf('\n  }\n', i));
     expect(body).not.toMatch(/0xffffff/);
-    expect(body).toMatch(/color: sawTint/);
+    // G9: drawn through the drum pen (drumPen.ts), colour after the width.
+    expect(body).toMatch(/penStroke\(sawPen, SAW_BAR_(GLOW|LINE)_W, sawTint,/);
     const t = src.indexOf('function drawSawTooth(');
     const tooth = src.slice(t, src.indexOf('\n  }\n', t));
     expect(tooth).toMatch(/sawTrackGhost\(/);
