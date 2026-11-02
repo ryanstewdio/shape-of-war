@@ -14,6 +14,11 @@
 // V3-A: the default config turns the bosses on. The four v2 pins now run with V2_GEN_CONFIG
 // (bosses off), so their hashes and files are unchanged. The '-boss' pins are new files: run seed
 // 42 at levels 5, 10 and 50 with the default config, and Endless segment 6 of seed 42.
+//
+// Release polish: the default config turns the long levels on. The three boss pins now run with
+// V4_GEN_CONFIG (the default with the long levels off), so their hashes and files are unchanged.
+// The '-long' pins are new files: seed 42 at levels 5, 10 and 50 (boss) and 12 (a rings drum with
+// membranes) and 13 (band 2), all with the default config.
 import { describe, expect, it } from 'vitest';
 import { canonicalJson, generateEndlessSegment, generateLevel, levelHash } from '../../src/levelgen/generator';
 import {
@@ -21,9 +26,11 @@ import {
   GENERATOR_VERSION,
   GENERATOR_VERSION_V2,
   GENERATOR_VERSION_V3,
+  GENERATOR_VERSION_V5,
   LEVELDEF_VERSION,
   V1_GEN_CONFIG,
   V2_GEN_CONFIG,
+  V4_GEN_CONFIG,
   fmix32,
 } from '../../src/levelgen/leveldef';
 import type { ArenaShape, Band, BossId, BossSpec, EndlessSegmentDef, GenConfig, ObjectiveDef } from '../../src/levelgen/leveldef';
@@ -150,11 +157,12 @@ function segmentHash(seg: EndlessSegmentDef): string {
   return fmix32(h).toString(16).toUpperCase().padStart(8, '0');
 }
 
-describe('LevelDef boss pins (bosses on)', () => {
+describe('LevelDef boss pins (bosses on, long levels off)', () => {
   expect(DEFAULT_GEN_CONFIG.enableBosses).toBe(true);
+  expect(V4_GEN_CONFIG.enableBosses).toBe(true);
 
   describe.each(BOSS_PINS)('$name', (pin) => {
-    const def = generateLevel(pin.runSeed, pin.levelIndex, DEFAULT_GEN_CONFIG);
+    const def = generateLevel(pin.runSeed, pin.levelIndex, V4_GEN_CONFIG);
 
     it('has the hard coded levelHash', () => {
       expect(levelHash(def)).toBe(pin.hash);
@@ -171,7 +179,7 @@ describe('LevelDef boss pins (bosses on)', () => {
     });
 
     it('validates with the flag on and needed no re-derive', () => {
-      expect(validateLevel(def, DEFAULT_GEN_CONFIG).errors).toEqual([]);
+      expect(validateLevel(def, V4_GEN_CONFIG).errors).toEqual([]);
       expect(def.retries).toBe(0);
     });
 
@@ -193,6 +201,60 @@ describe('LevelDef boss pins (bosses on)', () => {
 
   it('the boss pin hashes are distinct from each other and from every earlier pin', () => {
     const all = [...ALL_PINS.map((p) => p.hash), ...BOSS_PINS.map((p) => p.hash)];
+    expect(new Set(all).size).toBe(all.length);
+  });
+});
+
+// Release polish long level pins (the default config). New files.
+
+interface LongPin {
+  name: string;
+  runSeed: number;
+  levelIndex: number;
+  hash: string;
+  objective: ObjectiveDef['kind'];
+  boss: BossId | null;
+  membranes: boolean;
+}
+
+const LONG_PINS: readonly LongPin[] = [
+  { name: 'seed42-level5-long', runSeed: 42, levelIndex: 5, hash: '02C057B6', objective: 'scoreInTime', boss: 'warden', membranes: false },
+  { name: 'seed42-level10-long', runSeed: 42, levelIndex: 10, hash: '2D7C208F', objective: 'destroy', boss: 'brood', membranes: false },
+  { name: 'seed42-level12-long', runSeed: 42, levelIndex: 12, hash: 'CA85076C', objective: 'scoreInTime', boss: null, membranes: true },
+  { name: 'seed42-level13-long', runSeed: 42, levelIndex: 13, hash: '26424E18', objective: 'destroy', boss: null, membranes: false },
+  { name: 'seed42-level50-long', runSeed: 42, levelIndex: 50, hash: '5398DD3A', objective: 'survive', boss: 'prism', membranes: false },
+];
+
+describe('LevelDef long level pins (default config)', () => {
+  expect(DEFAULT_GEN_CONFIG.enableLongLevels).toBe(true);
+
+  describe.each(LONG_PINS)('$name', (pin) => {
+    const def = generateLevel(pin.runSeed, pin.levelIndex, DEFAULT_GEN_CONFIG);
+
+    it('has the hard coded levelHash', () => {
+      expect(levelHash(def)).toBe(pin.hash);
+    });
+
+    it('is version 5 with the pinned objective, boss and membranes', () => {
+      expect(def.generatorVersion).toBe(GENERATOR_VERSION_V5);
+      expect(def.objective.kind).toBe(pin.objective);
+      expect(def.boss?.id ?? null).toBe(pin.boss);
+      if (def.boss !== undefined) expect(def.boss.atSec).toBe(240);
+      expect(def.arena.obstacles.some((o) => o.membrane === true)).toBe(pin.membranes);
+    });
+
+    it('validates with the default config and needed no re-derive', () => {
+      expect(validateLevel(def, DEFAULT_GEN_CONFIG).errors).toEqual([]);
+      expect(def.retries).toBe(0);
+    });
+
+    it('matches the stored summary', async () => {
+      await expect(bossSnapshotText(def)).toMatchFileSnapshot(`./__snapshots__/levels/${pin.name}.json`);
+    });
+  });
+
+  it('the long pin hashes are distinct from every earlier pin', () => {
+    const all = [...ALL_PINS.map((p) => p.hash), ...BOSS_PINS.map((p) => p.hash), ...LONG_PINS.map((p) => p.hash)];
     expect(new Set(all).size).toBe(all.length);
   });
 });

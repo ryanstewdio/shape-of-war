@@ -27,12 +27,15 @@ import {
   GENERATOR_VERSION_V3,
   V1_GEN_CONFIG,
   V2_GEN_CONFIG,
+  V4_GEN_CONFIG,
   bandOf,
 } from '../../src/levelgen/leveldef';
 import type { BossSpec, EndlessSegmentDef, GenConfig, HazardDef, LevelDef } from '../../src/levelgen/leveldef';
 import { validateEndless, validateLevel, validateSegment } from '../../src/levelgen/validate';
 
-const ON = DEFAULT_GEN_CONFIG;
+// Release polish: these pin the v3 boss stage against v2.1, so ON is the default with the long
+// levels off (V4_GEN_CONFIG). The long boss entrance is covered in tests/levelgen/durations.test.ts.
+const ON = V4_GEN_CONFIG;
 const OFF = V2_GEN_CONFIG;
 const ids = (errors: readonly string[]): string[] => [...new Set(errors.map((e) => e.split(':')[0] ?? ''))];
 const SPREAD = 2654435761;
@@ -418,11 +421,11 @@ describe('validator: B1 to B4 and J7', () => {
     expect(ids(validateSegment(copySeg(good), OFF).errors)).toEqual(['J7']);
   });
 
-  it('J3 accepts version 3 and still rejects 5', () => {
+  it('J3 accepts version 3 and still rejects 6', () => {
     const d = boss5();
     expect(validateLevel(d).errors).toEqual([]);
-    // D13: 4 (GENERATOR_VERSION_V4, cylinder levels) is now known, so 5 is the first unknown version.
-    d.generatorVersion = 5;
+    // D13: 4 (cylinder levels) and release polish 5 (long levels) are known, so 6 is the first unknown.
+    d.generatorVersion = 6;
     expect(ids(validateLevel(d).errors)).toContain('J3');
   });
 

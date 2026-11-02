@@ -12,7 +12,10 @@ import {
   GENERATOR_VERSION_V2,
   GENERATOR_VERSION_V3,
   GENERATOR_VERSION_V4,
+  GENERATOR_VERSION_V5,
   LEVELDEF_VERSION,
+  LONG_BANDS,
+  LONG_MIN_REPEAT_SEC,
   MAX_RETRIES,
   SPAWN_PATTERNS,
   SUPER_KINDS,
@@ -23,7 +26,8 @@ import {
   segmentSeed,
   speedScaleFor,
 } from './leveldef';
-import { BOSS_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_SEGMENT_AT_SEC, bossForLevel, bossForSegment, bossTierOf, sameBoss } from './boss';
+import { DRUM_BAR_THICK, MEMBRANE_MAX, MEMBRANE_MIN } from './drum';
+import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_SEGMENT_AT_SEC, bossForLevel, bossForSegment, bossTierOf, sameBoss } from './boss';
 import type {
   ArenaDef,
   Band,
@@ -437,7 +441,7 @@ function checkJson(c: Collector, def: unknown): void {
 function checkVersions(c: Collector, version: number, generatorVersion: number): void {
   c.check('J3', (report) => {
     if (version !== LEVELDEF_VERSION) report(`version ${version} !== ${LEVELDEF_VERSION}`);
-    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4];
+    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5];
     if (!known.includes(generatorVersion)) report(`generatorVersion ${generatorVersion} not ${known.join(', ')}`);
   });
 }
@@ -457,6 +461,8 @@ export interface BossCheckOptions {
  */
 export interface LevelCheckOptions extends BossCheckOptions {
   enableCylinder?: boolean;
+  /** Release polish: true or false makes J8 tie GENERATOR_VERSION_V5 to the flag; absent skips J8. */
+  enableLongLevels?: boolean;
 }
 
 interface BossRules {
@@ -485,7 +491,9 @@ function checkBoss(c: Collector, boss: BossSpec | undefined, generatorVersion: n
       else if (!sameBoss(boss, want)) {
         report(`boss ${String(boss.id)} tier ${boss.tier} at ${boss.atSec} s x${boss.hpMul} !== schedule ${want.id} tier ${want.tier} at ${want.atSec} s x${want.hpMul}`);
       }
-      if (generatorVersion !== GENERATOR_VERSION_V3) report(`boss present with generatorVersion ${generatorVersion}, want ${GENERATOR_VERSION_V3}`);
+      if (generatorVersion !== GENERATOR_VERSION_V3 && generatorVersion !== GENERATOR_VERSION_V5) {
+        report(`boss present with generatorVersion ${generatorVersion}, want ${GENERATOR_VERSION_V3} or ${GENERATOR_VERSION_V5}`);
+      }
     } else {
       if (generatorVersion === GENERATOR_VERSION_V3) report(`generatorVersion ${GENERATOR_VERSION_V3} without a boss`);
       if (want !== null && opts?.enableBosses === true) report(`${unit} ${index} is a boss ${unit} (${want.id}) but has no boss`);
@@ -706,7 +714,8 @@ function checkArena(c: Collector, arena: ArenaDef, cylinder = false): void {
   });
   c.check('A4', (report) => {
     const W = wOf();
-    const n = arena.obstacles.length;
+    // Membranes (release polish) sit in a ring beside a bar and are counted by M1, not here.
+    const n = arena.obstacles.filter((o) => o.membrane !== true).length;
     const max = cylinder ? CYLINDER_MAX_OBSTACLES : MAX_OBSTACLES;
     if (arena.shape === 'rectObstacles') {
       if (n < 1 || n > max) report(`rectObstacles has ${n} obstacles, want 1 to ${max}`);
@@ -727,6 +736,7 @@ function checkArena(c: Collector, arena: ArenaDef, cylinder = false): void {
     arena.obstacles.forEach((a, i) => {
       arena.obstacles.slice(i + 1).forEach((b, k) => {
         if (cylinder && seamJoined(a, b, W)) return;
+        if (cylinder && membraneJoined(a, b)) return;
         const g = cylinder ? cylObstacleGap(a, b, W) : obstacleGap(a, b);
         if (g < OBSTACLE_PAIR_GAP) report(`obstacles ${i} and ${i + k + 1} gap ${f1(g)} < ${OBSTACLE_PAIR_GAP}`);
       });
@@ -747,9 +757,22 @@ function checkArena(c: Collector, arena: ArenaDef, cylinder = false): void {
 }
 
 function checkObjective(c: Collector, def: LevelDef, band: Band): void {
-  const b = BANDS[band];
+  const long = def.generatorVersion === GENERATOR_VERSION_V5;
+  const l = LONG_BANDS[band];
+  const b = long ? { ...BANDS[band], surviveSec: l.surviveSec, scoreTimeSec: l.scoreTimeSec } : BANDS[band];
   const o = def.objective;
   c.check('O1', (report) => {
+    if (long && o.kind === 'destroy') {
+      // Long destroy: the count is sized from the waves, so the clear (the spawn numbered
+      // ceil(count / KILL_RATE)) comes no sooner than the band's least clear second.
+      if (!isInt(o.count) || o.count < 5 || o.count % 5 !== 0) report(`destroy count ${o.count} not a multiple of 5 from 5`);
+      let before = 0;
+      forEachSpawn(def.waves, l.destroySec.min, () => {
+        before++;
+      });
+      if (Math.ceil(o.count / KILL_RATE) <= before) report(`destroy ${o.count} clears before ${l.destroySec.min} s (${before} spawns by then)`);
+      return;
+    }
     switch (o.kind) {
       case 'survive':
         if (!inRange(o.durationSec, b.surviveSec.min, b.surviveSec.max) || !onStep(o.durationSec, b.surviveSec.min, 5)) {
@@ -788,6 +811,11 @@ function checkObjective(c: Collector, def: LevelDef, band: Band): void {
       n++;
     });
     if (n < o.count / KILL_RATE) report(`only ${n} spawns in ${MAX_EST_SEC} s for destroy ${o.count} (need ${Math.ceil(o.count / KILL_RATE)})`);
+  });
+  c.check('W11', (report) => {
+    // Release polish: on a long level no wave plays again within LONG_MIN_REPEAT_SEC.
+    if (!long) return;
+    if (def.waves.loopPeriodSec < LONG_MIN_REPEAT_SEC) report(`loopPeriodSec ${def.waves.loopPeriodSec} < ${LONG_MIN_REPEAT_SEC}`);
   });
   c.check('W10', (report) => {
     if (o.kind === 'destroy') return;
@@ -899,13 +927,23 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   checkCylinder(c, def);
   checkV2Content(c, def.generatorVersion, band, () => namedKinds(def.roster, def.waves));
   const o = def.objective;
+  const bossAt = def.generatorVersion === GENERATOR_VERSION_V5 ? BOSS_LONG_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
   checkBoss(c, def.boss, def.generatorVersion, {
-    want: bossForLevel(def.levelIndex),
+    want: bossForLevel(def.levelIndex, bossAt),
     unit: 'level',
     index: def.levelIndex,
-    atSec: BOSS_LEVEL_AT_SEC,
+    atSec: bossAt,
     timedSec: o.kind === 'survive' ? o.durationSec : o.kind === 'scoreInTime' ? o.timeLimitSec : null,
   }, opts);
+  checkMembranes(c, def);
+  c.check('J8', (report) => {
+    // Release polish: version 5 exactly when the long level flag is on (when the caller says).
+    const flag = opts?.enableLongLevels;
+    if (flag === undefined) return;
+    const v5 = def.generatorVersion === GENERATOR_VERSION_V5;
+    if (flag && !v5) report(`generatorVersion ${def.generatorVersion} with enableLongLevels on, want ${GENERATOR_VERSION_V5}`);
+    if (!flag && v5) report(`generatorVersion ${GENERATOR_VERSION_V5} with enableLongLevels off`);
+  });
   c.check('J5', (report) => {
     const r = def.retries;
     if (r === undefined || !isInt(r) || r < 0 || r > MAX_RETRIES) report(`retries ${String(r)} not an integer 0 to ${MAX_RETRIES}`);
@@ -940,7 +978,46 @@ function checkCylinder(c: Collector, def: LevelDef): void {
     const a = def.arena;
     if (a.shape !== 'rect' && a.shape !== 'rectObstacles') report(`cylinder arena shape ${String(a.shape)}, want rect or rectObstacles`);
     if (!isInt(a.width / CYLINDER_WIDTH_STEP)) report(`cylinder width ${a.width} not a multiple of ${CYLINDER_WIDTH_STEP}`);
-    if (def.generatorVersion !== GENERATOR_VERSION_V4) report(`cylinder with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V4}`);
+    if (def.generatorVersion !== GENERATOR_VERSION_V4 && def.generatorVersion !== GENERATOR_VERSION_V5) {
+      report(`cylinder with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V4} or ${GENERATOR_VERSION_V5}`);
+    }
+  });
+}
+
+/** Most membranes one ring carries. */
+export const MAX_MEMBRANES_PER_RING = 2;
+
+/** True when a membrane and a bar of the same ring touch end to end (gap 0 by design). */
+function membraneJoined(a: Obstacle, b: Obstacle): boolean {
+  if (a.membrane !== true && b.membrane !== true) return false;
+  if (a.cy !== b.cy || a.h !== b.h) return false;
+  return Math.abs(Math.abs(a.cx - b.cx) - (a.w + b.w) / 2) <= EPS;
+}
+
+/**
+ * M1 (release polish, docs/14 item 9): a membrane appears only on a long cylinder level with
+ * barrier rings. Each is exactly membrane: true, a horizontal ring segment MEMBRANE_MIN to
+ * MEMBRANE_MAX u wide and one bar thick, touching a solid bar of its own ring end to end, with at
+ * most MAX_MEMBRANES_PER_RING per ring.
+ */
+function checkMembranes(c: Collector, def: LevelDef): void {
+  c.check('M1', (report) => {
+    const obs = def.arena.obstacles;
+    const perRow = new Map<number, number>();
+    obs.forEach((o, i) => {
+      const m: unknown = (o as { membrane?: unknown }).membrane;
+      if (m === undefined) return;
+      if (m !== true) {
+        report(`obstacle ${i} membrane ${String(m)} must be true or absent`);
+        return;
+      }
+      if (def.surface !== 'cylinder') report(`membrane obstacle ${i} on a ${String(def.surface)} level`);
+      if (def.generatorVersion !== GENERATOR_VERSION_V5) report(`membrane obstacle ${i} with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V5}`);
+      if (o.h !== DRUM_BAR_THICK || !inRange(o.w, MEMBRANE_MIN, MEMBRANE_MAX)) report(`membrane ${i} size ${o.w} x ${o.h}, want ${MEMBRANE_MIN} to ${MEMBRANE_MAX} x ${DRUM_BAR_THICK}`);
+      if (!obs.some((b) => b.membrane !== true && b.w > b.h && membraneJoined(o, b))) report(`membrane ${i} does not continue a ring bar`);
+      perRow.set(o.cy, (perRow.get(o.cy) ?? 0) + 1);
+    });
+    for (const [v, n] of perRow) if (n > MAX_MEMBRANES_PER_RING) report(`ring at v ${v} has ${n} membranes, want 1 to ${MAX_MEMBRANES_PER_RING}`);
   });
 }
 

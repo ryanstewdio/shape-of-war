@@ -21,6 +21,13 @@ export const GENERATOR_VERSION_V3 = 3;
  * levels are always flat, so it never meets GENERATOR_VERSION_V3; every flat def keeps its version.
  */
 export const GENERATOR_VERSION_V4 = 4;
+/**
+ * Release polish (docs/14 items 7 and 9). Generator version of every def built with
+ * GenConfig.enableLongLevels on: the long objective tables (LONG_BANDS), the paced waves, the boss
+ * entrance at BOSS_LONG_LEVEL_AT_SEC and ring membranes. It replaces versions 1 to 4 on such a def
+ * (boss and cylinder are read from the boss and surface fields). Flag off: versions 1 to 4 as before.
+ */
+export const GENERATOR_VERSION_V5 = 5;
 
 /** V3 boss ids, in schedule order (docs/13). A BossView id is the index in this list. */
 export const BOSS_IDS = ['warden', 'brood', 'spindle', 'ember', 'mirage', 'gravitas', 'bastion', 'tempest', 'twins', 'prism'] as const;
@@ -232,6 +239,13 @@ export interface GenConfig {
    * output is byte identical to v3. Default on. Endless stays flat either way.
    */
   enableCylinder: boolean;
+  /**
+   * Release polish (docs/14 items 7 and 9). On: levels use LONG_BANDS objectives (at least 5
+   * minutes), paced waves, the boss entrance at 240 s, ring membranes, and report
+   * GENERATOR_VERSION_V5. Optional so older literals compile; only true turns it on, so absent or
+   * false is byte identical to the generator before it. Default on. Endless never reads it.
+   */
+  enableLongLevels?: boolean;
 }
 
 export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
@@ -242,16 +256,26 @@ export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>(
   enableV2Enemies: true,
   enableBosses: true,
   enableCylinder: true,
+  enableLongLevels: true,
 });
 
 /** DEFAULT_GEN_CONFIG with the v2 enemies, bosses and cylinder off: the v1 generator, byte for byte. */
-export const V1_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableV2Enemies: false, enableBosses: false, enableCylinder: false });
+export const V1_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
+  ...DEFAULT_GEN_CONFIG,
+  enableV2Enemies: false,
+  enableBosses: false,
+  enableCylinder: false,
+  enableLongLevels: false,
+});
 
 /** DEFAULT_GEN_CONFIG with the bosses and cylinder off: the v2.1 generator (v2 enemies on), byte for byte. */
-export const V2_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableBosses: false, enableCylinder: false });
+export const V2_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableBosses: false, enableCylinder: false, enableLongLevels: false });
 
 /** DEFAULT_GEN_CONFIG with the cylinder off: the v3 generator (v2 enemies and bosses on), byte for byte. */
-export const V3_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableCylinder: false });
+export const V3_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableCylinder: false, enableLongLevels: false });
+
+/** DEFAULT_GEN_CONFIG with the long levels off: the v4 generator (cylinder drums on), byte for byte. */
+export const V4_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableLongLevels: false });
 
 export interface ValidationResult {
   ok: boolean;
@@ -545,6 +569,43 @@ export const BANDS: Readonly<Record<Band, BandParams>> = {
     spawnerDartsPerEmit: 5,
   },
 };
+
+// Long level tables (release polish, docs/14 item 7). Read only with GenConfig.enableLongLevels on.
+
+/** Least expected play time of a non boss level, s. */
+export const LONG_MIN_LEVEL_SEC = 300;
+/** Least gap between two plays of the same wave (the loop period floor), s. */
+export const LONG_MIN_REPEAT_SEC = 90;
+/** Calmer opening: seconds at reduced budget before the first build. */
+export const LONG_CALM_SEC = 60;
+/** Breather after each peak, s. */
+export const LONG_BREATHER_SEC = 10;
+/** Waves keep coming this long past the objective time before the loop takes over, s. */
+export const LONG_SCHEDULE_PAD_SEC = 10;
+
+export interface LongBandParams {
+  surviveSec: IntRange; // step 5
+  /** Destroy: target clear time; the count is sized from the waves so the clear takes this long. Step 5. */
+  destroySec: IntRange;
+  scoreTimeSec: IntRange; // step 15
+  /** Budget and interval ramp length over the longer level. */
+  rampSec: number;
+  /** Seconds from one intensity peak to the next, 60 to 90. */
+  peakEverySec: number;
+}
+
+export const LONG_BANDS: Readonly<Record<Band, LongBandParams>> = {
+  1: { surviveSec: { min: 300, max: 300 }, destroySec: { min: 300, max: 300 }, scoreTimeSec: { min: 300, max: 300 }, rampSec: 180, peakEverySec: 90 },
+  2: { surviveSec: { min: 300, max: 330 }, destroySec: { min: 300, max: 330 }, scoreTimeSec: { min: 300, max: 330 }, rampSec: 210, peakEverySec: 80 },
+  3: { surviveSec: { min: 300, max: 345 }, destroySec: { min: 300, max: 345 }, scoreTimeSec: { min: 300, max: 345 }, rampSec: 240, peakEverySec: 75 },
+  4: { surviveSec: { min: 315, max: 360 }, destroySec: { min: 315, max: 360 }, scoreTimeSec: { min: 315, max: 360 }, rampSec: 240, peakEverySec: 60 },
+};
+
+/** BANDS[band] with the long objective ranges and ramp. destroyCount is unused on a long level. */
+export function longBandParams(band: Band): BandParams {
+  const l = LONG_BANDS[band];
+  return { ...BANDS[band], surviveSec: l.surviveSec, scoreTimeSec: l.scoreTimeSec, rampSec: l.rampSec };
+}
 
 /** docs/02 table 4.2, rounded to 2 decimals. */
 export function speedScaleFor(levelIndex: number): number {

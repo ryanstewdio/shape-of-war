@@ -10,7 +10,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { bossForLevel, bossForSegment, bossHazards } from '../../src/levelgen/boss';
 import { generateEndless, generateEndlessSegment, generateLevel, levelHash } from '../../src/levelgen/generator';
-import { DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V3, V2_GEN_CONFIG, fmix32 } from '../../src/levelgen/leveldef';
+import { GENERATOR_VERSION_V3, V2_GEN_CONFIG, V3_GEN_CONFIG, fmix32 } from '../../src/levelgen/leveldef';
 import type { LevelDef } from '../../src/levelgen/leveldef';
 import { validateLevel, validateSegment } from '../../src/levelgen/validate';
 
@@ -25,7 +25,9 @@ const LAST_SEGMENT = 36;
 const V21_LEVEL_DIGEST = 'bfbf1886';
 const V21_ENDLESS_DIGEST = '40cefa1e';
 
-const ON = { ...DEFAULT_GEN_CONFIG, enableCylinder: false }; // cylinder levels are checked in tests/levelgen/cylinder.test.ts
+// Cylinder levels are checked in tests/levelgen/cylinder.test.ts. Release polish: V3_GEN_CONFIG is the
+// old ON (default, cylinder off) with the long levels off too; long boss levels: durations.test.ts.
+const ON = V3_GEN_CONFIG;
 const OFF = V2_GEN_CONFIG;
 
 /** FNV-1a folded over strings: one number for a long list of hashes. */

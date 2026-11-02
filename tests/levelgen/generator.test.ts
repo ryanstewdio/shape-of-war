@@ -2,7 +2,7 @@
 // section 1; generateEndless(seed) of docs/05 is the additive Endless game definition.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as gen from '../../src/levelgen/generator';
-import { BANDS, DEFAULT_GEN_CONFIG, ENDLESS_ARENA, MAX_RETRIES, V1_GEN_CONFIG, bandOf, levelSeed } from '../../src/levelgen/leveldef';
+import { BANDS, DEFAULT_GEN_CONFIG, ENDLESS_ARENA, MAX_RETRIES, V1_GEN_CONFIG, V4_GEN_CONFIG, bandOf, levelSeed } from '../../src/levelgen/leveldef';
 import type { GenConfig, LevelDef } from '../../src/levelgen/leveldef';
 import {
   FOLD_SAFE_RECTS,
@@ -248,7 +248,8 @@ describe('generator', { timeout: 30_000 }, () => {
     it('hard coded hashes for seeds 1, 42, 0xDEADBEEF at levels 1 and 8', () => {
       const got: Record<string, string> = {};
       for (const s of [1, 42, 0xdeadbeef]) for (const n of [1, 8]) got[`${s}:${n}`] = gen.levelHash(gen.generateLevel(s, n, V1_GEN_CONFIG));
-      for (const s of [1, 42, 0xdeadbeef]) expect(gen.levelHash(gen.generateLevel(s, 1))).toBe(got[`${s}:1`]);
+      // Release polish: band 1 matches v1 on every config with the long levels off.
+      for (const s of [1, 42, 0xdeadbeef]) expect(gen.levelHash(gen.generateLevel(s, 1, V4_GEN_CONFIG))).toBe(got[`${s}:1`]);
       expect(got).toEqual({
         '1:1': 'E0D43B03',
         '1:8': '71455C7D',

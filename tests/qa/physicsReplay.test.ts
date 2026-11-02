@@ -19,11 +19,15 @@ import { SHIP_RADIUS, SHIP_SPEED, setShipSpace } from '../../src/game/ship';
 import { inlineRectLevel } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
 import { generateLevel } from '../../src/levelgen/generator';
-import { DEFAULT_GEN_CONFIG } from '../../src/levelgen/leveldef';
+import { V3_GEN_CONFIG } from '../../src/levelgen/leveldef';
 import type { ArenaDef, LevelDef } from '../../src/levelgen/leveldef';
 
-/** Flat levels only: the replay pins predate the cylinder surface. */
-const NO_CYL = { ...DEFAULT_GEN_CONFIG, enableCylinder: false };
+/**
+ * Flat levels only: the replay pins predate the cylinder surface. Release polish: V3_GEN_CONFIG is
+ * the same config (the default with the cylinder off) with the long levels off too, so the pinned
+ * levels do not move.
+ */
+const NO_CYL = V3_GEN_CONFIG;
 
 const DT = 1 / 120;
 const TICKS = 2400; // 20 s

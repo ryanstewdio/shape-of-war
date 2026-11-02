@@ -21,7 +21,13 @@ import {
   GENERATOR_VERSION_V2,
   GENERATOR_VERSION_V3,
   GENERATOR_VERSION_V4,
+  GENERATOR_VERSION_V5,
   LEVELDEF_VERSION,
+  LONG_BANDS,
+  LONG_BREATHER_SEC,
+  LONG_CALM_SEC,
+  LONG_MIN_REPEAT_SEC,
+  LONG_SCHEDULE_PAD_SEC,
   MAX_RETRIES,
   SUPER_KINDS,
   bandOf,
@@ -29,6 +35,7 @@ import {
   effectiveIndexOf,
   expandSpawns,
   forEachSpawn,
+  longBandParams,
   round1,
   round2,
   segmentSeed,
@@ -45,6 +52,7 @@ import type {
   GravityWellDef,
   HazardDef,
   LevelDef,
+  LongBandParams,
   ObjectiveDef,
   Obstacle,
   RosterEntry,
@@ -91,7 +99,9 @@ import {
   obstaclePointDistance,
   validateLevel,
 } from './validate';
-import { bossForLevel, bossForSegment, bossHazards } from './boss';
+import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards } from './boss';
+import { destroyCountFor, pulseAt } from './pacing';
+import type { PulseShape } from './pacing';
 import {
   CYLINDER_CHANCE,
   SURFACE_SALT,
@@ -271,7 +281,8 @@ export function drumPatternFor(seed: number, levelIndex: number, cfg: GenConfig 
 function cylinderArena(seed: number, levelIndex: number, cfg: GenConfig, arenaRng: Rng, band: Band): ArenaDef {
   const base = generateCylinderArena(arenaRng, band);
   const d = drumDraw(seed, levelIndex, cfg);
-  return d === null ? base : applyDrumPattern(base, d.pattern, d.r);
+  // Release polish: ring membranes ride on the long level flag, drawn after every ring draw.
+  return d === null ? base : applyDrumPattern(base, d.pattern, d.r, cfg.enableLongLevels === true);
 }
 
 /** docs/02 section 6.2. Per attempt draws: orientation, length, cx, cy. Stops at the first exhausted obstacle. */
@@ -332,6 +343,27 @@ export function generateObjective(r: Rng, b: BandParams): ObjectiveDef {
       return { kind, count: intStep(r, b.destroyCount.min, b.destroyCount.max, 5) };
     case 'scoreInTime':
       return { kind, target: PAR_MIN, timeLimitSec: intStep(r, b.scoreTimeSec.min, b.scoreTimeSec.max, 15) };
+  }
+}
+
+/**
+ * Long level objective (release polish). Draws: kind (band weights), then its one parameter from
+ * LONG_BANDS. destroy draws its target clear second; the count is filled from the waves later
+ * (destroyCountFor), so clearSec is returned beside a placeholder count of 0.
+ */
+export function generateLongObjective(r: Rng, b: BandParams, l: LongBandParams): { objective: ObjectiveDef; clearSec: number } {
+  const kind = weightedKey(r, OBJECTIVE_KINDS, b.objectiveWeights);
+  switch (kind) {
+    case 'survive': {
+      const durationSec = intStep(r, l.surviveSec.min, l.surviveSec.max, 5);
+      return { objective: { kind, durationSec }, clearSec: durationSec };
+    }
+    case 'destroy':
+      return { objective: { kind, count: 0 }, clearSec: intStep(r, l.destroySec.min, l.destroySec.max, 5) };
+    case 'scoreInTime': {
+      const timeLimitSec = intStep(r, l.scoreTimeSec.min, l.scoreTimeSec.max, 15);
+      return { objective: { kind, target: PAR_MIN, timeLimitSec }, clearSec: timeLimitSec };
+    }
   }
 }
 
@@ -557,6 +589,8 @@ interface WaveRun {
   budgetBonus: number;
   /** D13: the arena is a cylinder (wrapped spawn points). Absent means flat. */
   cylinder?: boolean;
+  /** Release polish: intensity pulses (calm opening, peaks, breathers). Absent means the plain ramp. */
+  pulse?: PulseShape;
 }
 
 function rampU(run: WaveRun, t: number): number {
@@ -591,7 +625,9 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
   const snakeTimes: number[] = [];
   for (let t = run.tStart, i = 0; t < run.tEnd; i++) {
     const u = rampU(run, t);
-    const budget = Math.round(b.budgetStart + (b.budgetEnd - b.budgetStart) * u) + run.budgetBonus;
+    const ramped = Math.round(b.budgetStart + (b.budgetEnd - b.budgetStart) * u) + run.budgetBonus;
+    const pulse = run.pulse === undefined ? null : pulseAt(run.pulse, t);
+    const budget = pulse === null ? ramped : Math.max(1, Math.round(ramped * pulse.budget));
     let nGroups = rngInt(r, b.groupsPerWave.min, b.groupsPerWave.max);
     while (nGroups > budget) nGroups--;
     const share = Math.floor(budget / nGroups);
@@ -626,7 +662,8 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
       entries.push(...emitted);
     }
     waves.push({ index: i, atSec: t, pattern: first ?? 'edges', entries });
-    t = round1(t + b.intervalStartSec + (b.intervalEndSec - b.intervalStartSec) * u);
+    const step = b.intervalStartSec + (b.intervalEndSec - b.intervalStartSec) * u;
+    t = round1(t + (pulse === null ? step : step * pulse.interval));
   }
   return { waves, groups };
 }
@@ -647,13 +684,13 @@ function scheduleOf(b: BandParams, waves: WaveDef[], loopFromIndex: number, loop
 }
 
 /** docs/02 section 7 step 3: loop the hard second half of the schedule. */
-function loopFields(waves: readonly WaveDef[], scheduleSec: number, intervalEndSec: number): { from: number; period: number } {
+function loopFields(waves: readonly WaveDef[], scheduleSec: number, intervalEndSec: number, minPeriodSec = 0): { from: number; period: number } {
   const found = waves.findIndex((w) => w.atSec >= 0.5 * scheduleSec);
   const from = found >= 0 ? found : waves.length - 1;
   const last = waves[waves.length - 1];
   const start = waves[from];
   const period = last !== undefined && start !== undefined ? round1(last.atSec + intervalEndSec - start.atSec) : intervalEndSec;
-  return { from, period: Math.max(period, intervalEndSec) };
+  return { from, period: Math.max(period, intervalEndSec, minPeriodSec) };
 }
 
 // Hazards, docs/02 section 9.
@@ -800,7 +837,9 @@ export function attemptSeed(seed: number, attempt: number): number {
 function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: number, cfg: GenConfig): LevelDef {
   const s = attemptSeed(seed, attempt);
   const band = bandOf(levelIndex);
-  const b = BANDS[band];
+  // Release polish: the long tables replace the objective ranges and the ramp; nothing else moves.
+  const long = cfg.enableLongLevels === true;
+  const b = long ? longBandParams(band) : BANDS[band];
   // D13: the surface stream is separate, so drawing it here moves no draw of any flat level.
   const surface = pickSurface(seed, levelIndex, cfg);
   const cyl = surface === 'cylinder';
@@ -809,9 +848,11 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const loadout = stream(s, SALT.loadout);
   const drone = pickAllowed(loadout, DRONE_KINDS, b.droneWeights, cfg.drones, 'attack');
   const superType = pickAllowed(loadout, SUPER_KINDS, b.superWeights, cfg.supers, 'turbo');
-  let objective = generateObjective(stream(s, SALT.objective), b);
-  const timed = objectiveTimeSec(objective);
-  const scheduleSec = timed === null ? b.scheduleSec : Math.max(b.scheduleSec, timed + 10);
+  const longObjective = long ? generateLongObjective(stream(s, SALT.objective), b, LONG_BANDS[band]) : null;
+  let objective = longObjective === null ? generateObjective(stream(s, SALT.objective), b) : longObjective.objective;
+  const timed = longObjective === null ? objectiveTimeSec(objective) : longObjective.clearSec;
+  const scheduleSec =
+    longObjective !== null ? longObjective.clearSec + LONG_SCHEDULE_PAD_SEC : timed === null ? b.scheduleSec : Math.max(b.scheduleSec, timed + 10);
   const v1List = generateWaveGroups(stream(s, SALT.waves), {
     arena,
     roster: v1Roster,
@@ -822,19 +863,22 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     fullRamp: false,
     budgetBonus: 0,
     cylinder: cyl,
+    ...(long ? { pulse: longPulse(LONG_BANDS[band]) } : {}),
   });
   const v2 = runsV2(cfg, band);
   // The v2 stage only rewrites kinds and entries; atSec is untouched, so the loop fields match v1.
   const { roster, waves: list } = v2 ? applyV2Enemies(stream(s, V2_ENEMY_SALT), band, arena, v1Roster, v1List, cyl) : { roster: v1Roster, waves: v1List.waves };
-  const loop = loopFields(list, scheduleSec, b.intervalEndSec);
+  const loop = loopFields(list, scheduleSec, b.intervalEndSec, long ? LONG_MIN_REPEAT_SEC : 0);
   const waves = scheduleOf(b, list, loop.from, loop.period);
+  if (longObjective !== null && objective.kind === 'destroy') objective = { kind: 'destroy', count: destroyCountFor(waves, longObjective.clearSec) };
   const hazards = generateHazards(stream(s, SALT.hazards), arena, b, cfg, objective, cyl);
   const { par, target } = computePar(waves, objective);
-  if (objective.kind === 'scoreInTime') objective = { ...objective, target };
+  if (objective.kind === 'scoreInTime') objective = { ...objective, target: long ? scaledTarget(waves, objective.timeLimitSec, BANDS[band].scoreTimeSec.max, par) : target };
   const def: LevelDef = {
     version: LEVELDEF_VERSION,
     // D13: a cylinder level reports GENERATOR_VERSION_V4; every flat level keeps its v3 version.
-    generatorVersion: cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
+    // Release polish: every long level reports GENERATOR_VERSION_V5 instead.
+    generatorVersion: long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
     runSeed,
     levelIndex,
     seed,
@@ -863,9 +907,26 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
  * so every other key keeps its place), GENERATOR_VERSION_V3, and rule 12 on the hazards. No draw.
  */
 export function withLevelBoss(def: LevelDef, cfg: GenConfig): LevelDef {
-  const boss = cfg.enableBosses ? bossForLevel(def.levelIndex) : null;
+  const long = cfg.enableLongLevels === true;
+  const boss = cfg.enableBosses ? bossForLevel(def.levelIndex, long ? BOSS_LONG_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC) : null;
   if (boss === null) return def;
-  return { ...def, generatorVersion: GENERATOR_VERSION_V3, hazards: bossHazards(def.hazards), boss };
+  return { ...def, generatorVersion: long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3, hazards: bossHazards(def.hazards), boss };
+}
+
+/** Pulse shape of a long level in a band. */
+export function longPulse(l: LongBandParams): PulseShape {
+  return { calmSec: LONG_CALM_SEC, peakEverySec: l.peakEverySec, breatherSec: LONG_BREATHER_SEC };
+}
+
+/**
+ * Long scoreInTime target: the target the same waves give over the band's legacy time limit
+ * (refSec), scaled by timeLimitSec / refSec (the current score per second), on the PAR_STEP grid,
+ * at least PAR_MIN and at most par.
+ */
+export function scaledTarget(waves: WaveSchedule, timeLimitSec: number, refSec: number, par: number): number {
+  const ref = computePar(waves, { kind: 'scoreInTime', target: PAR_MIN, timeLimitSec: refSec }).target;
+  const scaled = Math.round((ref * timeLimitSec) / refSec / PAR_STEP) * PAR_STEP;
+  return Math.min(par, Math.max(PAR_MIN, scaled));
 }
 
 /**

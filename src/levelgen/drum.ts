@@ -30,6 +30,13 @@ export const RING_V_MIN = 220;
 export const RING_THIRD_BAND = 130;
 /** Shortest piece a seam cut may leave; the ring rotates by this until no piece is shorter. */
 const RING_MIN_PIECE = 40;
+/** Membrane segment width range, u, step 10 (release polish, docs/14 item 9). */
+export const MEMBRANE_MIN = 120;
+export const MEMBRANE_MAX = 200;
+/** Least solid bar left beside a membrane, as RING_MIN_PIECE. */
+export const MEMBRANE_MIN_SOLID = RING_MIN_PIECE;
+/** Least solid left between a membrane and the seam on a seam cut bar: the pair gap (validate.ts A5). */
+export const MEMBRANE_SEAM_SOLID = 80;
 /** Pillar count range and the longest pillar. */
 export const PILLARS_MIN = 6;
 export const PILLARS_MAX = 10;
@@ -60,14 +67,16 @@ export function narrowWidth(height: number): number {
  * no draw. narrow: rect at narrowWidth, no obstacles, no draw. rings and pillars: rectObstacles
  * with the pattern's bars in place of the C0 obstacles.
  */
-export function applyDrumPattern(base: ArenaDef, pattern: DrumPattern, r: Rng): ArenaDef {
+export function applyDrumPattern(base: ArenaDef, pattern: DrumPattern, r: Rng, membranes = false): ArenaDef {
   switch (pattern) {
     case 'open':
       return base;
     case 'narrow':
       return { ...base, shape: 'rect', width: narrowWidth(base.height), obstacles: [] };
-    case 'rings':
-      return { ...base, shape: 'rectObstacles', obstacles: ringBars(r, base.width, base.height) };
+    case 'rings': {
+      const bars = ringBars(r, base.width, base.height);
+      return { ...base, shape: 'rectObstacles', obstacles: membranes ? addMembranes(r, bars, base.width) : bars };
+    }
     case 'pillars':
       return { ...base, shape: 'rectObstacles', obstacles: pillarBars(r, base.width, base.height) };
   }
@@ -141,6 +150,69 @@ export function ringBars(r: Rng, width: number, height: number): Obstacle[] {
       pieces = ringPieces(v, centres.map((c) => c + shift), gaps, width);
     }
     out.push(...pieces);
+  });
+  return out;
+}
+
+/** One end of a bar that borders an open gap (not the seam): bar index and which end. */
+interface GapEdge {
+  bar: number;
+  high: boolean;
+}
+
+/**
+ * Release polish (docs/14 item 9): each ring gets 1 or 2 membrane segments beside its open gaps.
+ * A membrane takes MEMBRANE_MIN to MEMBRANE_MAX u off the gap end of a bar, so the bar count is
+ * unchanged and the open gap stays open. Runs after every ring draw, so the rings themselves do
+ * not move. Draws per ring (rows in order of first appearance): count (1 or 2), then per membrane
+ * the gap edge and the width. An edge whose bar cannot keep MEMBRANE_MIN_SOLID is not offered; a
+ * ring with no edge left gets fewer membranes. A bar that already has a membrane is not offered;
+ * a seam cut half offers only its gap end. Output: the bars in their order, each followed by
+ * its membrane pieces.
+ */
+export function addMembranes(r: Rng, bars: readonly Obstacle[], width: number): Obstacle[] {
+  const h = width / 2;
+  const solid = bars.map((o) => ({ ...o }));
+  const extra: Obstacle[][] = bars.map(() => []);
+  const rows: number[] = [];
+  for (const o of bars) if (!rows.includes(o.cy)) rows.push(o.cy);
+  for (const v of rows) {
+    const n = rngInt(r, 1, 2);
+    const used: GapEdge[] = [];
+    for (let m = 0; m < n; m++) {
+      const edges: GapEdge[] = [];
+      solid.forEach((o, i) => {
+        if (o.cy !== v || o.membrane === true) return;
+        const lo = o.cx - o.w / 2;
+        const hi = o.cx + o.w / 2;
+        // A half of a bar cut at the seam takes a membrane only at its gap end, and keeps
+        // MEMBRANE_SEAM_SOLID so the membrane stays the pair gap away from the other half.
+        const seam = lo <= -h || hi >= h;
+        if (o.w - MEMBRANE_MIN < (seam ? MEMBRANE_SEAM_SOLID : MEMBRANE_MIN_SOLID) || used.some((e) => e.bar === i)) return;
+        if (lo > -h) edges.push({ bar: i, high: false });
+        if (hi < h) edges.push({ bar: i, high: true });
+      });
+      if (edges.length === 0) break;
+      const e = edges[rngInt(r, 0, edges.length - 1)];
+      const o = e === undefined ? undefined : solid[e.bar];
+      if (e === undefined || o === undefined) break;
+      const seam = o.cx - o.w / 2 <= -h || o.cx + o.w / 2 >= h;
+      const maxW = Math.min(MEMBRANE_MAX, floor10(o.w - (seam ? MEMBRANE_SEAM_SOLID : MEMBRANE_MIN_SOLID)));
+      const mw = MEMBRANE_MIN + 10 * rngInt(r, 0, Math.max(0, (maxW - MEMBRANE_MIN) / 10));
+      const lo = o.cx - o.w / 2;
+      const hi = o.cx + o.w / 2;
+      const nlo = e.high ? lo : lo + mw;
+      const nhi = e.high ? hi - mw : hi;
+      const mlo = e.high ? hi - mw : lo;
+      solid[e.bar] = { cx: (nlo + nhi) / 2 + 0, cy: o.cy, w: nhi - nlo, h: o.h };
+      extra[e.bar]?.push({ cx: mlo + mw / 2 + 0, cy: o.cy, w: mw, h: o.h, membrane: true });
+      used.push(e);
+    }
+  }
+  const out: Obstacle[] = [];
+  solid.forEach((o, i) => {
+    out.push(o);
+    out.push(...(extra[i] ?? []));
   });
   return out;
 }

@@ -29,7 +29,7 @@ import {
 } from '../../src/levelgen/drum';
 import type { DrumPattern } from '../../src/levelgen/drum';
 import { drumPatternFor, generateLevel, levelHash } from '../../src/levelgen/generator';
-import { DEFAULT_GEN_CONFIG, V3_GEN_CONFIG, fmix32, levelSeed } from '../../src/levelgen/leveldef';
+import { DEFAULT_GEN_CONFIG, V3_GEN_CONFIG, V4_GEN_CONFIG, fmix32, levelSeed } from '../../src/levelgen/leveldef';
 import type { ArenaDef, LevelDef } from '../../src/levelgen/leveldef';
 import {
   CONNECT_CLEARANCE,
@@ -48,11 +48,13 @@ const ids = (errs: readonly string[]): string[] => errs.map((e) => e.slice(0, e.
 const COARSE = 64;
 
 /** Seed 42 level per pattern, for the device check (?seed=42&level=n). */
+// Release polish (long levels, generator version 5, ring membranes) moved every hash: was open
+// FD31D371, rings 8FCFD3FB, pillars F383CDC7, narrow 0D7137CC.
 const EXAMPLES: Record<DrumPattern, { level: number; hash: string }> = {
-  open: { level: 18, hash: 'FD31D371' },
-  rings: { level: 12, hash: '8FCFD3FB' },
-  pillars: { level: 16, hash: 'F383CDC7' },
-  narrow: { level: 27, hash: '0D7137CC' },
+  open: { level: 18, hash: '1D71AE37' },
+  rings: { level: 12, hash: 'CA85076C' },
+  pillars: { level: 16, hash: 'AC6E0C94' },
+  narrow: { level: 27, hash: 'E3CF397C' },
 };
 
 /** Recorded on main at 8d5c989 before this change (same pairs, same fold). */
@@ -227,6 +229,8 @@ describe('drum patterns in the generator', () => {
     for (const p of DRUM_PATTERNS) expect(seen[p], p).toBeGreaterThan(800);
   }, 600000);
 
+  // Release polish: the two byte identity sweeps below pin the v4 drum stage, so they run on
+  // V4_GEN_CONFIG (the default with the long levels off).
   it('flat levels with the flag on and open drums are byte identical to main', () => {
     let flat = 0;
     let nFlat = 0;
@@ -234,10 +238,10 @@ describe('drum patterns in the generator', () => {
     let nOpen = 0;
     for (let i = 0; i < 2000; i++) {
       const seed = pairSeed(i);
-      const d = generateLevel(seed, 1 + (i % 60));
+      const d = generateLevel(seed, 1 + (i % 60), V4_GEN_CONFIG);
       if (d.surface === 'flat') flat = fold(flat, levelHash(d), nFlat++);
       const n = 11 + (i % 50);
-      if (drumPatternFor(levelSeed(seed, n), n) === 'open') open = fold(open, levelHash(generateLevel(seed, n)), nOpen++);
+      if (drumPatternFor(levelSeed(seed, n), n) === 'open') open = fold(open, levelHash(generateLevel(seed, n, V4_GEN_CONFIG)), nOpen++);
     }
     expect([hex(flat), nFlat]).toEqual([MAIN_FLAT_ON_DIGEST, MAIN_FLAT_ON_COUNT]);
     expect([hex(open), nOpen]).toEqual([MAIN_OPEN_DIGEST, MAIN_OPEN_COUNT]);
@@ -250,7 +254,7 @@ describe('drum patterns in the generator', () => {
       const off = generateLevel(seed, n, V3_GEN_CONFIG);
       expect(off.surface).toBe('flat');
       expect(drumPatternFor(levelSeed(seed, n), n, V3_GEN_CONFIG)).toBeNull();
-      const on = generateLevel(seed, n);
+      const on = generateLevel(seed, n, V4_GEN_CONFIG);
       if (on.surface === 'flat') expect(JSON.stringify(on)).toBe(JSON.stringify(off));
     }
   }, 120000);
