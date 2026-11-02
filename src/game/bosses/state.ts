@@ -3,7 +3,7 @@
 // invariant). Arrays are allocated once per world; re-arming for a later Endless boss reuses them.
 import type { BossId, BossSpec, BossTier } from '../../levelgen/leveldef';
 import type { World } from '../world';
-import { BOSS_TABLE, MAX_ADDS, MAX_HORNETS, MAX_PARTS, type BossRow } from './table';
+import { BOSS_TABLE, MAX_ADDS, MAX_HORNETS, MAX_PARTS, ROTATION, type BossRow } from './table';
 import { BossMode, type BossDef, type BossStatus } from './types';
 
 export interface BossState {
@@ -133,6 +133,26 @@ export interface BossState {
   /** True while a run up to the window is being reported; winTimer counts to the next report. */
   winLead: boolean;
   winTimer: number;
+
+  // Release polish scaling (item 7), set when the boss spawns.
+  /** Attack scale from the level (levelAttackScale): bullet speed. */
+  levelScale: number;
+  /** Attack clock multiplier: levelScale times the difficulty's bossScale. */
+  cadence: number;
+  /** Hits on the core (and split body parts) are divided by this (armourFor; 1 below the Int16 cap). */
+  armour: number;
+  /** Fraction of a tenth carried between armoured hits. */
+  dmgAcc: number;
+  /** Attack rotation: attack seconds to the next volley, recheck countdown, volleys fired, recent patterns. */
+  rotT: number;
+  rotWait: number;
+  rotCount: number;
+  rotLog: Int8Array;
+  /** Pool id of the charging rotation volley's first bullet, -1 for none; rotEv is its fx:bossShot payload. */
+  rotShotId: number;
+  rotEv: { x: number; y: number; id: BossId };
+  /** The rotation runs (true by default; a test of a single attack turns it off, like the stress scene flag). */
+  rotOn: boolean;
 }
 
 /** Length of BossState.abl (GW6: 40, so each of two Tempest split parts keeps 20 slots; 16 before). */
@@ -219,6 +239,17 @@ function createState(w: World, spec: BossSpec, def: BossDef): BossState {
     windowEv: { id: spec.id, open: false, secondsLeft: 0 },
     winLead: false,
     winTimer: 0,
+    levelScale: 1,
+    cadence: 1,
+    armour: 1,
+    dmgAcc: 0,
+    rotT: 0,
+    rotWait: 0,
+    rotCount: 0,
+    rotLog: new Int8Array(ROTATION.logSize).fill(-1),
+    rotShotId: -1,
+    rotEv: { x: 0, y: 0, id: spec.id },
+    rotOn: true,
   };
 }
 
@@ -300,5 +331,16 @@ export function armState(w: World, spec: BossSpec, def: BossDef, atSec: number):
   s.windowEv.id = spec.id;
   s.winLead = false;
   s.winTimer = 0;
+  s.levelScale = 1;
+  s.cadence = 1;
+  s.armour = 1;
+  s.dmgAcc = 0;
+  s.rotT = 0;
+  s.rotWait = 0;
+  s.rotCount = 0;
+  s.rotLog.fill(-1);
+  s.rotShotId = -1;
+  s.rotEv.id = spec.id;
+  s.rotOn = true;
   return s;
 }

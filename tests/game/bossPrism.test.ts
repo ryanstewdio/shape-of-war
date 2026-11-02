@@ -23,7 +23,7 @@ import { SHIP_RADIUS } from '../../src/game/ship';
 import { gs } from '../../src/game/state';
 import { Kind, type World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
-import { bossGame, bossLevel, bs, count, enter, park, run } from './bossHelpers';
+import { bossGame, bossLevel, bs, count, enter, park, run, LEGACY_BOSS_HP, legacyBossHp } from './bossHelpers';
 import { DT, idle } from './helpers';
 
 afterEach(() => {
@@ -70,7 +70,7 @@ function makeHammer(hitsPerSec: number): (w: World) => void {
 describe('prism pure rules', () => {
   it('is registered with 1000 hit points and four phases', () => {
     expect(bossDefOf('prism')).not.toBeNull();
-    expect(BOSS_TABLE.prism.hp).toBe(1000);
+    expect(LEGACY_BOSS_HP.prism).toBe(1000); // release polish raised the row (bossScale tests)
     expect(BOSS_TABLE.prism.phases).toBe(4);
   });
 
@@ -111,6 +111,7 @@ describe('prism pure rules', () => {
 });
 
 describe('prism in the sim', () => {
+  legacyBossHp();
   it('a hit in the window lands in full, outside it a quarter (exact over four hits)', () => {
     const w = bossGame('prism');
     const id = enter(w);

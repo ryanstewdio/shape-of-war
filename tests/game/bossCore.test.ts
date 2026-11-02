@@ -30,8 +30,11 @@ import { detonate } from '../../src/game/supers';
 import { equipWeapon, weaponState } from '../../src/game/weapons';
 import { Kind } from '../../src/game/world';
 import type { SpawnEntry, WaveSchedule } from '../../src/levelgen/leveldef';
-import { bs, bossGame, count, enter, first, park, run } from './bossHelpers';
+import { bs, bossGame, count, enter, first, park, run, legacyBossHp } from './bossHelpers';
 import { DT, idle, makeGame } from './helpers';
+
+// Mechanics tuned on the GW6 hit points (release polish raised the rows; bossFightLength covers them).
+legacyBossHp();
 
 afterEach(() => bus.clear());
 

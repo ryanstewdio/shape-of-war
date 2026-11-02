@@ -66,7 +66,7 @@ export function fireVolley(w: World, id: number, bs: BossState, row: ShotRow, sp
   if (w.ship.active && !inShotRange(pointDist(mx, my, w.x[0] ?? 0, w.y[0] ?? 0))) return false;
   const tier = bs.row.tier;
   const tele = hazardTelegraph(tier);
-  const speed = shotSpeed(row, speedMul);
+  const speed = shotSpeed(row, speedMul * bs.levelScale); // release polish: the level scale
   const n = volleyCount(row);
   const spread = (row.spreadDeg ?? 0) * DEG;
   let firstId = -1;
@@ -100,4 +100,5 @@ export function stepVolleyLaunch(w: World, bs: BossState): void {
 export function cancelVolley(bs: BossState): void {
   bs.shotId = -1;
   bs.shotWait = 0;
+  bs.rotShotId = -1; // the rotation volley's bullets went with the rest
 }

@@ -20,10 +20,10 @@ import * as dart from '../enemies/dart';
 import { dropSlime } from '../enemies/slime';
 import { angleBetween, distBetween, moveHeading, moveTo, moveToHit, stepToward, targetOf, turnToward } from '../steer';
 import { Kind, type World } from '../world';
-import { bossEnraged, clearHazards, countParts, crackBody, livePart, spawnAdd, spawnLaneMarker, spawnPart } from './core';
+import { bossAdt, clearHazards, countParts, crackBody, livePart, spawnAdd, spawnLaneMarker, spawnPart } from './core';
 import { hazardTelegraph, wrapPi } from './kit';
 import { bossOf, type BossState } from './state';
-import { BROOD, BROODLING, ENRAGE_RATE, MAX_PARTS } from './table';
+import { BROOD, BROODLING, MAX_PARTS } from './table';
 import { BossMode, PartType, type BossDef } from './types';
 import { removeEntity } from '../remove';
 
@@ -337,7 +337,7 @@ function launchDarts(w: World, id: number, bs: BossState): void {
 export function stepBroodling(w: World, id: number, dt: number): void {
   const bs = bossOf(w);
   if (bs === null || bs.status !== 'alive' || !bs.split || !w.ship.active || bs.stagger > 0) return;
-  const adt = bossEnraged(w) ? dt * ENRAGE_RATE : dt;
+  const adt = bossAdt(w, bs, dt);
   const ship = targetOf(w, id);
   switch (slotOf(bs, id)) {
     case BroodlingRole.Chase: {

@@ -19,7 +19,12 @@ import { gs, type ScoringPort } from '../../src/game/state';
 import { Kind, type World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
 import { generateLevel } from '../../src/levelgen/generator';
+import { legacyBossHp } from './bossHelpers';
 import { DT, idle } from './helpers';
+
+// The bossFirst plan kills the boss on the GW6 hit points before the objective passes (release
+// polish raised the rows; bossFightLength covers the new ones).
+legacyBossHp();
 
 afterEach(() => bus.clear());
 

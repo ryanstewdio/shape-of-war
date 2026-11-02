@@ -13,8 +13,11 @@ import { bulletHits } from '../../src/game/combat';
 import { stepGame } from '../../src/game/game';
 import { SHIP_RADIUS } from '../../src/game/ship';
 import { type World, Kind } from '../../src/game/world';
-import { bs, bossGame, enter, park, run } from './bossHelpers';
+import { bs, bossGame, enter, park, run, legacyBossHp } from './bossHelpers';
 import { DT, idle } from './helpers';
+
+// Mechanics tuned on the GW6 hit points (release polish raised the rows; bossFightLength covers them).
+legacyBossHp();
 
 afterEach(() => bus.clear());
 

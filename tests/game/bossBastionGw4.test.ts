@@ -11,9 +11,12 @@ import { BASTION, BASTION_SHIELD, BOSS_TABLE, PHASE_CHANGE_SEC } from '../../src
 import { PartType } from '../../src/game/bosses/types';
 import { stepGame } from '../../src/game/game';
 import type { World } from '../../src/game/world';
-import { breakTurret, bs, bossGame, enter, park, run } from './bossHelpers';
+import { breakTurret, bs, bossGame, enter, park, run, legacyBossHp } from './bossHelpers';
 import { stateHash } from './bossGw2Helpers';
 import { DT, idle } from './helpers';
+
+// Mechanics tuned on the GW6 hit points (release polish raised the rows; bossFightLength covers them).
+legacyBossHp();
 
 afterEach(() => {
   bus.clear();

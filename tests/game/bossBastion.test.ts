@@ -7,7 +7,10 @@ import { countParts, damageBoss, livePart } from '../../src/game/bosses/core';
 import { BASTION } from '../../src/game/bosses/table';
 import { PartType } from '../../src/game/bosses/types';
 import { Kind, type World } from '../../src/game/world';
-import { breakTurret, bs, bossGame, count, enter, park, run } from './bossHelpers';
+import { breakTurret, bs, bossGame, count, enter, park, run, legacyBossHp } from './bossHelpers';
+
+// Mechanics tuned on the GW6 hit points (release polish raised the rows; bossFightLength covers them).
+legacyBossHp();
 
 afterEach(() => bus.clear());
 

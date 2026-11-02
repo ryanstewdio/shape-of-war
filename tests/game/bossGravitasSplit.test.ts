@@ -12,8 +12,11 @@ import { createBossView, readBoss } from '../../src/game/bosses/view';
 import { stepGame } from '../../src/game/game';
 import { gs } from '../../src/game/state';
 import { Kind, type World } from '../../src/game/world';
-import { bs, bossGame, count, enter, park, run } from './bossHelpers';
+import { bs, bossGame, count, enter, park, run, legacyBossHp } from './bossHelpers';
 import { DT, idle } from './helpers';
+
+// Mechanics tuned on the GW6 hit points (release polish raised the rows; bossFightLength covers them).
+legacyBossHp();
 
 afterEach(() => {
   bus.clear();
