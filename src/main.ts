@@ -14,6 +14,7 @@ import { freshSeed, hash01 } from './core/rng';
 import {
   ensureSchema,
   loadAdventureScores,
+  loadDifficulty,
   loadMenuTheme,
   loadRunSeed,
   loadSettings,
@@ -34,7 +35,8 @@ import { readBoss, type BossView } from './game/bosses/view';
 import { armBossFromSpec } from './game/bosses/index';
 import { bossTierOf } from './levelgen/boss';
 import type { BossId } from './levelgen/leveldef';
-import { createEndlessGame, createGame, gameState, objectiveClock, setWeaponPickups, stepGame } from './game/game';
+import { createEndlessGame, createGame, gameState, objectiveClock, setWeaponPickups, stepGame, type GameOptions } from './game/game';
+import type { Difficulty } from './core/difficulty';
 import { setShipSpace } from './game/ship';
 import { installAudio, play as playCue } from './audio/synth';
 import { superChargeFraction } from './game/supers';
@@ -65,7 +67,9 @@ import { resolveAudio } from './ui/audioPort';
 import { needsBossStrip } from './ui/boss';
 import { endlessLabel, endlessLevel, endlessLine } from './ui/endless';
 import { createLevelSelect } from './ui/levelSelect';
-import { continueLabel, createMenuScreen } from './ui/menu';
+import { continueLabel, createMenuScreen, footerLine } from './ui/menu';
+import { gateSearch, isDev } from './ui/devGate';
+import { createSplashScreen } from './ui/splash';
 import { createPreviewWorld, previewRect, stepPreview } from './ui/preview';
 import { fallbackStatus, levelSuccess, objectiveProgress, type ObjectiveSnapshot } from './ui/objective';
 import { createPauseScreen } from './ui/pause';
@@ -130,8 +134,32 @@ function byId(id: string): HTMLElement {
   return el;
 }
 
-function readQuery(): { stress: number; particles: number; sprite: boolean; debug: boolean } {
-  const q = new URLSearchParams(window.location.search);
+/**
+ * Release gate (docs/14 item 4): GameOptions plus the difficulty field. Forge adds
+ * GameOptions.difficulty in parallel; until it lands the field rides along on this typed object.
+ */
+type ReleaseGameOptions = GameOptions & { difficulty: Difficulty };
+
+/**
+ * Edge: the query every knob reader may see. Without ?dev=1 the query is stripped from the address
+ * bar before any other module reads window.location (renderer, touch and devpanel read it later
+ * in boot), so every test knob is ignored on a tester's phone.
+ */
+function gateLocation(): { search: string; dev: boolean } {
+  const raw = window.location.search;
+  const search = gateSearch(raw);
+  if (search !== raw) {
+    try {
+      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.hash);
+    } catch {
+      // a sandboxed frame may refuse: main.ts still reads the gated query below
+    }
+  }
+  return { search, dev: isDev(raw) };
+}
+
+function readQuery(search: string): { stress: number; particles: number; sprite: boolean; debug: boolean } {
+  const q = new URLSearchParams(search);
   const num = (k: string, def: number): number => {
     const v = Number.parseInt(q.get(k) ?? '', 10);
     return Number.isFinite(v) && v >= 0 ? v : def;
@@ -201,8 +229,12 @@ async function boot(): Promise<void> {
   const buildLabel = byId('sow-build');
   const viewportLabel = byId('sow-viewport');
   const host = byId('game');
+  const gated = gateLocation(); // first, before any module reads window.location
   buildLabel.textContent = `build ${__BUILD_ID__}`;
   buildLabel.style.zIndex = '25'; // above the UI layer (z 20) so menus never hide the build id
+  // Tester build: the corner build label is a debug readout, shown only with ?dev=1. The menu
+  // footer carries the short sha and seed for screenshots instead.
+  buildLabel.style.display = gated.dev ? '' : 'none';
 
   let note = 'renderer: starting';
   let gestureDone = false; // fullscreen and audio unlock ran (boot tap or first pointerup)
@@ -218,7 +250,7 @@ async function boot(): Promise<void> {
 
   // Surface script errors on the phone, where there is no console. The viewport label shows
   // with ?debug=1 or after an error; otherwise it would sit under the HUD score.
-  const query = readQuery();
+  const query = readQuery(gated.search);
   let failed = false;
   const showLabel = (): void => {
     viewportLabel.style.display = query.debug || failed ? '' : 'none';
@@ -242,7 +274,7 @@ async function boot(): Promise<void> {
   // run seed, unlocks or the Adventure table.
   ensureSchema(); // sow.schema = 1 on first launch
   const settings = loadSettings();
-  const levelQuery = parseLevelQuery(window.location.search);
+  const levelQuery = parseLevelQuery(gated.search);
   const storedSeed = loadRunSeed(freshSeed); // created once from crypto.getRandomValues
   let runSeed = levelQuery.seed ?? storedSeed;
   let customSeed = levelQuery.seed !== null && levelQuery.seed !== storedSeed;
@@ -265,7 +297,9 @@ async function boot(): Promise<void> {
   const menuLevel = (): number => levelQuery.level ?? loadUnlocked();
   let pick: LevelPick = pickLevel(generator, runSeed, menuLevel(), VALID_FIXTURES);
   let level: LevelDef = pick.def;
-  let world: World = createGame(level, { scoring: scoringPort });
+  /** Options for every new world; difficulty is read at each level start (settings change between levels). */
+  const gameOptions = (difficulty: Difficulty): ReleaseGameOptions => ({ scoring: scoringPort, difficulty });
+  let world: World = createGame(level, gameOptions(loadDifficulty()));
   let endlessSeed = 0;
   // V2-A glue point, the one named port call for space physics. Fable replaces the body with
   // Forge's setShipSpace(world, level) after both branches merge; src/game/ship.ts is not imported
@@ -407,17 +441,17 @@ async function boot(): Promise<void> {
       level = endlessLevel({ generateEndless, generateEndlessSegment }, endlessSeed);
       pick = { def: level, source: 'generator', hash: levelHash(generateEndless(endlessSeed)) };
       // Glue: Swarm's segment driven Endless run, segments generated on demand from the seed.
-      world = createEndlessGame(generateEndless(endlessSeed), (seg) => generateEndlessSegment(endlessSeed, seg), { scoring: scoringPort });
+      world = createEndlessGame(generateEndless(endlessSeed), (seg) => generateEndlessSegment(endlessSeed, seg), gameOptions(settingsModel.state.difficulty));
     } else {
       pick = pickLevel(generator, runSeed, index, VALID_FIXTURES);
       level = pick.def;
-      world = createGame(level, { scoring: scoringPort });
+      world = createGame(level, gameOptions(settingsModel.state.difficulty));
       hud.setLevel(index, level.par, pick.hash);
     }
     hud.setSuper(level.superType);
     resetScore(world);
     // Temporary debug hook (docs/12 shared rule 8): ?boss=<id> forces that boss on this level at 10 s.
-    const forcedBoss = new URLSearchParams(window.location.search).get('boss');
+    const forcedBoss = new URLSearchParams(gated.search).get('boss'); // dev gated: null without ?dev=1
     const forcedTier = forcedBoss === null ? null : bossTierOf(forcedBoss);
     const forcedOn = forcedBoss !== null && forcedTier !== null;
     if (forcedOn) armBossFromSpec(world, { id: forcedBoss as BossId, tier: forcedTier, atSec: 10, hpMul: 1 }, 10);
@@ -488,7 +522,6 @@ async function boot(): Promise<void> {
     endless: () => bus.emit('game:start', { mode: 'endless', levelIndex: 1 }),
     settings: () => dispatch({ type: 'openSettings' }),
   });
-  menu.setFooter(`build ${__BUILD_ID__}`);
   const levelSelect = createLevelSelect(uiRoot, {
     play: (index) => {
       if (customSeed) {
@@ -565,6 +598,8 @@ async function boot(): Promise<void> {
     void unlockGesture();
     dispatch({ type: 'tapStart' });
   });
+  // docs/14 item 2: the title splash sits above the boot screen for 1.2 s, a tap skips it.
+  createSplashScreen(uiRoot, () => undefined, { after: (ms, cb) => void window.setTimeout(cb, ms) });
   const introScreen = createIntroScreen(uiRoot, () => {
     intro = skipIntro(intro);
     paintIntro();
@@ -577,7 +612,7 @@ async function boot(): Promise<void> {
     }
     if (intro.kind === 'ready') introScreen.showReady();
     else {
-      const card = introCard(flow.levelIndex, level);
+      const card = introCard(flow.levelIndex, level, settingsModel.state.difficulty);
       introScreen.showCard({ ...card, title: `${card.title}  Seed ${runSeed}${customSeed ? ' (typed)' : ''}` });
     }
   }
@@ -594,6 +629,7 @@ async function boot(): Promise<void> {
         const seedNote = customSeed ? `Seed ${runSeed} (typed)` : `Seed ${runSeed}`;
         menu.setContinue(customSeed ? 'Play typed seed' : continueLabel(menuLevel()));
         menu.setInfo(`Level ${adventureLevel()}  ${seedNote}${generator === null ? '  (fixture levels)' : ''}`);
+        menu.setFooter(footerLine(typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : undefined, runSeed));
         menu.show();
         break;
       }

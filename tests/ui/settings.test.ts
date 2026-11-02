@@ -28,6 +28,7 @@ import {
   createSettingsScreen,
   EFFECTS_ROW_LABEL,
   TILT_ROW_LABEL,
+  DIFFICULTY_ROW_LABEL,
   effectsButtonStates,
   effectsLabel,
   fpsLabel,
@@ -87,7 +88,7 @@ describe('settings screen model', () => {
   it('defaults to neon 70, volume 70, fps off, bloom, space physics off and weapon pickups on, and applies them at boot', () => {
     const fx = fakeFx();
     const m = createSettingsModel(fx, memory());
-    expect(m.state).toEqual({ neon: 70, volume: 70, showFps: false, glowPath: 'bloom', spacePhysics: 'off', weaponPickups: true, effects: 'standard', tilt: 'off', music: 50 });
+    expect(m.state).toEqual({ neon: 70, volume: 70, showFps: false, glowPath: 'bloom', spacePhysics: 'off', weaponPickups: true, effects: 'standard', tilt: 'off', difficulty: 'normal', music: 50 });
     m.applyBoot();
     expect(fx.neon).toEqual([70]);
     expect(fx.calls).toEqual(['vol:70', 'fps:false', 'glow:bloom', 'space:off', 'pickups:true', 'effects:standard', 'tilt:off', 'music:50']);
@@ -205,7 +206,7 @@ describe('settings screen model', () => {
       },
     };
     const m = createSettingsModel(fakeFx(), throwing);
-    expect(m.state).toEqual({ neon: 70, volume: 70, showFps: false, glowPath: 'bloom', spacePhysics: 'off', weaponPickups: true, effects: 'standard', tilt: 'off', music: 50 });
+    expect(m.state).toEqual({ neon: 70, volume: 70, showFps: false, glowPath: 'bloom', spacePhysics: 'off', weaponPickups: true, effects: 'standard', tilt: 'off', difficulty: 'normal', music: 50 });
     expect(() => m.neonCommit(30)).not.toThrow();
     expect(() => m.toggleGlowPath()).not.toThrow();
     expect(m.state.glowPath).toBe('fallback');
@@ -346,7 +347,7 @@ describe('space physics: model', () => {
     const fx = fakeFx();
     const m = createSettingsModel(fx, store);
     m.setSpacePhysics('medium');
-    expect(m.state).toEqual({ neon: 70, volume: 70, showFps: false, glowPath: 'bloom', spacePhysics: 'medium', weaponPickups: true, effects: 'standard', tilt: 'off', music: 50 });
+    expect(m.state).toEqual({ neon: 70, volume: 70, showFps: false, glowPath: 'bloom', spacePhysics: 'medium', weaponPickups: true, effects: 'standard', tilt: 'off', difficulty: 'normal', music: 50 });
     expect([...store.data.keys()]).toEqual([SPACE_PHYSICS_KEY]);
     expect(fx.neon).toEqual([]);
   });
@@ -657,7 +658,7 @@ describe('weapon pickups: model', () => {
     const fx = fakeFx();
     const m = createSettingsModel(fx, store);
     m.setWeaponPickups(false);
-    expect(m.state).toEqual({ neon: 70, volume: 70, showFps: false, glowPath: 'bloom', spacePhysics: 'off', weaponPickups: false, effects: 'standard', tilt: 'off', music: 50 });
+    expect(m.state).toEqual({ neon: 70, volume: 70, showFps: false, glowPath: 'bloom', spacePhysics: 'off', weaponPickups: false, effects: 'standard', tilt: 'off', difficulty: 'normal', music: 50 });
     expect([...store.data.keys()]).toEqual([WEAPON_PICKUPS_KEY]);
     expect(fx.neon).toEqual([]);
     m.setSpacePhysics('high');
@@ -781,7 +782,7 @@ describe('weapon pickups: settings screen', () => {
   it('sits on the one settings screen the menu and the pause screen open, after the space row', () => {
     const { root } = open();
     const groups = root.all().filter((e) => e.getAttribute('role') === 'group');
-    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual([SPACE_ROW_LABEL, WEAPON_ROW_LABEL, EFFECTS_ROW_LABEL, TILT_ROW_LABEL]);
+    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual([DIFFICULTY_ROW_LABEL, SPACE_ROW_LABEL, WEAPON_ROW_LABEL, EFFECTS_ROW_LABEL, TILT_ROW_LABEL]);
   });
 });
 
@@ -882,7 +883,7 @@ describe('effects tier: model', () => {
     const fx = fakeFx();
     const m = createSettingsModel(fx, store);
     m.setEffectsTier('high');
-    expect(m.state).toEqual({ neon: 70, volume: 70, showFps: false, glowPath: 'bloom', spacePhysics: 'off', weaponPickups: true, effects: 'high', tilt: 'off', music: 50 });
+    expect(m.state).toEqual({ neon: 70, volume: 70, showFps: false, glowPath: 'bloom', spacePhysics: 'off', weaponPickups: true, effects: 'high', tilt: 'off', difficulty: 'normal', music: 50 });
     expect([...store.data.keys()]).toEqual([EFFECTS_KEY]);
     expect(fx.neon).toEqual([]);
     m.setSpacePhysics('medium');

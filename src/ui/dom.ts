@@ -84,6 +84,14 @@ export const UI_CSS = `
   border-top: 1px solid hsla(185, 90%, 60%, 0.35); padding-top: 4px; }
 @keyframes sow-row-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .sow-btn.sow-menu-row { animation: none; opacity: 1; } }
+.sow-screen.sow-splash { z-index: 30; }
+.sow-splash-title { font-size: clamp(34px, 10vmin, 84px); white-space: nowrap; opacity: 0.4;
+  animation: sow-splash-pulse 1200ms ease-in-out forwards; }
+@keyframes sow-splash-pulse {
+  0% { opacity: 0.4; text-shadow: 0 0 4px hsl(185, 90%, 55%), 0 0 10px hsl(185, 90%, 45%); }
+  50% { opacity: 1; text-shadow: 0 0 14px hsl(185, 95%, 60%), 0 0 40px hsl(185, 95%, 50%), 0 0 70px hsl(300, 90%, 60%); }
+  100% { opacity: 0.9; text-shadow: 0 0 8px hsl(185, 90%, 55%), 0 0 22px hsl(185, 90%, 45%); } }
+@media (prefers-reduced-motion: reduce) { .sow-splash-title { animation: none; opacity: 1; } }
 `;
 
 /** Insert the shared stylesheet once. */

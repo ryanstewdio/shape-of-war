@@ -1,13 +1,16 @@
 // Settings screen (docs/01 section 10, docs/03 sections 7 and 8, SPEC 4). Neon slider 0 to 100
 // over a live preview arena, Volume slider, Music slider (v2, 0 is off), Space physics (Off, Low,
-// Medium, High; v2), Weapon pickups (On, Off; v2), Effects (Low, Standard, High; v2), 3D tilt (Off, Low, High; v3), Show FPS,
+// Medium, High; v2), Weapon pickups (On, Off; v2), Effects (Low, Standard, High; v2), 3D tilt (Off, Low, High; v3), Difficulty (Easy, Normal,
+// Hard; release polish, applied from the next level start), Show FPS,
 // Bloom / Fallback, Play seed, Reset progress, and a hidden debug menu behind five taps on the
 // version label. The same screen opens from the menu and from the pause screen.
 // The model is pure apart from injected effects, so tests drive it with fakes. applyNeon is
 // throttled to one call per animation frame while dragging; the value is saved on finger up.
+import { DIFFICULTIES, type Difficulty } from '../core/difficulty';
 import {
   clampMusic,
   EFFECTS_TIER_SETTINGS,
+  loadDifficulty,
   loadEffects,
   loadGlowPath,
   loadMusic,
@@ -15,10 +18,12 @@ import {
   loadSpacePhysics,
   loadTilt,
   loadWeaponPickups,
+  parseDifficulty,
   parseEffects,
   parseSeedInput,
   parseSpacePhysics,
   parseTilt,
+  saveDifficulty,
   saveEffects,
   saveGlowPath,
   saveMusic,
@@ -85,6 +90,8 @@ export interface SettingsView {
   weaponPickups: boolean;
   effects: EffectsTierSetting;
   tilt: TiltSetting;
+  /** Difficulty for the next level start (sow.settings.difficulty). */
+  difficulty: Difficulty;
   /** Music volume 0 to 100, 0 is off. */
   music: number;
 }
@@ -109,6 +116,8 @@ export interface SettingsModel {
   setEffectsTier(tier: EffectsTierSetting): void;
   /** Row tap: persist sow.settings.tilt and call the effect once. Same level: no effect call. */
   setTilt(level: TiltSetting): void;
+  /** Row tap: persist sow.settings.difficulty. No effect call: main.ts reads state.difficulty when a level starts. */
+  setDifficulty(d: Difficulty): void;
   /** Slider drag: state now, and the effect once per distinct value. Nothing is saved yet. */
   musicInput(v: number): void;
   /** Finger up: persist sow.settings.music. The effect is not called again for an unchanged value. */
@@ -139,6 +148,7 @@ export function createSettingsModel(fx: SettingsEffects, storage?: StorageLike |
     weaponPickups: loadWeaponPickups(storage),
     effects: loadEffects(storage),
     tilt: loadTilt(storage),
+    difficulty: loadDifficulty(storage),
     music: loadMusic(storage),
   };
   /** The music value the effect last received, so a finger up never repeats it. */
@@ -212,6 +222,10 @@ export function createSettingsModel(fx: SettingsEffects, storage?: StorageLike |
       state.tilt = next;
       saveTilt(next, storage); // always written, so a failed earlier write heals on the next tap
       if (changed) fx.setTilt(next);
+    },
+    setDifficulty(d) {
+      state.difficulty = parseDifficulty(d);
+      saveDifficulty(state.difficulty, storage);
     },
     musicInput(v) {
       state.music = clampMusic(v);
@@ -318,6 +332,30 @@ export interface EffectsButtonState {
 /** Pure: the three Effects buttons in order (Low, Standard, High) with the current tier marked. */
 export function effectsButtonStates(current: EffectsTierSetting): EffectsButtonState[] {
   return EFFECTS_TIER_SETTINGS.map((tier) => ({ tier, label: effectsLabel(tier), selected: tier === current }));
+}
+
+export const DIFFICULTY_ROW_LABEL = 'Difficulty';
+
+const DIFFICULTY_LABELS: Readonly<Record<Difficulty, string>> = {
+  easy: 'Easy',
+  normal: 'Normal',
+  hard: 'Hard',
+};
+
+/** Pure: the text on one Difficulty button, also used on the intro card. */
+export function difficultyLabel(d: Difficulty): string {
+  return DIFFICULTY_LABELS[d];
+}
+
+export interface DifficultyButtonState {
+  difficulty: Difficulty;
+  label: string;
+  selected: boolean;
+}
+
+/** Pure: the three Difficulty buttons in order (Easy, Normal, Hard) with the current one marked. */
+export function difficultyButtonStates(current: Difficulty): DifficultyButtonState[] {
+  return DIFFICULTIES.map((difficulty) => ({ difficulty, label: difficultyLabel(difficulty), selected: difficulty === current }));
 }
 
 export const TILT_ROW_LABEL = '3D tilt';
@@ -494,6 +532,20 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
   tiltBtns.append(...tiltButtons);
   tiltRow.append(el('div', 'sow-choice-label', TILT_ROW_LABEL), tiltBtns);
 
+  // Difficulty: label with Easy, Normal and Hard buttons, the same row shape as Effects.
+  const difficultyRow = el('div', 'sow-choice');
+  difficultyRow.setAttribute('role', 'group');
+  difficultyRow.setAttribute('aria-label', DIFFICULTY_ROW_LABEL);
+  const difficultyButtons = DIFFICULTIES.map((d) =>
+    button(difficultyLabel(d), () => {
+      model.setDifficulty(d);
+      refresh();
+    }),
+  );
+  const difficultyBtns = el('div', 'sow-choice-btns');
+  difficultyBtns.append(...difficultyButtons);
+  difficultyRow.append(el('div', 'sow-choice-label', DIFFICULTY_ROW_LABEL), difficultyBtns);
+
   const seedField = el('input', 'sow-input');
   seedField.type = 'text';
   seedField.inputMode = 'numeric';
@@ -548,7 +600,7 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
     if (r.fire) debugRow.style.display = debugRow.style.display === 'none' ? '' : 'none';
   });
 
-  panel.append(title, neon.root, volume.root, music.root, spaceRow, weaponRow, effectsRow, tiltRow, toggles, seedRow, seedLine, bottom, debugRow, version);
+  panel.append(title, neon.root, volume.root, music.root, difficultyRow, spaceRow, weaponRow, effectsRow, tiltRow, toggles, seedRow, seedLine, bottom, debugRow, version);
   s.root.append(panel);
 
   function refresh(): void {
@@ -571,6 +623,12 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
     });
     effectsButtonStates(model.state.effects).forEach((st, i) => {
       const b = effectsButtons[i];
+      if (b === undefined) return;
+      b.classList.toggle('sow-on', st.selected);
+      b.setAttribute('aria-pressed', st.selected ? 'true' : 'false');
+    });
+    difficultyButtonStates(model.state.difficulty).forEach((st, i) => {
+      const b = difficultyButtons[i];
       if (b === undefined) return;
       b.classList.toggle('sow-on', st.selected);
       b.setAttribute('aria-pressed', st.selected ? 'true' : 'false');
