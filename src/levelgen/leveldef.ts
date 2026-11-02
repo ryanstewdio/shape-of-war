@@ -68,6 +68,11 @@ export interface Obstacle {
   cy: number;
   w: number;
   h: number;
+  /**
+   * Release polish contract stub (Fable): a membrane bar blocks the ship and player bullets but lets
+   * enemies squeeze through slowly (Forge). Absent means a solid wall, so existing levels are unchanged.
+   */
+  membrane?: true;
 }
 
 export interface ArenaDef {
