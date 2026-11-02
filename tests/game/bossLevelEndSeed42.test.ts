@@ -40,8 +40,11 @@ const PORT: ScoringPort = {
 
 type Plan = 'objectiveFirst' | 'bossFirst' | 'deadAtKill';
 
-/** Aim the real stick at the nearest target. The boss and its parts only when boss is true. */
-function aim(w: World, input: InputState, boss: boolean): void {
+/**
+ * Aim the real stick at the nearest target. The boss and its parts only when boss is true; with
+ * bossOnly nothing else is a target (the stick rests while no boss target is up).
+ */
+function aim(w: World, input: InputState, boss: boolean, bossOnly = false): void {
   const sx = w.x[0] ?? 0;
   const sy = w.y[0] ?? 0;
   let best = -1;
@@ -50,7 +53,7 @@ function aim(w: World, input: InputState, boss: boolean): void {
     if (w.alive[i] !== 1) continue;
     const k = w.kind[i] ?? 0;
     const isBoss = k === Kind.Boss || k === Kind.BossPart;
-    if (isBoss ? !boss || !isBossTarget(w, i) : !isTargetable(w, i)) continue;
+    if (isBoss ? !boss || !isBossTarget(w, i) : bossOnly || !isTargetable(w, i)) continue;
     // Boss targets first when allowed, then the nearest enemy.
     const d = Math.hypot((w.x[i] ?? 0) - sx, (w.y[i] ?? 0) - sy) - (isBoss ? 1e5 : 0);
     if (d < bestD) {
@@ -106,7 +109,7 @@ function play(level: number, plan: Plan): { w: World; r: Run } {
   });
   const input = idle();
   for (let i = 0; i < 120 * 400 && g.outcome === 'running'; i++) {
-    // Two deaths on the way: one before the boss enters (20 s), one while it lives. deadAtKill
+    // Two deaths on the way, at 12 s and 30 s (both before the long level's boss at 240 s). deadAtKill
     // spends its second life at the killing blow instead (3 lives: a third death would lose).
     // bossFirst kills the boss soon after it enters, so its second death comes as the boss arrives.
     const second = plan !== 'deadAtKill' && r.deaths === 1 && (w.time >= 30 || (plan === 'bossFirst' && bossHittable(w) > 0));
@@ -140,7 +143,10 @@ function play(level: number, plan: Plan): { w: World; r: Run } {
         r.deadAtDown = !w.ship.active && !bossPending(w);
       }
     }
-    aim(w, input, shootBoss);
+    // Release polish (docs/14 item 7): the boss enters at 240 s of a long level, by which time a
+    // bot that clears every wave has nearly met a destroy count. bossFirst therefore shoots only the
+    // boss, so the boss still dies before the regular objective passes (the premise of the plan).
+    aim(w, input, shootBoss, plan === 'bossFirst');
     const o = w.level.objective;
     // scoreInTime, hold plans: this bot scores little while the boss lives (thinned waves) and its
     // attack drone kills the boss before the timer runs out, so the target is credited when the

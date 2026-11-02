@@ -28,7 +28,7 @@ import {
 import { Kind, type World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
 import { generateLevel } from '../../src/levelgen/generator';
-import type { LevelDef } from '../../src/levelgen/leveldef';
+import { V4_GEN_CONFIG, type LevelDef } from '../../src/levelgen/leveldef';
 import { DT, idle, makeGame, put, quietLevel } from './helpers';
 
 afterEach(() => bus.clear());
@@ -98,8 +98,11 @@ describe('spread golden (v1 identical)', () => {
     expect(h).toBe(V1_QUIET_10S);
   });
 
+  // Release polish (docs/14 item 7) made the default generator build long, paced levels (version 5),
+  // so the v1 golden plays the same level from V4_GEN_CONFIG (long levels off, everything else as
+  // before). The hash also proves Normal difficulty is a no op on a real level with kills.
   it('a generated band 2 level with kills equals v1 for 30 s with pickups off', () => {
-    const w = createGame(generateLevel(0x1234, 9), { vibrate: () => undefined, weaponPickups: false, wellNova: false });
+    const w = createGame(generateLevel(0x1234, 9, V4_GEN_CONFIG), { vibrate: () => undefined, weaponPickups: false, wellNova: false });
     let h = 2166136261;
     for (let i = 0; i < 3600; i++) {
       stepGame(w, DT, script(i));
@@ -107,6 +110,22 @@ describe('spread golden (v1 identical)', () => {
     }
     expect(gameState(w).kills).toBeGreaterThan(15);
     expect(h).toBe(V1_BAND2_30S);
+  });
+
+  it('the long default band 2 level: 30 s with pickups off has kills and hashes the same twice', () => {
+    const play = (): { h: number; kills: number } => {
+      const w = createGame(generateLevel(0x1234, 9), { vibrate: () => undefined, weaponPickups: false, wellNova: false });
+      let h = 2166136261;
+      for (let i = 0; i < 3600; i++) {
+        stepGame(w, DT, script(i));
+        h = hashPool(hashWorld(h, w), w.bullets);
+      }
+      expect(currentWeapon(w)).toBe('spread');
+      return { h, kills: gameState(w).kills };
+    };
+    const a = play();
+    expect(a.kills).toBeGreaterThan(5);
+    expect(play().h).toBe(a.h);
   });
 });
 

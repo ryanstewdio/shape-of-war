@@ -38,7 +38,7 @@ import { gs } from '../../src/game/state';
 import { Kind, type World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
 import { generateLevel } from '../../src/levelgen/generator';
-import { breakTurret, bs, bossGame, enter, park, run, LEGACY_BOSS_HP } from './bossHelpers';
+import { breakTurret, bs, bossGame, enter, park, run, LEGACY_BOSS_HP, earlyBoss } from './bossHelpers';
 import { stateHash } from './bossGw2Helpers';
 import { DT, idle } from './helpers';
 
@@ -57,7 +57,7 @@ function bossState(w: World): BossState {
 
 /** The real level 40 game, played past the Tempest entrance, then cracked to its split. */
 function splitLevel40(seed: number): World {
-  const def = generateLevel(seed, 40);
+  const def = earlyBoss(generateLevel(seed, 40));
   expect(def.boss?.id).toBe('tempest');
   const w = createGame({ ...def, drone: 'collect' });
   gs(w).invulnerable = true;
@@ -137,6 +137,10 @@ describe('tempest gw5 in play', () => {
     }
   });
 
+  // Fans seen in the 30 s by seed. Release polish (docs/14 item 7): on seed 2 the long level's paced
+  // waves change the fight so 12 of its 14 rests begin with the ship inside the 300 u rule, which
+  // skips the fan by design (fireDashFan), and 2 fans land (one per part). Seeds 1 and 42 keep 3.
+  const MIN_FANS: Readonly<Record<number, number>> = { 1: 3, 2: 2, 42: 3 };
   for (const seed of [1, 2, 42]) {
     it('seed ' + seed + ': each Tempestling dashes at 462 u/s and fires 6 bullet fans back along its path', () => {
       const w = splitLevel40(seed);
@@ -196,7 +200,7 @@ describe('tempest gw5 in play', () => {
       expect(dashSteps).toBeGreaterThan(20);
       expect(fans[0]).toBeGreaterThanOrEqual(1);
       expect(fans[1]).toBeGreaterThanOrEqual(1);
-      expect((fans[0] ?? 0) + (fans[1] ?? 0)).toBeGreaterThanOrEqual(3);
+      expect((fans[0] ?? 0) + (fans[1] ?? 0)).toBeGreaterThanOrEqual(MIN_FANS[seed] ?? 3);
     });
   }
 
