@@ -1,0 +1,329 @@
+{
+  "hash": "CA85076C",
+  "identity": {
+    "version": 1,
+    "generatorVersion": 5,
+    "runSeed": 42,
+    "levelIndex": 12,
+    "seed": 1290934609,
+    "band": 2,
+    "retries": 0,
+    "surface": "cylinder"
+  },
+  "arena": {
+    "shape": "rectObstacles",
+    "width": 1216,
+    "height": 780,
+    "cornerRadius": 0,
+    "obstacles": [
+      {
+        "cx": 569,
+        "cy": -250,
+        "w": 78,
+        "h": 24
+      },
+      {
+        "cx": -229,
+        "cy": -250,
+        "w": 758,
+        "h": 24
+      },
+      {
+        "cx": 230,
+        "cy": -250,
+        "w": 160,
+        "h": 24,
+        "membrane": true
+      },
+      {
+        "cx": 206,
+        "cy": 250,
+        "w": 804,
+        "h": 24
+      },
+      {
+        "cx": -281,
+        "cy": 250,
+        "w": 170,
+        "h": 24,
+        "membrane": true
+      },
+      {
+        "cx": -587,
+        "cy": 250,
+        "w": 42,
+        "h": 24
+      }
+    ],
+    "spawnPoint": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "roster": [
+    {
+      "kind": "grunt",
+      "weight": 30
+    },
+    {
+      "kind": "dart",
+      "weight": 15
+    },
+    {
+      "kind": "splime",
+      "weight": 8
+    }
+  ],
+  "speedScale": 1.05,
+  "drone": "collect",
+  "superType": "homing",
+  "lives": 3,
+  "bombs": 3,
+  "objective": {
+    "kind": "scoreInTime",
+    "target": 59500,
+    "timeLimitSec": 315
+  },
+  "hazards": {
+    "wells": [
+      {
+        "x": -469,
+        "y": -5
+      }
+    ],
+    "spawners": []
+  },
+  "par": 1447000,
+  "stars": [
+    1447000,
+    2894000,
+    5788000
+  ],
+  "schedule": {
+    "maxLiveEnemies": 90,
+    "intervalStartSec": 5,
+    "intervalEndSec": 3,
+    "rampSec": 210,
+    "rampExponent": 1.2,
+    "budgetStart": 5,
+    "budgetEnd": 12,
+    "waveCount": 84,
+    "loopFromIndex": 34,
+    "loopPeriodSec": 160.9,
+    "spawnTotal": 913,
+    "spawnsByKind": {
+      "grunt": 427,
+      "wanderer": 0,
+      "weaver": 0,
+      "pinwheel": 0,
+      "dart": 292,
+      "snake": 0,
+      "splime": 194
+    },
+    "firstWave": {
+      "index": 0,
+      "atSec": 2.5,
+      "pattern": "cluster",
+      "entries": [
+        {
+          "kind": "dart",
+          "tOffsetSec": 0,
+          "mode": "fixed",
+          "x": -543.6,
+          "y": 290,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "dart",
+          "tOffsetSec": 0.15,
+          "mode": "fixed",
+          "x": -510.1,
+          "y": 290,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "dart",
+          "tOffsetSec": 0.3,
+          "mode": "fixed",
+          "x": 238.3,
+          "y": -323,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "dart",
+          "tOffsetSec": 0.45,
+          "mode": "fixed",
+          "x": -505.6,
+          "y": 290,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "dart",
+          "tOffsetSec": 0.6,
+          "mode": "fixed",
+          "x": 210.5,
+          "y": -312,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "dart",
+          "tOffsetSec": 0.75,
+          "mode": "fixed",
+          "x": 194,
+          "y": -293.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "dart",
+          "tOffsetSec": 0.9,
+          "mode": "fixed",
+          "x": 194.2,
+          "y": -328.6,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        }
+      ]
+    },
+    "lastWave": {
+      "index": 83,
+      "atSec": 322.1,
+      "pattern": "edges",
+      "entries": [
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0,
+          "mode": "fixed",
+          "x": 491.1,
+          "y": -330,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.15,
+          "mode": "fixed",
+          "x": 531.1,
+          "y": -330,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.3,
+          "mode": "fixed",
+          "x": 571.1,
+          "y": -330,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.45,
+          "mode": "fixed",
+          "x": -604.9,
+          "y": -330,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.6,
+          "mode": "fixed",
+          "x": -564.9,
+          "y": -330,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.75,
+          "mode": "fixed",
+          "x": -524.9,
+          "y": -330,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.5,
+          "mode": "fixed",
+          "x": 528,
+          "y": 310,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.65,
+          "mode": "fixed",
+          "x": -528,
+          "y": 310,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.8,
+          "mode": "fixed",
+          "x": -528,
+          "y": -310,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.95,
+          "mode": "fixed",
+          "x": 528,
+          "y": -310,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.1,
+          "mode": "fixed",
+          "x": 528,
+          "y": 310,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.25,
+          "mode": "fixed",
+          "x": -528,
+          "y": 310,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        }
+      ]
+    }
+  },
+  "boss": null
+}

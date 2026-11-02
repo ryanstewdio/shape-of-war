@@ -1,0 +1,219 @@
+{
+  "hash": "02C057B6",
+  "identity": {
+    "version": 1,
+    "generatorVersion": 5,
+    "runSeed": 42,
+    "levelIndex": 5,
+    "seed": 3824075370,
+    "band": 1,
+    "retries": 0,
+    "surface": "flat"
+  },
+  "arena": {
+    "shape": "rect",
+    "width": 1040,
+    "height": 700,
+    "cornerRadius": 0,
+    "obstacles": [],
+    "spawnPoint": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "roster": [
+    {
+      "kind": "grunt",
+      "weight": 40
+    },
+    {
+      "kind": "wanderer",
+      "weight": 35
+    },
+    {
+      "kind": "pinwheel",
+      "weight": 25
+    }
+  ],
+  "speedScale": 1,
+  "drone": "attack",
+  "superType": "turbo",
+  "lives": 3,
+  "bombs": 3,
+  "objective": {
+    "kind": "scoreInTime",
+    "target": 5000,
+    "timeLimitSec": 300
+  },
+  "hazards": {
+    "wells": [],
+    "spawners": []
+  },
+  "par": 141000,
+  "stars": [
+    141000,
+    282000,
+    564000
+  ],
+  "schedule": {
+    "maxLiveEnemies": 60,
+    "intervalStartSec": 6,
+    "intervalEndSec": 4,
+    "rampSec": 180,
+    "rampExponent": 1,
+    "budgetStart": 3,
+    "budgetEnd": 8,
+    "waveCount": 65,
+    "loopFromIndex": 27,
+    "loopPeriodSec": 157.7,
+    "spawnTotal": 454,
+    "spawnsByKind": {
+      "grunt": 174,
+      "wanderer": 110,
+      "weaver": 0,
+      "pinwheel": 170,
+      "dart": 0,
+      "snake": 0
+    },
+    "firstWave": {
+      "index": 0,
+      "atSec": 2.5,
+      "pattern": "edges",
+      "entries": [
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0,
+          "mode": "fixed",
+          "x": 460,
+          "y": 53.7,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.15,
+          "mode": "fixed",
+          "x": 460,
+          "y": 93.7,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        }
+      ]
+    },
+    "lastWave": {
+      "index": 64,
+      "atSec": 309,
+      "pattern": "ring",
+      "entries": [
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0,
+          "mode": "ring",
+          "x": 0,
+          "y": 0,
+          "angleDeg": 206,
+          "radius": 270,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.15,
+          "mode": "ring",
+          "x": 0,
+          "y": 0,
+          "angleDeg": 242,
+          "radius": 270,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.3,
+          "mode": "ring",
+          "x": 0,
+          "y": 0,
+          "angleDeg": 278,
+          "radius": 270,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.45,
+          "mode": "ring",
+          "x": 0,
+          "y": 0,
+          "angleDeg": 314,
+          "radius": 270,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.6,
+          "mode": "ring",
+          "x": 0,
+          "y": 0,
+          "angleDeg": 350,
+          "radius": 270,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.75,
+          "mode": "ring",
+          "x": 0,
+          "y": 0,
+          "angleDeg": 26,
+          "radius": 270,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.9,
+          "mode": "ring",
+          "x": 0,
+          "y": 0,
+          "angleDeg": 62,
+          "radius": 270,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.05,
+          "mode": "ring",
+          "x": 0,
+          "y": 0,
+          "angleDeg": 98,
+          "radius": 270,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.2,
+          "mode": "ring",
+          "x": 0,
+          "y": 0,
+          "angleDeg": 134,
+          "radius": 270,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.35,
+          "mode": "ring",
+          "x": 0,
+          "y": 0,
+          "angleDeg": 170,
+          "radius": 270,
+          "headingDeg": 0
+        }
+      ]
+    }
+  },
+  "boss": {
+    "id": "warden",
+    "tier": 1,
+    "atSec": 240,
+    "hpMul": 1
+  }
+}

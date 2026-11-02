@@ -1,0 +1,383 @@
+{
+  "hash": "5398DD3A",
+  "identity": {
+    "version": 1,
+    "generatorVersion": 5,
+    "runSeed": 42,
+    "levelIndex": 50,
+    "seed": 160852627,
+    "band": 4,
+    "retries": 0,
+    "surface": "flat"
+  },
+  "arena": {
+    "shape": "rectObstacles",
+    "width": 1480,
+    "height": 1020,
+    "cornerRadius": 0,
+    "obstacles": [
+      {
+        "cx": -590,
+        "cy": 50,
+        "w": 24,
+        "h": 410
+      },
+      {
+        "cx": 120,
+        "cy": -340,
+        "w": 420,
+        "h": 24
+      },
+      {
+        "cx": 420,
+        "cy": -10,
+        "w": 440,
+        "h": 24
+      }
+    ],
+    "spawnPoint": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "roster": [
+    {
+      "kind": "grunt",
+      "weight": 20
+    },
+    {
+      "kind": "weaver",
+      "weight": 18
+    },
+    {
+      "kind": "charger",
+      "weight": 18
+    },
+    {
+      "kind": "bulwark",
+      "weight": 16
+    },
+    {
+      "kind": "swirl",
+      "weight": 12
+    }
+  ],
+  "speedScale": 1.3,
+  "drone": "collect",
+  "superType": "detonate",
+  "lives": 3,
+  "bombs": 3,
+  "objective": {
+    "kind": "survive",
+    "durationSec": 340
+  },
+  "hazards": {
+    "wells": [
+      {
+        "x": 484.7,
+        "y": -260.4
+      }
+    ],
+    "spawners": []
+  },
+  "par": 15438500,
+  "stars": [
+    15438500,
+    30877000,
+    61754000
+  ],
+  "schedule": {
+    "maxLiveEnemies": 160,
+    "intervalStartSec": 4,
+    "intervalEndSec": 2,
+    "rampSec": 240,
+    "rampExponent": 1.6,
+    "budgetStart": 8,
+    "budgetEnd": 20,
+    "waveCount": 123,
+    "loopFromIndex": 45,
+    "loopPeriodSec": 174.8,
+    "spawnTotal": 1928,
+    "spawnsByKind": {
+      "grunt": 192,
+      "wanderer": 0,
+      "weaver": 88,
+      "pinwheel": 0,
+      "dart": 0,
+      "snake": 0,
+      "bulwark": 419,
+      "swirl": 610,
+      "charger": 619
+    },
+    "firstWave": {
+      "index": 0,
+      "atSec": 2.5,
+      "pattern": "edges",
+      "entries": [
+        {
+          "kind": "bulwark",
+          "tOffsetSec": 0,
+          "mode": "fixed",
+          "x": -680,
+          "y": 43.3,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "bulwark",
+          "tOffsetSec": 0.15,
+          "mode": "fixed",
+          "x": -680,
+          "y": 83.3,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.5,
+          "mode": "fixed",
+          "x": 680,
+          "y": -244.2,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.65,
+          "mode": "fixed",
+          "x": 680,
+          "y": -204.2,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "swirl",
+          "tOffsetSec": 1,
+          "mode": "ring",
+          "x": 0,
+          "y": 0,
+          "angleDeg": 86,
+          "radius": 270,
+          "headingDeg": 0
+        },
+        {
+          "kind": "swirl",
+          "tOffsetSec": 1.15,
+          "mode": "ring",
+          "x": 0,
+          "y": 0,
+          "angleDeg": 266,
+          "radius": 270,
+          "headingDeg": 0
+        }
+      ]
+    },
+    "lastWave": {
+      "index": 122,
+      "atSec": 349.5,
+      "pattern": "edges",
+      "entries": [
+        {
+          "kind": "weaver",
+          "tOffsetSec": 0,
+          "mode": "fixed",
+          "x": 409.7,
+          "y": 450,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "weaver",
+          "tOffsetSec": 0.15,
+          "mode": "fixed",
+          "x": 449.7,
+          "y": 450,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "weaver",
+          "tOffsetSec": 0.3,
+          "mode": "fixed",
+          "x": 489.7,
+          "y": 450,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "weaver",
+          "tOffsetSec": 0.45,
+          "mode": "fixed",
+          "x": 529.7,
+          "y": 450,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "weaver",
+          "tOffsetSec": 0.6,
+          "mode": "fixed",
+          "x": 569.7,
+          "y": 450,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "weaver",
+          "tOffsetSec": 0.75,
+          "mode": "fixed",
+          "x": 609.7,
+          "y": 450,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.5,
+          "mode": "fixed",
+          "x": -680,
+          "y": -361.6,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.65,
+          "mode": "fixed",
+          "x": -680,
+          "y": -321.6,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.8,
+          "mode": "fixed",
+          "x": -680,
+          "y": -281.6,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.95,
+          "mode": "fixed",
+          "x": -680,
+          "y": -241.6,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.1,
+          "mode": "fixed",
+          "x": -680,
+          "y": -201.6,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.25,
+          "mode": "fixed",
+          "x": -680,
+          "y": -161.6,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.4,
+          "mode": "fixed",
+          "x": -680,
+          "y": -121.6,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.55,
+          "mode": "fixed",
+          "x": -680,
+          "y": -81.6,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.7,
+          "mode": "fixed",
+          "x": -680,
+          "y": -41.6,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.85,
+          "mode": "fixed",
+          "x": -680,
+          "y": -1.6,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 2,
+          "mode": "fixed",
+          "x": -680,
+          "y": 38.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 2.15,
+          "mode": "fixed",
+          "x": -680,
+          "y": 78.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 2.3,
+          "mode": "fixed",
+          "x": -680,
+          "y": 118.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        }
+      ]
+    }
+  },
+  "boss": {
+    "id": "prism",
+    "tier": 4,
+    "atSec": 240,
+    "hpMul": 1
+  }
+}

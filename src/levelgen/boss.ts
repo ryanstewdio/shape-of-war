@@ -9,6 +9,11 @@ export const BOSS_EVERY = 5;
 export const BOSS_SEGMENT_EVERY = 6;
 /** Wave clock second of the boss entrance on an Adventure level. */
 export const BOSS_LEVEL_AT_SEC = 20;
+/**
+ * Release polish (docs/14 item 7): wave clock second of the boss entrance on a long level
+ * (GenConfig.enableLongLevels on). At least 4 minutes of regular waves come first.
+ */
+export const BOSS_LONG_LEVEL_AT_SEC = 240;
 /** Seconds after the segment start of the boss entrance in Endless. */
 export const BOSS_SEGMENT_AT_SEC = 10;
 /** Index in BOSS_SCHEDULE that every pass after the first restarts from (ember, the first tier 2 boss). */
@@ -67,10 +72,10 @@ export function bossOfNumber(j: number, atSec: number): BossSpec | null {
   return { id: row.id, tier: row.tier, atSec, hpMul: 1 + BOSS_HP_PER_PASS * (pass - 1) };
 }
 
-/** The boss of Adventure level n, or null when n is not a boss level (a positive multiple of 5). */
-export function bossForLevel(levelIndex: number): BossSpec | null {
+/** The boss of Adventure level n, or null when n is not a boss level (a positive multiple of 5). atSec: the entrance second. */
+export function bossForLevel(levelIndex: number, atSec: number = BOSS_LEVEL_AT_SEC): BossSpec | null {
   if (!Number.isInteger(levelIndex) || levelIndex < BOSS_EVERY || levelIndex % BOSS_EVERY !== 0) return null;
-  return bossOfNumber(levelIndex / BOSS_EVERY, BOSS_LEVEL_AT_SEC);
+  return bossOfNumber(levelIndex / BOSS_EVERY, atSec);
 }
 
 /** The boss of Endless segment s (0 based), or null unless s is a positive multiple of 6. */

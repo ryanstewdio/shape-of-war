@@ -1,0 +1,268 @@
+{
+  "hash": "26424E18",
+  "identity": {
+    "version": 1,
+    "generatorVersion": 5,
+    "runSeed": 42,
+    "levelIndex": 13,
+    "seed": 985803412,
+    "band": 2,
+    "retries": 0,
+    "surface": "flat"
+  },
+  "arena": {
+    "shape": "circle",
+    "width": 800,
+    "height": 800,
+    "cornerRadius": 0,
+    "obstacles": [],
+    "spawnPoint": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "roster": [
+    {
+      "kind": "grunt",
+      "weight": 30
+    },
+    {
+      "kind": "wanderer",
+      "weight": 20
+    },
+    {
+      "kind": "pinwheel",
+      "weight": 15
+    },
+    {
+      "kind": "splime",
+      "weight": 8
+    }
+  ],
+  "speedScale": 1.05,
+  "drone": "attack",
+  "superType": "homing",
+  "lives": 3,
+  "bombs": 3,
+  "objective": {
+    "kind": "destroy",
+    "count": 605
+  },
+  "hazards": {
+    "wells": [],
+    "spawners": []
+  },
+  "par": 1512500,
+  "stars": [
+    1512500,
+    3025000,
+    6050000
+  ],
+  "schedule": {
+    "maxLiveEnemies": 90,
+    "intervalStartSec": 5,
+    "intervalEndSec": 3,
+    "rampSec": 210,
+    "rampExponent": 1.2,
+    "budgetStart": 5,
+    "budgetEnd": 12,
+    "waveCount": 89,
+    "loopFromIndex": 36,
+    "loopPeriodSec": 168.9,
+    "spawnTotal": 901,
+    "spawnsByKind": {
+      "grunt": 263,
+      "wanderer": 227,
+      "weaver": 0,
+      "pinwheel": 131,
+      "dart": 0,
+      "snake": 0,
+      "splime": 280
+    },
+    "firstWave": {
+      "index": 0,
+      "atSec": 2.5,
+      "pattern": "corners",
+      "entries": [
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0,
+          "mode": "fixed",
+          "x": 240.4,
+          "y": -240.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.15,
+          "mode": "fixed",
+          "x": 240.4,
+          "y": 240.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.3,
+          "mode": "fixed",
+          "x": -240.4,
+          "y": 240.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.45,
+          "mode": "fixed",
+          "x": -240.4,
+          "y": -240.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        }
+      ]
+    },
+    "lastWave": {
+      "index": 88,
+      "atSec": 337.1,
+      "pattern": "edges",
+      "entries": [
+        {
+          "kind": "splime",
+          "tOffsetSec": 0,
+          "mode": "fixed",
+          "x": -338.1,
+          "y": 35.5,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "splime",
+          "tOffsetSec": 0.15,
+          "mode": "fixed",
+          "x": -165.3,
+          "y": -307.7,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "splime",
+          "tOffsetSec": 0.3,
+          "mode": "fixed",
+          "x": -126.6,
+          "y": -318.1,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "splime",
+          "tOffsetSec": 0.45,
+          "mode": "fixed",
+          "x": -88,
+          "y": -328.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "splime",
+          "tOffsetSec": 0.6,
+          "mode": "fixed",
+          "x": -49.4,
+          "y": -338.8,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "splime",
+          "tOffsetSec": 0.75,
+          "mode": "fixed",
+          "x": -10.7,
+          "y": -349.1,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "splime",
+          "tOffsetSec": 0.9,
+          "mode": "fixed",
+          "x": 333.8,
+          "y": 64.9,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.5,
+          "mode": "fixed",
+          "x": -240.4,
+          "y": -240.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.65,
+          "mode": "fixed",
+          "x": 240.4,
+          "y": -240.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.8,
+          "mode": "fixed",
+          "x": 240.4,
+          "y": 240.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 0.95,
+          "mode": "fixed",
+          "x": -240.4,
+          "y": 240.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.1,
+          "mode": "fixed",
+          "x": -240.4,
+          "y": -240.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "grunt",
+          "tOffsetSec": 1.25,
+          "mode": "fixed",
+          "x": 240.4,
+          "y": -240.4,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        }
+      ]
+    }
+  },
+  "boss": null
+}

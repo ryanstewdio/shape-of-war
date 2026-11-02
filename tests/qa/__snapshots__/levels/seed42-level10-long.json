@@ -1,0 +1,218 @@
+{
+  "hash": "2D7C208F",
+  "identity": {
+    "version": 1,
+    "generatorVersion": 5,
+    "runSeed": 42,
+    "levelIndex": 10,
+    "seed": 33005907,
+    "band": 2,
+    "retries": 0,
+    "surface": "flat"
+  },
+  "arena": {
+    "shape": "rect",
+    "width": 1300,
+    "height": 880,
+    "cornerRadius": 0,
+    "obstacles": [],
+    "spawnPoint": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "roster": [
+    {
+      "kind": "grunt",
+      "weight": 30
+    },
+    {
+      "kind": "weaver",
+      "weight": 20
+    },
+    {
+      "kind": "dart",
+      "weight": 15
+    },
+    {
+      "kind": "charger",
+      "weight": 12
+    }
+  ],
+  "speedScale": 1.05,
+  "drone": "ram",
+  "superType": "detonate",
+  "lives": 3,
+  "bombs": 3,
+  "objective": {
+    "kind": "destroy",
+    "count": 530
+  },
+  "hazards": {
+    "wells": [
+      {
+        "x": -521.3,
+        "y": -264.5
+      }
+    ],
+    "spawners": []
+  },
+  "par": 1462500,
+  "stars": [
+    1462500,
+    2925000,
+    5850000
+  ],
+  "schedule": {
+    "maxLiveEnemies": 90,
+    "intervalStartSec": 5,
+    "intervalEndSec": 3,
+    "rampSec": 210,
+    "rampExponent": 1.2,
+    "budgetStart": 5,
+    "budgetEnd": 12,
+    "waveCount": 84,
+    "loopFromIndex": 34,
+    "loopPeriodSec": 160.9,
+    "spawnTotal": 780,
+    "spawnsByKind": {
+      "grunt": 319,
+      "wanderer": 0,
+      "weaver": 78,
+      "pinwheel": 0,
+      "dart": 142,
+      "snake": 0,
+      "charger": 241
+    },
+    "firstWave": {
+      "index": 0,
+      "atSec": 2.5,
+      "pattern": "cluster",
+      "entries": [
+        {
+          "kind": "dart",
+          "tOffsetSec": 0,
+          "mode": "fixed",
+          "x": -528.6,
+          "y": -152.3,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "dart",
+          "tOffsetSec": 0.15,
+          "mode": "fixed",
+          "x": -511.5,
+          "y": -128.8,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "dart",
+          "tOffsetSec": 0.3,
+          "mode": "fixed",
+          "x": -531.2,
+          "y": -81.3,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "dart",
+          "tOffsetSec": 0.45,
+          "mode": "fixed",
+          "x": -579.2,
+          "y": -142.1,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "dart",
+          "tOffsetSec": 0.6,
+          "mode": "fixed",
+          "x": -531.7,
+          "y": -143.7,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        }
+      ]
+    },
+    "lastWave": {
+      "index": 83,
+      "atSec": 322.1,
+      "pattern": "edges",
+      "entries": [
+        {
+          "kind": "weaver",
+          "tOffsetSec": 0,
+          "mode": "fixed",
+          "x": 590,
+          "y": 221.3,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "weaver",
+          "tOffsetSec": 0.15,
+          "mode": "fixed",
+          "x": 590,
+          "y": 261.3,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "weaver",
+          "tOffsetSec": 0.3,
+          "mode": "fixed",
+          "x": 590,
+          "y": 301.3,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "weaver",
+          "tOffsetSec": 0.45,
+          "mode": "fixed",
+          "x": 590,
+          "y": 341.3,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "weaver",
+          "tOffsetSec": 0.6,
+          "mode": "fixed",
+          "x": 590,
+          "y": 381.3,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        },
+        {
+          "kind": "weaver",
+          "tOffsetSec": 0.75,
+          "mode": "fixed",
+          "x": -590,
+          "y": 319.2,
+          "angleDeg": 0,
+          "radius": 0,
+          "headingDeg": 0
+        }
+      ]
+    }
+  },
+  "boss": {
+    "id": "brood",
+    "tier": 1,
+    "atSec": 240,
+    "hpMul": 1
+  }
+}

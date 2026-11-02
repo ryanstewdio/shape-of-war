@@ -1,6 +1,8 @@
 // D13 phase C0: the generator chooses cylinder levels. The surface comes from its own stream after
 // every other draw, so every flat level keeps its exact LevelDef and hash; enableCylinder false is
 // the v3 generator byte for byte.
+// Release polish: these pin the v4 cylinder stage, so generation runs on V4_GEN_CONFIG (the
+// default with the long levels off); long drum levels are covered in durations.test.ts.
 import { describe, expect, it } from 'vitest';
 import {
   CYLINDER_CHANCE,
@@ -17,6 +19,7 @@ import {
 import { generateEndless, generateEndlessSegment, generateLevel, levelHash, pickSurface } from '../../src/levelgen/generator';
 import {
   DEFAULT_GEN_CONFIG,
+  V4_GEN_CONFIG,
   GENERATOR_VERSION_V2,
   GENERATOR_VERSION_V4,
   V1_GEN_CONFIG,
@@ -95,7 +98,7 @@ describe('generator surface choice', () => {
     for (let i = 0; i < PAIRS; i++) {
       const { seed, n } = pair(i);
       const off = generateLevel(seed, n, V3_GEN_CONFIG);
-      const on = generateLevel(seed, n);
+      const on = generateLevel(seed, n, V4_GEN_CONFIG);
       main = fold(main, levelHash(off), i);
       expect(off.surface).toBe('flat');
       if (on.surface === 'flat') expect(JSON.stringify(on), `seed ${seed} level ${n}`).toBe(JSON.stringify(off));
@@ -108,10 +111,11 @@ describe('generator surface choice', () => {
 
   it('V1 and V2 configs carry the cylinder flag off; the default carries it on', () => {
     expect(DEFAULT_GEN_CONFIG.enableCylinder).toBe(true);
+    expect(V4_GEN_CONFIG.enableCylinder).toBe(true);
     expect(V1_GEN_CONFIG.enableCylinder).toBe(false);
     expect(V2_GEN_CONFIG.enableCylinder).toBe(false);
     expect(V3_GEN_CONFIG.enableCylinder).toBe(false);
-    expect({ ...V3_GEN_CONFIG, enableCylinder: true }).toEqual(DEFAULT_GEN_CONFIG);
+    expect({ ...V3_GEN_CONFIG, enableCylinder: true }).toEqual(V4_GEN_CONFIG);
   });
 
   it('share of cylinder is near 35 percent of eligible levels from 11 to 60; levels 1 to 10 and boss levels flat', () => {
@@ -121,7 +125,7 @@ describe('generator surface choice', () => {
     for (let s = 0; s < 4000; s++) {
       const runSeed = Math.imul(s + 7, 0x9e3779b1) >>> 0;
       for (let n = 1; n <= 60; n++) {
-        const surface = pickSurface(levelSeed(runSeed, n), n, DEFAULT_GEN_CONFIG);
+        const surface = pickSurface(levelSeed(runSeed, n), n, V4_GEN_CONFIG);
         if (n <= 10 || n % BOSS_EVERY === 0) {
           expect(surface).toBe('flat');
           continue;
@@ -144,7 +148,7 @@ describe('generator surface choice', () => {
     for (let s = 0; s < 60; s++) {
       const runSeed = (1 + s * 2654435761) >>> 0;
       for (let n = 11; n <= 60; n++) {
-        const d = generateLevel(runSeed, n);
+        const d = generateLevel(runSeed, n, V4_GEN_CONFIG);
         if (n % BOSS_EVERY === 0) {
           expect(d.surface, `boss level ${n}`).toBe('flat');
           expect(d.boss).toBeDefined();
@@ -160,8 +164,8 @@ describe('generator surface choice', () => {
   it('boss levels stay flat with the boss flag on or off; Endless stays flat', () => {
     for (let s = 0; s < 30; s++) {
       for (const n of [15, 20, 25, 30, 35, 40, 45, 50, 55, 60]) {
-        expect(generateLevel(s, n).surface).toBe('flat');
-        expect(generateLevel(s, n, { ...DEFAULT_GEN_CONFIG, enableBosses: false }).surface).toBe('flat');
+        expect(generateLevel(s, n, V4_GEN_CONFIG).surface).toBe('flat');
+        expect(generateLevel(s, n, { ...V4_GEN_CONFIG, enableBosses: false }).surface).toBe('flat');
       }
     }
     expect(generateEndless(42).surface).toBe('flat');
@@ -169,9 +173,9 @@ describe('generator surface choice', () => {
   }, 120000);
 
   it(`seed ${CYL_SEED} level ${CYL_LEVEL} is a cylinder level, deterministic and valid`, () => {
-    const d = generateLevel(CYL_SEED, CYL_LEVEL);
+    const d = generateLevel(CYL_SEED, CYL_LEVEL, V4_GEN_CONFIG);
     expect(d.surface).toBe('cylinder');
-    expect(generateLevel(CYL_SEED, CYL_LEVEL)).toEqual(d);
+    expect(generateLevel(CYL_SEED, CYL_LEVEL, V4_GEN_CONFIG)).toEqual(d);
     expect(levelHash(d)).toBe('F383CDC7');
     expectCylinder(d);
     expect(generateLevel(CYL_SEED, CYL_LEVEL, V3_GEN_CONFIG).surface).toBe('flat');
@@ -185,18 +189,18 @@ function expectCylinder(d: LevelDef): void {
   expect(W % CYLINDER_WIDTH_STEP, at).toBe(0);
   expect(d.generatorVersion, at).toBe(GENERATOR_VERSION_V4);
   expect(d.boss, at).toBeUndefined();
-  expect(validateLevel(d, DEFAULT_GEN_CONFIG).errors, at).toEqual([]);
+  expect(validateLevel(d, V4_GEN_CONFIG).errors, at).toEqual([]);
   const canonical = (x: number): boolean => x >= -W / 2 && x < W / 2;
   for (const w of d.waves.waves) for (const e of w.entries) if (e.mode === 'fixed') expect(canonical(e.x), `${at} entry x ${e.x}`).toBe(true);
   for (const p of [...d.hazards.wells, ...d.hazards.spawners]) expect(canonical(p.x), `${at} hazard x ${p.x}`).toBe(true);
 }
 
 describe('validator C1 and V1 with the cylinder', () => {
-  const cyl = (): LevelDef => structuredClone(generateLevel(CYL_SEED, CYL_LEVEL));
+  const cyl = (): LevelDef => structuredClone(generateLevel(CYL_SEED, CYL_LEVEL, V4_GEN_CONFIG));
 
   it('accepts the generated cylinder level, with or without options', () => {
     expect(validateLevel(cyl()).errors).toEqual([]);
-    expect(validateLevel(cyl(), DEFAULT_GEN_CONFIG).errors).toEqual([]);
+    expect(validateLevel(cyl(), V4_GEN_CONFIG).errors).toEqual([]);
   });
 
   it('rejects cylinder when the config says the flag is off (V1)', () => {
@@ -219,7 +223,7 @@ describe('validator C1 and V1 with the cylinder', () => {
     const early = { ...structuredClone(generateLevel(42, 9, V3_GEN_CONFIG)), surface: 'cylinder' as const, generatorVersion: GENERATOR_VERSION_V4 };
     expect(validateLevel(early).errors.filter((e) => e.startsWith('C1:')).some((e) => e.includes('level 9'))).toBe(true);
 
-    const boss = { ...structuredClone(generateLevel(42, 20)), surface: 'cylinder' as const };
+    const boss = { ...structuredClone(generateLevel(42, 20, V4_GEN_CONFIG)), surface: 'cylinder' as const };
     expect(ids(validateLevel(boss).errors)).toContain('C1');
   });
 

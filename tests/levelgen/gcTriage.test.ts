@@ -13,18 +13,21 @@ const SEED = 42;
 /** Share of a level's waves that counts as "early": waves with index below floor(0.6 x n). */
 const EARLY_FRAC = 0.6;
 
-/** The six first appearances claimed in run 0155 and the hashes they generate at 374a7b9. */
+/**
+ * The six first appearances claimed in run 0155. Release polish (long levels, generator version 5)
+ * moved every hash: was, in order, 93A4C56E, CC6859DC, 5BD14124, F383CDC7, F9779FC2, 66AF8BD7.
+ */
 const CASES: readonly { level: number; kind: EnemyKind; hash: string }[] = [
-  { level: 6, kind: 'charger', hash: '93A4C56E' },
-  { level: 7, kind: 'swirl', hash: 'CC6859DC' },
-  { level: 9, kind: 'splime', hash: '5BD14124' },
+  { level: 6, kind: 'charger', hash: '184C1369' },
+  { level: 7, kind: 'swirl', hash: '66985C67' },
+  { level: 9, kind: 'splime', hash: '18F95442' },
   // D13 C0: seed 42 level 16 is now a cylinder level (was D736C51F flat at 374a7b9). Drum-maps:
   // a pillars drum (was 712BC1C1 open drum at 8d5c989).
-  { level: 16, kind: 'bulwark', hash: 'F383CDC7' },
+  { level: 16, kind: 'bulwark', hash: 'AC6E0C94' },
   // D13 C0: seed 42 level 17 is now a cylinder level too (was 43CADCE4 flat at 374a7b9). Drum-maps:
   // a pillars drum (was BCC2F1B8 open drum at 8d5c989).
-  { level: 17, kind: 'blink', hash: 'F9779FC2' },
-  { level: 31, kind: 'sower', hash: '66AF8BD7' },
+  { level: 17, kind: 'blink', hash: 'A537DF3D' },
+  { level: 31, kind: 'sower', hash: '373D700E' },
 ];
 
 interface EarlySpawn {
