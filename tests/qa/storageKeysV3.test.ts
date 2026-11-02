@@ -36,6 +36,9 @@ const V2_KEYS: readonly string[] = [
 ];
 /** The only key v3 may add, and only from wave V3-E. */
 const TILT_KEY = 'sow.settings.tilt';
+/** Release polish (docs/14 item 6): the one key the tester build adds, listed in the docs/13 table. */
+const DIFFICULTY_KEY = 'sow.settings.difficulty';
+const ALLOWED_EXTRA: readonly string[] = [TILT_KEY, DIFFICULTY_KEY];
 
 /** Every key the settings module implements: the exported *_KEY constants plus prefix + each Settings field. */
 function implementedKeys(): string[] {
@@ -73,11 +76,16 @@ function sowLiterals(text: string): string[] {
 describe('storage keys after v3', () => {
   const keys = implementedKeys();
 
-  it('the implemented set is exactly the 13 key v2 set, plus at most sow.settings.tilt', () => {
+  it('the implemented set is exactly the v2 set, plus at most sow.settings.tilt and sow.settings.difficulty', () => {
     const extra = keys.filter((k) => !V2_KEYS.includes(k));
-    expect(extra.filter((k) => k !== TILT_KEY), 'a key outside the v2 set and outside docs/13').toEqual([]);
+    expect(extra.filter((k) => !ALLOWED_EXTRA.includes(k)), 'a key outside the v2 set and outside docs/13').toEqual([]);
     expect(keys.filter((k) => V2_KEYS.includes(k)).sort()).toEqual([...V2_KEYS].sort());
-    expect(keys.length).toBeLessThanOrEqual(V2_KEYS.length + 1);
+    expect(keys.length).toBeLessThanOrEqual(V2_KEYS.length + ALLOWED_EXTRA.length);
+  });
+
+  it('registers sow.settings.difficulty with the settings prefix', () => {
+    expect(keys).toContain(DIFFICULTY_KEY);
+    expect(settings.DIFFICULTY_KEY).toBe(DIFFICULTY_KEY);
   });
 
   it('every key has the sow. prefix and the sow.<area>.<name> shape (or sow.schema)', () => {
@@ -129,9 +137,10 @@ describe('docs/13 key table', () => {
   const section = start >= 0 ? doc.slice(start, start + 2500) : '';
   const documented = [...section.matchAll(/^\| `(sow\.[A-Za-z0-9_.]+)` \|/gm)].map((m) => m[1] ?? '');
 
-  it('is found and documents the tilt key', () => {
+  it('is found and documents the tilt and difficulty keys', () => {
     expect(start).toBeGreaterThanOrEqual(0);
     expect(documented).toContain(TILT_KEY);
+    expect(documented).toContain(DIFFICULTY_KEY);
   });
 
   it('documents no key that is neither implemented nor tilt', () => {

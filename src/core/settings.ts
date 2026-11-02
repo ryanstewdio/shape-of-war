@@ -2,6 +2,7 @@
 // One key per value so a corrupt value cannot poison the rest. Every storage access is wrapped
 // in try/catch: private mode, quota or a missing localStorage fall back to an in memory copy,
 // then to defaults.
+import type { Difficulty } from './difficulty';
 
 export interface Settings {
   neon: number;
@@ -219,6 +220,26 @@ export function loadTilt(storage: StorageLike | null = defaultStorage()): TiltSe
 
 export function saveTilt(level: TiltSetting, storage: StorageLike | null = defaultStorage()): void {
   writeRaw(storage, TILT_KEY, parseTilt(level));
+}
+
+// Difficulty (release polish, docs/14 item 6): "easy", "normal" or "hard", default "normal". The
+// literal union comes from src/core/difficulty.ts. Kept out of Settings and DEFAULT_SETTINGS, like
+// the other extra keys. Applied when the next level starts, never to a running world.
+
+export const DIFFICULTY_KEY = `${SETTINGS_PREFIX}difficulty`;
+export const DEFAULT_DIFFICULTY: Difficulty = 'normal';
+
+/** Pure: anything other than the three exact lower case strings (and null) falls back to "normal". */
+export function parseDifficulty(raw: string | null): Difficulty {
+  return raw === 'easy' || raw === 'normal' || raw === 'hard' ? raw : DEFAULT_DIFFICULTY;
+}
+
+export function loadDifficulty(storage: StorageLike | null = defaultStorage()): Difficulty {
+  return parseDifficulty(readRaw(storage, DIFFICULTY_KEY));
+}
+
+export function saveDifficulty(d: Difficulty, storage: StorageLike | null = defaultStorage()): void {
+  writeRaw(storage, DIFFICULTY_KEY, parseDifficulty(d));
 }
 
 // Menu theme (chorus menu-themes request): the raw index text "0" to "2" of the last title theme, so

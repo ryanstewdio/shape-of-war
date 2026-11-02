@@ -1,4 +1,4 @@
-// Main menu (docs/01 section 10): title "Shape of War", Continue (Adventure at the highest
+// Main menu (docs/01 section 10): title "Shapes of War", Continue (Adventure at the highest
 // unlocked level), Level select, Endless, Settings.
 // Look (Ryan, wave 2): a centred neon panel with a double glowing border over the grid, the title
 // in the game's own neon style, four stacked framed neon rows, the focused or last used row in a
@@ -12,15 +12,15 @@ import type { Insets, Rect } from '../input/types';
 import { button, createScreen, el, MIN_HIT_PX, type Screen } from './dom';
 import { aspectClass } from './hudFrame';
 
-export const GAME_TITLE = 'Shape of War';
+export const GAME_TITLE = 'Shapes of War';
 export const SHOW_ENDLESS = true;
 /** Delay between one row's entrance and the next. */
 export const MENU_STAGGER_MS = 200;
 export const MENU_ROWS = 4;
 /** Clear space kept between the panel and the safe area edge: room for the outer border and glow. */
 export const MENU_MARGIN = 12;
-/** The title is about this many ems wide ("Shape of War", bold, 0.06 em tracking), used to size it to the panel. */
-export const TITLE_EMS = 7.8;
+/** The title is about this many ems wide ("Shapes of War", bold, 0.06 em tracking), used to size it to the panel. */
+export const TITLE_EMS = 8.4;
 
 export interface MenuActions {
   adventure(): void;
@@ -34,12 +34,29 @@ export interface MenuScreen extends Screen {
   setInfo(text: string): void;
   /** Label on the Adventure button, for example "Continue  L3". */
   setContinue(text: string): void;
-  /** Footer line, for example "build abc123". */
+  /** Footer line, for example "v3 build abc123 seed 42" (footerLine). */
   setFooter(text: string): void;
   /** Size the panel for the viewport and its safe area insets (resize, fold and unfold). */
   layout(cssW: number, cssH: number, insets: Insets): void;
   /** Index of the row in the warm frame: the last row tapped, Play or Continue at first. */
   focused(): number;
+}
+
+/** The release line printed before the build sha in the menu footer. */
+export const FOOTER_VERSION = 'v3';
+
+/**
+ * Pure: the short sha from the build id define (vite.config.ts __BUILD_ID__, "<sha> <date>"), or
+ * "dev" when the define is missing, empty or the build had no git ("nogit").
+ */
+export function shortSha(buildId: string | undefined): string {
+  const sha = (buildId ?? '').trim().split(/\s+/)[0] ?? '';
+  return sha === '' || sha === 'nogit' || sha === 'unknown' ? 'dev' : sha;
+}
+
+/** Pure: the menu footer testers screenshot, "v3 build <short sha> seed <run seed>". */
+export function footerLine(buildId: string | undefined, runSeed: number): string {
+  return `${FOOTER_VERSION} build ${shortSha(buildId)} seed ${runSeed >>> 0}`;
 }
 
 /** Pure: Adventure button label. */

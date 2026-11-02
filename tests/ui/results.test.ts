@@ -159,8 +159,8 @@ describe('boss results line', () => {
 });
 
 describe('menu', () => {
-  it('title is Shape of War and Endless is shown', () => {
-    expect(GAME_TITLE).toBe('Shape of War');
+  it('title is Shapes of War and Endless is shown', () => {
+    expect(GAME_TITLE).toBe('Shapes of War');
     expect(SHOW_ENDLESS).toBe(true);
   });
   it('continue label names the highest unlocked level', () => {

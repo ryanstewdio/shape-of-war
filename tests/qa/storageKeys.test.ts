@@ -29,8 +29,10 @@ import {
   saveSpacePhysics,
   saveWeaponPickups,
   saveEffects,
+  saveDifficulty,
   saveMusic,
   EFFECTS_KEY,
+  DIFFICULTY_KEY,
   MENU_THEME_KEY,
   saveMenuTheme,
   MUSIC_KEY,
@@ -57,6 +59,7 @@ const IMPLEMENTED_KEYS: readonly string[] = [
   'sow.settings.spacePhysics',
   'sow.settings.weaponPickups',
   'sow.settings.effects',
+  'sow.settings.difficulty',
   'sow.settings.menuTheme',
   'sow.settings.music',
   'sow.settings.neon',
@@ -149,6 +152,7 @@ describe('declared storage keys', () => {
     SPACE_PHYSICS_KEY,
     WEAPON_PICKUPS_KEY,
     EFFECTS_KEY,
+    DIFFICULTY_KEY,
     MUSIC_KEY,
     MENU_THEME_KEY,
     RUN_SEED_KEY,
@@ -193,6 +197,7 @@ describe('keys written at run time', () => {
     saveSpacePhysics('medium', store);
     saveWeaponPickups(false, store);
     saveEffects('low', store);
+    saveDifficulty('hard', store);
     saveMusic(40, store);
     saveMenuTheme('1', store);
     loadRunSeed(() => 123456, store);

@@ -1,8 +1,9 @@
 // Level intro card and Endless "Ready" text (B7, docs/01 section 10). The card shows the level
-// number, objective, par and star thresholds, drone and super; it holds the sim for 1.5 s and a
+// number, objective, par and star thresholds, drone and super, boss and difficulty; it holds the sim for 1.5 s and a
 // tap skips it. Endless gets a 1.5 s "Ready" text instead, which does not take touches, so the
 // thumbs can settle on the sticks. The gate is pure and ticks on sim time, so a pause during the
 // intro freezes it.
+import type { Difficulty } from '../core/difficulty';
 import type { BossSpec, DroneKind, LevelDef, SuperKind } from '../levelgen/leveldef';
 import { bossName } from './boss';
 import { createScreen, el, type Screen } from './dom';
@@ -63,6 +64,15 @@ export interface IntroCard {
   kit: string;
   /** "Boss: <name>" on a boss level, '' otherwise (docs/13 section 9). */
   boss: string;
+  /** "Difficulty: Normal" (docs/14 item 6). */
+  difficulty: string;
+}
+
+const DIFFICULTY_NAMES: Readonly<Record<Difficulty, string>> = { easy: 'Easy', normal: 'Normal', hard: 'Hard' };
+
+/** Pure: the difficulty line on the intro card. */
+export function difficultyIntroLine(d: Difficulty): string {
+  return `Difficulty: ${DIFFICULTY_NAMES[d]}`;
 }
 
 /** Pure: "Boss: <name>" for a level that carries a boss, '' for every other level. */
@@ -74,6 +84,7 @@ export function bossIntroLine(boss: BossSpec | undefined): string {
 export function introCard(
   levelIndex: number,
   def: Pick<LevelDef, 'objective' | 'par' | 'stars' | 'drone' | 'superType'> & { boss?: BossSpec },
+  difficulty: Difficulty = 'normal',
 ): IntroCard {
   const [s1, s2, s3] = def.stars;
   return {
@@ -82,6 +93,7 @@ export function introCard(
     par: `Par ${formatInt(def.par)}   ★ ${formatInt(s1)}  ★★ ${formatInt(s2)}  ★★★ ${formatInt(s3)}`,
     kit: `${droneName(def.drone)}   ${superName(def.superType)}`,
     boss: bossIntroLine(def.boss),
+    difficulty: difficultyIntroLine(difficulty),
   };
 }
 
@@ -102,8 +114,10 @@ export function createIntroScreen(parent: HTMLElement, onSkip: () => void): Intr
   const boss = el('div', 'sow-sub');
   boss.style.fontWeight = '700';
   boss.setAttribute('data-intro', 'boss');
+  const diff = el('div', 'sow-sub');
+  diff.setAttribute('data-intro', 'difficulty');
   const hint = el('div', 'sow-small', 'tap to skip');
-  s.root.append(head, objective, par, kit, boss, hint);
+  s.root.append(head, objective, par, kit, boss, diff, hint);
   let armed = -1;
   s.root.addEventListener('pointerdown', (e) => {
     armed = e.pointerId;
@@ -114,7 +128,7 @@ export function createIntroScreen(parent: HTMLElement, onSkip: () => void): Intr
     onSkip();
   });
   const show = (ready: boolean): void => {
-    for (const e of [objective, par, kit, hint]) e.style.display = ready ? 'none' : '';
+    for (const e of [objective, par, kit, diff, hint]) e.style.display = ready ? 'none' : '';
     boss.style.display = ready || boss.textContent === '' ? 'none' : '';
     s.root.style.pointerEvents = ready ? 'none' : 'auto';
     s.root.style.background = ready ? 'transparent' : 'rgba(2, 4, 12, 0.45)';
@@ -128,6 +142,7 @@ export function createIntroScreen(parent: HTMLElement, onSkip: () => void): Intr
       par.textContent = card.par;
       kit.textContent = card.kit;
       boss.textContent = card.boss;
+      diff.textContent = card.difficulty;
       show(false);
     },
     showReady() {
