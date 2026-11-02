@@ -71,6 +71,7 @@ describe('ship on the cylinder', () => {
   it('flies across the seam five times with continuous position', () => {
     const w = cylGame();
     w.ship.invuln = 1e9;
+    w.drift.active = false; // pure ship speed: open drum drift has its own tests (drift.test.ts)
     const right = moving(1, 0);
     let crossings = 0;
     let steps = 0;

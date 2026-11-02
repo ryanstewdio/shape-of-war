@@ -11,6 +11,7 @@ import { isInsideOn } from './arena';
 import { keepScheduledEntry, waveClockHeld } from './bosses/core';
 import { advanceSegments } from './endless';
 import { defOf, kindOf } from './defs';
+import { difficultyOf, scaledCount } from './difficulty';
 import { init as initPinwheel } from './enemies/pinwheel';
 import { spawnSnake } from './enemies/snake';
 import { def as spawnerDef } from './enemies/spawner';
@@ -23,6 +24,8 @@ export const TELEGRAPH_SEC = 0.6;
 export const SAFE_RADIUS = 180;
 export const RECHECK_SEC = 0.5;
 const MAX_WAVES_PER_STEP = 64;
+/** Seconds between repeat passes of a wave's entries when difficulty raises its spawn count. */
+export const REPEAT_STAGGER = 0.35;
 
 function inRoster(w: World, k: EnemyKind): boolean {
   const r = w.level.roster;
@@ -68,10 +71,15 @@ export function enqueueDueWaves(w: World, clock: number): void {
     const at = wave.atSec + shift;
     if (clock < at) return;
     const seq = ++g.waveSeq;
-    for (let i = 0; i < wave.entries.length; i++) {
-      const e = wave.entries[i];
+    // Difficulty spawnRate: the first n entries (fewer), or every entry then repeats in order, each
+    // repeat pass REPEAT_STAGGER s later (more). Normal: n is the entry count, the v3 loop exactly.
+    const len = wave.entries.length;
+    const n = scaledCount(len, difficultyOf(w).spawnRate);
+    for (let i = 0; i < n; i++) {
+      const e = wave.entries[i % len];
+      const lag = i < len ? 0 : Math.floor(i / len) * REPEAT_STAGGER;
       // keepScheduledEntry thins the schedule to 0.6 while an Adventure boss lives (always true otherwise).
-      if (e !== undefined && inRoster(w, e.kind) && keepScheduledEntry(w)) pushEntry(w, e, at + e.tOffsetSec, seq);
+      if (e !== undefined && inRoster(w, e.kind) && keepScheduledEntry(w)) pushEntry(w, e, at + e.tOffsetSec + lag, seq);
     }
     g.nextWave++;
     if (g.nextWave >= s.waves.length) {

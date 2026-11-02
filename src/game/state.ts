@@ -2,6 +2,7 @@
 // session counters live here, keyed by the World object. Allocated once per world.
 import type { PaletteKey } from '../render/neon';
 import type { EndlessDef, EndlessSegmentDef, SpawnEntry, SuperKind } from '../levelgen/leveldef';
+import { difficultyOf, scaledHp, startingLives } from './difficulty';
 import type { EnemyDef } from './enemies/types';
 import { baseValue } from './scoring';
 import { arenaSpeedFactor } from './tuning';
@@ -272,6 +273,12 @@ export function defaultVibrate(ms: number): void {
   if (nav !== undefined && typeof nav.vibrate === 'function') nav.vibrate(ms);
 }
 
+/** Starting lives: the level's lives plus the difficulty's extraLives, at least 1 (normal: the level's). */
+function livesAtStart(w: World): number {
+  const extra = difficultyOf(w).extraLives;
+  return extra === 0 ? w.level.lives : startingLives(w.level.lives, extra);
+}
+
 const states = new WeakMap<World, GameState>();
 
 function createState(w: World): GameState {
@@ -284,7 +291,7 @@ function createState(w: World): GameState {
     mode: 'adventure',
     score: 0,
     multiplier: 1,
-    lives: w.level.lives,
+    lives: livesAtStart(w),
     bombs: w.level.bombs,
     kills: 0,
     superCharge: 0,
@@ -388,7 +395,7 @@ export function spawnFromDef(w: World, def: EnemyDef, x: number, y: number, tele
   if (id < 0) return -1;
   const g = gs(w);
   w.radius[id] = def.radius;
-  w.hp[id] = def.hp;
+  w.hp[id] = isHostile(def.kind) ? scaledHp(def.hp, difficultyOf(w).enemyHp) : def.hp;
   g.tele[id] = tele;
   g.aux[id] = 0;
   g.pvx[id] = 0;
@@ -396,10 +403,10 @@ export function spawnFromDef(w: World, def: EnemyDef, x: number, y: number, tele
   return id;
 }
 
-/** Multiplier for enemy linear speeds: speedScale x arena factor. */
+/** Multiplier for enemy linear speeds: speedScale x arena factor x difficulty enemySpeed. */
 export function enemySpeedScale(w: World): number {
   const g = gs(w);
-  return g.speedScale * g.arenaFactor;
+  return g.speedScale * g.arenaFactor * difficultyOf(w).enemySpeed;
 }
 
 /** Multiplier for enemy turn rates (Dart): speedScale only, per docs/01 section 6.6. */

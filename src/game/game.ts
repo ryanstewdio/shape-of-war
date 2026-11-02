@@ -1,5 +1,6 @@
 // Swarm session entry points for wiring in main.ts: createGame replaces createWorld, stepGame
 // replaces stepWorld in the loop's step hook. stepGame allocates nothing.
+import type { Difficulty } from '../core/difficulty';
 import { bus } from '../core/events';
 import type { InputState } from '../input/types';
 import type { EndlessDef, LevelDef } from '../levelgen/leveldef';
@@ -36,6 +37,8 @@ export interface GameOptions {
   weaponPickups?: boolean;
   /** Gravity well super nova after 5 to 7 s (G3C). Default on; the v1 golden tests turn it off to stay v1 identical. */
   wellNova?: boolean;
+  /** Release polish: Settings difficulty (docs/14 item 6). Default normal, bit identical to the v3 sim. */
+  difficulty?: Difficulty;
 }
 
 export const HUD_INTERVAL = 0.1;
@@ -45,7 +48,7 @@ export { setWeaponPickups };
 
 export function createGame(level: LevelDef, opts: GameOptions = {}): World {
   registerSwarmBehaviours();
-  const w = createWorld(level, opts.capacity);
+  const w = createWorld(level, opts.capacity, opts.difficulty ?? 'normal');
   const g = gs(w);
   if (opts.mode !== undefined) g.mode = opts.mode;
   if (opts.vibrate !== undefined) g.vibrate = opts.vibrate;
