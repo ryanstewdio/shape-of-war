@@ -11,6 +11,7 @@ import { clearPickup, collectPickup, livePickup, onScoringKill, PICKUP_LIFE, PIC
 import { killShip, triggerBomb } from '../../src/game/player';
 import { gs } from '../../src/game/state';
 import { stepShip } from '../../src/game/ship';
+import { TURBO_SCALE } from '../../src/game/turbo';
 import {
   BLADE_COOLDOWN,
   chooseDrop,
@@ -323,7 +324,7 @@ describe('turbo', () => {
     const press = aimAt(1, 0);
     press.superPressed = true;
     stepGame(w, DT, press);
-    expect(w.ship.fireRateScale).toBe(2);
+    expect(w.ship.fireRateScale).toBe(TURBO_SCALE);
     let peak = 0;
     for (let i = 0; i < 600; i++) {
       stepGame(w, DT, aimAt(Math.cos(i * 0.01), Math.sin(i * 0.01)));

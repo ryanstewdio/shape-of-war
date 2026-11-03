@@ -14,6 +14,8 @@ import {
   HOMING_TURN,
   stepSupers,
   SUPER_DURATION,
+  TURBO_DURATION,
+  TURBO_SCALE,
   superReady,
   superTimeLeft,
   triggerSuper,
@@ -76,23 +78,23 @@ describe('super charge', () => {
 });
 
 describe('turbo', () => {
-  it('doubles the volley rate for 5 s, then returns to 12 per second', () => {
+  it('R3: 2.5x the volley rate for 10 s, then returns to 12 per second', () => {
     const { w } = makeGame({ superType: 'turbo' });
     w.ship.invuln = 1e9;
     const input = aimRight();
     charge(w);
     expect(triggerSuper(w)).toBe(true);
-    expect(w.ship.fireRateScale).toBe(2);
+    expect(w.ship.fireRateScale).toBe(TURBO_SCALE);
     let volleyEvents = 0;
     bus.on('sfx', (s) => {
       if (s === 'shot') volleyEvents++;
     });
     for (let i = 0; i < 120; i++) stepGame(w, DT, input);
-    // One 'shot' sfx per step with a volley; at 24/s and 120 Hz every volley is its own step.
-    expect(volleyEvents).toBe(24);
+    // One 'shot' sfx per step with a volley; at 30/s and 120 Hz every volley is its own step.
+    expect(volleyEvents).toBe(30);
     expect(countBullets(w)).toBeGreaterThan(0);
-    expect(superTimeLeft(w)).toBeCloseTo(SUPER_DURATION - 1, 2);
-    for (let i = 0; i < 4 * 120 + 2; i++) stepGame(w, DT, input);
+    expect(superTimeLeft(w)).toBeCloseTo(TURBO_DURATION - 1, 2);
+    for (let i = 0; i < 9 * 120 + 2; i++) stepGame(w, DT, input);
     expect(gs(w).superActive).toBeNull();
     expect(w.ship.fireRateScale).toBe(1);
     expect(superTimeLeft(w)).toBe(0);
@@ -101,12 +103,12 @@ describe('turbo', () => {
     expect(volleyEvents).toBe(12);
   });
 
-  it('ends after exactly 5 s of sim time', () => {
+  it('R3: ends after exactly 10 s of sim time with no kills', () => {
     const { w } = makeGame({ superType: 'turbo' });
     charge(w);
     triggerSuper(w);
-    for (let i = 0; i < 599; i++) stepSupers(w, DT);
-    expect(w.ship.fireRateScale).toBe(2);
+    for (let i = 0; i < 1199; i++) stepSupers(w, DT);
+    expect(w.ship.fireRateScale).toBe(TURBO_SCALE);
     stepSupers(w, DT);
     stepSupers(w, DT);
     expect(w.ship.fireRateScale).toBe(1);

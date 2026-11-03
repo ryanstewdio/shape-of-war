@@ -18,6 +18,7 @@ import { removeEntity } from './remove';
 import { gs, isDroppedHazard, isHostile, isV2Enemy, SNAKE_SEGMENTS, SNAKE_SLOTS, type GameState, type KillFx } from './state';
 import { SHIP_RADIUS } from './ship';
 import { moveTo } from './steer';
+import { turboKill } from './turbo';
 import { bulletRadiusOf, capsuleHits, SAW_AT, SWEEP_MAX, SAW_COOL_MULT, sawHitDamage, sawPowered, shieldOf, SPIKE_PIERCE, SPIKE_RADIUS, weaponState } from './weapons';
 import { Kind, type World } from './world';
 
@@ -77,6 +78,7 @@ export function killEnemy(w: World, id: number, scored: boolean): void {
   }
   g.score += g.scoring.awardKill(w, k);
   if (countsForDestroy(k)) g.kills++;
+  turboKill(g); // R3: each scored kill extends a running Turbo
   if (k === Kind.SnakeHead) segmentBurst(w, id);
   removeEntity(w, id);
   emitKill(g, x, y, d.colour, k, id);

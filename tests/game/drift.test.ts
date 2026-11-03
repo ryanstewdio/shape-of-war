@@ -1,5 +1,6 @@
-// Release polish (docs/14 item 8): open drum drift. Cylinder levels with no obstacles drift every
-// live entity and the ship along u at 40 u/s, bursting to 160 u/s (4 x) for 1.5 s every 9 to 14 s.
+// Release polish (docs/14 item 8): open drum drift. Cylinder levels with no obstacles run a current
+// along u at 40 u/s, bursting to 160 u/s (4 x) for 1.5 s every 9 to 14 s. R3: the ship takes the
+// full current, player bullets half and every other entity a quarter, so a burst is felt.
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
 import {
@@ -12,13 +13,17 @@ import {
   burstWeight,
   createDrift,
   DRIFT_BASE,
+  DRIFT_BULLET_SHARE,
   DRIFT_BURST,
+  DRIFT_ENEMY_SHARE,
   DRIFT_WARN,
   driftDir,
   driftSpeedAt,
   GAP_MAX,
   GAP_MIN,
+  stepDrift,
 } from '../../src/game/drift';
+import { spawnBullet, STYLE_ORBIT } from '../../src/game/bullets';
 import * as grunt from '../../src/game/enemies/grunt';
 import { stepGame } from '../../src/game/game';
 import { SHIP_SPEED } from '../../src/game/ship';
@@ -156,7 +161,7 @@ describe('drift in the sim', () => {
     expect(w.drift.speed).toBe(DRIFT_BURST);
   });
 
-  it('drifts enemies too', () => {
+  it('R3: drifts enemies at a quarter of the current', () => {
     const w = drum();
     runTo(w, 1);
     const id = put(w, grunt.def, 300, 300);
@@ -167,9 +172,10 @@ describe('drift in the sim', () => {
     other.drift.active = false;
     stepGame(w, DT, idle());
     stepGame(other, DT, idle());
-    // Both ships: one drifted by dir*40*DT, the grunt the same plus its seek step toward it.
+    // The grunt moves its seek step plus a quarter of the dir*40*DT current.
     deltaTo(w, other.x[id2] ?? 0, other.y[id2] ?? 0, w.x[id] ?? 0, w.y[id] ?? 0, d);
-    expect(d.x).toBeCloseTo(w.drift.dir * DRIFT_BASE * DT, 3);
+    expect(DRIFT_ENEMY_SHARE).toBe(0.25);
+    expect(d.x).toBeCloseTo(w.drift.dir * DRIFT_BASE * DRIFT_ENEMY_SHARE * DT, 3);
   });
 
   it('the ship counters a full burst at full stick and makes headway', () => {
@@ -202,6 +208,91 @@ describe('drift in the sim', () => {
       put(w, grunt.def, -300, -200);
       for (let i = 0; i < 3000; i++) stepGame(w, DT, moving(i % 400 < 200 ? 1 : -1));
       return Float32Array.from(w.x);
+    };
+    expect(run()).toEqual(run());
+  });
+});
+
+describe('R3: drift is a current (ship full, player bullets half, enemies a quarter)', () => {
+  /** u displacement of the ship minus a grunt's, from stepDrift alone over seconds sec from t0. */
+  function relative(w: World, grunt: number, t0: number, sec: number): number {
+    w.time = t0;
+    let rel = 0;
+    for (let i = 0; i < Math.round(sec / DT); i++) {
+      const s0 = w.x[0] ?? 0;
+      const g0 = w.x[grunt] ?? 0;
+      stepDrift(w, DT);
+      rel += (w.x[0] ?? 0) - s0 - ((w.x[grunt] ?? 0) - g0);
+      w.time += DT;
+    }
+    return rel;
+  }
+
+  it('the ship to grunt displacement in a burst is at least 3x the base flow', () => {
+    const w = drum();
+    const g = put(w, grunt.def, 300, 300);
+    const at = burstGap(7, 0);
+    const base = relative(w, g, 1, BURST_HOLD) * w.drift.dir;
+    const burst = relative(w, g, at + BURST_RAMP, BURST_HOLD) * w.drift.dir;
+    expect(base).toBeCloseTo(DRIFT_BASE * (1 - DRIFT_ENEMY_SHARE) * BURST_HOLD, 1);
+    expect(burst).toBeCloseTo(DRIFT_BURST * (1 - DRIFT_ENEMY_SHARE) * BURST_HOLD, 1);
+    expect(burst).toBeGreaterThanOrEqual(3 * base);
+    // Against the drum itself the burst carries the ship 3 x the base drift further than a grunt.
+    expect(burst).toBeGreaterThanOrEqual(3 * DRIFT_BASE * BURST_HOLD - 0.05);
+  });
+
+  it('player bullets ride the current at half strength; orbit blades do not', () => {
+    const w = drum();
+    w.time = 1;
+    const b = spawnBullet(w.bullets, 100, 0, 0, 0, 5);
+    const o = spawnBullet(w.bullets, -100, 0, 0, 0, 5);
+    w.bullets.style[o] = STYLE_ORBIT;
+    stepDrift(w, DT);
+    expect(DRIFT_BULLET_SHARE).toBe(0.5);
+    expect((w.bullets.x[b] ?? 0) - 100).toBeCloseTo(w.drift.dir * DRIFT_BASE * 0.5 * DT, 5);
+    expect(w.bullets.x[o]).toBe(-100);
+  });
+
+  it('a dead ship is not drifted; enemies still are', () => {
+    const w = drum();
+    w.time = 1;
+    const g = put(w, grunt.def, 300, 300);
+    w.ship.active = false;
+    const sx = w.x[0];
+    const gx = w.x[g] ?? 0;
+    stepDrift(w, DT);
+    expect(w.x[0]).toBe(sx);
+    expect((w.x[g] ?? 0) - gx).toBeCloseTo(w.drift.dir * DRIFT_BASE * DRIFT_ENEMY_SHARE * DT, 3);
+  });
+
+  for (const diff of ['easy', 'normal'] as const) {
+    it(`${diff}: the ship at full stick makes headway against a full burst`, () => {
+      const { w } = makeGame(drumPatch(7), { difficulty: diff });
+      gs(w).invulnerable = true;
+      const at = burstGap(7, 0);
+      runTo(w, at + BURST_RAMP);
+      const against = moving(-w.drift.dir);
+      let made = 0;
+      for (let i = 0; i < Math.round(BURST_HOLD / DT) - 2; i++) {
+        const u = stepU(w, 0, against) * -w.drift.dir;
+        expect(u).toBeGreaterThan(0);
+        made += u;
+      }
+      const scale = diff === 'easy' ? 0.7 : 1;
+      expect(made).toBeCloseTo((SHIP_SPEED - DRIFT_BURST * scale) * (Math.round(BURST_HOLD / DT) - 2) * DT, 1);
+      expect(made).toBeGreaterThan(100);
+    });
+  }
+
+  it('is deterministic with bullets in flight: two runs match bit for bit', () => {
+    const run = (): number[] => {
+      const w = drum(13);
+      put(w, grunt.def, 300, 300);
+      put(w, grunt.def, -300, -200);
+      const input = moving(1);
+      input.aim = { active: true, x: 0, y: 1 };
+      for (let i = 0; i < 2400; i++) stepGame(w, DT, input);
+      return [...Array.from(w.x), ...Array.from(w.bullets.x)];
     };
     expect(run()).toEqual(run());
   });

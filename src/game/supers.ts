@@ -5,10 +5,11 @@
 //           most 540 deg/s. Bullets fired in the window keep homing until they expire.
 //   Detonate: the drone explodes, killing every enemy within 260 u (scored, geoms dropped,
 //           wells and snake segments excluded); the drone is absent for 3 s.
-//   Turbo: fire rate doubled (24 volleys/s for spread; every weapon doubles) for 5 s. G3A ("not
-//           worth using"): the ship's speed cap is also 25 percent higher and every spread, rapid
-//           and drone bullet fired in the window passes through one enemy before it stops.
-//           'fx:turbo' marks the start and the end for Glow and Chorus.
+//   Turbo: R3 ("needs to be longer and more valuable", numbers in turbo.ts): for 10 s every weapon
+//           fires 2.5x as fast, the ship's speed cap is 35 percent higher and every spread, rapid
+//           and drone bullet fired in the window passes through two enemies before it stops. Each
+//           scored kill while it runs adds 0.25 s, up to 15 s in all. 'fx:turbo' marks the start
+//           and the end for Glow and Chorus.
 import { bus } from '../core/events';
 import type { SuperKind } from '../levelgen/leveldef';
 import { STYLE_ORBIT } from './bullets';
@@ -18,6 +19,7 @@ import { SUPER_CHARGE_MAX } from './geoms';
 import { removeEntity } from './remove';
 import { gs } from './state';
 import { DEG } from './steer';
+import { TURBO_DURATION, TURBO_PIERCE, TURBO_SCALE, TURBO_SPEED_SCALE } from './turbo';
 import { Kind, type World } from './world';
 
 export const SUPER_DURATION = 5.0;
@@ -25,11 +27,7 @@ export const HOMING_RADIUS = 300;
 export const HOMING_TURN = 540 * DEG;
 export const DETONATE_RADIUS = 260;
 export const DRONE_ABSENT_SEC = 3.0;
-export const TURBO_SCALE = 2;
-/** Turbo speed cap multiplier (G3A). */
-export const TURBO_SPEED_SCALE = 1.25;
-/** Enemies a Turbo bullet passes through before it stops on the next (G3A). */
-export const TURBO_PIERCE = 1;
+export { TURBO_DURATION, TURBO_KILL_BONUS, TURBO_MAX_TOTAL, TURBO_PIERCE, TURBO_SCALE, TURBO_SPEED_SCALE } from './turbo';
 
 /** Turbo on or off: fire rate, speed cap, bullet pass through and the 'fx:turbo' event. */
 function setTurbo(w: World, on: boolean): void {
@@ -82,7 +80,8 @@ function startTimed(w: World, kind: SuperKind): void {
   const g = gs(w);
   if (g.superActive === 'turbo' && kind !== 'turbo') setTurbo(w, false);
   g.superActive = kind;
-  g.superTimer = SUPER_DURATION;
+  g.superTimer = kind === 'turbo' ? TURBO_DURATION : SUPER_DURATION;
+  g.turboTotal = kind === 'turbo' ? TURBO_DURATION : 0;
 }
 
 function endTimed(w: World): void {
@@ -90,6 +89,7 @@ function endTimed(w: World): void {
   if (g.superActive === 'turbo') setTurbo(w, false);
   g.superActive = null;
   g.superTimer = 0;
+  g.turboTotal = 0;
 }
 
 /** Scratch for surface deltas; read both fields before the next call. */
