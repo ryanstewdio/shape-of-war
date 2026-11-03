@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BOSS_IDS } from '../../src/levelgen/leveldef';
 import { BOSS_NAMES } from '../../src/ui/boss';
 import { bootFlow, reduceFlow, simRunning, type FlowAction } from '../../src/ui/flow';
-import { SUPER_DURATION, TURBO_PIERCE, TURBO_SCALE, TURBO_SPEED_SCALE } from '../../src/game/supers';
+import { SUPER_DURATION, TURBO_DURATION, TURBO_PIERCE, TURBO_SCALE, TURBO_SPEED_SCALE } from '../../src/game/supers';
 import { UI_CSS } from '../../src/ui/dom';
 import {
   arenaName,
@@ -151,10 +151,12 @@ describe('R3 intro card text', () => {
   });
 
   it('Turbo text is built from the supers.ts numbers', () => {
-    expect(TURBO_NUMBERS).toEqual({ fire: TURBO_SCALE, speed: TURBO_SPEED_SCALE, pierce: TURBO_PIERCE, durationSec: SUPER_DURATION });
+    expect(TURBO_NUMBERS).toEqual({ fire: TURBO_SCALE, speed: TURBO_SPEED_SCALE, pierce: TURBO_PIERCE, durationSec: TURBO_DURATION });
     const pct = Math.round((TURBO_SPEED_SCALE - 1) * 100);
-    const fire = TURBO_SCALE === 2 ? 'doubles fire rate' : `${TURBO_SCALE}x fire rate`;
-    expect(turboText()).toBe(`${fire}, ${pct}% faster ship, shots pierce ${TURBO_PIERCE} ${TURBO_PIERCE === 1 ? 'enemy' : 'enemies'}, ${SUPER_DURATION} s`);
+    const scale: number = TURBO_SCALE;
+    const pierce: number = TURBO_PIERCE;
+    const fire = scale === 2 ? 'doubles fire rate' : `${scale}x fire rate`;
+    expect(turboText()).toBe(`${fire}, ${pct}% faster ship, shots pierce ${pierce} ${pierce === 1 ? 'enemy' : 'enemies'}, ${TURBO_DURATION} s`);
     expect(turboText({ fire: 2, speed: 1.25, pierce: 1, durationSec: 5 })).toBe('doubles fire rate, 25% faster ship, shots pierce 1 enemy, 5 s');
     expect(turboText({ fire: 2.5, speed: 1.35, pierce: 2, durationSec: 10 })).toBe('2.5x fire rate, 35% faster ship, shots pierce 2 enemies, 10 s');
     expect(loadoutItems('attack', 'turbo').map(labelled)).toEqual(['Drone: Attack', `Super: Turbo (${turboText()})`]);

@@ -12,7 +12,7 @@
 // The gate is pure and ticks on sim time, so a pause during Ready freezes it.
 import { DIFFICULTIES, type Difficulty } from '../core/difficulty';
 import { INSANE_STARS, STAR_CAP } from '../core/stars';
-import { DETONATE_RADIUS, HOMING_RADIUS, SUPER_DURATION, TURBO_PIERCE, TURBO_SCALE, TURBO_SPEED_SCALE } from '../game/supers';
+import { DETONATE_RADIUS, HOMING_RADIUS, SUPER_DURATION, TURBO_DURATION, TURBO_PIERCE, TURBO_SCALE, TURBO_SPEED_SCALE } from '../game/supers';
 import type { BossSpec, DroneKind, LevelDef, ObjectiveDef, SuperKind } from '../levelgen/leveldef';
 import { bossName } from './boss';
 import { button, createScreen, el, type Screen } from './dom';
@@ -206,7 +206,7 @@ export interface TurboNumbers {
   readonly durationSec: number;
 }
 
-export const TURBO_NUMBERS: TurboNumbers = { fire: TURBO_SCALE, speed: TURBO_SPEED_SCALE, pierce: TURBO_PIERCE, durationSec: SUPER_DURATION };
+export const TURBO_NUMBERS: TurboNumbers = { fire: TURBO_SCALE, speed: TURBO_SPEED_SCALE, pierce: TURBO_PIERCE, durationSec: TURBO_DURATION }; // R3: Turbo has its own 10 s duration
 
 function trimNum(n: number): string {
   return String(Math.round(n * 100) / 100);
