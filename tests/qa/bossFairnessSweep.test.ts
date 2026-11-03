@@ -231,7 +231,8 @@ describe('fairness sweep: every boss, 60 s, six fuzzed sessions each (rules 5 an
     // Release polish (docs/14 item 7): fights last 210 to 260 s, so a 60 s session no longer kills a
     // boss. The sessions must still hurt it (measured: 16 of 60 take a fifth of the bar); the kill
     // path is swept on the legacy hit points below.
-    expect(all.filter((x) => x.bossLost >= 0.2).length).toBeGreaterThan(10);
+    // R1: boss hit points rose 40 percent, so a 60 s session takes a smaller share of the bar.
+    expect(all.filter((x) => x.bossLost >= 0.14).length).toBeGreaterThan(10);
     expect(Math.max(...all.map((x) => x.bossLost))).toBeLessThan(1);
     expect(Math.max(...all.map((x) => x.maxHazards))).toBe(MAX_HAZARDS);
     expect(Math.max(...all.map((x) => x.maxParts))).toBe(MAX_PARTS);

@@ -73,6 +73,7 @@ import { continueLabel, createMenuScreen, footerLine } from './ui/menu';
 import { gateSearch, isDev } from './ui/devGate';
 import { createSplashScreen } from './ui/splash';
 import { createPreviewWorld, previewRect, stepPreview } from './ui/preview';
+import { starsFor } from './game/objective';
 import { fallbackStatus, levelSuccess, objectiveProgress, type ObjectiveSnapshot } from './ui/objective';
 import { createPauseScreen } from './ui/pause';
 import { musicCue, type MusicCue } from './ui/musicFlow';
@@ -769,7 +770,7 @@ async function boot(): Promise<void> {
       // Fallback end check. On a boss level the sim alone decides a win: it holds for the boss.
       if (endCheck && fallbackStatus(level.objective, snapshotOf(world), level.boss !== undefined) !== 'running') {
         const score = scoreOf(world).score;
-        const st = flow.mode === 'endless' ? 0 : stars(score, level.par);
+        const st = flow.mode === 'endless' ? 0 : starsFor(score, level.stars); // R1: the level's own thresholds (v6 is 1, 1.25, 1.5 x par)
         bus.emit('game:over', { score, stars: st, levelIndex: flow.levelIndex, mode: flow.mode });
       }
     },
