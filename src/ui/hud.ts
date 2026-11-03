@@ -415,7 +415,12 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   const bar = el('div', 'sow-hud-bar');
   const fill = el('div', 'sow-hud-fill');
   const objLabel = el('div', 'sow-hud-item', '');
-  bar.append(fill);
+  // R2: a thin star line along the bottom of the bar (score toward the third star), with two ticks
+  // at the first and second star thresholds. Separate from the objective fill above it.
+  const starFill = el('div', 'sow-hud-star');
+  starFill.setAttribute('data-hud', 'starLine');
+  const starTicks = [el('div', 'sow-hud-tick'), el('div', 'sow-hud-tick')];
+  bar.append(fill, starFill, ...starTicks);
   const par = el('div', 'sow-hud-item', '');
   const lives = el('div', 'sow-hud-item', '');
   const bombs = el('div', 'sow-hud-item', '');
@@ -555,6 +560,14 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
     setObjective(p) {
       objLabel.textContent = p.label;
       fill.style.width = `${Math.round(p.fraction * 1000) / 10}%`;
+      const line = p.stars ?? null;
+      starFill.style.display = line === null ? 'none' : '';
+      starFill.style.width = `${Math.round((line ?? 0) * 1000) / 10}%`;
+      starTicks.forEach((t, i) => {
+        const at = p.starMarks?.[i];
+        t.style.display = line === null || at === undefined ? 'none' : '';
+        t.style.left = `${Math.round((at ?? 0) * 1000) / 10}%`;
+      });
     },
     layout(frame, buttons) {
       const B = frame.boxes;

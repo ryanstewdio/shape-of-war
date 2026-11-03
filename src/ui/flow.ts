@@ -7,8 +7,10 @@
 import type { Difficulty } from '../core/difficulty';
 import type { SpaceLevelSetting } from '../core/settings';
 import type { StarCount } from '../core/stars';
-export type ScreenId = 'boot' | 'menu' | 'levels' | 'playing' | 'paused' | 'results' | 'settings';
-export type Mode = 'adventure' | 'endless';
+// R2: 'freeplay' is the Free Play options screen (difficulty, arena, barriers); its Start begins a
+// run in mode 'freeplay', an Endless style run with no stars and no bests.
+export type ScreenId = 'boot' | 'menu' | 'levels' | 'freeplay' | 'playing' | 'paused' | 'results' | 'settings';
+export type Mode = 'adventure' | 'endless' | 'freeplay';
 
 export interface LevelResult {
   mode: Mode;
@@ -31,6 +33,10 @@ export interface LevelResult {
   space?: SpaceLevelSetting;
   /** V3: set only on a win where the level's boss died. The flat bonus the kill paid (docs/13 SPEC 3.6). */
   bossBonus?: number;
+  /** R2: seconds the run lasted (Endless and Free Play show it). */
+  timeSec?: number;
+  /** R2: the arena name for the results title line ("Circle"). */
+  arena?: string;
 }
 
 export interface FlowState {
@@ -59,6 +65,8 @@ export type FlowAction =
   | { type: 'openSettings' }
   | { type: 'openLevels' }
   | { type: 'closeLevels' }
+  | { type: 'openFreePlay' }
+  | { type: 'closeFreePlay' }
   | { type: 'closeSettings' };
 
 export function initialFlow(levelIndex = 1): FlowState {
@@ -89,6 +97,8 @@ export function reduceFlow(s: FlowState, a: FlowAction): FlowState {
     case 'tapStart':
       return s.screen === 'boot' ? { ...s, screen: 'menu' } : s;
     case 'start':
+      // Free Play starts only from its options screen; Adventure and Endless from the menu or level select.
+      if (a.mode === 'freeplay') return s.screen === 'freeplay' ? play(s, a.mode, 1) : s;
       return s.screen === 'menu' || s.screen === 'levels' ? play(s, a.mode, Math.max(1, Math.floor(a.levelIndex))) : s;
     case 'pause':
     case 'hidden':
@@ -115,6 +125,10 @@ export function reduceFlow(s: FlowState, a: FlowAction): FlowState {
       return s.screen === 'menu' ? { ...s, screen: 'levels' } : s;
     case 'closeLevels':
       return s.screen === 'levels' ? { ...s, screen: 'menu' } : s;
+    case 'openFreePlay':
+      return s.screen === 'menu' ? { ...s, screen: 'freeplay' } : s;
+    case 'closeFreePlay':
+      return s.screen === 'freeplay' ? { ...s, screen: 'menu' } : s;
     case 'closeSettings':
       return s.screen === 'settings' ? { ...s, screen: s.settingsFrom } : s;
   }

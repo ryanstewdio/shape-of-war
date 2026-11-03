@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ObjectiveDef } from '../../src/levelgen/leveldef';
-import { formatClock, formatInt, iconRun, starGlyphs } from '../../src/ui/format';
+import { formatClock, formatCompact, formatInt, iconRun, starGlyphs } from '../../src/ui/format';
 import {
   bossHolds,
   fallbackStatus,
@@ -10,6 +10,7 @@ import {
   objectiveProgress,
   objectiveStatus,
   objectiveText,
+  starLine,
   type ObjectiveSnapshot,
 } from '../../src/ui/objective';
 
@@ -46,9 +47,9 @@ describe('objectives', () => {
   });
 
   it('progress labels and fractions', () => {
-    expect(objectiveProgress(sit, snap({ score: 2500, elapsedSec: 30 }))).toEqual({ label: '2,500 / 5,000  1:00', fraction: 0.5 });
-    expect(objectiveProgress(surv, snap({ elapsedSec: 15 }))).toEqual({ label: 'Survive 0:45', fraction: 0.25 });
-    expect(objectiveProgress(destroy, snap({ kills: 50 }))).toEqual({ label: 'Destroy 40 / 40', fraction: 1 });
+    expect(objectiveProgress(sit, snap({ score: 2500, elapsedSec: 30 }))).toEqual({ label: 'Score 2,500 / 5,000  1:00', fraction: 0.5, stars: null, starMarks: [] });
+    expect(objectiveProgress(surv, snap({ elapsedSec: 15 }))).toEqual({ label: 'Survive 0:45', fraction: 0.25, stars: null, starMarks: [] });
+    expect(objectiveProgress(destroy, snap({ kills: 50 }))).toEqual({ label: 'Destroy 40 / 40', fraction: 1, stars: null, starMarks: [] });
     expect(objectiveText(destroy)).toBe('Destroy 40 enemies');
   });
 });
@@ -72,7 +73,7 @@ describe('boss hold label', () => {
 
   for (const [name, obj, passed, running] of cases) {
     it(`${name}: reads "Defeat the boss" with a full bar once the test passes while the boss lives`, () => {
-      expect(objectiveProgress(obj, passed, true)).toEqual({ label: 'Defeat the boss', fraction: 1 });
+      expect(objectiveProgress(obj, passed, true)).toEqual({ label: 'Defeat the boss', fraction: 1, stars: null, starMarks: [] });
       expect(bossHolds(obj, passed, true)).toBe(true);
     });
 
@@ -97,12 +98,12 @@ describe('boss hold label', () => {
   it('the timer label of a survive or scoreInTime level never shows a negative clock under the hold', () => {
     // The HUD label is replaced, but the unheld label must still clamp at 0:00 if the boss dies late.
     expect(objectiveProgress(surv, snap({ elapsedSec: 75 })).label).toBe('Survive 0:00');
-    expect(objectiveProgress(sit, snap({ score: 6000, elapsedSec: 120 })).label).toBe('Target met  0:00');
+    expect(objectiveProgress(sit, snap({ score: 6000, elapsedSec: 120 })).label).toBe('Score 6,000 / 5,000  0:00');
   });
 
   it('boss absent is the default, so every existing call is unchanged', () => {
-    expect(objectiveProgress(surv, snap({ elapsedSec: 15 }))).toEqual({ label: 'Survive 0:45', fraction: 0.25 });
-    expect(objectiveProgress(destroy, snap({ kills: 50 }))).toEqual({ label: 'Destroy 40 / 40', fraction: 1 });
+    expect(objectiveProgress(surv, snap({ elapsedSec: 15 }))).toEqual({ label: 'Survive 0:45', fraction: 0.25, stars: null, starMarks: [] });
+    expect(objectiveProgress(destroy, snap({ kills: 50 }))).toEqual({ label: 'Destroy 40 / 40', fraction: 1, stars: null, starMarks: [] });
   });
 });
 
@@ -148,11 +149,21 @@ describe('boss level end check and verdict', () => {
     expect(levelSuccess(surv, snap({ elapsedSec: 60 }), 'running', true)).toBe(false);
   });
 
-  it('levelSuccess on every other level is goalMet, whatever the outcome says (v1 behaviour kept)', () => {
-    for (const outcome of ['running', 'won', 'lost'] as const) {
-      expect(levelSuccess(destroy, snap({ kills: 40, lives: 0 }), outcome, false)).toBe(true);
-      expect(levelSuccess(surv, snap({ elapsedSec: 12 }), outcome, false)).toBe(false);
-    }
+  it('R2 P0: levelSuccess on every other level is the sim verdict when it has one', () => {
+    expect(levelSuccess(destroy, snap({ kills: 40, lives: 0 }), 'won', false)).toBe(true);
+    expect(levelSuccess(destroy, snap({ kills: 40, lives: 0 }), 'lost', false)).toBe(false);
+    expect(levelSuccess(surv, snap({ elapsedSec: 12 }), 'won', false)).toBe(true);
+    // The device bug: score target met early, then every life lost. goalMet says yes; the verdict is a loss.
+    expect(goalMet(sit, snap({ score: 6000, elapsedSec: 40, lives: 0 }))).toBe(true);
+    expect(levelSuccess(sit, snap({ score: 6000, elapsedSec: 40, lives: 0 }), 'lost', false)).toBe(false);
+  });
+
+  it('R2 P0: with no verdict yet (fallback check), the snapshot decides and lives out is never a win', () => {
+    expect(levelSuccess(sit, snap({ score: 6000, elapsedSec: 40, lives: 0 }), 'running', false)).toBe(false);
+    expect(levelSuccess(surv, snap({ elapsedSec: 70, lives: 0 }), 'running', false)).toBe(false);
+    expect(levelSuccess(sit, snap({ score: 6000, elapsedSec: 90, lives: 1 }), 'running', false)).toBe(true);
+    expect(levelSuccess(destroy, snap({ kills: 40, lives: 1 }), 'running', false)).toBe(true);
+    expect(levelSuccess(surv, snap({ elapsedSec: 12 }), 'running', false)).toBe(false);
   });
 });
 
@@ -175,5 +186,56 @@ describe('format', () => {
   });
   it('starGlyphs', () => {
     expect(starGlyphs(2)).toBe('★★☆');
+  });
+});
+
+// R2 item 3: the bar shows progress toward the objective the player must complete, with a clear
+// label, and a separate thin star line. A score or destroy objective never fills on the timer.
+describe('R2 objective bar', () => {
+  const sit: ObjectiveDef = { kind: 'scoreInTime', target: 3_300_000, timeLimitSec: 180 };
+  const surv: ObjectiveDef = { kind: 'survive', durationSec: 300 };
+  const destroy: ObjectiveDef = { kind: 'destroy', count: 530 };
+  const stars = [1000, 2000, 4000] as const;
+
+  it('survive: "Survive 4:12", fills with time survived', () => {
+    const p = objectiveProgress(surv, snap({ elapsedSec: 48 }), false, stars);
+    expect(p.label).toBe('Survive 4:12');
+    expect(p.fraction).toBeCloseTo(48 / 300);
+  });
+
+  it('destroy: "Destroy 312 / 530", fills with kills only, never with time', () => {
+    const a = objectiveProgress(destroy, snap({ kills: 312, elapsedSec: 10 }), false, stars);
+    const b = objectiveProgress(destroy, snap({ kills: 312, elapsedSec: 500 }), false, stars);
+    expect(a.label).toBe('Destroy 312 / 530');
+    expect(a.fraction).toBeCloseTo(312 / 530);
+    expect(b.fraction).toBe(a.fraction);
+    expect(objectiveProgress(destroy, snap({ kills: 1312 })).label).toBe('Destroy 530 / 530');
+  });
+
+  it('score: "Score 1.2M / 3.3M" with the time left, fills with the score only, never with time', () => {
+    const a = objectiveProgress(sit, snap({ score: 1_234_567, elapsedSec: 19 }), false, stars);
+    expect(a.label).toBe('Score 1.2M / 3.3M  2:41');
+    expect(a.fraction).toBeCloseTo(1_234_567 / 3_300_000);
+    // The old bar switched to a timer once the target was met; the new one stays on the score.
+    const met = objectiveProgress(sit, snap({ score: 4_000_000, elapsedSec: 20 }));
+    expect(met.fraction).toBe(1);
+    const later = objectiveProgress(sit, snap({ score: 1_234_567, elapsedSec: 170 }));
+    expect(later.fraction).toBe(a.fraction);
+  });
+
+  it('the star line is score toward the third threshold, with marks at the first and second', () => {
+    expect(objectiveProgress(surv, snap({ score: 1000 }), false, stars)).toMatchObject({ stars: 0.25, starMarks: [0.25, 0.5] });
+    expect(objectiveProgress(destroy, snap({ score: 9000 }), false, stars).stars).toBe(1);
+    expect(starLine(500, undefined)).toEqual({ stars: null, starMarks: [] });
+  });
+
+  it('formatCompact', () => {
+    expect(formatCompact(9999)).toBe('9,999');
+    expect(formatCompact(12_345)).toBe('12.3K');
+    expect(formatCompact(1_200_000)).toBe('1.2M');
+    expect(formatCompact(3_000_000)).toBe('3M');
+    expect(formatCompact(3_299_999)).toBe('3.2M');
+    expect(formatCompact(2_500_000_000)).toBe('2.5B');
+    expect(formatCompact(-5)).toBe('0');
   });
 });

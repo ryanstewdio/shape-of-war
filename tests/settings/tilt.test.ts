@@ -13,7 +13,6 @@ function fx(calls: string[]): SettingsEffects {
     setGlowPath: () => undefined,
     applyNeon: () => undefined,
     setVolume: () => undefined,
-    setSpacePhysics: () => undefined,
     setWeaponPickups: () => undefined,
     setEffectsTier: () => undefined,
     setTilt: (l) => calls.push(`tilt:${l}`),

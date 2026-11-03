@@ -1,6 +1,6 @@
 // R1: the iridescent 4th star (CSS only) and the intro card Difficulty selector.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DIFFICULTY_KEY, type StorageLike } from '../../src/core/settings';
+import { LAST_DIFFICULTY_KEY, type StorageLike } from '../../src/core/settings';
 import { neonParams } from '../../src/render/neon';
 import {
   FOURTH_STAR_CLASS,
@@ -14,13 +14,9 @@ import {
 import {
   armIntro,
   createIntroScreen,
-  holdIntro,
   introActive,
   introCard,
-  introHeld,
-  INTRO_HELD_HINT,
-  INTRO_SKIP_HINT,
-  skipIntro,
+  startIntro,
   tickIntro,
 } from '../../src/ui/intro';
 import { createLevelSelect } from '../../src/ui/levelSelect';
@@ -40,7 +36,6 @@ function fx(): SettingsEffects {
     setGlowPath: no,
     applyNeon: no,
     setVolume: no,
-    setSpacePhysics: no,
     setWeaponPickups: no,
     setEffectsTier: no,
     setTilt: no,
@@ -110,15 +105,11 @@ describe('4th star elements', () => {
 describe('intro card Difficulty selector', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('a held card stays up until tapped; only an active card can be held', () => {
-    const held = holdIntro(armIntro('adventure'));
-    expect(introHeld(held)).toBe(true);
-    let g = held;
+  it('R2: the card waits with no timer until Start', () => {
+    let g = armIntro('adventure');
     for (let i = 0; i < 6000; i++) g = tickIntro(g, 1 / 60);
     expect(introActive(g)).toBe(true);
-    expect(skipIntro(g)).toEqual({ kind: 'none', left: 0 });
-    expect(holdIntro(armIntro('endless'))).toEqual(armIntro('endless'));
-    expect(introHeld(holdIntro(skipIntro(armIntro('adventure'))))).toBe(false);
+    expect(startIntro(g, 'adventure')).toEqual({ kind: 'none', left: 0 });
   });
 
   it('shows four buttons marked with the card difficulty', () => {
@@ -131,34 +122,29 @@ describe('intro card Difficulty selector', () => {
     expect(card('insane').choice).toBe('insane');
   });
 
-  it('a tap saves the setting, applies to the card and never skips it', () => {
+  it('a chip tap saves the last choice, applies to the card and never starts it', () => {
     const root = installFakeDocument();
     const st = memory();
     const model = createSettingsModel(fx(), st);
-    let skips = 0;
-    let gate = armIntro('adventure');
+    let starts = 0;
     let applied = model.state.difficulty;
     const screen = createIntroScreen(
       asParent(root),
-      () => void skips++,
+      () => void starts++,
       (d) => {
         model.setDifficulty(d);
         applied = d; // main.ts rebuilds the level at d here
-        gate = holdIntro(gate);
       },
     );
     screen.showCard(card(model.state.difficulty));
-    const hint = root.all().find((e) => e.textContent === INTRO_SKIP_HINT);
-    expect(hint).toBeDefined();
     groupButtons(root, DIFFICULTY_ROW_LABEL)[3]?.tap();
-    expect(skips).toBe(0);
-    expect(st.data.get(DIFFICULTY_KEY)).toBe('insane');
+    expect(starts).toBe(0);
+    expect(st.data.get(LAST_DIFFICULTY_KEY)).toBe('insane');
     expect(model.state.difficulty).toBe('insane');
     expect(applied).toBe('insane');
-    expect(introHeld(gate)).toBe(true);
     expect(groupButtons(root, DIFFICULTY_ROW_LABEL).map((x) => x.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'false', 'true']);
-    screen.showCard(card(model.state.difficulty), true);
-    expect(hint?.textContent).toBe(INTRO_HELD_HINT);
+    root.all().find((e) => e.getAttribute('data-intro') === 'start')?.tap();
+    expect(starts).toBe(1);
   });
 
   it('the Ready text hides the selector', () => {

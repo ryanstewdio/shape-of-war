@@ -16,7 +16,7 @@ export const GAME_TITLE = 'Shapes of War';
 export const SHOW_ENDLESS = true;
 /** Delay between one row's entrance and the next. */
 export const MENU_STAGGER_MS = 200;
-export const MENU_ROWS = 4;
+export const MENU_ROWS = 5; // R2: Adventure, Level select, Endless, Free Play, Settings
 /** Clear space kept between the panel and the safe area edge: room for the outer border and glow. */
 export const MENU_MARGIN = 12;
 /** The title is about this many ems wide ("Shapes of War", bold, 0.06 em tracking), used to size it to the panel. */
@@ -26,6 +26,8 @@ export interface MenuActions {
   adventure(): void;
   levels(): void;
   endless(): void;
+  /** R2: opens the Free Play options screen. */
+  freePlay(): void;
   settings(): void;
 }
 
@@ -130,7 +132,9 @@ function build(safe: Rect, arrangement: MenuArrangement, t: Tier): MenuLayout {
   const infoH = lineH(t.infoSize, 1.5) * 2; // room for two lines (pre-line), the seed note can wrap
   const fH = footH(t.footSize);
   let bodyH: number;
-  if (arrangement === 'side') bodyH = Math.max(titleH, rowsH + t.sectionGap + infoH);
+  // R2: five rows. On the cover screen the info line sits under the title in the left column, so the
+  // rows column holds only the rows and the panel still fits the short screen.
+  if (arrangement === 'side') bodyH = Math.max(titleH + t.sectionGap + infoH, rowsH);
   else bodyH = titleH + t.sectionGap + rowsH + t.sectionGap + infoH;
   const panelH = 2 * t.pad + bodyH + t.sectionGap + fH;
   const panel: Rect = { x: safe.x + (safe.w - panelW) / 2, y: safe.y + (safe.h - panelH) / 2, w: panelW, h: panelH };
@@ -142,9 +146,10 @@ function build(safe: Rect, arrangement: MenuArrangement, t: Tier): MenuLayout {
   let info: Rect;
   if (arrangement === 'side') {
     rowsX = ix + leftW + colGap;
-    rowsY = iy + (bodyH - rowsH - t.sectionGap - infoH) / 2;
-    title = { x: ix, y: iy + (bodyH - titleH) / 2, w: leftW, h: titleH };
-    info = { x: rowsX, y: rowsY + rowsH + t.sectionGap, w: rightW, h: infoH };
+    rowsY = iy + (bodyH - rowsH) / 2;
+    const leftH = titleH + t.sectionGap + infoH;
+    title = { x: ix, y: iy + (bodyH - leftH) / 2, w: leftW, h: titleH };
+    info = { x: ix, y: title.y + titleH + t.sectionGap, w: leftW, h: infoH };
   } else {
     rowsX = ix;
     rowsY = iy + titleH + t.sectionGap;
@@ -232,9 +237,10 @@ export function createMenuScreen(parent: HTMLElement, actions: MenuActions): Men
   const adventure = row('Adventure', () => actions.adventure());
   const levels = row('Level select', () => actions.levels());
   const endless = row('Endless', () => actions.endless());
+  const freePlay = row('Free Play', () => actions.freePlay());
   const settings = row('Settings', () => actions.settings());
   endless.style.display = SHOW_ENDLESS ? '' : 'none';
-  rowsBox.append(adventure, levels, endless, settings);
+  rowsBox.append(adventure, levels, endless, freePlay, settings);
   paintFocus();
   const info = el('div', 'sow-menu-info', '');
   info.style.gridArea = 'info';
@@ -263,9 +269,9 @@ export function createMenuScreen(parent: HTMLElement, actions: MenuActions): Men
       if (L.arrangement === 'side') {
         p.gridTemplateColumns = `${L.leftW}px ${L.rightW}px`;
         p.gridTemplateRows = 'auto auto auto';
-        p.gridTemplateAreas = '"title rows" "title info" "foot foot"';
+        p.gridTemplateAreas = '"title rows" "info rows" "foot foot"';
         p.columnGap = `${L.colGap}px`;
-        title.style.alignSelf = 'center';
+        title.style.alignSelf = 'end';
         info.style.alignSelf = 'start';
       } else {
         p.gridTemplateColumns = '1fr';

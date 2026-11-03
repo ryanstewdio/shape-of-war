@@ -2,6 +2,7 @@
 // One key per value so a corrupt value cannot poison the rest. Every storage access is wrapped
 // in try/catch: private mode, quota or a missing localStorage fall back to an in memory copy,
 // then to defaults.
+import type { StartBonus } from './bonus';
 import type { Difficulty } from './difficulty';
 import { asStarCount, type StarCount } from './stars';
 
@@ -242,6 +243,94 @@ export function loadDifficulty(storage: StorageLike | null = defaultStorage()): 
 
 export function saveDifficulty(d: Difficulty, storage: StorageLike | null = defaultStorage()): void {
   writeRaw(storage, DIFFICULTY_KEY, parseDifficulty(d));
+}
+
+// R2 (Ryan): difficulty is chosen on the card at the start of every level and of Endless, so the
+// Settings Difficulty and Space physics rows are gone. sow.settings.difficulty and
+// sow.settings.spacePhysics stay readable (loadDifficulty, loadSpacePhysics) but nothing writes or
+// applies them any more. The last choice made on a card lives in sow.progress.difficulty; on a
+// phone that has never chosen on a card, the old Settings value seeds it once, so the card
+// preselects what the player last set.
+
+export const LAST_DIFFICULTY_KEY = 'sow.progress.difficulty';
+
+/** The difficulty the card preselects: the last card choice, else the old Settings value, else Normal. */
+export function loadLastDifficulty(storage: StorageLike | null = defaultStorage()): Difficulty {
+  const raw = readRaw(storage, LAST_DIFFICULTY_KEY);
+  return raw !== null ? parseDifficulty(raw) : loadDifficulty(storage);
+}
+
+export function saveLastDifficulty(d: Difficulty, storage: StorageLike | null = defaultStorage()): void {
+  writeRaw(storage, LAST_DIFFICULTY_KEY, parseDifficulty(d));
+}
+
+/** Pure (R2): space physics follows difficulty: Easy off, Normal low, Hard medium, Insane high. */
+export const SPACE_FOR_DIFFICULTY: Readonly<Record<Difficulty, SpaceLevelSetting>> = Object.freeze({
+  easy: 'off',
+  normal: 'low',
+  hard: 'medium',
+  insane: 'high',
+});
+
+export function spaceForDifficulty(d: Difficulty): SpaceLevelSetting {
+  return SPACE_FOR_DIFFICULTY[parseDifficulty(d)];
+}
+
+// R2 par reward: the choice made on a results screen where par was reached, held for the start of
+// the next Adventure level. JSON { "level": <index>, "bonus": StartBonus }. Taken once: the level
+// start that uses it clears the key ('' reads as none).
+
+export const START_BONUS_KEY = 'sow.progress.startBonus';
+
+export interface PendingBonus {
+  readonly level: number;
+  readonly bonus: StartBonus;
+}
+
+const BASE_WEAPONS: readonly string[] = ['spread', 'rapid', 'pierce', 'orbit'];
+
+/** Pure: a StartBonus from untrusted JSON, or null. */
+export function parseStartBonus(v: unknown): StartBonus | null {
+  if (typeof v !== 'object' || v === null || !('kind' in v)) return null;
+  if (v.kind === 'life') return { kind: 'life' };
+  if (v.kind === 'bomb') return { kind: 'bomb' };
+  if (v.kind === 'weapon' && 'weapon' in v && typeof v.weapon === 'string' && BASE_WEAPONS.includes(v.weapon)) {
+    return { kind: 'weapon', weapon: v.weapon as 'spread' | 'rapid' | 'pierce' | 'orbit' };
+  }
+  return null;
+}
+
+/** Pure: the stored pending reward, or null for anything malformed. */
+export function parsePendingBonus(raw: string | null): PendingBonus | null {
+  if (raw === null || raw === '') return null;
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (typeof v !== 'object' || v === null || !('level' in v) || !('bonus' in v)) return null;
+    const level = typeof v.level === 'number' && Number.isInteger(v.level) && v.level >= FIRST_LEVEL ? v.level : null;
+    const bonus = parseStartBonus(v.bonus);
+    return level === null || bonus === null ? null : { level, bonus };
+  } catch {
+    return null;
+  }
+}
+
+export function loadPendingBonus(storage: StorageLike | null = defaultStorage()): PendingBonus | null {
+  return parsePendingBonus(readRaw(storage, START_BONUS_KEY));
+}
+
+export function savePendingBonus(p: PendingBonus, storage: StorageLike | null = defaultStorage()): void {
+  writeRaw(storage, START_BONUS_KEY, JSON.stringify({ level: Math.floor(p.level), bonus: p.bonus }));
+}
+
+/**
+ * Take the reward for a level start: returns it and clears the key when it was held for `level`,
+ * otherwise null and the key is left alone (a Retry of the level that earned it keeps it waiting).
+ */
+export function takePendingBonus(level: number, storage: StorageLike | null = defaultStorage()): StartBonus | null {
+  const p = loadPendingBonus(storage);
+  if (p === null || p.level !== Math.floor(level)) return null;
+  writeRaw(storage, START_BONUS_KEY, '');
+  return p.bonus;
 }
 
 // Menu theme (chorus menu-themes request): the raw index text "0" to "2" of the last title theme, so
@@ -495,10 +584,11 @@ export function ensureSchema(storage: StorageLike | null = defaultStorage()): nu
   return SCHEMA_VERSION;
 }
 
-/** Settings screen "Reset progress": unlocked back to 1 and the Adventure table cleared. */
+/** Settings screen "Reset progress": unlocked back to 1, the Adventure table cleared and any held par reward dropped. */
 export function resetProgress(storage: StorageLike | null = defaultStorage()): void {
   writeRaw(storage, UNLOCKED_KEY, String(FIRST_LEVEL));
   writeRaw(storage, ADVENTURE_SCORES_KEY, '{}');
+  writeRaw(storage, START_BONUS_KEY, '');
 }
 
 /** Pure: a typed run seed, or null. Accepts 1 to 10 digits up to 4294967295. */

@@ -1,34 +1,33 @@
 // Settings screen (docs/01 section 10, docs/03 sections 7 and 8, SPEC 4). Neon slider 0 to 100
-// over a live preview arena, Volume slider, Music slider (v2, 0 is off), Space physics (Off, Low,
-// Medium, High; v2), Weapon pickups (On, Off; v2), Effects (Low, Standard, High; v2), 3D tilt (Off, Low, High; v3), Difficulty (Easy, Normal,
-// Hard, Insane; release polish and R1, applied from the next level start), Show FPS,
+// over a live preview arena, Volume slider, Music slider (v2, 0 is off), Weapon pickups (On, Off;
+// v2), Effects (Low, Standard, High; v2), 3D tilt (Off, Low, High; v3), Show FPS,
 // Bloom / Fallback, Play seed, Reset progress, and a hidden debug menu behind five taps on the
 // version label. The same screen opens from the menu and from the pause screen.
+// R2: the Difficulty and Space physics rows are gone. Difficulty is chosen on the card at every
+// level start; space physics follows it (core/settings spaceForDifficulty). The model keeps
+// `difficulty` as the card's last choice (sow.progress.difficulty), so the card preselects it.
 // The model is pure apart from injected effects, so tests drive it with fakes. applyNeon is
 // throttled to one call per animation frame while dragging; the value is saved on finger up.
 import { DIFFICULTIES, type Difficulty } from '../core/difficulty';
 import {
   clampMusic,
   EFFECTS_TIER_SETTINGS,
-  loadDifficulty,
+  loadLastDifficulty,
   loadEffects,
   loadGlowPath,
   loadMusic,
   loadSettings,
-  loadSpacePhysics,
   loadTilt,
   loadWeaponPickups,
   parseDifficulty,
   parseEffects,
   parseSeedInput,
-  parseSpacePhysics,
   parseTilt,
-  saveDifficulty,
+  saveLastDifficulty,
   saveEffects,
   saveGlowPath,
   saveMusic,
   saveSetting,
-  saveSpacePhysics,
   saveTilt,
   saveWeaponPickups,
   SPACE_LEVELS,
@@ -51,11 +50,6 @@ export interface SettingsEffects {
   applyNeon(n: number): void;
   /** Master volume 0 to 100 (Glow's synth when merged, else a no-op). */
   setVolume(v: number): void;
-  /**
-   * Space physics level (v2). Called at boot, then once per change. Fable glue maps it to Forge's
-   * setShipSpace(world, level); until then main.ts leaves it a no-op.
-   */
-  setSpacePhysics(level: SpaceLevelSetting): void;
   /**
    * Weapon pickups on or off (v2). Called at boot, then once per change. Fable glue maps it to
    * Swarm's setWeaponPickups(world, on); until then main.ts leaves it a no-op.
@@ -86,11 +80,10 @@ export interface SettingsView {
   volume: number;
   showFps: boolean;
   glowPath: GlowPathSetting;
-  spacePhysics: SpaceLevelSetting;
   weaponPickups: boolean;
   effects: EffectsTierSetting;
   tilt: TiltSetting;
-  /** Difficulty for the next level start (sow.settings.difficulty). */
+  /** R2: the last difficulty chosen on a card (sow.progress.difficulty); the card preselects it. */
   difficulty: Difficulty;
   /** Music volume 0 to 100, 0 is off. */
   music: number;
@@ -108,15 +101,13 @@ export interface SettingsModel {
   volumeCommit(v: number): void;
   setShowFps(on: boolean): void;
   setGlowPath(p: GlowPathSetting): void;
-  /** Row tap: persist sow.settings.spacePhysics and call the effect once. Same level: no effect call. */
-  setSpacePhysics(level: SpaceLevelSetting): void;
   /** Row tap: persist sow.settings.weaponPickups and call the effect once. Same value: no effect call. */
   setWeaponPickups(on: boolean): void;
   /** Row tap: persist sow.settings.effects and call the effect once. Same tier: no effect call. */
   setEffectsTier(tier: EffectsTierSetting): void;
   /** Row tap: persist sow.settings.tilt and call the effect once. Same level: no effect call. */
   setTilt(level: TiltSetting): void;
-  /** Row tap: persist sow.settings.difficulty. No effect call: main.ts reads state.difficulty when a level starts. */
+  /** Card tap (R2): persist sow.progress.difficulty. No effect call: main.ts reads state.difficulty when a level starts. */
   setDifficulty(d: Difficulty): void;
   /** Slider drag: state now, and the effect once per distinct value. Nothing is saved yet. */
   musicInput(v: number): void;
@@ -144,11 +135,10 @@ export function createSettingsModel(fx: SettingsEffects, storage?: StorageLike |
     volume: loaded.volume,
     showFps: loaded.showFps,
     glowPath: loadGlowPath(storage),
-    spacePhysics: loadSpacePhysics(storage),
     weaponPickups: loadWeaponPickups(storage),
     effects: loadEffects(storage),
     tilt: loadTilt(storage),
-    difficulty: loadDifficulty(storage),
+    difficulty: loadLastDifficulty(storage),
     music: loadMusic(storage),
   };
   /** The music value the effect last received, so a finger up never repeats it. */
@@ -161,7 +151,6 @@ export function createSettingsModel(fx: SettingsEffects, storage?: StorageLike |
       fx.setVolume(state.volume);
       fx.setShowFps(state.showFps);
       fx.setGlowPath(state.glowPath);
-      fx.setSpacePhysics(state.spacePhysics);
       fx.setWeaponPickups(state.weaponPickups);
       fx.setEffectsTier(state.effects);
       fx.setTilt(state.tilt);
@@ -196,13 +185,6 @@ export function createSettingsModel(fx: SettingsEffects, storage?: StorageLike |
       saveGlowPath(p, storage);
       fx.setGlowPath(p);
     },
-    setSpacePhysics(level) {
-      const next = parseSpacePhysics(level);
-      const changed = next !== state.spacePhysics;
-      state.spacePhysics = next;
-      saveSpacePhysics(next, storage); // always written, so a failed earlier write heals on the next tap
-      if (changed) fx.setSpacePhysics(next);
-    },
     setWeaponPickups(on) {
       const changed = on !== state.weaponPickups;
       state.weaponPickups = on;
@@ -225,7 +207,7 @@ export function createSettingsModel(fx: SettingsEffects, storage?: StorageLike |
     },
     setDifficulty(d) {
       state.difficulty = parseDifficulty(d);
-      saveDifficulty(state.difficulty, storage);
+      saveLastDifficulty(state.difficulty, storage);
     },
     musicInput(v) {
       state.music = clampMusic(v);
@@ -477,21 +459,8 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
   const toggles = el('div', 'sow-row');
   toggles.append(fps, glow);
 
-  // Space physics: label and four buttons on one line (the cover screen is short), selected one lit.
-  const spaceRow = el('div', 'sow-choice');
-  spaceRow.setAttribute('role', 'group');
-  spaceRow.setAttribute('aria-label', SPACE_ROW_LABEL);
-  const spaceButtons = SPACE_LEVELS.map((level) =>
-    button(spaceLabel(level), () => {
-      model.setSpacePhysics(level);
-      refresh();
-    }),
-  );
-  const spaceBtns = el('div', 'sow-choice-btns');
-  spaceBtns.append(...spaceButtons);
-  spaceRow.append(el('div', 'sow-choice-label', SPACE_ROW_LABEL), spaceBtns);
 
-  // Weapon pickups: label with On and Off buttons, the same row shape as Space physics.
+  // Weapon pickups: label with On and Off buttons on one line (the cover screen is short), selected one lit.
   const weaponRow = el('div', 'sow-choice');
   weaponRow.setAttribute('role', 'group');
   weaponRow.setAttribute('aria-label', WEAPON_ROW_LABEL);
@@ -533,19 +502,6 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
   tiltBtns.append(...tiltButtons);
   tiltRow.append(el('div', 'sow-choice-label', TILT_ROW_LABEL), tiltBtns);
 
-  // Difficulty: label with Easy, Normal, Hard and Insane buttons, the same row shape as Effects.
-  const difficultyRow = el('div', 'sow-choice');
-  difficultyRow.setAttribute('role', 'group');
-  difficultyRow.setAttribute('aria-label', DIFFICULTY_ROW_LABEL);
-  const difficultyButtons = DIFFICULTIES.map((d) =>
-    button(difficultyLabel(d), () => {
-      model.setDifficulty(d);
-      refresh();
-    }),
-  );
-  const difficultyBtns = el('div', 'sow-choice-btns');
-  difficultyBtns.append(...difficultyButtons);
-  difficultyRow.append(el('div', 'sow-choice-label', DIFFICULTY_ROW_LABEL), difficultyBtns);
 
   const seedField = el('input', 'sow-input');
   seedField.type = 'text';
@@ -601,7 +557,7 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
     if (r.fire) debugRow.style.display = debugRow.style.display === 'none' ? '' : 'none';
   });
 
-  panel.append(title, neon.root, volume.root, music.root, difficultyRow, spaceRow, weaponRow, effectsRow, tiltRow, toggles, seedRow, seedLine, bottom, debugRow, version);
+  panel.append(title, neon.root, volume.root, music.root, weaponRow, effectsRow, tiltRow, toggles, seedRow, seedLine, bottom, debugRow, version);
   s.root.append(panel);
 
   function refresh(): void {
@@ -610,12 +566,6 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
     music.set(model.state.music);
     fps.textContent = fpsLabel(model.state.showFps);
     glow.textContent = glowLabel(model.state.glowPath);
-    spaceButtonStates(model.state.spacePhysics).forEach((st, i) => {
-      const b = spaceButtons[i];
-      if (b === undefined) return;
-      b.classList.toggle('sow-on', st.selected);
-      b.setAttribute('aria-pressed', st.selected ? 'true' : 'false');
-    });
     weaponButtonStates(model.state.weaponPickups).forEach((st, i) => {
       const b = weaponButtons[i];
       if (b === undefined) return;
@@ -624,12 +574,6 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
     });
     effectsButtonStates(model.state.effects).forEach((st, i) => {
       const b = effectsButtons[i];
-      if (b === undefined) return;
-      b.classList.toggle('sow-on', st.selected);
-      b.setAttribute('aria-pressed', st.selected ? 'true' : 'false');
-    });
-    difficultyButtonStates(model.state.difficulty).forEach((st, i) => {
-      const b = difficultyButtons[i];
       if (b === undefined) return;
       b.classList.toggle('sow-on', st.selected);
       b.setAttribute('aria-pressed', st.selected ? 'true' : 'false');

@@ -1,13 +1,16 @@
 // Release polish (docs/14 item 6): sow.settings.difficulty persistence, the Settings model and the
-// Difficulty row. No real localStorage: a Map backed store, and a store that throws.
+// card's last choice (R2). No real localStorage: a Map backed store, and a store that throws.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DIFFICULTIES } from '../../src/core/difficulty';
 import {
   DEFAULT_DIFFICULTY,
   DIFFICULTY_KEY,
+  LAST_DIFFICULTY_KEY,
   loadDifficulty,
+  loadLastDifficulty,
   parseDifficulty,
   saveDifficulty,
+  saveLastDifficulty,
   type StorageLike,
 } from '../../src/core/settings';
 import {
@@ -44,7 +47,6 @@ function fx(): SettingsEffects & { calls: string[] } {
     setGlowPath: log('glowPath'),
     applyNeon: log('neon'),
     setVolume: log('volume'),
-    setSpacePhysics: log('space'),
     setWeaponPickups: log('weapons'),
     setEffectsTier: log('effects'),
     setTilt: log('tilt'),
@@ -102,8 +104,10 @@ describe('difficulty key', () => {
   });
 });
 
-describe('difficulty in the settings model', () => {
-  it('loads the stored value and persists a tap without calling any effect', () => {
+// R2: the Settings Difficulty row is gone. The model's difficulty is the card's last choice,
+// stored in sow.progress.difficulty; the old sow.settings.difficulty is read only, to seed it once.
+describe('difficulty in the settings model (R2: the card\'s last choice)', () => {
+  it('seeds from the old Settings key, then persists a card tap in sow.progress.difficulty without any effect', () => {
     const s = memory();
     s.data.set(DIFFICULTY_KEY, 'hard');
     const f = fx();
@@ -111,19 +115,33 @@ describe('difficulty in the settings model', () => {
     expect(m.state.difficulty).toBe('hard');
     m.setDifficulty('easy');
     expect(m.state.difficulty).toBe('easy');
-    expect(s.data.get(DIFFICULTY_KEY)).toBe('easy');
+    expect(s.data.get(LAST_DIFFICULTY_KEY)).toBe('easy');
+    expect(s.data.get(DIFFICULTY_KEY)).toBe('hard'); // the old key is never written again
     expect(f.calls).toEqual([]);
     expect(createSettingsModel(fx(), s).state.difficulty).toBe('easy');
   });
 
-  it('writes only its own key', () => {
+  it('writes only the last choice key', () => {
     const s = memory();
     createSettingsModel(fx(), s).setDifficulty('hard');
-    expect([...s.data.keys()]).toEqual([DIFFICULTY_KEY]);
+    expect([...s.data.keys()]).toEqual([LAST_DIFFICULTY_KEY]);
+  });
+
+  it('loadLastDifficulty: the card key wins, a corrupt one reads as normal, a throwing store as normal', () => {
+    const s = memory();
+    expect(loadLastDifficulty(s)).toBe('normal');
+    s.data.set(DIFFICULTY_KEY, 'insane');
+    expect(loadLastDifficulty(s)).toBe('insane');
+    saveLastDifficulty('easy', s);
+    expect(loadLastDifficulty(s)).toBe('easy');
+    s.data.set(LAST_DIFFICULTY_KEY, 'nightmare');
+    expect(loadLastDifficulty(s)).toBe('normal');
+    expect(loadLastDifficulty(throwing)).toBe('normal');
+    expect(() => saveLastDifficulty('hard', throwing)).not.toThrow();
   });
 });
 
-describe('Difficulty row', () => {
+describe('Difficulty labels', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('labels are Easy, Normal, Hard and Insane with the current one marked', () => {
@@ -134,22 +152,10 @@ describe('Difficulty row', () => {
     expect(difficultyButtonStates('hard').map((b) => b.label)).toEqual(['Easy', 'Normal', 'Hard', 'Insane']);
   });
 
-  it('is on the settings screen; a tap lights the button and saves the key', () => {
+  it('R2: the row is no longer on the settings screen', () => {
     const root = installFakeDocument();
-    const s = memory();
-    const model = createSettingsModel(fx(), s);
-    const screen = createSettingsScreen(asParent(root), model, actions());
+    const screen = createSettingsScreen(asParent(root), createSettingsModel(fx(), memory()), actions());
     screen.show();
-    const buttons = groupButtons(root, DIFFICULTY_ROW_LABEL);
-    expect(buttons.map((b) => b.textContent)).toEqual(['Easy', 'Normal', 'Hard', 'Insane']);
-    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false', 'false']);
-    buttons[2]?.tap();
-    expect(model.state.difficulty).toBe('hard');
-    expect(s.data.get(DIFFICULTY_KEY)).toBe('hard');
-    expect(buttons.map((b) => b.classList.contains('sow-on'))).toEqual([false, false, true, false]);
-    buttons[3]?.tap();
-    expect(model.state.difficulty).toBe('insane');
-    expect(s.data.get(DIFFICULTY_KEY)).toBe('insane');
-    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'false', 'true']);
+    expect(groupButtons(root, DIFFICULTY_ROW_LABEL)).toEqual([]);
   });
 });

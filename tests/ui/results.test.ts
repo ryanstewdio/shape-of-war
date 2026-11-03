@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LevelResult } from '../../src/ui/flow';
 import { continueLabel, GAME_TITLE, SHOW_ENDLESS } from '../../src/ui/menu';
-import { badgeText, bossLine, createResultsScreen, physicsLine, resultLines } from '../../src/ui/results';
+import { badgeText, bossLine, createResultsScreen, parFraction, physicsLine, resultLines } from '../../src/ui/results';
 import { asParent, installFakeDocument, type FakeEl } from './fakeDom';
 
 const base: LevelResult = {
@@ -18,20 +18,80 @@ const base: LevelResult = {
   hash: '0badf00d',
 };
 
-describe('results screen text', () => {
-  it('success shows score, stars, par, best and hash', () => {
-    const t = resultLines(base);
+describe('results screen text (R2 layout)', () => {
+  it('success: headline, title line, score against par, stars, best, hash, Next', () => {
+    const t = resultLines({ ...base, arena: 'Circle' });
     expect(t.title).toBe('Level 2 complete');
+    expect(t.sub).toBe('Circle arena');
     expect(t.score).toBe('4,500');
+    expect(t.par).toBe('Score 4,500 / Par 1,000');
+    expect(t.parFill).toBe(1);
+    expect(t.showPar).toBe(true);
     expect(t.stars).toBe('★★★');
-    expect(t.detail).toBe('Par 1,000  Best 4,500  New best\nLevel #0badf00d');
+    expect(t.best).toBe('Best 4,500  New best');
+    expect(t.detail).toBe('Level #0badf00d');
+    expect(t.parReached).toBe(true);
+    expect(t.primary).toBe('next');
   });
 
-  it('failure title and no new best flag', () => {
+  it('failure: no new best flag, no par reward, Retry', () => {
     const t = resultLines({ ...base, success: false, stars: 0, score: 200, best: 4500, newBest: false });
     expect(t.title).toBe('Level 2 failed');
     expect(t.stars).toBe('☆☆☆');
-    expect(t.detail).toBe('Par 1,000  Best 4,500\nLevel #0badf00d');
+    expect(t.best).toBe('Best 4,500');
+    expect(t.parFill).toBeCloseTo(0.2);
+    expect(t.parReached).toBe(false);
+    expect(t.primary).toBe('retry');
+  });
+
+  it('Free Play shows score and time only: no stars, no best, no par', () => {
+    const t = resultLines({ ...base, mode: 'freeplay', success: false, stars: 0, par: 0, best: 0, newBest: false, timeSec: 192, arena: 'Drum' });
+    expect(t.title).toBe('Free Play over');
+    expect(t.sub).toBe('Drum arena');
+    expect(t.score).toBe('4,500');
+    expect(t.detail).toBe('Time 3:12');
+    expect(t.stars).toBe('');
+    expect(t.best).toBe('');
+    expect(t.showPar).toBe(false);
+    expect(t.parReached).toBe(false);
+    expect(t.primary).toBe('retry');
+  });
+
+  it('parFraction is score over par, clamped, and 0 without par', () => {
+    expect(parFraction({ score: 500, par: 1000 })).toBe(0.5);
+    expect(parFraction({ score: 5000, par: 1000 })).toBe(1);
+    expect(parFraction({ score: 5000, par: 0 })).toBe(0);
+  });
+
+  describe('screen', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('two big buttons: Next on a win, Retry on a loss, and Menu', () => {
+      const root = installFakeDocument();
+      const calls: string[] = [];
+      const screen = createResultsScreen(asParent(root), { next: () => calls.push('next'), retry: () => calls.push('retry'), menu: () => calls.push('menu') });
+      screen.showResult(base);
+      const primary = (): FakeEl | undefined => root.all().find((e) => e.getAttribute('data-results') === 'primary');
+      expect(primary()?.textContent).toBe('Next');
+      expect(root.all().filter((e) => e.tag === 'button' && e.classList.contains('sow-big')).map((e) => e.textContent)).toEqual(['Next', 'Menu']);
+      primary()?.tap();
+      screen.showResult({ ...base, success: false, stars: 0 });
+      expect(primary()?.textContent).toBe('Retry');
+      primary()?.tap();
+      root.all().find((e) => e.tag === 'button' && e.textContent === 'Menu')?.tap();
+      expect(calls).toEqual(['next', 'retry', 'menu']);
+    });
+
+    it('the par bar fills with score against par and hides in Free Play', () => {
+      const root = installFakeDocument();
+      const screen = createResultsScreen(asParent(root), { next: () => undefined, retry: () => undefined, menu: () => undefined });
+      const par = (): FakeEl | undefined => root.all().find((e) => e.getAttribute('data-results') === 'par');
+      screen.showResult({ ...base, score: 250 });
+      expect(par()?.style.display).toBe('');
+      expect(par()?.all().find((e) => e.classList.contains('sow-par-fill'))?.style.width).toBe('25%');
+      screen.showResult({ ...base, mode: 'freeplay', par: 0, success: false });
+      expect(par()?.style.display).toBe('none');
+    });
   });
 });
 
@@ -42,7 +102,9 @@ describe('Endless results', () => {
     expect(t.title).toBe('Game over');
     expect(t.badge).toBe('New high score');
     expect(t.stars).toBe('');
-    expect(t.detail).toBe('Best 12,000\nEndless seed 99');
+    expect(t.best).toBe('Best 12,000');
+    expect(t.detail).toBe('Endless seed 99');
+    expect(resultLines({ ...endless, timeSec: 75 }).detail).toBe('Time 1:15\nEndless seed 99');
   });
   it('lower ranks and misses', () => {
     expect(badgeText({ ...endless, rank: 4 })).toBe('Top 10: #4');
@@ -89,9 +151,11 @@ describe('B13 Space physics on the results screen', () => {
     });
   });
 
-  it('main.ts fills the result from the settings model at game over, both modes', () => {
+  it('main.ts fills the result from the run difficulty at game over (R2: space physics follows difficulty)', () => {
     const src = readFileSync(fileURLToPath(new URL('../../src/main.ts', import.meta.url)), 'utf8');
-    expect(src.match(/space: settingsModel\.state\.spacePhysics/g)?.length).toBe(2);
+    expect(src).toContain('const space = spaceForDifficulty(runDifficulty);');
+    expect(src.match(/^\s+space,$/gm)?.length).toBe(2);
+    expect(src).not.toContain('settingsModel.state.spacePhysics');
   });
 });
 

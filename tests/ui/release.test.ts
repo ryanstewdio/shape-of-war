@@ -47,7 +47,7 @@ describe('rename to Shapes of War', () => {
   it('the menu screen shows the new title', () => {
     try {
       const root = installFakeDocument();
-      createMenuScreen(asParent(root), { adventure: () => undefined, levels: () => undefined, endless: () => undefined, settings: () => undefined });
+      createMenuScreen(asParent(root), { adventure: () => undefined, levels: () => undefined, endless: () => undefined, freePlay: () => undefined, settings: () => undefined });
       expect(root.all().some((e) => e.classList.contains('sow-title') && e.textContent === 'Shapes of War')).toBe(true);
     } finally {
       vi.unstubAllGlobals();
@@ -239,14 +239,16 @@ describe('difficulty on the intro card', () => {
     expect(line()?.style.display).toBe('none');
   });
 
-  it('main.ts passes the stored difficulty to every new world and to the card', () => {
+  it('main.ts passes the run difficulty to every new world, the card and the star cap (R2: the card choice)', () => {
     const main = read('src/main.ts');
-    expect(main).toContain('type ReleaseGameOptions = GameOptions & { difficulty: Difficulty };');
-    // R1: each level start snapshots the stored setting into runDifficulty; worlds, card and star cap read it.
-    expect(main).toContain('runDifficulty = settingsModel.state.difficulty;');
-    expect(main).toContain('createGame(level, gameOptions(runDifficulty))');
+    expect(main).toContain('type ReleaseGameOptions = GameOptions & { difficulty: Difficulty; startBonus?: StartBonus };');
+    // Each level start snapshots the card's last choice (Free Play: its options) into runDifficulty.
+    expect(main).toContain("runDifficulty = mode === 'freeplay' ? freePlayChoice.difficulty : settingsModel.state.difficulty;");
+    expect(main).toContain('createGame(level, gameOptions(runDifficulty, runBonus ?? undefined))');
     expect(main).toContain('gameOptions(runDifficulty));');
     expect(main).toContain('introCard(flow.levelIndex, level, runDifficulty)');
-    expect(main).toContain('awardStars(p.stars, runDifficulty, success)');
+    expect(main).toContain('difficulty: runDifficulty,');
+    expect(main).toContain('applySpacePhysics(spaceForDifficulty(runDifficulty));');
+    expect(main).toContain('settleAdventure({');
   });
 });

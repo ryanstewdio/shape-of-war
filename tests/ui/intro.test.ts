@@ -1,4 +1,4 @@
-// B7 regression: boot "Tap to start" screen, 1.5 s level intro card, Endless "Ready" text.
+// B7 regression: boot "Tap to start" screen; R2: the level intro card waits for Start, Ready text after.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -6,15 +6,18 @@ import { BOSS_IDS } from '../../src/levelgen/leveldef';
 import { BOSS_NAMES } from '../../src/ui/boss';
 import { bootFlow, reduceFlow, simRunning, type FlowAction } from '../../src/ui/flow';
 import {
+  arenaName,
   armIntro,
   bossIntroLine,
   createIntroScreen,
+  endlessIntroCard,
   INTRO_SEC,
   introActive,
   introCard,
   NO_INTRO,
   READY_TEXT,
-  skipIntro,
+  START_LABEL,
+  startIntro,
   tickIntro,
 } from '../../src/ui/intro';
 import { asParent, installFakeDocument, type FakeEl } from './fakeDom';
@@ -46,30 +49,40 @@ describe('B7 boot screen in the flow', () => {
   });
 });
 
-describe('B7 intro gate', () => {
-  it('Adventure gets the card, Endless gets Ready, both 1.5 s', () => {
+// R2: difficulty is chosen at the start of every level and of Endless. The card waits with no timer
+// until Start; Endless then shows Ready for 1.5 s; Free Play goes straight to Ready.
+describe('R2 intro gate', () => {
+  it('Adventure and Endless get a card with no timer, Free Play gets Ready for 1.5 s', () => {
     expect(INTRO_SEC).toBe(1.5);
-    expect(armIntro('adventure')).toEqual({ kind: 'card', left: 1.5 });
-    expect(armIntro('endless')).toEqual({ kind: 'ready', left: 1.5 });
+    expect(armIntro('adventure')).toEqual({ kind: 'card', left: Number.POSITIVE_INFINITY });
+    expect(armIntro('endless')).toEqual({ kind: 'card', left: Number.POSITIVE_INFINITY });
+    expect(armIntro('freeplay')).toEqual({ kind: 'ready', left: 1.5 });
     expect(READY_TEXT).toBe('Ready');
   });
 
-  it('holds the sim for 1.5 s of sim time then releases', () => {
+  it('the card never times out, however long the sim time', () => {
     let g = armIntro('adventure');
-    const dt = 1 / 120;
+    for (let i = 0; i < 120 * 600; i++) g = tickIntro(g, 1 / 120);
+    expect(introActive(g)).toBe(true);
+    expect(g.kind).toBe('card');
+  });
+
+  it('Start plays Adventure at once and gives Endless the Ready text', () => {
+    expect(startIntro(armIntro('adventure'), 'adventure')).toBe(NO_INTRO);
+    const ready = startIntro(armIntro('endless'), 'endless');
+    expect(ready).toEqual({ kind: 'ready', left: 1.5 });
+    expect(startIntro(ready, 'endless')).toBe(ready); // only a card starts
+  });
+
+  it('Ready holds the sim for 1.5 s of sim time then releases', () => {
+    let g = armIntro('freeplay');
     let steps = 0;
     while (introActive(g) && steps < 1000) {
-      g = tickIntro(g, dt);
+      g = tickIntro(g, 1 / 120);
       steps++;
     }
     expect(steps).toBe(180);
     expect(g).toBe(NO_INTRO);
-  });
-
-  it('a tap skips the card but not the Ready text', () => {
-    expect(skipIntro(armIntro('adventure'))).toBe(NO_INTRO);
-    const ready = armIntro('endless');
-    expect(skipIntro(ready)).toBe(ready);
   });
 
   it('a finished gate stays finished', () => {
@@ -78,31 +91,69 @@ describe('B7 intro gate', () => {
   });
 });
 
-describe('B7 intro card text', () => {
-  it('shows level number, objective, par with star thresholds, drone and super', () => {
+describe('R2 intro card text', () => {
+  const arena = { shape: 'circle', width: 900, height: 900, cornerRadius: 0, obstacles: [], spawnPoint: { x: 0, y: 0 } } as const;
+
+  it('title line with level and arena, objective in one sentence, star marks as numbers, drone and super', () => {
     const card = introCard(7, {
       objective: { kind: 'destroy', count: 40 },
       par: 1500,
       stars: [1500, 3000, 6000],
       drone: 'collect',
       superType: 'detonate',
+      arena: { ...arena, obstacles: [] },
     });
-    expect(card.title).toBe('Level 7');
-    expect(card.objective).toBe('Destroy 40 enemies');
-    expect(card.par).toBe('Par 1,500   ★ 1,500  ★★ 3,000  ★★★ 6,000');
+    expect(card.title).toBe('Level 7  Circle arena');
+    expect(card.objective).toBe('Destroy 40 enemies.');
+    expect(card.stars).toBe('★ 1,500   ★★ 3,000   ★★★ 6,000');
     expect(card.kit).toBe('Collect drone   Detonate super');
   });
 
-  it('timed objectives read as clock text', () => {
-    const card = introCard(1, {
-      objective: { kind: 'survive', durationSec: 90 },
-      par: 1000,
-      stars: [1000, 2000, 4000],
-      drone: 'attack',
-      superType: 'homing',
+  it('timed objectives read as clock text; a boss level adds the boss to the sentence', () => {
+    const def = { objective: { kind: 'survive', durationSec: 90 } as const, par: 1000, stars: [1000, 2000, 4000] as [number, number, number], drone: 'attack' as const, superType: 'homing' as const };
+    expect(introCard(1, def).objective).toBe('Survive 1:30.');
+    expect(introCard(1, def).title).toBe('Level 1');
+    expect(introCard(1, { ...def, boss: { id: 'warden', tier: 1, atSec: 20, hpMul: 1 } }).objective).toBe('Survive 1:30, then defeat the boss.');
+  });
+
+  it('arena names: drum for a cylinder surface, else by shape', () => {
+    expect(arenaName({ arena: { ...arena, shape: 'rect', obstacles: [] } })).toBe('Rectangle');
+    expect(arenaName({ arena: { ...arena, shape: 'rectObstacles', obstacles: [] } })).toBe('Pillars');
+    expect(arenaName({ arena: { ...arena, shape: 'hexagon', obstacles: [] } })).toBe('Hexagon');
+    expect(arenaName({ arena: { ...arena, shape: 'roundRect', obstacles: [] } })).toBe('Rounded');
+    expect(arenaName({ arena: { ...arena, obstacles: [] }, surface: 'cylinder' })).toBe('Drum');
+    expect(arenaName({})).toBe('');
+  });
+
+  it('the Endless card has the arena title, a sentence and no stars', () => {
+    const c = endlessIntroCard({ arena: { ...arena, shape: 'rect', obstacles: [] } }, 'hard');
+    expect(c.title).toBe('Endless  Rectangle arena');
+    expect(c.stars).toBe('');
+    expect(c.choice).toBe('hard');
+  });
+
+  describe('screen', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it('Start is the only way off the card; a tap on the card background does nothing', () => {
+      const root = installFakeDocument();
+      let starts = 0;
+      const screen = createIntroScreen(asParent(root), () => void starts++);
+      screen.showCard(introCard(2, { objective: { kind: 'destroy', count: 5 }, par: 10, stars: [10, 20, 40], drone: 'attack', superType: 'homing' }, 'normal'));
+      root.children[0]?.tap();
+      expect(starts).toBe(0);
+      const start = root.all().find((e) => e.getAttribute('data-intro') === 'start');
+      expect(start?.textContent).toBe(START_LABEL);
+      start?.tap();
+      expect(starts).toBe(1);
     });
-    expect(card.objective).toBe('Survive 1:30');
-    expect(card.kit).toBe('Attack drone   Homing super');
+
+    it('the Ready text hides the chips, stars and Start', () => {
+      const root = installFakeDocument();
+      const screen = createIntroScreen(asParent(root), () => undefined);
+      screen.showReady();
+      for (const k of ['difficulty', 'stars', 'start']) expect(root.all().find((e) => e.getAttribute('data-intro') === k)?.style.display, k).toBe('none');
+    });
   });
 });
 
@@ -139,7 +190,7 @@ describe('V3-A intro card boss line', () => {
     expect(plain.boss).toBe('');
     expect(bossIntroLine(undefined)).toBe('');
     const withBoss = introCard(7, { ...def, boss: { id: 'brood', tier: 1, atSec: 20, hpMul: 1 } });
-    expect({ ...withBoss, boss: '' }).toEqual(plain);
+    expect({ ...withBoss, boss: '', objective: plain.objective }).toEqual(plain);
   });
 
   describe('screen', () => {

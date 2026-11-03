@@ -5,7 +5,7 @@
 // fallback check skips success there (fallbackStatus), the sim's verdict decides the win
 // (levelSuccess) and the label reads "Defeat the boss" while the hold lasts (objectiveProgress).
 import type { ObjectiveDef } from '../levelgen/leveldef';
-import { formatClock, formatInt } from './format';
+import { formatClock, formatCompact, formatInt } from './format';
 
 export interface ObjectiveSnapshot {
   elapsedSec: number;
@@ -75,43 +75,70 @@ export function fallbackStatus(obj: ObjectiveDef, s: ObjectiveSnapshot, bossLeve
 export type SimOutcome = 'running' | 'won' | 'lost';
 
 /**
- * Pure: did the player win, for the results screen. game:over carries no success flag. A normal
- * level infers it from the objective target (goalMet, unchanged since v1). On a boss level the
- * target can be met and the level then lost while holding for the boss, so the sim's own verdict
- * decides there.
+ * Pure: did the player win, for the results screen. game:over carries no success flag.
+ * R2 (P0): the sim's verdict decides whenever it has one ('won' or 'lost'); its lives rule is the
+ * same on every objective, so losing every life is never a win. goalMet alone ignored lives, which
+ * let a score objective whose target was met early report a win after the last life was lost.
+ * Only when the fallback check ends the level before the sim does ('running') is the snapshot read,
+ * through objectiveStatus, which applies the same lives rule. A boss level never wins on the
+ * snapshot: only the sim says when the boss died.
  */
 export function levelSuccess(obj: ObjectiveDef, s: ObjectiveSnapshot, outcome: SimOutcome, bossLevel: boolean): boolean {
-  return bossLevel ? outcome === 'won' : goalMet(obj, s);
+  if (outcome !== 'running') return outcome === 'won';
+  if (bossLevel) return false;
+  return objectiveStatus(obj, s) === 'success';
 }
 
 export interface ObjectiveProgress {
   label: string;
-  /** 0 to 1, bar fill. */
+  /** 0 to 1, bar fill: progress toward the objective the player must complete, never a timer on a score or destroy objective. */
   fraction: number;
+  /**
+   * R2: the thin star line under the bar, score toward the third star threshold, 0 to 1. null when
+   * the run has no stars (Endless, Free Play) or no thresholds were given. Absent reads as null.
+   */
+  stars?: number | null;
+  /** R2: where the first and second star thresholds sit on the star line, 0 to 1. Empty with no line. */
+  starMarks?: number[];
 }
 
 function frac(a: number, b: number): number {
   return b > 0 ? Math.max(0, Math.min(1, a / b)) : 1;
 }
 
+/** Pure: the star line and its marks for a score and the level's three thresholds. */
+export function starLine(score: number, thresholds: readonly [number, number, number] | undefined): Pick<ObjectiveProgress, 'stars' | 'starMarks'> {
+  if (thresholds === undefined) return { stars: null, starMarks: [] };
+  const top = thresholds[2];
+  return { stars: frac(score, top), starMarks: [frac(thresholds[0], top), frac(thresholds[1], top)] };
+}
+
 /**
- * Pure: HUD label and bar fill. While the level holds for a living boss (`bossAlive` and the
- * success test passing) the label reads "Defeat the boss" and the bar is full.
+ * Pure: HUD label and bar fill. R2: the bar shows progress toward what the player must complete
+ * ("Survive 4:12", "Destroy 312 / 530", "Score 1.2M / 3.3M  2:41"); a score objective fills with
+ * the score only, a destroy objective with kills only. `thresholds` (LevelDef.stars) adds the thin
+ * star line. While the level holds for a living boss the label reads "Defeat the boss" and the bar
+ * is full.
  */
-export function objectiveProgress(obj: ObjectiveDef, s: ObjectiveSnapshot, bossAlive = false): ObjectiveProgress {
-  if (bossHolds(obj, s, bossAlive)) return { label: HOLD_LABEL, fraction: 1 };
+export function objectiveProgress(
+  obj: ObjectiveDef,
+  s: ObjectiveSnapshot,
+  bossAlive = false,
+  thresholds?: readonly [number, number, number],
+): ObjectiveProgress {
+  const line = starLine(s.score, thresholds);
+  if (bossHolds(obj, s, bossAlive)) return { label: HOLD_LABEL, fraction: 1, ...line };
   switch (obj.kind) {
     case 'scoreInTime':
       return {
-        label: s.score >= obj.target
-          ? `Target met  ${formatClock(obj.timeLimitSec - s.elapsedSec)}`
-          : `${formatInt(s.score)} / ${formatInt(obj.target)}  ${formatClock(obj.timeLimitSec - s.elapsedSec)}`,
-        fraction: s.score >= obj.target ? frac(s.elapsedSec, obj.timeLimitSec) : frac(s.score, obj.target),
+        label: `Score ${formatCompact(s.score)} / ${formatCompact(obj.target)}  ${formatClock(obj.timeLimitSec - s.elapsedSec)}`,
+        fraction: frac(s.score, obj.target),
+        ...line,
       };
     case 'survive':
-      return { label: `Survive ${formatClock(obj.durationSec - s.elapsedSec)}`, fraction: frac(s.elapsedSec, obj.durationSec) };
+      return { label: `Survive ${formatClock(obj.durationSec - s.elapsedSec)}`, fraction: frac(s.elapsedSec, obj.durationSec), ...line };
     case 'destroy':
-      return { label: `Destroy ${Math.min(s.kills, obj.count)} / ${obj.count}`, fraction: frac(s.kills, obj.count) };
+      return { label: `Destroy ${formatInt(Math.min(s.kills, obj.count))} / ${formatInt(obj.count)}`, fraction: frac(s.kills, obj.count), ...line };
   }
 }
 

@@ -255,7 +255,7 @@ describe('what the v2 settings write', () => {
     }).not.toThrow();
   });
 
-  it('Reset progress touches only the two progress keys and leaves every setting, v2 included', () => {
+  it('Reset progress touches only the progress keys (R2: plus the held par reward) and leaves every setting, v2 included', () => {
     const store = recording(V1_PROFILE);
     saveSpacePhysics('medium', store);
     saveWeaponPickups(false, store);
@@ -263,7 +263,7 @@ describe('what the v2 settings write', () => {
     saveMusic(35, store);
     store.writes.length = 0;
     resetProgress(store);
-    expect([...store.writes].sort()).toEqual(['sow.progress.unlocked', 'sow.scores.adventure']);
+    expect([...store.writes].sort()).toEqual(['sow.progress.startBonus', 'sow.progress.unlocked', 'sow.scores.adventure']);
     expect([loadSpacePhysics(store), loadWeaponPickups(store), loadEffects(store), loadMusic(store)]).toEqual(['medium', false, 'high', 35]);
     expect(store.data.get('sow.settings.neon')).toBe('33');
   });
@@ -294,9 +294,10 @@ describe('key literals in src/', () => {
     }
   });
 
-  it('every v2 key is read through its load function by main.ts or the settings screen, so the stored choice reaches the game at boot', () => {
+  it('every v2 key still in use is read through its load function by main.ts or the settings screen, so the stored choice reaches the game at boot', () => {
     const main = stripComments(readFileSync(join(SRC_DIR, 'main.ts'), 'utf8'));
-    for (const fn of ['loadSpacePhysics', 'loadWeaponPickups', 'loadEffects', 'loadMusic']) {
+    // R2: space physics follows difficulty; sow.settings.spacePhysics stays readable (loadSpacePhysics) but unused.
+    for (const fn of ['loadWeaponPickups', 'loadEffects', 'loadMusic']) {
       expect(main.includes(fn) || readFileSync(join(SRC_DIR, 'ui/settings.ts'), 'utf8').includes(fn), fn).toBe(true);
     }
   });
