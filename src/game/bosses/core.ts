@@ -28,10 +28,10 @@ import {
   clampRingGapHalf,
   clampSweepArms,
   hazardHits,
-  hazardTelegraph,
   pullSpeed,
   wrapPi,
 } from './kit';
+import { bossTele, hornetCap, telegraphScaleFor } from './scale';
 import { setShield } from './shield';
 import { resetRotation, stepRotation } from './rotation';
 import { cancelVolley, stepVolleyLaunch } from './shots';
@@ -230,7 +230,10 @@ function spawnBoss(w: World, bs: BossState): boolean {
   zeroExtras(w, id);
   w.radius[id] = r;
   w.rot[id] = wrapPi(a + Math.PI);
-  bs.maxHp = applyBossScaling(w, bs, difficultyOf(w).bossScale);
+  const diff = difficultyOf(w);
+  bs.maxHp = applyBossScaling(w, bs, diff.bossScale);
+  bs.addScale = diff.addScale;
+  bs.teleScale = telegraphScaleFor(w.difficulty);
   w.hp[id] = bs.maxHp;
   resetRotation(bs);
   bs.id = id;
@@ -851,7 +854,7 @@ export function spawnHazard(
   w.vx[id] = vx;
   w.vy[id] = vy;
   w.hp[id] = 0;
-  bs.hzTele[id] = type === HazardType.Pull ? 0 : hazardTelegraph(bs.row.tier);
+  bs.hzTele[id] = type === HazardType.Pull ? 0 : bossTele(bs);
   bs.hzRate[id] = rate;
   bs.hzLife[id] = life;
   bs.hzFollow[id] = follow ? 1 : 0;
@@ -869,7 +872,7 @@ export function spawnLaneMarker(w: World, bs: BossState, x: number, y: number, r
   const id = spawn(w, Kind.BossHazard, x, y);
   if (id < 0) return -1;
   zeroExtras(w, id);
-  const tele = hazardTelegraph(bs.row.tier);
+  const tele = bossTele(bs);
   w.a[id] = HazardType.Lane;
   w.rot[id] = rot;
   w.radius[id] = clampLaneHalfWidth(halfWidth);
@@ -891,7 +894,7 @@ export function markerLife(tele: number): number {
 
 /** Ring from radius r0 growing at growth u/s (negative collapses), gaps of half angle gapHalf from gapRot. */
 export function spawnRing(w: World, bs: BossState, x: number, y: number, r0: number, gapRot: number, gapHalf: number, gaps: number, growth: number): number {
-  const tele = hazardTelegraph(bs.row.tier);
+  const tele = bossTele(bs);
   const maxR = Math.hypot(w.level.arena.width, w.level.arena.height);
   const travel = growth > 0 ? (maxR - r0) / growth : growth < 0 ? r0 / -growth : 0;
   return spawnHazard(w, bs, HazardType.Ring, x, y, gapRot, r0, clampRingGapHalf(bs.row.tier, gapHalf), gaps >= 2 ? 2 : 1, growth, tele + travel, false);
@@ -899,7 +902,7 @@ export function spawnRing(w: World, bs: BossState, x: number, y: number, r0: num
 
 /** Lane from (x, y) along rot: telegraph, then lethal for HAZARD.laneLethalSec. */
 export function spawnLane(w: World, bs: BossState, x: number, y: number, rot: number, length: number, halfWidth: number): number {
-  const life = hazardTelegraph(bs.row.tier) + HAZARD.laneLethalSec;
+  const life = bossTele(bs) + HAZARD.laneLethalSec;
   return spawnHazard(w, bs, HazardType.Lane, x, y, rot, clampLaneHalfWidth(halfWidth), length, 0, 0, life, false);
 }
 
@@ -946,7 +949,7 @@ export function spawnRingMarker(w: World, bs: BossState, x: number, y: number, r
   const id = spawn(w, Kind.BossHazard, x, y);
   if (id < 0) return -1;
   zeroExtras(w, id);
-  const tele = hazardTelegraph(bs.row.tier);
+  const tele = bossTele(bs);
   const cap = markerLife(tele);
   w.a[id] = HazardType.Ring;
   w.rot[id] = 0;
@@ -1066,14 +1069,15 @@ export function countHornets(w: World, bs: BossState): number {
  * every part.
  */
 export function spawnHornet(w: World, bs: BossState, x: number, y: number, rot: number): number {
+  // R1: at most hornetCap live (10 at Normal, the GW2 cap), in the MAX_HORNETS slot pool.
+  const cap = hornetCap(bs.addScale);
   let slot = -1;
+  let live = 0;
   for (let i = 0; i < MAX_HORNETS; i++) {
-    if (liveHornet(w, bs, i) < 0) {
-      slot = i;
-      break;
-    }
+    if (liveHornet(w, bs, i) >= 0) live++;
+    else if (slot < 0) slot = i;
   }
-  if (slot < 0) return -1;
+  if (slot < 0 || live >= cap) return -1;
   const id = spawn(w, Kind.BossPart, x, y);
   if (id < 0) return -1;
   zeroExtras(w, id);

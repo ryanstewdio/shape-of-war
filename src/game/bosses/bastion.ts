@@ -32,11 +32,12 @@ import * as bulwark from '../enemies/bulwark';
 import { angleBetween, moveTo, moveToHit, stepToward, targetOf } from '../steer';
 import { Kind, type World } from '../world';
 import { countParts, HAZARD_OVERLAP, livePart, spawnAdd, spawnLane, spawnLaneMarker, spawnPart, spawnSweep } from './core';
-import { hazardTelegraph, wrapPi } from './kit';
+import { wrapPi } from './kit';
+import { bossTele, minionCount } from './scale';
 import { setShield } from './shield';
 import type { BossState } from './state';
 import { fireVolley } from './shots';
-import { BASTION, BASTION_SHIELD, BOSS_SHOTS, HAZARD_RECHECK_SEC, SHOT_RECHECK_SEC } from './table';
+import { BASTION, BASTION_SHIELD, BOSS_SHOTS, HAZARD_RECHECK_SEC, MAX_ADDS, MAX_HORNETS, SHOT_RECHECK_SEC } from './table';
 import { burstSize, releaseHornets } from './warden';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
 
@@ -193,7 +194,7 @@ function stepShield(w: World, id: number, bs: BossState, dt: number): boolean {
   const at = BASTION_SHIELD.burstAt;
   let b = bs.abl[BURSTS] ?? 0;
   while (b < at.length && into >= (at[b] ?? Infinity)) {
-    releaseHornets(w, id, bs, burstSize(BASTION_SHIELD.hornets, b), b);
+    releaseHornets(w, id, bs, burstSize(bastionHornets(bs.addScale), b), b);
     b++;
   }
   bs.abl[BURSTS] = b;
@@ -263,10 +264,11 @@ function stepAwake(w: World, id: number, bs: BossState, dt: number, adt: number)
   bs.t2 = 0;
   bs.angle = a;
   bs.dir = Wake.Windup;
-  bs.t3 = hazardTelegraph(bs.row.tier);
+  bs.t3 = bossTele(bs);
 }
 
 const QUARTER = Math.PI / 2;
+const DEG = Math.PI / 180;
 
 /** Pure: the phase for live turrets: 1 with three or four, 2 with one or two, 3 with none. */
 export function phaseForTurrets(turrets: number): number {
@@ -364,10 +366,25 @@ function stepTurns(w: World, bs: BossState, dt: number, adt: number): void {
   if (bs.t0 < 0) bs.t0 = 0;
 }
 
+/** Pure (R1): Hornets per phase 3 shield at addScale, inside the Hornet pool. */
+export function bastionHornets(addScale: number): number {
+  return minionCount(BASTION_SHIELD.hornets, addScale, MAX_HORNETS);
+}
+
+/** Pure (R1): Bulwarks per add wave at addScale (1 at Normal), inside the add slots. */
+export function bulwarksFor(addScale: number): number {
+  return minionCount(BASTION.addsPerWave, addScale, MAX_ADDS);
+}
+
 function summon(w: World, id: number, bs: BossState): void {
-  const a = angleBetween(w, id, targetOf(w, id));
+  const a0 = angleBetween(w, id, targetOf(w, id));
   const d = (w.radius[id] ?? 0) + BASTION.addPad + bulwark.def.radius;
-  spawnAdd(w, bs, bulwark.def, (w.x[id] ?? 0) + Math.cos(a) * d, (w.y[id] ?? 0) + Math.sin(a) * d);
+  const n = bulwarksFor(bs.addScale);
+  for (let k = 0; k < n; k++) {
+    // R1: extra Bulwarks fan out either side of the facing (one at Normal, straight ahead).
+    const a = a0 + (k - (n - 1) / 2) * BASTION.addSpreadDeg * DEG;
+    spawnAdd(w, bs, bulwark.def, (w.x[id] ?? 0) + Math.cos(a) * d, (w.y[id] ?? 0) + Math.sin(a) * d);
+  }
 }
 
 export function reset(w: World, id: number, bs: BossState, first: boolean): void {

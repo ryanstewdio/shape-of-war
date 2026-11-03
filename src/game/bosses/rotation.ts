@@ -12,7 +12,8 @@ import { bus } from '../../core/events';
 import { isInside } from '../arena';
 import { clampEnemyBulletSpeed, ENEMY_BULLET_MIN_RANGE, ENEMY_BULLET_RADIUS, enemyBulletsOf, spawnEnemyBullet } from '../enemyBullets';
 import { Kind, type World } from '../world';
-import { hazardTelegraph, pointDist } from './kit';
+import { pointDist } from './kit';
+import { bossTele } from './scale';
 import type { BossState } from './state';
 import { ENRAGE_AFTER_SEC, ENRAGE_RATE, ROTATION, SHOT_RECHECK_SEC, SHOT_VOLLEY_MAX } from './table';
 import { BossMode, PartType } from './types';
@@ -129,7 +130,7 @@ function fire(w: World, bs: BossState, id: number): boolean {
   const pattern = patternAt(bs.rotCount);
   const n = patternBullets(pattern, bs.phase);
   const tier = bs.row.tier;
-  const tele = hazardTelegraph(tier);
+  const tele = bossTele(bs);
   const speed = rotationSpeed(bs.levelScale);
   let firstId = -1;
   for (let k = 0; k < n; k++) {

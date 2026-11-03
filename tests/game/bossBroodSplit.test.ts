@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
 import { fleeHeading } from '../../src/game/bosses/brood';
-import { bossBonusAwarded, bossOnBomb, bossSlain, damageBoss, damageBossPart, livePart } from '../../src/game/bosses/core';
+import { armouredTenths, bossBonusAwarded, bossOnBomb, bossSlain, damageBoss, damageBossPart, livePart } from '../../src/game/bosses/core';
 import { BROODLING, CRACK_AT, STAGGER_SEC } from '../../src/game/bosses/table';
 import { BossMode, PartType } from '../../src/game/bosses/types';
 import { createBossView, readBoss } from '../../src/game/bosses/view';
@@ -154,7 +154,8 @@ describe('brood split fight', () => {
     const [chase] = broodlings(w) as [number, number, number];
     damageBossPart(w, chase, 10, 0, 0);
     run(w, 0.3);
-    expect(hp).toBe(3 * BROODLING.hp - 10);
+    // R1: Brood's row is past the Int16 store, so hits on its parts pass through its armour.
+    expect(hp).toBe(3 * BROODLING.hp - armouredTenths(10, bs(w).armour, 0));
   });
 
   it('the fight ends with the third Broodling and awards the bonus once', () => {
@@ -169,15 +170,17 @@ describe('brood split fight', () => {
     const score0 = gs(w).score;
     const kills0 = gs(w).kills;
     const [a, b, c] = broodlings(w) as [number, number, number];
-    damageBossPart(w, a, BROODLING.hp, 0, 0);
-    damageBossPart(w, b, BROODLING.hp, 0, 0);
+    // R1: enough to pass Brood's armour (its row is past the Int16 store).
+    const kill = Math.ceil(BROODLING.hp * bs(w).armour) + 1;
+    damageBossPart(w, a, kill, 0, 0);
+    damageBossPart(w, b, kill, 0, 0);
     run(w, 0.3);
     expect(bs(w).status).toBe('alive');
     expect(bossSlain(w)).toBe(false);
     expect(downs.length).toBe(0);
     const cx = w.x[c] ?? 0;
     const cy = w.y[c] ?? 0;
-    damageBossPart(w, c, BROODLING.hp, 0, 0);
+    damageBossPart(w, c, kill, 0, 0);
     expect(bs(w).status).toBe('defeated');
     expect(bossSlain(w)).toBe(true);
     expect(downs).toEqual([{ x: cx, y: cy }]);

@@ -6,6 +6,10 @@
 // the end of the entrance to the kill, windows included. Release polish: every boss at Normal on
 // its own campaign level (Warden 5 to Prism 50), attack rotation on, lasts 210 to 260 s (Ryan:
 // "at least 3.5 minutes of boss fighting"). Before it Warden ran about 60 s, Brood 37, Spindle 28.
+// R1: a skilled player beat Warden in about 150 s where this script said 210 to 260 s, so the
+// script is weaker than Ryan. Every row rose 40 percent and the band with it: 294 to 364 s (R1
+// script: warden 314.8, brood 330.0, spindle 328.8, ember 345.3, mirage 329.6, gravitas 325.7,
+// bastion 327.6, tempest 328.9, twins 328.8, prism 334.6).
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
 import { damageBoss, damageBossPart, livePart } from '../../src/game/bosses/core';
@@ -20,10 +24,10 @@ afterEach(() => bus.clear());
 
 const OPEN_FIRE = 180;
 const POD_REACTION = 0.5;
-const MIN_SEC = 210;
-const MAX_SEC = 260;
+const MIN_SEC = 294;
+const MAX_SEC = 364;
 
-/** Seconds from the end of the entrance to the kill on the script, Infinity past 400 s. */
+/** Seconds from the end of the entrance to the kill on the script, Infinity past 500 s. */
 function fightSeconds(id: BossId): number {
   const level = bossNominalLevel(BOSS_IDS.indexOf(id));
   const w = bossGame(id, { lives: 99, levelIndex: level }, {}, true, 0.25, true);
@@ -32,7 +36,7 @@ function fightSeconds(id: BossId): number {
   const s = bs(w);
   let acc = 0;
   let podClock = 0;
-  for (let i = 0; i < 120 * 400; i++) {
+  for (let i = 0; i < 120 * 500; i++) {
     let pod = -1;
     for (let k = 0; k < MAX_PARTS && pod < 0; k++) {
       const p = livePart(w, s, k);
@@ -72,7 +76,7 @@ function fightSeconds(id: BossId): number {
   return Infinity;
 }
 
-describe('fight length at open fire, Normal, each boss on its own level', () => {
+describe('fight length at open fire, Normal, each boss on its own level (R1 band)', () => {
   const secs = new Map<BossId, number>();
   for (const id of BOSS_IDS) secs.set(id, fightSeconds(id));
 

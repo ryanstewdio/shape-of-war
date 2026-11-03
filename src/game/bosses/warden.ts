@@ -22,11 +22,11 @@ import { removeEntity } from '../remove';
 import { angleBetween, distBetween, entityHash, moveHeading, targetOf, turnToward } from '../steer';
 import type { World } from '../world';
 import { bossEnraged, HAZARD_OVERLAP, spawnHornet, spawnRing } from './core';
-import { hazardTelegraph } from './kit';
+import { bossTele, minionCount } from './scale';
 import { setShield } from './shield';
 import { bossOf, type BossState } from './state';
 import { ENEMY_BULLET_RADIUS, spawnEnemyBullet } from '../enemyBullets';
-import { ENRAGE_RATE, HAZARD, HAZARD_RECHECK_SEC, HORNET, WARDEN, WARDEN_SHIELD } from './table';
+import { ENRAGE_RATE, HAZARD, HAZARD_RECHECK_SEC, HORNET, MAX_HORNETS, WARDEN, WARDEN_SHIELD } from './table';
 import { BossMode, type BossDef } from './types';
 
 const TAU = Math.PI * 2;
@@ -114,7 +114,8 @@ export function releaseHornets(w: World, id: number, bs: BossState, n: number, b
 function startShield(w: World, id: number, bs: BossState): void {
   const n = bs.abl[SHIELDS] ?? 0;
   bs.abl[SHIELDS] = n + 1;
-  bs.abl[COUNT] = hornetsFor(entityHash(w, id, 1000 + n));
+  // R1: the Hornet count scales with the difficulty's addScale, inside the Hornet pool.
+  bs.abl[COUNT] = minionCount(hornetsFor(entityHash(w, id, 1000 + n)), bs.addScale, MAX_HORNETS);
   bs.abl[INTO] = 0;
   bs.abl[BURSTS] = 0;
   setShield(bs, true, w.x[id] ?? 0, w.y[id] ?? 0, WARDEN_SHIELD.shieldSec);
@@ -178,7 +179,7 @@ function fireDropRing(w: World, id: number, bs: BossState): void {
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
   const a0 = angleBetween(w, id, targetOf(w, id));
-  const tele = hazardTelegraph(bs.row.tier);
+  const tele = bossTele(bs);
   let firstId = -1;
   for (let k = 0; k < n; k++) {
     const a = dropRingHeading(a0, k, n);
@@ -211,7 +212,7 @@ function fireRing(w: World, id: number, bs: BossState, every: number): void {
   }
   bs.t0 -= every;
   if (bs.t0 < 0) bs.t0 = 0;
-  if (h > 0) bs.t1 = hazardTelegraph(bs.row.tier);
+  if (h > 0) bs.t1 = bossTele(bs);
 }
 
 export function step(w: World, id: number, bs: BossState, dt: number, adt: number): void {

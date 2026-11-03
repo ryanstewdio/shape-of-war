@@ -11,7 +11,8 @@
 import { angleBetween, stepToward } from '../steer';
 import { Kind, type World } from '../world';
 import { HAZARD_OVERLAP, spawnSweep } from './core';
-import { hazardTelegraph, wrapPi } from './kit';
+import { wrapPi } from './kit';
+import { bossTele } from './scale';
 import { fireVolley } from './shots';
 import type { BossState } from './state';
 import { BOSS_SHOTS, HAZARD_RECHECK_SEC, SHOT_RECHECK_SEC, SPINDLE, spindleArmRate, type ShotRow } from './table';
@@ -55,7 +56,7 @@ export function armTelegraphNear(w: World, bs: BossState, old: number, dt: numbe
   if (old < 0 || bs.retry > 0 || bs.n1 !== 0) return true;
   if ((w.t[old] ?? 0) < (bs.hzTele[old] ?? 0)) return true;
   const rate = dt > 0 ? adt / dt : 1;
-  return bs.t0 + hazardTelegraph(bs.row.tier) * rate >= SPINDLE.reverseEvery;
+  return bs.t0 + bossTele(bs) * rate >= SPINDLE.reverseEvery;
 }
 
 /** Pure: seconds between pellets in a phase for a shot row. */

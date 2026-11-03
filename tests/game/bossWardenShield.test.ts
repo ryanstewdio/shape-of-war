@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/core/events';
 import { bossOnBomb, countAdds, countHornets, damageBoss, damageBossPart, liveHornet, spawnAdd, spawnHornet } from '../../src/game/bosses/core';
-import { HORNET, MAX_ADDS, MAX_HORNETS, WARDEN_SHIELD } from '../../src/game/bosses/table';
+import { HORNET, HORNET_CAP, MAX_ADDS, MAX_HORNETS, WARDEN_SHIELD } from '../../src/game/bosses/table';
 import { PartType } from '../../src/game/bosses/types';
 import { createBossView, readBoss } from '../../src/game/bosses/view';
 import { burstSize, hornetsFor, shieldActive, shieldClockStart } from '../../src/game/bosses/warden';
@@ -91,7 +91,8 @@ describe('warden shield timing', () => {
       expect(burstSize(n, 0)).toBe(5);
       expect(burstSize(n, 1)).toBe(5);
     }
-    expect(MAX_HORNETS).toBe(10);
+    expect(HORNET_CAP).toBe(10); // R1: the live cap at Normal
+    expect(MAX_HORNETS).toBe(16); // R1: the slot pool, for Insane
     expect(WARDEN_SHIELD.firstSec).toBe(10);
     expect(WARDEN_SHIELD.everySec).toBe(14);
     expect(WARDEN_SHIELD.openSec).toBe(2.0);

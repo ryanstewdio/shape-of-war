@@ -22,19 +22,22 @@ export interface BossRow {
  * Normal on its own level lasts 210 to 260 s on the bossFightLength script (about 235 s; damage
  * windows unchanged). Before: warden 520, brood 400, spindle 500, ember 600, mirage 640, gravitas
  * 700, bastion 1242, tempest 1138.5, twins 1000, prism 1000. Rows past the Int16 store (BOSS_HP_MAX
- * tenths) keep the bar at the cap and turn the rest into armour (armourFor).
+ * tenths) keep the bar at the cap and turn the rest into armour (armourFor). R1 (Ryan: a skilled
+ * Warden fight took about 150 s against the 3.5 minute target): every row 40 percent higher, damage
+ * windows and patterns unchanged. Before R1: warden 1840, brood 2900, spindle 4227, ember 2289,
+ * mirage 4237, gravitas 5430, bastion 3730, tempest 3586, twins 4227, prism 1314.
  */
 export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
-  warden: { tier: 1, hp: 1840, phases: 2, radius: 56, colour: 'bossBlue' },
-  brood: { tier: 1, hp: 2900, phases: 2, radius: 52, colour: 'bossGreen' },
-  spindle: { tier: 1, hp: 4227, phases: 2, radius: 48, colour: 'bossYellow' },
-  ember: { tier: 2, hp: 2289, phases: 3, radius: 44, colour: 'bossOrange' },
-  mirage: { tier: 2, hp: 4237, phases: 3, radius: 50, colour: 'bossMagenta' },
-  gravitas: { tier: 2, hp: 5430, phases: 3, radius: 60, colour: 'bossViolet' },
-  bastion: { tier: 3, hp: 3730, phases: 3, radius: 70, colour: 'bossRed' },
-  tempest: { tier: 3, hp: 3586, phases: 3, radius: 46, colour: 'bossRed' },
-  twins: { tier: 3, hp: 4227, phases: 2, radius: 44, colour: 'bossRed' },
-  prism: { tier: 4, hp: 1314, phases: 4, radius: 90, colour: 'bossPrism' },
+  warden: { tier: 1, hp: 2576, phases: 2, radius: 56, colour: 'bossBlue' },
+  brood: { tier: 1, hp: 4060, phases: 2, radius: 52, colour: 'bossGreen' },
+  spindle: { tier: 1, hp: 5918, phases: 2, radius: 48, colour: 'bossYellow' },
+  ember: { tier: 2, hp: 3205, phases: 3, radius: 44, colour: 'bossOrange' },
+  mirage: { tier: 2, hp: 5932, phases: 3, radius: 50, colour: 'bossMagenta' },
+  gravitas: { tier: 2, hp: 7602, phases: 3, radius: 60, colour: 'bossViolet' },
+  bastion: { tier: 3, hp: 5222, phases: 3, radius: 70, colour: 'bossRed' },
+  tempest: { tier: 3, hp: 5020, phases: 3, radius: 46, colour: 'bossRed' },
+  twins: { tier: 3, hp: 5918, phases: 2, radius: 44, colour: 'bossRed' },
+  prism: { tier: 4, hp: 1840, phases: 4, radius: 90, colour: 'bossPrism' },
 };
 
 /** Damage per hit against a boss or a boss part, in tenths of a hit (boss rule 8). */
@@ -81,8 +84,14 @@ export const HAZARD_RECHECK_SEC = 0.3;
  */
 export const MAX_HAZARDS = 8;
 export const MAX_ADDS = 8;
-/** Hornet pool (GW1): its own cap, separate from the add slots and the part slots. GW2: 10. */
-export const MAX_HORNETS = 10;
+/**
+ * Hornet pool (GW1): its own cap, separate from the add slots and the part slots. GW2: 10. R1: 16,
+ * so Insane's 16 Warden Hornets (10 times addScale 1.6) fit; the 512 entity store has room and the
+ * pool is allocated once per world. Normal still releases 10.
+ */
+export const MAX_HORNETS = 16;
+/** R1: live Hornets at Normal (the GW2 cap); other difficulties scale it by addScale up to MAX_HORNETS. */
+export const HORNET_CAP = 10;
 export const MAX_PARTS = 4;
 /** hud:boss throttle, s. */
 export const BOSS_HUD_INTERVAL = 0.1;
@@ -412,6 +421,10 @@ export const BASTION = {
   laneLength: 600,
   laneHalfWidth: 22,
   addEvery: 12,
+  /** R1: Bulwarks per add wave at Normal (times addScale on other difficulties). */
+  addsPerWave: 1,
+  /** R1: extra Bulwarks of one wave sit this far apart round the facing. */
+  addSpreadDeg: 40,
   /** Bulwarks join this far outside the body edge, on the side facing the target. */
   addPad: 40,
   // Phase 3 (G3C): the core wakes once the last turret dies.

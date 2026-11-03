@@ -143,6 +143,10 @@ export interface BossState {
   armour: number;
   /** Fraction of a tenth carried between armoured hits. */
   dmgAcc: number;
+  /** R1: multiplier on minion counts (the difficulty's addScale), applied through minionCount. */
+  addScale: number;
+  /** R1: multiplier on every telegraph this boss shows (0.85 on Insane, else 1), through bossTele. */
+  teleScale: number;
   /** Attack rotation: attack seconds to the next volley, recheck countdown, volleys fired, recent patterns. */
   rotT: number;
   rotWait: number;
@@ -243,6 +247,8 @@ function createState(w: World, spec: BossSpec, def: BossDef): BossState {
     cadence: 1,
     armour: 1,
     dmgAcc: 0,
+    addScale: 1,
+    teleScale: 1,
     rotT: 0,
     rotWait: 0,
     rotCount: 0,
@@ -335,6 +341,8 @@ export function armState(w: World, spec: BossSpec, def: BossDef, atSec: number):
   s.cadence = 1;
   s.armour = 1;
   s.dmgAcc = 0;
+  s.addScale = 1;
+  s.teleScale = 1;
   s.rotT = 0;
   s.rotWait = 0;
   s.rotCount = 0;
