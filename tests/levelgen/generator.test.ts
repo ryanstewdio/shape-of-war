@@ -229,7 +229,8 @@ describe('generator', { timeout: 30_000 }, () => {
     // Budget: 2x the measured Mac time (150 to 175 ms in this file, gen-perf run 0191). The GitHub
     // runner (CI=true) measured about 3.3x slower than the Mac before gen-perf, so it gets the
     // 1200 ms ceiling instead of a budget that would flake.
-    const GEN_BUDGET_MS = process.env.CI === 'true' ? 1200 : 350;
+    // R1: generator v6 waves have about 25 percent more spawns (Foundry measured about 410 ms warm on the Mac).
+    const GEN_BUDGET_MS = process.env.CI === 'true' ? 1200 : 500;
     it(`generation is fast: 200 levels under ${GEN_BUDGET_MS} ms (flag on)`, () => {
       const t0 = performance.now();
       for (let n = 1; n <= 200; n++) gen.generateLevel(0x4e464f4c, n);
