@@ -34,7 +34,7 @@ import {
   speedScaleFor,
 } from './leveldef';
 import { DRUM_BAR_THICK, MEMBRANE_MAX, MEMBRANE_MIN } from './drum';
-import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, BOSS_SEGMENT_AT_SEC, bossForLevel, bossForSegment, bossTierOf, sameBoss } from './boss';
+import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, BOSS_SEGMENT_AT_SEC, bossForLevel, bossForSegment, bossTierOf, freePlayBossFor, sameBoss } from './boss';
 import type {
   ArenaDef,
   Band,
@@ -42,6 +42,8 @@ import type {
   EndlessDef,
   EndlessSegmentDef,
   EnemyKind,
+  FreePlayArena,
+  FreePlayLevelOptions,
   LevelDef,
   Obstacle,
   RosterEntry,
@@ -50,6 +52,7 @@ import type {
   WaveSchedule,
 } from './leveldef';
 import { ALL_ENEMY_KINDS, isV2Kind } from './v2enemies';
+import type { FreePlayDensity, FreePlaySize } from '../core/freeplayConfig';
 import {
   CYLINDER_MAX_OBSTACLES,
   CYLINDER_WIDTH_STEP,
@@ -686,13 +689,22 @@ function checkWaves(c: Collector, ws: WaveSchedule, arena: ArenaDef, roster: rea
   });
 }
 
-/** circleObstacles (Free Play only): a circle arena may carry 0 to MAX_OBSTACLES obstacles. */
-function checkArena(c: Collector, arena: ArenaDef, cylinder = false, circleObstacles = false): void {
+/**
+ * circleObstacles (Free Play only): a circle arena may carry 0 to MAX_OBSTACLES obstacles.
+ * sizeScale (Free Play arena size only): the A1 height and width bounds widen by it (below 1 the
+ * floor, above 1 the ceilings) and the F1 ship floor shrinks by it above 1.
+ */
+function checkArena(c: Collector, arena: ArenaDef, cylinder = false, circleObstacles = false, sizeScale = 1): void {
+  const lo = Math.min(1, sizeScale);
+  const hi = Math.max(1, sizeScale);
   c.check('A1', (report) => {
     const { shape, width: w, height: h } = arena;
+    const minH = ARENA_MIN_HEIGHT * lo;
+    const maxH = ARENA_MAX_HEIGHT * hi;
+    const maxW = ARENA_MAX_WIDTH * hi;
     if (!ARENA_SHAPES.includes(shape)) report(`unknown arena shape ${String(shape)}`);
-    if (!inRange(h, ARENA_MIN_HEIGHT, ARENA_MAX_HEIGHT)) report(`arena height ${h} outside bounds ${ARENA_MIN_HEIGHT} to ${ARENA_MAX_HEIGHT}`);
-    if (!(w > 0) || w > ARENA_MAX_WIDTH + EPS) report(`arena width ${w} outside bounds 0 to ${ARENA_MAX_WIDTH}`);
+    if (!inRange(h, minH, maxH)) report(`arena height ${h} outside bounds ${minH} to ${maxH}`);
+    if (!(w > 0) || w > maxW + EPS) report(`arena width ${w} outside bounds 0 to ${maxW}`);
     const aspect = w / h;
     if (shape === 'circle') {
       if (w !== h) report(`circle width ${w} !== height ${h}`);
@@ -705,7 +717,8 @@ function checkArena(c: Collector, arena: ArenaDef, cylinder = false, circleObsta
   c.check('F1', (report) => {
     for (const rect of FOLD_SAFE_RECTS) {
       const px = 2 * SHIP_RADIUS * fitScale(arena.width, arena.height, rect);
-      if (!(px >= MIN_SHIP_PX - EPS)) report(`arena does not fit ${rect.name} safe rect: ship ${f1(px)} px < ${MIN_SHIP_PX} px`);
+      const floor = MIN_SHIP_PX / hi;
+      if (!(px >= floor - EPS)) report(`arena does not fit ${rect.name} safe rect: ship ${f1(px)} px < ${f1(floor)} px`);
     }
   });
   c.check('A2', (report) => {
@@ -1115,10 +1128,15 @@ export function validateSegment(seg: EndlessSegmentDef, opts?: BossCheckOptions)
  * validateSegment check, W4 run on the Free Play arena (wrapped on a drum).
  */
 export function validateFreePlaySegment(seg: EndlessSegmentDef, def: EndlessDef, opts?: BossCheckOptions): ValidationResult {
-  return segmentChecks(seg, def.arena, def.surface === 'cylinder', opts);
+  return segmentChecks(seg, def.arena, def.surface === 'cylinder', opts, def.freePlay?.options);
 }
 
-function segmentChecks(seg: EndlessSegmentDef, arena: ArenaDef, cylinder: boolean, opts: BossCheckOptions | undefined): ValidationResult {
+/**
+ * fp: the Free Play options of the def (absent: the plain Endless rules). Chosen enemies replace
+ * R1 with FP5 (the roster is exactly the chosen kinds) and J6 reads no band; Swarm raises the W7
+ * maxLiveEnemies; the boss follows freePlayBossFor.
+ */
+function segmentChecks(seg: EndlessSegmentDef, arena: ArenaDef, cylinder: boolean, opts: BossCheckOptions | undefined, fp?: FreePlayLevelOptions): ValidationResult {
   const c = new Collector();
   checkJson(c, seg);
   checkVersions(c, seg.version, seg.generatorVersion);
@@ -1131,7 +1149,15 @@ function segmentChecks(seg: EndlessSegmentDef, arena: ArenaDef, cylinder: boolea
     if (seg.effectiveIndex !== effective) report(`effectiveIndex ${seg.effectiveIndex} !== ${effective}`);
     if (seg.band !== band) report(`band ${seg.band} !== bandOf(${effective}) ${band}`);
   });
-  checkRoster(c, seg.roster, band);
+  const chosen = fp !== undefined && fp.enemies.length > 0 ? fp.enemies : null;
+  if (chosen === null) checkRoster(c, seg.roster, band);
+  else {
+    c.check('FP5', (report) => {
+      const kinds = seg.roster.map((e) => e.kind);
+      if (kinds.join(',') !== chosen.join(',')) report(`roster ${kinds.join(', ')} !== chosen ${chosen.join(', ')}`);
+      for (const e of seg.roster) if (!(e.weight > 0)) report(`${e.kind} weight ${e.weight} not positive`);
+    });
+  }
   checkSpeed(c, seg.speedScale, effective);
   checkWaves(
     c,
@@ -1140,7 +1166,7 @@ function segmentChecks(seg: EndlessSegmentDef, arena: ArenaDef, cylinder: boolea
     seg.roster,
     {
       firstAtSec: seg.segment === 0 ? FIRST_WAVE_SEC : 0,
-      maxLive: BANDS[band].maxLiveEnemies,
+      maxLive: fp === undefined ? BANDS[band].maxLiveEnemies : freePlayMaxLive(BANDS[band].maxLiveEnemies, fp.density),
       segmentSec: ENDLESS_SEGMENT_SEC,
     },
     cylinder,
@@ -1150,8 +1176,9 @@ function segmentChecks(seg: EndlessSegmentDef, arena: ArenaDef, cylinder: boolea
       if (!(w.atSec >= 0 && w.atSec < ENDLESS_SEGMENT_SEC)) report(`wave ${i} atSec ${w.atSec} outside 0 to ${ENDLESS_SEGMENT_SEC}`);
     });
   });
-  checkV2Content(c, seg.generatorVersion, band, () => namedKinds(seg.roster, seg.waves));
-  checkBoss(c, seg.boss, seg.generatorVersion, { want: bossForSegment(seg.segment), unit: 'segment', index: seg.segment, atSec: BOSS_SEGMENT_AT_SEC, timedSec: null }, opts);
+  checkV2Content(c, seg.generatorVersion, chosen === null ? band : null, () => namedKinds(seg.roster, seg.waves));
+  const want = fp === undefined ? bossForSegment(seg.segment) : freePlayBossFor(fp.bosses, seg.segment, cylinder);
+  checkBoss(c, seg.boss, seg.generatorVersion, { want, unit: 'segment', index: seg.segment, atSec: BOSS_SEGMENT_AT_SEC, timedSec: null }, opts);
   return c.result();
 }
 
@@ -1162,6 +1189,76 @@ function segmentChecks(seg: EndlessSegmentDef, arena: ArenaDef, cylinder: boolea
 export const FREE_PLAY_RECT: Readonly<{ width: number; height: number }> = Object.freeze({ width: ENDLESS_ARENA.width, height: ENDLESS_ARENA.height });
 /** Free Play circle arena diameter. */
 export const FREE_PLAY_CIRCLE = 1100;
+
+// Free Play options (docs/14), the level side. Shared by freeplay.ts and the checks below.
+
+/** Arena size multiplier per option, applied to every arena dimension. */
+export const FREE_PLAY_SIZE_SCALE: Readonly<Record<FreePlaySize, number>> = Object.freeze({ small: 0.75, medium: 1, large: 1.3 });
+/** Spawn count multiplier per density option (each wave's budget). */
+export const FREE_PLAY_DENSITY_SCALE: Readonly<Record<FreePlayDensity, number>> = Object.freeze({ low: 0.6, normal: 1, swarm: 1.8 });
+/** Live enemy ceiling for Swarm: src/game/world.ts ENTITY_CAP, copied to keep levelgen standalone. */
+export const FREE_PLAY_ENTITY_CAP = 512;
+/** Gravity wells with wells 'many'. The game holds at most 4 (src/game/state.ts MAX_WELLS). */
+export const FREE_PLAY_MANY_WELLS: Readonly<{ min: number; max: number }> = Object.freeze({ min: 2, max: 4 });
+/** Least distance from a Free Play well to the ship spawn point, u (fits the small circle). */
+export const FREE_PLAY_WELL_SPAWN_CLEAR = 240;
+/** Least distance between two Free Play wells, u. */
+export const FREE_PLAY_WELL_PAIR = 300;
+
+/** Arena width and height of a Free Play arena at a size. Rect and circle on the 10 u grid; drum width a multiple of 64. */
+export function freePlayArenaSize(kind: FreePlayArena, size: FreePlaySize): { width: number; height: number } {
+  const k = FREE_PLAY_SIZE_SCALE[size];
+  const ten = (v: number): number => Math.round((v * k) / 10) * 10;
+  if (kind === 'circle') return { width: ten(FREE_PLAY_CIRCLE), height: ten(FREE_PLAY_CIRCLE) };
+  if (kind === 'drum') return { width: Math.round((FREE_PLAY_RECT.width * k) / CYLINDER_WIDTH_STEP) * CYLINDER_WIDTH_STEP, height: ten(FREE_PLAY_RECT.height) };
+  return { width: ten(FREE_PLAY_RECT.width), height: ten(FREE_PLAY_RECT.height) };
+}
+
+/** maxLiveEnemies of a Free Play segment: the band value, raised 1.8x for Swarm up to the entity cap. */
+export function freePlayMaxLive(bandMax: number, density: FreePlayDensity): number {
+  return density === 'swarm' ? Math.min(FREE_PLAY_ENTITY_CAP, Math.round(bandMax * FREE_PLAY_DENSITY_SCALE.swarm)) : bandMax;
+}
+
+const FP_DENSITIES: readonly string[] = ['low', 'normal', 'swarm'];
+const FP_WELLS: readonly string[] = ['off', 'normal', 'many'];
+const FP_SIZES: readonly string[] = ['small', 'medium', 'large'];
+
+/** FP3: the options record is well formed and its enemies are catalogue kinds in order. */
+function checkFreePlayOptions(c: Collector, o: FreePlayLevelOptions, roster: readonly RosterEntry[]): void {
+  c.check('FP3', (report) => {
+    const catalogue = new Set<string>(roster.map((e) => e.kind));
+    const order = ALL_ENEMY_KINDS.filter((k) => o.enemies.includes(k));
+    if (order.join(',') !== o.enemies.join(',')) report(`enemies ${o.enemies.join(', ')} not unique kinds in catalogue order`);
+    for (const k of o.enemies) if (!catalogue.has(k)) report(`enemy ${String(k)} not in the run catalogue`);
+    if (!FP_DENSITIES.includes(o.density)) report(`density ${String(o.density)}`);
+    if (!FP_WELLS.includes(o.wells)) report(`wells ${String(o.wells)}`);
+    if (!FP_SIZES.includes(o.size)) report(`size ${String(o.size)}`);
+    if (o.bosses !== 'off' && o.bosses !== 'every3' && bossTierOf(o.bosses) === null) report(`bosses ${String(o.bosses)}`);
+  });
+}
+
+/** FP4: wells 'many' places 2 to 4 wells inside the arena, clear of the spawn, obstacles and each other. */
+function checkFreePlayWells(c: Collector, def: EndlessDef, many: boolean): void {
+  c.check('FP4', (report) => {
+    const wells = def.hazards.wells;
+    if (def.hazards.spawners.length !== 0) report('Free Play has no hazard spawners');
+    if (!many) {
+      if (wells.length !== 0) report(`${wells.length} wells without wells 'many'`);
+      return;
+    }
+    const { min, max } = FREE_PLAY_MANY_WELLS;
+    if (wells.length < min || wells.length > max) report(`${wells.length} wells, want ${min} to ${max}`);
+    const g = geometryOf(def.arena, def.surface === 'cylinder');
+    wells.forEach((w, i) => {
+      if (!g.inside(w, WELL_EDGE)) report(`well ${i} outside arena margin ${WELL_EDGE}`);
+      if (g.dist(w, def.arena.spawnPoint) < FREE_PLAY_WELL_SPAWN_CLEAR) report(`well ${i} within ${FREE_PLAY_WELL_SPAWN_CLEAR} of spawn`);
+      if (def.arena.obstacles.some((o) => g.obstacle(o, w) < WELL_OBSTACLE)) report(`well ${i} within ${WELL_OBSTACLE} of an obstacle`);
+      wells.slice(i + 1).forEach((v, k) => {
+        if (g.dist(w, v) < FREE_PLAY_WELL_PAIR) report(`wells ${i} and ${i + k + 1} closer than ${FREE_PLAY_WELL_PAIR}`);
+      });
+    });
+  });
+}
 
 /**
  * Validates a Free Play EndlessDef: J1 to J3, V1, FP1 (mode, kit, clocks, version 7, the freePlay
@@ -1181,15 +1278,18 @@ export function validateFreePlay(def: EndlessDef): ValidationResult {
     if (def.mode !== 'endless') report(`mode ${String(def.mode)} !== 'endless'`);
     if (def.objective.kind !== 'none') report(`objective ${String(def.objective.kind)} !== 'none'`);
     if (!isInt(def.endlessSeed) || def.endlessSeed < 0 || def.endlessSeed > 0xffffffff) report(`endlessSeed ${def.endlessSeed} not a uint32`);
-    if (def.hazards.wells.length !== 0 || def.hazards.spawners.length !== 0) report('Free Play has no hazards');
     if (def.drone !== 'attack' || def.superType !== 'turbo') report(`kit ${String(def.drone)}, ${String(def.superType)} !== attack, turbo`);
     if (def.lives !== LIVES || def.bombs !== BOMBS) report(`start lives ${def.lives}, bombs ${def.bombs} !== ${LIVES}, ${BOMBS}`);
     if (def.segmentSec !== ENDLESS_SEGMENT_SEC) report(`segmentSec ${def.segmentSec} !== ${ENDLESS_SEGMENT_SEC}`);
     if (!(def.budgetPerSegment > 0)) report(`budgetPerSegment ${def.budgetPerSegment} not positive: ramp must be unbounded`);
   });
+  const options = fp?.options;
+  if (options !== undefined) checkFreePlayOptions(c, options, def.roster);
+  checkFreePlayWells(c, def, options?.wells === 'many');
   c.check('FP2', (report) => {
     if (fp === undefined) return;
     const a = def.arena;
+    const want = freePlayArenaSize(fp.arena, options?.size ?? 'medium');
     const n = a.obstacles.length;
     const cyl = def.surface === 'cylinder';
     if (n > 0 !== fp.barriers) report(`barriers ${String(fp.barriers)} with ${n} obstacles`);
@@ -1199,22 +1299,23 @@ export function validateFreePlay(def: EndlessDef): ValidationResult {
       case 'rect':
         if (cyl) report('rect Free Play on a cylinder');
         if (a.shape !== (fp.barriers ? 'rectObstacles' : 'rect')) report(`rect Free Play shape ${a.shape}`);
-        if (a.width !== FREE_PLAY_RECT.width || a.height !== FREE_PLAY_RECT.height) report(`rect Free Play size ${a.width} x ${a.height}`);
+        if (a.width !== want.width || a.height !== want.height) report(`rect Free Play size ${a.width} x ${a.height}`);
         break;
       case 'circle':
         if (cyl) report('circle Free Play on a cylinder');
-        if (a.shape !== 'circle' || a.width !== FREE_PLAY_CIRCLE || a.height !== FREE_PLAY_CIRCLE) report(`circle Free Play arena ${a.shape} ${a.width} x ${a.height}`);
+        if (a.shape !== 'circle' || a.width !== want.width || a.height !== want.height) report(`circle Free Play arena ${a.shape} ${a.width} x ${a.height}`);
         break;
       case 'drum':
         if (!cyl) report(`drum Free Play surface ${String(def.surface)}`);
         if (a.shape !== (fp.barriers ? 'rectObstacles' : 'rect')) report(`drum Free Play shape ${a.shape}`);
         if (!isInt(a.width / CYLINDER_WIDTH_STEP)) report(`drum width ${a.width} not a multiple of ${CYLINDER_WIDTH_STEP}`);
+        if (options !== undefined && (a.width !== want.width || a.height !== want.height)) report(`drum Free Play size ${a.width} x ${a.height}`);
         break;
       default:
         report(`unknown Free Play arena ${String(fp.arena)}`);
     }
   });
-  checkArena(c, def.arena, def.surface === 'cylinder', true);
+  checkArena(c, def.arena, def.surface === 'cylinder', true, FREE_PLAY_SIZE_SCALE[options?.size ?? 'medium'] ?? 1);
   c.check('E2', (report) => {
     const seen = new Set<string>();
     for (const e of def.roster) {

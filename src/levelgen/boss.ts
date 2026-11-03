@@ -107,3 +107,16 @@ export function bossHazards(h: HazardDef): HazardDef {
 export function sameBoss(a: BossSpec, b: BossSpec): boolean {
   return a.id === b.id && a.tier === b.tier && a.atSec === b.atSec && a.hpMul === b.hpMul;
 }
+
+/**
+ * Free Play options (docs/14): the boss of segment s. 'off': none. 'every3': the Endless tier ladder
+ * (bossForSegment, every 180 s). A BossId: that boss every 180 s, its hit point multiplier from
+ * the ladder's pass at the same boss number. A drum keeps no boss either way. Pure, no draw.
+ */
+export function freePlayBossFor(bosses: 'off' | 'every3' | BossId, segment: number, cylinder: boolean): BossSpec | null {
+  if (bosses === 'off' || cylinder) return null;
+  const ladder = bossForSegment(segment);
+  if (bosses === 'every3' || ladder === null) return ladder;
+  const tier = bossTierOf(bosses);
+  return tier === null ? null : { id: bosses, tier, atSec: ladder.atSec, hpMul: ladder.hpMul };
+}

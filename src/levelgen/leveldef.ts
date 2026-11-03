@@ -1,6 +1,7 @@
 // Contract stub (docs/05-build-plan.md "Contract stubs"). Types are copied exactly from
 // docs/02-level-generator.md section 3. Foundry owns this file from W1 and may grow it additively.
 import type { SurfaceKind } from '../core/surface';
+import type { FreePlayBosses, FreePlayDensity, FreePlaySize, FreePlayWells } from '../core/freeplayConfig';
 
 export const LEVELDEF_VERSION = 1;
 /** Generator version of every def the v1 algorithm alone produced (flag off, or band 1). */
@@ -791,6 +792,21 @@ export interface FreePlayInfo {
   drumPattern: 'rings' | 'pillars' | null;
   /** Re-derives (0 to MAX_RETRIES) before the def passed validateFreePlay. */
   retries: number;
+  /**
+   * Free Play options (docs/14): the level side of the FreePlayConfig the def was built from.
+   * Absent when no config was passed (today's Free Play, byte for byte).
+   */
+  options?: FreePlayLevelOptions;
+}
+
+/** The level side of a FreePlayConfig, as stored on the def (freeplay.ts levelOptionsOf). */
+export interface FreePlayLevelOptions {
+  /** Chosen kinds in ALL_ENEMY_KINDS order, only kinds the run's catalogue has; empty: the normal roster. */
+  enemies: EnemyKind[];
+  density: FreePlayDensity;
+  bosses: FreePlayBosses;
+  wells: FreePlayWells;
+  size: FreePlaySize;
 }
 
 /** Recursive Object.freeze. Returns its argument. */
