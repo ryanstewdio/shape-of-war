@@ -13,10 +13,13 @@ import {
   GENERATOR_VERSION_V3,
   GENERATOR_VERSION_V4,
   GENERATOR_VERSION_V5,
+  GENERATOR_VERSION_V6,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_MIN_REPEAT_SEC,
   MAX_RETRIES,
+  R1_STAR_MULS,
+  isLongVersion,
   SPAWN_PATTERNS,
   SUPER_KINDS,
   bandOf,
@@ -441,7 +444,7 @@ function checkJson(c: Collector, def: unknown): void {
 function checkVersions(c: Collector, version: number, generatorVersion: number): void {
   c.check('J3', (report) => {
     if (version !== LEVELDEF_VERSION) report(`version ${version} !== ${LEVELDEF_VERSION}`);
-    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5];
+    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6];
     if (!known.includes(generatorVersion)) report(`generatorVersion ${generatorVersion} not ${known.join(', ')}`);
   });
 }
@@ -463,6 +466,8 @@ export interface LevelCheckOptions extends BossCheckOptions {
   enableCylinder?: boolean;
   /** Release polish: true or false makes J8 tie GENERATOR_VERSION_V5 to the flag; absent skips J8. */
   enableLongLevels?: boolean;
+  /** Release gate R1: with enableLongLevels true, true or false makes J9 tie GENERATOR_VERSION_V6 to the flag. */
+  enableR1Pacing?: boolean;
 }
 
 interface BossRules {
@@ -491,8 +496,8 @@ function checkBoss(c: Collector, boss: BossSpec | undefined, generatorVersion: n
       else if (!sameBoss(boss, want)) {
         report(`boss ${String(boss.id)} tier ${boss.tier} at ${boss.atSec} s x${boss.hpMul} !== schedule ${want.id} tier ${want.tier} at ${want.atSec} s x${want.hpMul}`);
       }
-      if (generatorVersion !== GENERATOR_VERSION_V3 && generatorVersion !== GENERATOR_VERSION_V5) {
-        report(`boss present with generatorVersion ${generatorVersion}, want ${GENERATOR_VERSION_V3} or ${GENERATOR_VERSION_V5}`);
+      if (generatorVersion !== GENERATOR_VERSION_V3 && !isLongVersion(generatorVersion)) {
+        report(`boss present with generatorVersion ${generatorVersion}, want ${GENERATOR_VERSION_V3}, ${GENERATOR_VERSION_V5} or ${GENERATOR_VERSION_V6}`);
       }
     } else {
       if (generatorVersion === GENERATOR_VERSION_V3) report(`generatorVersion ${GENERATOR_VERSION_V3} without a boss`);
@@ -757,7 +762,7 @@ function checkArena(c: Collector, arena: ArenaDef, cylinder = false): void {
 }
 
 function checkObjective(c: Collector, def: LevelDef, band: Band): void {
-  const long = def.generatorVersion === GENERATOR_VERSION_V5;
+  const long = isLongVersion(def.generatorVersion);
   const l = LONG_BANDS[band];
   const b = long ? { ...BANDS[band], surviveSec: l.surviveSec, scoreTimeSec: l.scoreTimeSec } : BANDS[band];
   const o = def.objective;
@@ -802,7 +807,10 @@ function checkObjective(c: Collector, def: LevelDef, band: Band): void {
     const p = def.par;
     if (!(p >= PAR_MIN) || p % PAR_STEP !== 0) report(`par ${p} not a multiple of ${PAR_STEP} at least ${PAR_MIN}`);
     const s = def.stars;
-    if (s.length !== 3 || s[0] !== p || s[1] !== 2 * p || s[2] !== 4 * p) report(`stars [${s.join(', ')}] !== [par, 2 x par, 4 x par] for par ${p}`);
+    // Release gate R1: version 6 stars sit at R1_STAR_MULS x par, each on the PAR_STEP grid.
+    const muls = def.generatorVersion === GENERATOR_VERSION_V6 ? R1_STAR_MULS : ([1, 2, 4] as const);
+    const want = muls.map((m) => (m === 1 ? p : Math.max(PAR_MIN, Math.round((m * p) / PAR_STEP) * PAR_STEP)));
+    if (s.length !== 3 || s.some((v, i) => v !== want[i])) report(`stars [${s.join(', ')}] !== [${muls.map((m) => `${m} x par`).join(', ')}] for par ${p}`);
   });
   c.check('W9', (report) => {
     if (o.kind !== 'destroy') return;
@@ -927,7 +935,7 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   checkCylinder(c, def);
   checkV2Content(c, def.generatorVersion, band, () => namedKinds(def.roster, def.waves));
   const o = def.objective;
-  const bossAt = def.generatorVersion === GENERATOR_VERSION_V5 ? BOSS_LONG_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
+  const bossAt = isLongVersion(def.generatorVersion) ? BOSS_LONG_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
   checkBoss(c, def.boss, def.generatorVersion, {
     want: bossForLevel(def.levelIndex, bossAt),
     unit: 'level',
@@ -940,9 +948,18 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
     // Release polish: version 5 exactly when the long level flag is on (when the caller says).
     const flag = opts?.enableLongLevels;
     if (flag === undefined) return;
-    const v5 = def.generatorVersion === GENERATOR_VERSION_V5;
-    if (flag && !v5) report(`generatorVersion ${def.generatorVersion} with enableLongLevels on, want ${GENERATOR_VERSION_V5}`);
-    if (!flag && v5) report(`generatorVersion ${GENERATOR_VERSION_V5} with enableLongLevels off`);
+    const v5 = isLongVersion(def.generatorVersion);
+    if (flag && !v5) report(`generatorVersion ${def.generatorVersion} with enableLongLevels on, want ${GENERATOR_VERSION_V5} or ${GENERATOR_VERSION_V6}`);
+    if (!flag && v5) report(`generatorVersion ${def.generatorVersion} with enableLongLevels off`);
+  });
+  c.check('J9', (report) => {
+    // Release gate R1: on a long level, version 6 exactly when the R1 flag is on and the level has
+    // no boss (boss levels keep version 5), when the caller says.
+    if (opts?.enableLongLevels !== true) return;
+    const v6 = def.generatorVersion === GENERATOR_VERSION_V6;
+    const flag = opts.enableR1Pacing === true && def.boss === undefined;
+    if (flag && !v6) report(`generatorVersion ${def.generatorVersion} with enableR1Pacing on, want ${GENERATOR_VERSION_V6}`);
+    if (!flag && v6) report(`generatorVersion ${GENERATOR_VERSION_V6} with enableR1Pacing off or on a boss level`);
   });
   c.check('J5', (report) => {
     const r = def.retries;
@@ -978,8 +995,8 @@ function checkCylinder(c: Collector, def: LevelDef): void {
     const a = def.arena;
     if (a.shape !== 'rect' && a.shape !== 'rectObstacles') report(`cylinder arena shape ${String(a.shape)}, want rect or rectObstacles`);
     if (!isInt(a.width / CYLINDER_WIDTH_STEP)) report(`cylinder width ${a.width} not a multiple of ${CYLINDER_WIDTH_STEP}`);
-    if (def.generatorVersion !== GENERATOR_VERSION_V4 && def.generatorVersion !== GENERATOR_VERSION_V5) {
-      report(`cylinder with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V4} or ${GENERATOR_VERSION_V5}`);
+    if (def.generatorVersion !== GENERATOR_VERSION_V4 && !isLongVersion(def.generatorVersion)) {
+      report(`cylinder with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V4}, ${GENERATOR_VERSION_V5} or ${GENERATOR_VERSION_V6}`);
     }
   });
 }
@@ -1012,7 +1029,7 @@ function checkMembranes(c: Collector, def: LevelDef): void {
         return;
       }
       if (def.surface !== 'cylinder') report(`membrane obstacle ${i} on a ${String(def.surface)} level`);
-      if (def.generatorVersion !== GENERATOR_VERSION_V5) report(`membrane obstacle ${i} with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V5}`);
+      if (!isLongVersion(def.generatorVersion)) report(`membrane obstacle ${i} with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V5} or ${GENERATOR_VERSION_V6}`);
       if (o.h !== DRUM_BAR_THICK || !inRange(o.w, MEMBRANE_MIN, MEMBRANE_MAX)) report(`membrane ${i} size ${o.w} x ${o.h}, want ${MEMBRANE_MIN} to ${MEMBRANE_MAX} x ${DRUM_BAR_THICK}`);
       if (!obs.some((b) => b.membrane !== true && b.w > b.h && membraneJoined(o, b))) report(`membrane ${i} does not continue a ring bar`);
       perRow.set(o.cy, (perRow.get(o.cy) ?? 0) + 1);

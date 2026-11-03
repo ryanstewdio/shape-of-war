@@ -67,10 +67,11 @@ export function narrowWidth(height: number): number {
  * no draw. narrow: rect at narrowWidth, no obstacles, no draw. rings and pillars: rectObstacles
  * with the pattern's bars in place of the C0 obstacles.
  */
-export function applyDrumPattern(base: ArenaDef, pattern: DrumPattern, r: Rng, membranes = false): ArenaDef {
+export function applyDrumPattern(base: ArenaDef, pattern: DrumPattern, r: Rng, membranes = false, clearOpen = false): ArenaDef {
   switch (pattern) {
     case 'open':
-      return base;
+      // Release gate R1: clearOpen makes an open drum a plain rect with no bars (no draw either way).
+      return clearOpen ? { ...base, shape: 'rect', obstacles: [] } : base;
     case 'narrow':
       return { ...base, shape: 'rect', width: narrowWidth(base.height), obstacles: [] };
     case 'rings': {

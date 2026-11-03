@@ -31,6 +31,7 @@ import {
   V1_GEN_CONFIG,
   V2_GEN_CONFIG,
   V4_GEN_CONFIG,
+  V5_GEN_CONFIG,
   fmix32,
 } from '../../src/levelgen/leveldef';
 import type { ArenaShape, Band, BossId, BossSpec, EndlessSegmentDef, GenConfig, ObjectiveDef } from '../../src/levelgen/leveldef';
@@ -225,11 +226,11 @@ const LONG_PINS: readonly LongPin[] = [
   { name: 'seed42-level50-long', runSeed: 42, levelIndex: 50, hash: '5398DD3A', objective: 'survive', boss: 'prism', membranes: false },
 ];
 
-describe('LevelDef long level pins (default config)', () => {
-  expect(DEFAULT_GEN_CONFIG.enableLongLevels).toBe(true);
+describe('LevelDef long level pins (V5_GEN_CONFIG: the default with the R1 pacing off)', () => {
+  expect(V5_GEN_CONFIG.enableLongLevels).toBe(true);
 
   describe.each(LONG_PINS)('$name', (pin) => {
-    const def = generateLevel(pin.runSeed, pin.levelIndex, DEFAULT_GEN_CONFIG);
+    const def = generateLevel(pin.runSeed, pin.levelIndex, V5_GEN_CONFIG);
 
     it('has the hard coded levelHash', () => {
       expect(levelHash(def)).toBe(pin.hash);
@@ -244,7 +245,7 @@ describe('LevelDef long level pins (default config)', () => {
     });
 
     it('validates with the default config and needed no re-derive', () => {
-      expect(validateLevel(def, DEFAULT_GEN_CONFIG).errors).toEqual([]);
+      expect(validateLevel(def, V5_GEN_CONFIG).errors).toEqual([]);
       expect(def.retries).toBe(0);
     });
 

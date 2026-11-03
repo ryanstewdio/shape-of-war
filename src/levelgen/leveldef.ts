@@ -28,6 +28,22 @@ export const GENERATOR_VERSION_V4 = 4;
  * (boss and cylinder are read from the boss and surface fields). Flag off: versions 1 to 4 as before.
  */
 export const GENERATOR_VERSION_V5 = 5;
+/**
+ * Release gate R1 pacing. Generator version of every non boss def built with enableLongLevels and
+ * enableR1Pacing both on: whole level par with stars at 1, 1.25 and 1.5 par, volatile waves with no
+ * dead air, 40 percent drums and truly open open drums. It replaces version 5 on such a def; boss
+ * levels stay version 5. Either flag off: versions 1 to 5 as before, byte for byte.
+ */
+export const GENERATOR_VERSION_V6 = 6;
+
+/**
+ * Version 6 star thresholds as multiples of par, each rounded to the 500 grid: a strong player
+ * who plays the full level lands between par and 1.5 x par (versions 1 to 5: 1, 2 and 4).
+ */
+export const R1_STAR_MULS: readonly [number, number, number] = [1, 1.25, 1.5];
+
+/** True when a def carries the long level tables (version 5 or 6). */
+export const isLongVersion = (v: number): boolean => v === GENERATOR_VERSION_V5 || v === GENERATOR_VERSION_V6;
 
 /** V3 boss ids, in schedule order (docs/13). A BossView id is the index in this list. */
 export const BOSS_IDS = ['warden', 'brood', 'spindle', 'ember', 'mirage', 'gravitas', 'bastion', 'tempest', 'twins', 'prism'] as const;
@@ -246,6 +262,13 @@ export interface GenConfig {
    * false is byte identical to the generator before it. Default on. Endless never reads it.
    */
   enableLongLevels?: boolean;
+  /**
+   * Release gate R1. On together with enableLongLevels: whole level par and 1, 1.25, 1.5 par
+   * stars, volatile waves without dead air, cylinder levels 40 percent of eligible levels and open
+   * drums without barriers; reports GENERATOR_VERSION_V6 (boss levels are left at version 5). Optional; only true turns it on, so
+   * absent or false is byte identical to version 5. Default on. Endless never reads it.
+   */
+  enableR1Pacing?: boolean;
 }
 
 export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
@@ -257,6 +280,7 @@ export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>(
   enableBosses: true,
   enableCylinder: true,
   enableLongLevels: true,
+  enableR1Pacing: true,
 });
 
 /** DEFAULT_GEN_CONFIG with the v2 enemies, bosses and cylinder off: the v1 generator, byte for byte. */
@@ -266,16 +290,29 @@ export const V1_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
   enableBosses: false,
   enableCylinder: false,
   enableLongLevels: false,
+  enableR1Pacing: false,
 });
 
 /** DEFAULT_GEN_CONFIG with the bosses and cylinder off: the v2.1 generator (v2 enemies on), byte for byte. */
-export const V2_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableBosses: false, enableCylinder: false, enableLongLevels: false });
+export const V2_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
+  ...DEFAULT_GEN_CONFIG,
+  enableBosses: false,
+  enableCylinder: false,
+  enableLongLevels: false,
+  enableR1Pacing: false,
+});
 
 /** DEFAULT_GEN_CONFIG with the cylinder off: the v3 generator (v2 enemies and bosses on), byte for byte. */
-export const V3_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableCylinder: false, enableLongLevels: false });
+export const V3_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableCylinder: false, enableLongLevels: false, enableR1Pacing: false });
 
 /** DEFAULT_GEN_CONFIG with the long levels off: the v4 generator (cylinder drums on), byte for byte. */
-export const V4_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableLongLevels: false });
+export const V4_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableLongLevels: false, enableR1Pacing: false });
+
+/** DEFAULT_GEN_CONFIG with the R1 pacing off: the v5 generator (long levels on), byte for byte. */
+export const V5_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableR1Pacing: false });
+
+/** True when a config builds R1 paced levels (long levels and R1 pacing both on). */
+export const runsR1 = (cfg: Readonly<GenConfig>): boolean => cfg.enableLongLevels === true && cfg.enableR1Pacing === true;
 
 export interface ValidationResult {
   ok: boolean;

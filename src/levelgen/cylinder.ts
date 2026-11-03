@@ -14,6 +14,8 @@ export const CYLINDER_WIDTH_STEP = 64;
 export const CYLINDER_MIN_LEVEL = 11;
 /** Share of eligible levels (11 and up, not a boss level) drawn as cylinder. */
 export const CYLINDER_CHANCE = 0.35;
+/** Release gate R1: the share with GenConfig.enableR1Pacing on (same single draw, a higher bar). */
+export const R1_CYLINDER_CHANCE = 0.4;
 
 /** True when level n may be a cylinder: 11 and up and not a boss level (boss levels stay flat). */
 export function cylinderEligible(levelIndex: number): boolean {

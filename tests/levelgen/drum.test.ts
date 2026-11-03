@@ -29,7 +29,7 @@ import {
 } from '../../src/levelgen/drum';
 import type { DrumPattern } from '../../src/levelgen/drum';
 import { drumPatternFor, generateLevel, levelHash } from '../../src/levelgen/generator';
-import { DEFAULT_GEN_CONFIG, V3_GEN_CONFIG, V4_GEN_CONFIG, fmix32, levelSeed } from '../../src/levelgen/leveldef';
+import { DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V6, V3_GEN_CONFIG, V4_GEN_CONFIG, V5_GEN_CONFIG, fmix32, levelSeed } from '../../src/levelgen/leveldef';
 import type { ArenaDef, LevelDef } from '../../src/levelgen/leveldef';
 import {
   CONNECT_CLEARANCE,
@@ -241,7 +241,7 @@ describe('drum patterns in the generator', () => {
       const d = generateLevel(seed, 1 + (i % 60), V4_GEN_CONFIG);
       if (d.surface === 'flat') flat = fold(flat, levelHash(d), nFlat++);
       const n = 11 + (i % 50);
-      if (drumPatternFor(levelSeed(seed, n), n) === 'open') open = fold(open, levelHash(generateLevel(seed, n, V4_GEN_CONFIG)), nOpen++);
+      if (drumPatternFor(levelSeed(seed, n), n, V4_GEN_CONFIG) === 'open') open = fold(open, levelHash(generateLevel(seed, n, V4_GEN_CONFIG)), nOpen++);
     }
     expect([hex(flat), nFlat]).toEqual([MAIN_FLAT_ON_DIGEST, MAIN_FLAT_ON_COUNT]);
     expect([hex(open), nOpen]).toEqual([MAIN_OPEN_DIGEST, MAIN_OPEN_COUNT]);
@@ -259,11 +259,11 @@ describe('drum patterns in the generator', () => {
     }
   }, 120000);
 
-  it('seed 42 has one level per pattern for the device check', () => {
+  it('seed 42 has one level per pattern for the device check (version 5)', () => {
     for (const p of DRUM_PATTERNS) {
       const { level, hash } = EXAMPLES[p];
-      expect(drumPatternFor(levelSeed(42, level), level), `level ${level}`).toBe(p);
-      const d = generateLevel(42, level);
+      expect(drumPatternFor(levelSeed(42, level), level, V5_GEN_CONFIG), `level ${level}`).toBe(p);
+      const d = generateLevel(42, level, V5_GEN_CONFIG);
       expect(levelHash(d), `${p} level ${level}`).toBe(hash);
       expectDrum(d, p);
     }
@@ -276,7 +276,7 @@ function expectDrum(d: LevelDef, p: DrumPattern): void {
   const W = a.width;
   expect(d.surface, at).toBe('cylinder');
   expect(W % CYLINDER_WIDTH_STEP, at).toBe(0);
-  expect(validateLevel(d, DEFAULT_GEN_CONFIG).errors, at).toEqual([]);
+  expect(validateLevel(d, d.generatorVersion === GENERATOR_VERSION_V6 ? DEFAULT_GEN_CONFIG : V5_GEN_CONFIG).errors, at).toEqual([]);
   expect(d.retries, at).toBe(0);
   const flood = drumFlood(a, COARSE, CONNECT_CLEARANCE);
   expect(flood.top && flood.bottom, `${at} rims reachable`).toBe(true);

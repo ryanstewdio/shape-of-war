@@ -2,9 +2,9 @@
 // Date, no DOM. The generator reads pulseAt and destroyCountFor; tests and the validator read the
 // estimates. A competent player kills KILL_RATE of the spawns (the par model), so a destroy clear
 // lands on the spawn numbered ceil(count / KILL_RATE).
-import { expandSpawns, forEachSpawn } from './leveldef';
+import { ENEMY_BASE, ENEMY_GEOMS, R1_STAR_MULS, expandSpawns, forEachSpawn } from './leveldef';
 import type { LevelDef, ObjectiveDef, WaveSchedule } from './leveldef';
-import { KILL_RATE, MAX_EST_SEC } from './validate';
+import { KILL_RATE, MAX_EST_SEC, PAR_MIN, PAR_STEP } from './validate';
 
 export interface PulseShape {
   /** Seconds of calmer opening. */
@@ -38,6 +38,12 @@ export function pulseAt(s: PulseShape, t: number): Pulse {
   const phase = (t - s.calmSec) % s.peakEverySec;
   if (phase >= build) return { budget: BREATHER_BUDGET, interval: BREATHER_INTERVAL };
   return { budget: BUILD_BUDGET_LOW + ((BUILD_BUDGET_PEAK - BUILD_BUDGET_LOW) * phase) / build, interval: 1 };
+}
+
+/** True during a breather (the last breatherSec of each cycle after the calm opening). */
+export function inBreather(s: PulseShape, t: number): boolean {
+  if (t < s.calmSec) return false;
+  return (t - s.calmSec) % s.peakEverySec >= s.peakEverySec - s.breatherSec;
 }
 
 /** Number of spawns with t < tSec. */
@@ -93,6 +99,96 @@ export function estimateDuration(def: Pick<LevelDef, 'objective' | 'waves' | 'bo
   const t = objectiveSec(def.objective, def.waves);
   if (def.boss === undefined) return { wavesSec: t, boss: false };
   return { wavesSec: Math.min(t, def.boss.atSec), boss: true };
+}
+
+// R1 whole level par. The legacy par (computePar) scaled the multiplier from a 0.1 geom rate and
+// halved the result, which on a 5 minute level put a strong full run at 6x par. This one walks the
+// spawns in time order over the expected duration: a competent player kills KILL_RATE of each
+// spawn, scoring base x multiplier, and collects R1_COLLECT_RATE of the geoms the kills drop,
+// each geom adding 1 to the multiplier (capped as the sim caps it). par is the total.
+
+/** Geoms a competent player collects per geom dropped. Calibrated on Ryan's R1 level 6 run. */
+export const R1_COLLECT_RATE = 0.45;
+/** The sim's multiplier cap (src/game/scoring.ts MULTIPLIER_CAP), copied to keep levelgen standalone. */
+export const R1_MULTIPLIER_CAP = 999;
+const toParGrid = (v: number): number => Math.max(PAR_MIN, Math.round(v / PAR_STEP) * PAR_STEP);
+
+/**
+ * Expected whole level score of a competent player: spawns before the objective time (survive,
+ * scoreInTime) or the first ceil(count / KILL_RATE) spawns (destroy), in time order.
+ */
+export function wholeLevelScore(w: WaveSchedule, o: ObjectiveDef, killRate: number = KILL_RATE, collectRate: number = R1_COLLECT_RATE): number {
+  const all = expandSpawns(w, o.kind === 'destroy' ? MAX_EST_SEC : o.kind === 'survive' ? o.durationSec : o.timeLimitSec);
+  const n = o.kind === 'destroy' ? Math.min(all.length, spawnsNeeded(o.count, killRate)) : all.length;
+  let score = 0;
+  let geoms = 0;
+  for (let i = 0; i < n; i++) {
+    const s = all[i];
+    if (s === undefined) continue;
+    score += killRate * ENEMY_BASE[s.kind] * Math.min(R1_MULTIPLIER_CAP, 1 + collectRate * geoms);
+    geoms += killRate * ENEMY_GEOMS[s.kind];
+  }
+  return score;
+}
+
+/** R1 par (on the 500 grid, at least PAR_MIN) and its stars at R1_STAR_MULS x par, each on the grid. */
+export function wholeLevelPar(w: WaveSchedule, o: ObjectiveDef): { par: number; stars: [number, number, number] } {
+  const par = toParGrid(wholeLevelScore(w, o));
+  return { par, stars: r1Stars(par) };
+}
+
+/** Stars of an R1 par. */
+export function r1Stars(par: number): [number, number, number] {
+  return [toParGrid(par * R1_STAR_MULS[0]), toParGrid(par * R1_STAR_MULS[1]), toParGrid(par * R1_STAR_MULS[2])];
+}
+
+/** R1 dead air model: seconds an enemy stays alive (0.6 s telegraph plus a strong player's kill time). */
+export const DEAD_AIR_LIVE_SEC = 2;
+/** R1: fewer live enemies than this counts as dead air. */
+export const DEAD_AIR_MIN_LIVE = 3;
+/** R1: dead air is not checked in the first seconds of a level. */
+export const DEAD_AIR_FROM_SEC = 10;
+/** R1: longest dead air allowed anywhere, and the longest allowed as a breather right after a peak. */
+export const DEAD_AIR_MAX_SEC = 3;
+export const DEAD_AIR_BREATHER_SEC = 4;
+
+export interface DeadAirGap {
+  startSec: number;
+  lenSec: number;
+}
+
+/**
+ * Stretches of [fromSec, toSec) with fewer than minLive enemies alive, when every spawn lives
+ * liveSec from its spawn time (the dead air model). Pure; allocates, so test and generation time only.
+ */
+export function deadAirGaps(
+  w: WaveSchedule,
+  fromSec: number,
+  toSec: number,
+  liveSec: number = DEAD_AIR_LIVE_SEC,
+  minLive: number = DEAD_AIR_MIN_LIVE,
+): DeadAirGap[] {
+  const ev: Array<[number, number]> = [];
+  forEachSpawn(w, toSec, (t) => {
+    if (t + liveSec > fromSec) ev.push([t, 1], [t + liveSec, -1]);
+  });
+  // Deaths sort before births at the same instant, so back to back lives do not overlap.
+  ev.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const gaps: DeadAirGap[] = [];
+  let live = 0;
+  let gapStart: number | null = fromSec;
+  for (const [t, d] of ev) {
+    const at = Math.min(Math.max(t, fromSec), toSec);
+    live += d;
+    if (live >= minLive && gapStart !== null) {
+      if (at > gapStart) gaps.push({ startSec: gapStart, lenSec: at - gapStart });
+      gapStart = null;
+    } else if (live < minLive && gapStart === null) {
+      gapStart = at;
+    }
+  }
+  if (gapStart !== null && toSec > gapStart) gaps.push({ startSec: gapStart, lenSec: toSec - gapStart });
+  return gaps;
 }
 
 /**
