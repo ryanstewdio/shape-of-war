@@ -466,9 +466,9 @@ Settings keys (docs/12 Appendix B). Every read and write is in try/catch with a 
 |---|---|---|---|
 | `sow.settings.tilt` | `off`, `low`, `high` | `off` | "Perspective tilt" row, three buttons, saved on tap, in the menu and the pause screen. Added only after D12 |
 | `sow.settings.menuTheme` | `0`, `1`, `2` | none (first boot starts on theme 0) | No control. Audio saves the last title theme index through `menuStore` so the rotation continues across boots |
-| `sow.settings.difficulty` | `easy`, `normal`, `hard` | `normal` | "Difficulty" row, three buttons, saved on tap, applied at the next level start and shown on the intro card. Added for the tester build (docs/14 item 6) |
+| `sow.settings.difficulty` | `easy`, `normal`, `hard`, `insane` | `normal` | "Difficulty" row, four buttons, saved on tap, applied at the next level start. Added for the tester build (docs/14 item 6). R1: Insane added, and the intro card carries the same four way selector; a tap there saves the key and rebuilds that level at the new difficulty |
 
-No other key is added. `sow.settings.effects` keeps its key and values; its code default changes from `standard` to `high` only after D9 (SPEC 3.8 rule 5) (default confirmed, Q15). Buttons have a 44 CSS px minimum hit height. Reset progress does not reset settings.
+No other key is added. R1: each `sow.scores.adventure` entry may carry an optional `difficulty` field (one of the four values) beside `best` and `stars`; `stars` runs 0 to 4 (capped Easy 1, Normal 2, Hard 3; 4 only for an Insane win). Entries without the field still load. `sow.settings.effects` keeps its key and values; its code default changes from `standard` to `high` only after D9 (SPEC 3.8 rule 5) (default confirmed, Q15). Buttons have a 44 CSS px minimum hit height. Reset progress does not reset settings.
 
 Bus events added to `src/core/events.ts` (stubbed at V3-W0, emitted as listed). Payload objects are reused by the sim, so handlers copy what they need:
 

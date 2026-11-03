@@ -8,7 +8,8 @@ import type { SpaceLevelSetting } from '../core/settings';
 import { button, createScreen, el, type Screen } from './dom';
 import type { LevelResult } from './flow';
 import { formatInt, starGlyphs } from './format';
-import { SPACE_ROW_LABEL, spaceLabel } from './settings';
+import { fourthStarEl, hasFourthStar } from './fourthStar';
+import { difficultyLabel, SPACE_ROW_LABEL, spaceLabel } from './settings';
 
 export interface ResultsActions {
   next(): void;
@@ -47,6 +48,10 @@ export interface ResultText {
   physics: string;
   /** Boss line, '' when the level had no boss or it was not beaten. */
   boss: string;
+  /** R1: true when the iridescent 4th star shows after the three glyphs (an Insane win). */
+  fourthStar: boolean;
+  /** R1: "Difficulty: Hard" on an Adventure result that names one, '' otherwise. */
+  difficulty: string;
 }
 
 /** Pure: the text lines shown for a result. */
@@ -61,6 +66,8 @@ export function resultLines(r: LevelResult): ResultText {
       badge: badgeText(r),
       physics,
       boss: '',
+      fourthStar: false,
+      difficulty: '',
     };
   }
   const title = r.success ? `Level ${r.levelIndex} complete` : `Level ${r.levelIndex} failed`;
@@ -73,6 +80,8 @@ export function resultLines(r: LevelResult): ResultText {
     badge: '',
     physics,
     boss: bossLine(r),
+    fourthStar: hasFourthStar(r.stars),
+    difficulty: r.difficulty === undefined ? '' : `Difficulty: ${difficultyLabel(r.difficulty)}`,
   };
 }
 
@@ -87,6 +96,11 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
   score.style.fontSize = 'clamp(24px, 6vmin, 52px)';
   const badge = el('div', 'sow-badge');
   const starsEl = el('div', 'sow-stars');
+  const glyphs = el('span', '');
+  const star4 = fourthStarEl();
+  starsEl.append(glyphs, star4);
+  const diff = el('div', 'sow-small');
+  diff.setAttribute('data-results', 'difficulty');
   const detail = el('div', 'sow-sub');
   const physics = el('div', 'sow-sub');
   physics.setAttribute('data-results', 'physics');
@@ -95,7 +109,7 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
   const row = el('div', 'sow-row');
   const next = button('Next', actions.next);
   row.append(next, button('Retry', actions.retry), button('Menu', actions.menu));
-  s.root.append(title, score, badge, starsEl, boss, detail, physics, row);
+  s.root.append(title, score, badge, starsEl, diff, boss, detail, physics, row);
   return {
     ...s,
     showResult(r) {
@@ -104,8 +118,12 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
       score.textContent = t.score;
       badge.textContent = t.badge;
       badge.style.display = t.badge === '' ? 'none' : '';
-      starsEl.textContent = t.stars;
+      glyphs.textContent = t.stars;
+      star4.style.display = t.fourthStar ? '' : 'none';
       starsEl.style.display = t.stars === '' ? 'none' : '';
+      starsEl.setAttribute('aria-label', t.fourthStar ? '4 stars' : t.stars);
+      diff.textContent = t.difficulty;
+      diff.style.display = t.difficulty === '' ? 'none' : '';
       boss.textContent = t.boss;
       boss.style.display = t.boss === '' ? 'none' : '';
       detail.textContent = t.detail;

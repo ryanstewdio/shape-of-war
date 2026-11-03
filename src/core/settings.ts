@@ -3,6 +3,7 @@
 // in try/catch: private mode, quota or a missing localStorage fall back to an in memory copy,
 // then to defaults.
 import type { Difficulty } from './difficulty';
+import { asStarCount, type StarCount } from './stars';
 
 export interface Settings {
   neon: number;
@@ -222,16 +223,17 @@ export function saveTilt(level: TiltSetting, storage: StorageLike | null = defau
   writeRaw(storage, TILT_KEY, parseTilt(level));
 }
 
-// Difficulty (release polish, docs/14 item 6): "easy", "normal" or "hard", default "normal". The
-// literal union comes from src/core/difficulty.ts. Kept out of Settings and DEFAULT_SETTINGS, like
-// the other extra keys. Applied when the next level starts, never to a running world.
+// Difficulty (release polish, docs/14 item 6; Insane added in R1): "easy", "normal", "hard" or
+// "insane", default "normal". The literal union comes from src/core/difficulty.ts. Kept out of
+// Settings and DEFAULT_SETTINGS, like the other extra keys. Applied when a level starts (or while
+// its intro card still holds the sim), never to a running world.
 
 export const DIFFICULTY_KEY = `${SETTINGS_PREFIX}difficulty`;
 export const DEFAULT_DIFFICULTY: Difficulty = 'normal';
 
-/** Pure: anything other than the three exact lower case strings (and null) falls back to "normal". */
+/** Pure: anything other than the four exact lower case strings (and null) falls back to "normal". */
 export function parseDifficulty(raw: string | null): Difficulty {
-  return raw === 'easy' || raw === 'normal' || raw === 'hard' ? raw : DEFAULT_DIFFICULTY;
+  return raw === 'easy' || raw === 'normal' || raw === 'hard' || raw === 'insane' ? raw : DEFAULT_DIFFICULTY;
 }
 
 export function loadDifficulty(storage: StorageLike | null = defaultStorage()): Difficulty {
@@ -327,13 +329,22 @@ export function unlockLevel(index: number, storage: StorageLike | null = default
 
 export interface LevelBest {
   best: number;
-  stars: 0 | 1 | 2 | 3;
+  /** Best stars earned (R1: capped by difficulty, 4 only from an Insane win). */
+  stars: StarCount;
+  /** R1: the difficulty the best stars were earned on. Absent on entries saved before R1. */
+  difficulty?: Difficulty;
 }
 
 export type AdventureScores = Record<string, LevelBest>;
 
-function asStars(v: unknown): 0 | 1 | 2 | 3 {
-  return v === 1 || v === 2 || v === 3 ? v : 0;
+function asStars(v: unknown): StarCount {
+  return asStarCount(v);
+}
+
+function storedDifficulty(v: unknown): Difficulty | undefined {
+  if (typeof v !== 'string') return undefined;
+  const d = parseDifficulty(v);
+  return d === v ? d : undefined;
 }
 
 /** Pure: parse the stored map, dropping any entry that is not well formed. */
@@ -351,8 +362,11 @@ export function parseAdventureScores(raw: string | null): AdventureScores {
     if (!/^\d+$/.test(k) || typeof v !== 'object' || v === null) continue;
     const best: unknown = 'best' in v ? v.best : undefined;
     const st: unknown = 'stars' in v ? v.stars : undefined;
+    const diff = storedDifficulty('difficulty' in v ? v.difficulty : undefined);
     if (typeof best !== 'number' || !Number.isFinite(best) || best < 0) continue;
-    out[k] = { best: Math.floor(best), stars: asStars(st) };
+    const entry: LevelBest = { best: Math.floor(best), stars: asStars(st) };
+    if (diff !== undefined) entry.difficulty = diff;
+    out[k] = entry;
   }
   return out;
 }
@@ -361,20 +375,29 @@ export function loadAdventureScores(storage: StorageLike | null = defaultStorage
   return parseAdventureScores(readRaw(storage, ADVENTURE_SCORES_KEY));
 }
 
-/** Pure: merge one result into the map. Best score and best stars are kept independently. */
+/**
+ * Pure: merge one result into the map. Best score and best stars are kept independently. A higher
+ * star count replaces a lower one together with the difficulty it was earned on (R1); an equal or
+ * lower count keeps the stored stars and their difficulty.
+ */
 export function mergeAdventureScore(
   scores: Readonly<AdventureScores>,
   index: number,
   score: number,
-  starCount: 0 | 1 | 2 | 3,
+  starCount: StarCount,
+  difficulty?: Difficulty,
 ): { scores: AdventureScores; best: number; newBest: boolean } {
   const key = String(Math.floor(index));
   const prev = scores[key];
   const newBest = prev === undefined || score > prev.best;
+  const earned = asStars(starCount);
+  const betterStars = prev === undefined || earned > prev.stars;
   const entry: LevelBest = {
     best: newBest ? Math.floor(score) : (prev?.best ?? 0),
-    stars: asStars(Math.max(prev?.stars ?? 0, starCount)),
+    stars: betterStars ? earned : prev.stars,
   };
+  const diff = betterStars ? difficulty : prev.difficulty;
+  if (diff !== undefined) entry.difficulty = diff;
   return { scores: { ...scores, [key]: entry }, best: entry.best, newBest };
 }
 
@@ -382,10 +405,11 @@ export function mergeAdventureScore(
 export function recordAdventureScore(
   index: number,
   score: number,
-  starCount: 0 | 1 | 2 | 3,
+  starCount: StarCount,
   storage: StorageLike | null = defaultStorage(),
+  difficulty?: Difficulty,
 ): { best: number; newBest: boolean } {
-  const merged = mergeAdventureScore(loadAdventureScores(storage), index, score, starCount);
+  const merged = mergeAdventureScore(loadAdventureScores(storage), index, score, starCount, difficulty);
   writeRaw(storage, ADVENTURE_SCORES_KEY, JSON.stringify(merged.scores));
   return { best: merged.best, newBest: merged.newBest };
 }

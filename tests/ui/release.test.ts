@@ -226,12 +226,14 @@ describe('difficulty on the intro card', () => {
     expect(introCard(3, { ...def, stars: [1500, 3000, 6000] }, 'hard').difficulty).toBe('Difficulty: Hard');
   });
 
-  it('the card screen shows the line and hides it on Ready', () => {
+  it('the card screen shows the selector (R1) and hides it on Ready', () => {
     const root = installFakeDocument();
     const screen = createIntroScreen(asParent(root), () => undefined);
     const line = (): FakeEl | undefined => root.all().find((e) => e.getAttribute('data-intro') === 'difficulty');
     screen.showCard(introCard(3, { ...def, stars: [1500, 3000, 6000] }, 'easy'));
-    expect(line()?.textContent).toBe('Difficulty: Easy');
+    expect(line()?.getAttribute('aria-label')).toBe('Difficulty');
+    const on = line()?.all().filter((e) => e.tag === 'button' && e.getAttribute('aria-pressed') === 'true');
+    expect(on?.map((e) => e.textContent)).toEqual(['Easy']);
     expect(line()?.style.display).toBe('');
     screen.showReady();
     expect(line()?.style.display).toBe('none');
@@ -240,8 +242,11 @@ describe('difficulty on the intro card', () => {
   it('main.ts passes the stored difficulty to every new world and to the card', () => {
     const main = read('src/main.ts');
     expect(main).toContain('type ReleaseGameOptions = GameOptions & { difficulty: Difficulty };');
-    expect(main).toContain('createGame(level, gameOptions(settingsModel.state.difficulty))');
-    expect(main).toContain('gameOptions(settingsModel.state.difficulty));');
-    expect(main).toContain('introCard(flow.levelIndex, level, settingsModel.state.difficulty)');
+    // R1: each level start snapshots the stored setting into runDifficulty; worlds, card and star cap read it.
+    expect(main).toContain('runDifficulty = settingsModel.state.difficulty;');
+    expect(main).toContain('createGame(level, gameOptions(runDifficulty))');
+    expect(main).toContain('gameOptions(runDifficulty));');
+    expect(main).toContain('introCard(flow.levelIndex, level, runDifficulty)');
+    expect(main).toContain('awardStars(p.stars, runDifficulty, success)');
   });
 });

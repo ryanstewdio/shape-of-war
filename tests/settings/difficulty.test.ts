@@ -72,9 +72,10 @@ describe('difficulty key', () => {
     expect(loadDifficulty(memory())).toBe('normal');
   });
 
-  it('parses only the three exact strings; anything else is normal', () => {
+  it('parses only the four exact strings; anything else is normal', () => {
+    expect(DIFFICULTIES).toEqual(['easy', 'normal', 'hard', 'insane']);
     for (const d of DIFFICULTIES) expect(parseDifficulty(d)).toBe(d);
-    for (const bad of [null, '', 'Easy', 'HARD', ' hard', 'medium', '1']) expect(parseDifficulty(bad), String(bad)).toBe('normal');
+    for (const bad of [null, '', 'Easy', 'HARD', ' hard', 'medium', '1', 'Insane', 'INSANE']) expect(parseDifficulty(bad), String(bad)).toBe('normal');
   });
 
   it('round trips every value and writes only its own key', () => {
@@ -125,11 +126,12 @@ describe('difficulty in the settings model', () => {
 describe('Difficulty row', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('labels are Easy, Normal and Hard with the current one marked', () => {
+  it('labels are Easy, Normal, Hard and Insane with the current one marked', () => {
     expect(DIFFICULTY_ROW_LABEL).toBe('Difficulty');
-    expect(DIFFICULTIES.map(difficultyLabel)).toEqual(['Easy', 'Normal', 'Hard']);
-    expect(difficultyButtonStates('normal').map((b) => b.selected)).toEqual([false, true, false]);
-    expect(difficultyButtonStates('hard').map((b) => b.label)).toEqual(['Easy', 'Normal', 'Hard']);
+    expect(DIFFICULTIES.map(difficultyLabel)).toEqual(['Easy', 'Normal', 'Hard', 'Insane']);
+    expect(difficultyButtonStates('normal').map((b) => b.selected)).toEqual([false, true, false, false]);
+    expect(difficultyButtonStates('insane').map((b) => b.selected)).toEqual([false, false, false, true]);
+    expect(difficultyButtonStates('hard').map((b) => b.label)).toEqual(['Easy', 'Normal', 'Hard', 'Insane']);
   });
 
   it('is on the settings screen; a tap lights the button and saves the key', () => {
@@ -139,11 +141,15 @@ describe('Difficulty row', () => {
     const screen = createSettingsScreen(asParent(root), model, actions());
     screen.show();
     const buttons = groupButtons(root, DIFFICULTY_ROW_LABEL);
-    expect(buttons.map((b) => b.textContent)).toEqual(['Easy', 'Normal', 'Hard']);
-    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
+    expect(buttons.map((b) => b.textContent)).toEqual(['Easy', 'Normal', 'Hard', 'Insane']);
+    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false', 'false']);
     buttons[2]?.tap();
     expect(model.state.difficulty).toBe('hard');
     expect(s.data.get(DIFFICULTY_KEY)).toBe('hard');
-    expect(buttons.map((b) => b.classList.contains('sow-on'))).toEqual([false, false, true]);
+    expect(buttons.map((b) => b.classList.contains('sow-on'))).toEqual([false, false, true, false]);
+    buttons[3]?.tap();
+    expect(model.state.difficulty).toBe('insane');
+    expect(s.data.get(DIFFICULTY_KEY)).toBe('insane');
+    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'false', 'true']);
   });
 });

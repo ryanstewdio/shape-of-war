@@ -1,14 +1,17 @@
 // Level select (docs/01 section 10): grid of unlocked levels with best stars. Pages of 12, newest
 // page first, because page scrolling is blocked by the document touchmove guard.
+// R1: a level whose best is an Insane win shows three stars plus the iridescent 4th star.
 import type { AdventureScores } from '../core/settings';
+import type { StarCount } from '../core/stars';
 import { button, createScreen, el, type Screen } from './dom';
 import { formatInt, starGlyphs } from './format';
+import { fourthStarEl, hasFourthStar } from './fourthStar';
 
 export const LEVELS_PER_PAGE = 12;
 
 export interface LevelEntry {
   index: number;
-  stars: 0 | 1 | 2 | 3;
+  stars: StarCount;
   best: number;
 }
 
@@ -37,7 +40,7 @@ export function levelPage(unlocked: number, scores: Readonly<AdventureScores>, p
   return { entries, page: p, pages };
 }
 
-/** Pure: two line label on a level button. */
+/** Pure: two line label on a level button. Three glyphs at most; the 4th star is its own element. */
 export function levelButtonLabel(e: LevelEntry): string {
   return `${e.index}\n${starGlyphs(e.stars)}`;
 }
@@ -73,6 +76,10 @@ export function createLevelSelect(parent: HTMLElement, a: LevelSelectActions): L
       ...lp.entries.map((e) => {
         const b = button(levelButtonLabel(e), () => a.play(e.index));
         if (e.best > 0) b.title = `Best ${formatInt(e.best)}`;
+        if (hasFourthStar(e.stars)) {
+          b.append(fourthStarEl());
+          b.setAttribute('aria-label', `Level ${e.index}, 4 stars`);
+        }
         return b;
       }),
     );

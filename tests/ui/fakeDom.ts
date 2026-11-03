@@ -60,6 +60,10 @@ export class FakeEl {
     this.children.push(...nodes);
   }
 
+  replaceChildren(...nodes: FakeEl[]): void {
+    this.children.splice(0, this.children.length, ...nodes);
+  }
+
   setAttribute(name: string, value: string): void {
     this.attrs.set(name, value);
   }

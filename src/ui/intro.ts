@@ -3,10 +3,11 @@
 // tap skips it. Endless gets a 1.5 s "Ready" text instead, which does not take touches, so the
 // thumbs can settle on the sticks. The gate is pure and ticks on sim time, so a pause during the
 // intro freezes it.
-import type { Difficulty } from '../core/difficulty';
+import { DIFFICULTIES, type Difficulty } from '../core/difficulty';
 import type { BossSpec, DroneKind, LevelDef, SuperKind } from '../levelgen/leveldef';
 import { bossName } from './boss';
-import { createScreen, el, type Screen } from './dom';
+import { button, createScreen, el, type Screen } from './dom';
+import { DIFFICULTY_ROW_LABEL, difficultyButtonStates, difficultyLabel } from './settings';
 import { formatInt } from './format';
 import type { Mode } from './flow';
 import { objectiveText } from './objective';
@@ -45,6 +46,22 @@ export function skipIntro(g: IntroGate): IntroGate {
   return g.kind === 'card' ? NO_INTRO : g;
 }
 
+/**
+ * Pure (R1): a tap on the card's Difficulty selector holds the card until the player taps the card
+ * to start, so the choice is never cut off by the 1.5 s timer. Only an active card can be held.
+ */
+export function holdIntro(g: IntroGate): IntroGate {
+  return g.kind === 'card' && introActive(g) ? { kind: 'card', left: Number.POSITIVE_INFINITY } : g;
+}
+
+/** Pure: true while a held card waits for a tap. */
+export function introHeld(g: IntroGate): boolean {
+  return g.kind === 'card' && g.left === Number.POSITIVE_INFINITY;
+}
+
+export const INTRO_SKIP_HINT = 'tap to skip';
+export const INTRO_HELD_HINT = 'tap to start';
+
 function title(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -66,6 +83,8 @@ export interface IntroCard {
   boss: string;
   /** "Difficulty: Normal" (docs/14 item 6). */
   difficulty: string;
+  /** R1: the difficulty marked on the card's four way selector. */
+  choice: Difficulty;
 }
 
 const DIFFICULTY_NAMES: Readonly<Record<Difficulty, string>> = { easy: 'Easy', normal: 'Normal', hard: 'Hard', insane: 'Insane' };
@@ -94,16 +113,25 @@ export function introCard(
     kit: `${droneName(def.drone)}   ${superName(def.superType)}`,
     boss: bossIntroLine(def.boss),
     difficulty: difficultyIntroLine(difficulty),
+    choice: difficulty,
   };
 }
 
 export interface IntroScreen extends Screen {
-  showCard(card: IntroCard): void;
+  /** `held`: the card waits for a tap (after a Difficulty change); the hint reads "tap to start". */
+  showCard(card: IntroCard, held?: boolean): void;
   showReady(): void;
 }
 
-/** DOM edge. `onSkip` fires on a tap on the card. */
-export function createIntroScreen(parent: HTMLElement, onSkip: () => void): IntroScreen {
+/**
+ * DOM edge. `onSkip` fires on a tap on the card. `onDifficulty` fires on a tap on the card's
+ * Difficulty selector (Easy, Normal, Hard, Insane); a selector tap never skips the card.
+ */
+export function createIntroScreen(
+  parent: HTMLElement,
+  onSkip: () => void,
+  onDifficulty: (d: Difficulty) => void = () => undefined,
+): IntroScreen {
   const s = createScreen(parent);
   s.root.style.background = 'rgba(2, 4, 12, 0.45)';
   const head = el('div', 'sow-title');
@@ -114,9 +142,32 @@ export function createIntroScreen(parent: HTMLElement, onSkip: () => void): Intr
   const boss = el('div', 'sow-sub');
   boss.style.fontWeight = '700';
   boss.setAttribute('data-intro', 'boss');
-  const diff = el('div', 'sow-sub');
+  // R1: the Difficulty line is a four way selector, the same row shape as the Settings row.
+  const diff = el('div', 'sow-choice');
   diff.setAttribute('data-intro', 'difficulty');
-  const hint = el('div', 'sow-small', 'tap to skip');
+  diff.setAttribute('role', 'group');
+  diff.setAttribute('aria-label', DIFFICULTY_ROW_LABEL);
+  diff.style.width = 'min(520px, 90%)';
+  let choice: Difficulty = 'normal';
+  const mark = (): void => {
+    difficultyButtonStates(choice).forEach((st, i) => {
+      const b = diffButtons[i];
+      if (b === undefined) return;
+      b.classList.toggle('sow-on', st.selected);
+      b.setAttribute('aria-pressed', String(st.selected));
+    });
+  };
+  const diffButtons = DIFFICULTIES.map((d) =>
+    button(difficultyLabel(d), () => {
+      choice = d;
+      mark();
+      onDifficulty(d);
+    }),
+  );
+  const diffBtns = el('div', 'sow-choice-btns');
+  diffBtns.append(...diffButtons);
+  diff.append(el('div', 'sow-choice-label', DIFFICULTY_ROW_LABEL), diffBtns);
+  const hint = el('div', 'sow-small', INTRO_SKIP_HINT);
   s.root.append(head, objective, par, kit, boss, diff, hint);
   let armed = -1;
   s.root.addEventListener('pointerdown', (e) => {
@@ -136,13 +187,15 @@ export function createIntroScreen(parent: HTMLElement, onSkip: () => void): Intr
   };
   return {
     ...s,
-    showCard(card) {
+    showCard(card, held = false) {
       head.textContent = card.title;
       objective.textContent = card.objective;
       par.textContent = card.par;
       kit.textContent = card.kit;
       boss.textContent = card.boss;
-      diff.textContent = card.difficulty;
+      choice = card.choice;
+      mark();
+      hint.textContent = held ? INTRO_HELD_HINT : INTRO_SKIP_HINT;
       show(false);
     },
     showReady() {

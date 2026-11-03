@@ -37,6 +37,7 @@ import { bossTierOf } from './levelgen/boss';
 import type { BossId } from './levelgen/leveldef';
 import { createEndlessGame, createGame, gameState, objectiveClock, setWeaponPickups, stepGame, type GameOptions } from './game/game';
 import type { Difficulty } from './core/difficulty';
+import { awardStars } from './core/stars';
 import { setShipSpace } from './game/ship';
 import { installAudio, play as playCue } from './audio/synth';
 import { superChargeFraction } from './game/supers';
@@ -54,7 +55,8 @@ import { installDevPanel, setGlowPath, setShowFps } from './render/devpanel';
 import { setEffectsTier } from './render/effects';
 import { setTilt } from './render/tilt';
 import { createScreenAnnouncer } from './ui/screenEvent';
-import { applyNeon, currentNeon } from './render/neon';
+import { applyNeon, currentNeon, getNeonState, onNeonChanged } from './render/neon';
+import { syncFourthStarStyle } from './ui/fourthStar';
 import { createRenderer, type GameRenderer, type StickCircleLike } from './render/renderer';
 import { attachTouch, type TouchHandle } from './input/touch';
 import { createCuePort, type SimSnapshot } from './ui/cueFlow';
@@ -75,7 +77,7 @@ import { fallbackStatus, levelSuccess, objectiveProgress, type ObjectiveSnapshot
 import { createPauseScreen } from './ui/pause';
 import { musicCue, type MusicCue } from './ui/musicFlow';
 import { createBootScreen } from './ui/boot';
-import { armIntro, createIntroScreen, introActive, introCard, NO_INTRO, skipIntro, tickIntro, type IntroGate } from './ui/intro';
+import { armIntro, createIntroScreen, holdIntro, introActive, introCard, introHeld, NO_INTRO, skipIntro, tickIntro, type IntroGate } from './ui/intro';
 import { createResultsScreen } from './ui/results';
 import { createSettingsModel, createSettingsScreen } from './ui/settings';
 
@@ -299,7 +301,9 @@ async function boot(): Promise<void> {
   let level: LevelDef = pick.def;
   /** Options for every new world; difficulty is read at each level start (settings change between levels). */
   const gameOptions = (difficulty: Difficulty): ReleaseGameOptions => ({ scoring: scoringPort, difficulty });
-  let world: World = createGame(level, gameOptions(loadDifficulty()));
+  /** R1: the difficulty the current world was built with; the star cap reads this, not the setting. */
+  let runDifficulty: Difficulty = loadDifficulty();
+  let world: World = createGame(level, gameOptions(runDifficulty));
   let endlessSeed = 0;
   // V2-A glue point, the one named port call for space physics. Fable replaces the body with
   // Forge's setShipSpace(world, level) after both branches merge; src/game/ship.ts is not imported
@@ -436,16 +440,17 @@ async function boot(): Promise<void> {
 
   /** Build a fresh world for the flow's current level (start, Next, Retry, Restart). */
   const startLevel = (mode: 'adventure' | 'endless', index: number): void => {
+    runDifficulty = settingsModel.state.difficulty;
     if (mode === 'endless') {
       endlessSeed = freshSeed(); // every Endless game gets a fresh seed (docs/01 section 2.2)
       level = endlessLevel({ generateEndless, generateEndlessSegment }, endlessSeed);
       pick = { def: level, source: 'generator', hash: levelHash(generateEndless(endlessSeed)) };
       // Glue: Swarm's segment driven Endless run, segments generated on demand from the seed.
-      world = createEndlessGame(generateEndless(endlessSeed), (seg) => generateEndlessSegment(endlessSeed, seg), gameOptions(settingsModel.state.difficulty));
+      world = createEndlessGame(generateEndless(endlessSeed), (seg) => generateEndlessSegment(endlessSeed, seg), gameOptions(runDifficulty));
     } else {
       pick = pickLevel(generator, runSeed, index, VALID_FIXTURES);
       level = pick.def;
-      world = createGame(level, gameOptions(settingsModel.state.difficulty));
+      world = createGame(level, gameOptions(runDifficulty));
       hud.setLevel(index, level.par, pick.hash);
     }
     hud.setSuper(level.superType);
@@ -600,10 +605,23 @@ async function boot(): Promise<void> {
   });
   // docs/14 item 2: the title splash sits above the boot screen for 1.2 s, a tap skips it.
   createSplashScreen(uiRoot, () => undefined, { after: (ms, cb) => void window.setTimeout(cb, ms) });
-  const introScreen = createIntroScreen(uiRoot, () => {
-    intro = skipIntro(intro);
-    paintIntro();
-  });
+  const introScreen = createIntroScreen(
+    uiRoot,
+    () => {
+      intro = skipIntro(intro);
+      paintIntro();
+    },
+    (d) => {
+      // R1: a Difficulty tap on the card saves the setting and rebuilds this level at the new
+      // difficulty. The sim has not stepped while the card holds it, so nothing is lost. The card
+      // then waits for a tap so the 1.5 s timer cannot cut the choice off.
+      if (flow.screen !== 'playing' || flow.mode !== 'adventure' || intro.kind !== 'card' || !introActive(intro)) return;
+      settingsModel.setDifficulty(d);
+      if (d !== runDifficulty) startLevel(flow.mode, flow.levelIndex);
+      intro = holdIntro(armIntro(flow.mode));
+      paintIntro();
+    },
+  );
   /** Show the intro card or Ready text while the gate holds a playing sim. */
   function paintIntro(): void {
     if (flow.screen !== 'playing' || !introActive(intro)) {
@@ -612,8 +630,8 @@ async function boot(): Promise<void> {
     }
     if (intro.kind === 'ready') introScreen.showReady();
     else {
-      const card = introCard(flow.levelIndex, level, settingsModel.state.difficulty);
-      introScreen.showCard({ ...card, title: `${card.title}  Seed ${runSeed}${customSeed ? ' (typed)' : ''}` });
+      const card = introCard(flow.levelIndex, level, runDifficulty);
+      introScreen.showCard({ ...card, title: `${card.title}  Seed ${runSeed}${customSeed ? ' (typed)' : ''}` }, introHeld(intro));
     }
   }
 
@@ -699,14 +717,17 @@ async function boot(): Promise<void> {
     // it holds for the boss. Every other level infers success from the target, as since v1.
     const success = levelSuccess(level.objective, snapshotOf(world), gameState(world).outcome, level.boss !== undefined);
     // A typed seed is a session only run: no unlocks and no Adventure table entries.
-    const rec = customSeed ? { best: p.score, newBest: false } : recordAdventureScore(index, p.score, p.stars);
+    // R1: the score stars capped by the difficulty this world was built with; an Insane win is 4.
+    const earned = awardStars(p.stars, runDifficulty, success);
+    const rec = customSeed ? { best: p.score, newBest: false } : recordAdventureScore(index, p.score, earned, undefined, runDifficulty);
     if (!customSeed && success) unlockLevel(unlockAfter(loadUnlocked(), index, success));
     const result: LevelResult = {
       mode: 'adventure',
       levelIndex: index,
       score: p.score,
-      stars: p.stars,
+      stars: earned,
       success,
+      difficulty: runDifficulty,
       par: level.par,
       best: rec.best,
       newBest: rec.newBest,
@@ -820,6 +841,9 @@ async function boot(): Promise<void> {
     // Glow's panel and its slider. The panel stays installed for the FPS label it drives.
     panel.close();
   }
+  // R1: the iridescent 4th star follows the neon palette; this listener only reads what applyNeon set.
+  onNeonChanged((p) => syncFourthStarStyle(p.saturation, p.glowAlpha));
+  syncFourthStarStyle(getNeonState().params.saturation, getNeonState().params.glowAlpha);
   settingsModel.applyBoot(); // applyNeon(stored neon), volume, Show FPS, glow path, space physics, weapon pickups
   installAudio({ volume: settings.volume }); // Glue: Glow's synth listens on the bus; unlock happens on the first gesture
   // V2-D: bus wiring for the music engine, after the audio unlock path is installed. It starts
