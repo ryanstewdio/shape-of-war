@@ -38,7 +38,9 @@ const V2_KEYS: readonly string[] = [
 const TILT_KEY = 'sow.settings.tilt';
 /** Release polish (docs/14 item 6): the one key the tester build adds, listed in the docs/13 table. */
 const DIFFICULTY_KEY = 'sow.settings.difficulty';
-const ALLOWED_EXTRA: readonly string[] = [TILT_KEY, DIFFICULTY_KEY];
+/** R2 (docs/13 key table): the card's last difficulty choice and the par reward held for the next level. */
+const R2_KEYS: readonly string[] = ['sow.progress.difficulty', 'sow.progress.startBonus'];
+const ALLOWED_EXTRA: readonly string[] = [TILT_KEY, DIFFICULTY_KEY, ...R2_KEYS];
 
 /** Every key the settings module implements: the exported *_KEY constants plus prefix + each Settings field. */
 function implementedKeys(): string[] {
@@ -76,7 +78,7 @@ function sowLiterals(text: string): string[] {
 describe('storage keys after v3', () => {
   const keys = implementedKeys();
 
-  it('the implemented set is exactly the v2 set, plus at most sow.settings.tilt and sow.settings.difficulty', () => {
+  it('the implemented set is exactly the v2 set, plus at most tilt, difficulty and the two R2 progress keys', () => {
     const extra = keys.filter((k) => !V2_KEYS.includes(k));
     expect(extra.filter((k) => !ALLOWED_EXTRA.includes(k)), 'a key outside the v2 set and outside docs/13').toEqual([]);
     expect(keys.filter((k) => V2_KEYS.includes(k)).sort()).toEqual([...V2_KEYS].sort());
@@ -137,10 +139,19 @@ describe('docs/13 key table', () => {
   const section = start >= 0 ? doc.slice(start, start + 2500) : '';
   const documented = [...section.matchAll(/^\| `(sow\.[A-Za-z0-9_.]+)` \|/gm)].map((m) => m[1] ?? '');
 
-  it('is found and documents the tilt and difficulty keys', () => {
+  it('is found and documents the tilt and difficulty keys, and the R2 keys', () => {
     expect(start).toBeGreaterThanOrEqual(0);
     expect(documented).toContain(TILT_KEY);
     expect(documented).toContain(DIFFICULTY_KEY);
+    for (const k of R2_KEYS) expect(documented, k).toContain(k);
+    for (const k of R2_KEYS) expect(settings.LAST_DIFFICULTY_KEY === k || settings.START_BONUS_KEY === k, k).toBe(true);
+  });
+
+  it('R2: the old Difficulty and Space physics keys are documented as readable but unused', () => {
+    for (const k of [DIFFICULTY_KEY, 'sow.settings.spacePhysics']) {
+      const row = section.split('\n').find((l) => l.startsWith(`| \`${k}\``)) ?? '';
+      expect(row, k).toContain('R2: readable but unused');
+    }
   });
 
   it('R1: the difficulty row lists all four values, Insane included, and no new key is added', () => {

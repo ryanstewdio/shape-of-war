@@ -25,3 +25,25 @@ export function starGlyphs(stars: number): string {
   const s = Math.max(0, Math.min(3, Math.floor(stars)));
   return '★'.repeat(s) + '☆'.repeat(3 - s);
 }
+
+/**
+ * R2: short score for the objective label: under 10,000 as formatInt, then "12.3K", "1.2M", "3.3B"
+ * with one decimal (dropped when it is 0). Floors, so a target never reads as reached early.
+ */
+export function formatCompact(n: number): string {
+  const v = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+  if (v < 10000) return formatInt(v);
+  const units: ReadonlyArray<readonly [number, string]> = [
+    [1e9, 'B'],
+    [1e6, 'M'],
+    [1e3, 'K'],
+  ];
+  for (const [size, unit] of units) {
+    if (v >= size) {
+      const tenths = Math.floor((v / size) * 10) / 10;
+      const text = tenths % 1 === 0 ? String(tenths) : tenths.toFixed(1);
+      return `${text}${unit}`;
+    }
+  }
+  return formatInt(v);
+}

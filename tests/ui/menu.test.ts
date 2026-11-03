@@ -1,4 +1,4 @@
-// Wave 2 main menu: neon panel over the grid, four stacked framed rows, warm frame on the focused or
+// Wave 2 main menu: neon panel over the grid, five stacked framed rows (R2 adds Free Play), warm frame on the focused or
 // last used row, info and footer lines, 200 ms entrance stagger, touch only. Pure layout and the
 // screen on the fake DOM.
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -67,11 +67,11 @@ describe('menu layout', () => {
     }
   });
 
-  it('four rows, every one at least 44 px high and wide enough to tap, stacked top to bottom without overlap', () => {
+  it('five rows, every one at least 44 px high and wide enough to tap, stacked top to bottom without overlap', () => {
     expect(MIN_HIT_PX).toBe(44);
     for (const { L, name } of all) {
       expect(L.rows, name).toHaveLength(MENU_ROWS);
-      expect(MENU_ROWS).toBe(4);
+      expect(MENU_ROWS).toBe(5);
       for (const r of L.rows) {
         expect(r.h, name).toBeGreaterThanOrEqual(MIN_HIT_PX);
         expect(r.w, name).toBeGreaterThanOrEqual(160);
@@ -91,7 +91,7 @@ describe('menu layout', () => {
     for (const { L, name } of layouts(COVER_VIEWS)) expect(L.rowH, name).toBeGreaterThanOrEqual(MIN_HIT_PX);
   });
 
-  it('title, rows, info and footer are separate blocks inside the panel; info sits under the rows and the footer at the bottom', () => {
+  it('title, rows, info and footer are separate blocks inside the panel; info sits under the rows (stack) or the title (side, R2) and the footer at the bottom', () => {
     for (const { L, name } of all) {
       const blocks: Array<[string, Rect]> = [['title', L.title], ['info', L.info], ['foot', L.foot], ...L.rows.map((r, i): [string, Rect] => [`row${i}`, r])];
       for (const [id, b] of blocks) expect(inside(b, L.panel), `${name} ${id}`).toBe(true);
@@ -103,7 +103,9 @@ describe('menu layout', () => {
         }
       }
       const lastRow = L.rows[L.rows.length - 1] as Rect;
-      expect(L.info.y, name).toBeGreaterThanOrEqual(lastRow.y + lastRow.h);
+      if (L.arrangement === 'side') expect(L.info.y, name).toBeGreaterThanOrEqual(L.title.y + L.title.h);
+      else expect(L.info.y, name).toBeGreaterThanOrEqual(lastRow.y + lastRow.h);
+      expect(L.foot.y, name).toBeGreaterThanOrEqual(lastRow.y + lastRow.h);
       expect(L.foot.y, name).toBeGreaterThanOrEqual(L.info.y + L.info.h);
     }
   });
@@ -119,14 +121,14 @@ describe('menu layout', () => {
 
   it('degrades without throwing on a tiny or odd viewport', () => {
     const L = menuLayout(0, 0, ZERO);
-    expect(L.rows).toHaveLength(4);
+    expect(L.rows).toHaveLength(5);
     for (const r of L.rows) expect(r.h).toBeGreaterThanOrEqual(MIN_HIT_PX);
     expect(menuLayout(300, 200, ZERO).fits).toBe(false);
   });
 
   it('rows enter with a 200 ms stagger', () => {
     expect(MENU_STAGGER_MS).toBe(200);
-    expect([0, 1, 2, 3].map(rowDelay)).toEqual(['0ms', '200ms', '400ms', '600ms']);
+    expect([0, 1, 2, 3, 4].map(rowDelay)).toEqual(['0ms', '200ms', '400ms', '600ms', '800ms']);
   });
 });
 
@@ -176,6 +178,7 @@ describe('menu screen', () => {
       adventure: () => calls.push('adventure'),
       levels: () => calls.push('levels'),
       endless: () => calls.push('endless'),
+      freePlay: () => calls.push('freePlay'),
       settings: () => calls.push('settings'),
     });
     const rows = root.all().filter((e) => e.classList.contains('sow-menu-row'));
@@ -184,12 +187,12 @@ describe('menu screen', () => {
 
   const focused = (rows: FakeEl[]): number[] => rows.flatMap((r, i) => (r.classList.contains('sow-focus') ? [i] : []));
 
-  it('builds the title, four rows in order, the info line and the footer inside one panel', () => {
+  it('builds the title, five rows in order (R2: Free Play), the info line and the footer inside one panel', () => {
     const { root, rows } = build();
     const panel = root.all().find((e) => e.classList.contains('sow-menu-panel'));
     expect(panel).toBeDefined();
     expect(panel?.all().find((e) => e.classList.contains('sow-title'))?.textContent).toBe(GAME_TITLE);
-    expect(rows.map((r) => r.textContent)).toEqual(['Adventure', 'Level select', 'Endless', 'Settings']);
+    expect(rows.map((r) => r.textContent)).toEqual(['Adventure', 'Level select', 'Endless', 'Free Play', 'Settings']);
     expect(rows.every((r) => r.tag === 'button')).toBe(true);
     expect(panel?.all().some((e) => e.classList.contains('sow-menu-info'))).toBe(true);
     expect(panel?.all().some((e) => e.classList.contains('sow-menu-foot'))).toBe(true);
@@ -198,8 +201,8 @@ describe('menu screen', () => {
 
   it('every row keeps its callback', () => {
     const { root, calls } = build();
-    for (const label of ['Adventure', 'Level select', 'Endless', 'Settings']) buttonsLabelled(root, label)[0]?.tap();
-    expect(calls).toEqual(['adventure', 'levels', 'endless', 'settings']);
+    for (const label of ['Adventure', 'Level select', 'Endless', 'Free Play', 'Settings']) buttonsLabelled(root, label)[0]?.tap();
+    expect(calls).toEqual(['adventure', 'levels', 'endless', 'freePlay', 'settings']);
   });
 
   it('Play or Continue is in the warm frame at first; a tap moves the frame to the last row used', () => {
@@ -223,7 +226,7 @@ describe('menu screen', () => {
 
   it('rows carry the 200 ms entrance stagger', () => {
     const { rows } = build();
-    expect(rows.map((r) => r.style.animationDelay)).toEqual(['0ms', '200ms', '400ms', '600ms']);
+    expect(rows.map((r) => r.style.animationDelay)).toEqual(['0ms', '200ms', '400ms', '600ms', '800ms']);
   });
 
   it('setContinue, setInfo and setFooter fill their lines', () => {
@@ -243,7 +246,7 @@ describe('menu screen', () => {
       const L = menuLayout(W, H, ZERO);
       const panel = root.all().find((e) => e.classList.contains('sow-menu-panel'));
       expect(panel?.style.width).toBe(`${L.panel.w}px`);
-      expect(panel?.style.gridTemplateAreas).toBe(L.arrangement === 'side' ? '"title rows" "title info" "foot foot"' : '"title" "rows" "info" "foot"');
+      expect(panel?.style.gridTemplateAreas).toBe(L.arrangement === 'side' ? '"title rows" "info rows" "foot foot"' : '"title" "rows" "info" "foot"');
       for (const r of rows) {
         expect(Number.parseFloat(r.style.minHeight ?? '0')).toBeGreaterThanOrEqual(MIN_HIT_PX);
         expect(r.style.height).toBe(`${L.rowH}px`);

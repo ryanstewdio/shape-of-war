@@ -60,6 +60,9 @@ export const UI_CSS = `
 .sow-hud-item { position: absolute; white-space: pre; text-shadow: 0 0 6px hsla(190, 80%, 60%, 0.8); }
 .sow-hud-bar { position: absolute; border: 1px solid hsla(190, 60%, 90%, 0.6); border-radius: 3px; overflow: hidden; }
 .sow-hud-fill { height: 100%; width: 0; background: hsl(95, 100%, 60%); box-shadow: 0 0 8px hsl(95, 100%, 55%); }
+.sow-hud-star { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: hsl(55, 95%, 62%);
+  box-shadow: 0 0 6px hsl(55, 95%, 55%); }
+.sow-hud-tick { position: absolute; bottom: 0; width: 2px; height: 6px; margin-left: -1px; background: hsl(55, 95%, 80%); }
 .sow-hud-ring { position: absolute; border-radius: 50%; border: 2px solid hsla(190, 60%, 90%, 0.55);
   display: flex; align-items: center; justify-content: center; box-sizing: border-box; font-size: 16px; }
 .sow-hud-item[data-note]:not([data-note=""])::after { content: attr(data-note); margin-left: 0.4em;
@@ -84,6 +87,43 @@ export const UI_CSS = `
   border-top: 1px solid hsla(185, 90%, 60%, 0.35); padding-top: 4px; }
 @keyframes sow-row-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .sow-btn.sow-menu-row { animation: none; opacity: 1; } }
+.sow-card-screen { gap: 0; }
+.sow-card { display: flex; flex-direction: column; align-items: center; gap: 8px; box-sizing: border-box;
+  width: min(560px, 100%); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 14px 18px;
+  background: rgba(2, 6, 16, 0.8); border: 2px solid hsl(185, 95%, 62%); border-radius: 14px; text-align: center;
+  box-shadow: 0 0 14px hsla(185, 95%, 55%, 0.55), inset 0 0 18px hsla(185, 95%, 55%, 0.2); }
+.sow-card .sow-title { font-size: clamp(22px, 5.5vmin, 44px); margin: 0; }
+.sow-card.sow-card-bare { background: transparent; border-color: transparent; box-shadow: none; }
+.sow-card.sow-win { border-color: hsl(95, 100%, 62%); box-shadow: 0 0 18px hsla(95, 100%, 55%, 0.6), inset 0 0 18px hsla(95, 100%, 55%, 0.2); }
+.sow-card.sow-lose { border-color: hsl(350, 95%, 62%); box-shadow: 0 0 18px hsla(350, 95%, 55%, 0.55), inset 0 0 18px hsla(350, 95%, 55%, 0.18); }
+.sow-card-line { font-size: clamp(15px, 3.4vmin, 20px); opacity: 0.92; }
+.sow-card .sow-stars { font-size: clamp(20px, 5vmin, 34px); }
+.sow-card-stars { font-size: clamp(14px, 3.4vmin, 20px) !important; letter-spacing: 1px; }
+.sow-chips { display: flex; gap: 8px; width: 100%; }
+.sow-btn.sow-chip { flex: 1 1 0; min-width: 0; min-height: ${MIN_HIT_PX}px; padding: 4px; font-size: 15px; border-radius: 999px; }
+.sow-btn.sow-chip-insane.sow-on { border-color: hsl(300, 95%, 72%); background: hsl(300, 70%, 28%); box-shadow: 0 0 16px hsl(300, 90%, 60%); }
+.sow-btn.sow-big { min-width: 0; flex: 1 1 0; min-height: 56px; font-size: 20px; font-weight: 700; letter-spacing: 0.06em; }
+.sow-card .sow-row { width: 100%; flex-wrap: nowrap; }
+.sow-card .sow-choice { width: 100%; }
+.sow-results-score { font-size: clamp(26px, 7vmin, 56px) !important; }
+.sow-par { width: 100%; display: flex; flex-direction: column; gap: 4px; }
+.sow-par-bar { position: relative; height: 10px; border-radius: 5px; overflow: hidden; border: 1px solid hsla(190, 60%, 90%, 0.6); }
+.sow-par-fill { height: 100%; width: 0; background: hsl(185, 90%, 55%); box-shadow: 0 0 8px hsl(185, 90%, 55%); }
+.sow-par-bar.sow-par-full .sow-par-fill { background: hsl(55, 95%, 62%); box-shadow: 0 0 10px hsl(55, 95%, 55%); }
+.sow-reward { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+.sow-par-reached { font-size: clamp(20px, 5vmin, 34px); font-weight: 800; letter-spacing: 0.08em; color: hsl(55, 95%, 72%);
+  text-shadow: 0 0 10px hsl(55, 95%, 55%), 0 0 26px hsl(300, 90%, 60%); animation: sow-flourish 900ms ease-out both; }
+@keyframes sow-flourish { 0% { opacity: 0; transform: scale(0.6); letter-spacing: 0.5em; }
+  60% { opacity: 1; transform: scale(1.12); } 100% { transform: none; letter-spacing: 0.08em; } }
+@media (prefers-reduced-motion: reduce) { .sow-par-reached { animation: none; } }
+.sow-reward-groups { display: flex; gap: 10px; width: 100%; justify-content: center; flex-wrap: wrap; }
+.sow-reward-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.sow-reward-row { display: flex; gap: 6px; }
+.sow-reward-label { font-size: 12px; opacity: 0.75; }
+.sow-btn.sow-reward-btn { min-width: 0; min-height: 60px; width: 62px; padding: 4px 2px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; font-size: 12px; }
+.sow-btn.sow-reward-btn.sow-off { opacity: 0.35; }
+.sow-reward-word { font-size: 12px; line-height: 1; }
 .sow-screen.sow-splash { z-index: 30; }
 .sow-splash-title { font-size: clamp(34px, 10vmin, 84px); white-space: nowrap; opacity: 0.4;
   animation: sow-splash-pulse 1200ms ease-in-out forwards; }

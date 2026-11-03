@@ -40,8 +40,8 @@ describe('star caps per difficulty', () => {
     for (const s of [0, 1, 2, 3]) expect(awardStars(s, 'insane', true)).toBe(4);
   });
 
-  it('a failed Insane attempt never gives 4 and keeps the Hard cap', () => {
-    for (const s of [0, 1, 2, 3]) expect(awardStars(s, 'insane', false)).toBe(s);
+  it('R2 P0: a failed attempt gives 0 stars on every difficulty, whatever the score', () => {
+    for (const d of DIFFICULTIES) for (const s of [0, 1, 2, 3, 99]) expect(awardStars(s, d, false), `${d} ${s}`).toBe(0);
   });
 
   it('only Insane can ever give 4, and junk counts give 0', () => {

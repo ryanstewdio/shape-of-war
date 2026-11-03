@@ -40,6 +40,10 @@ import {
   WEAPON_PICKUPS_KEY,
   saveSetting,
   unlockLevel,
+  LAST_DIFFICULTY_KEY,
+  START_BONUS_KEY,
+  saveLastDifficulty,
+  savePendingBonus,
 } from '../../src/core/settings';
 import type { StorageLike } from '../../src/core/settings';
 import { stripComments } from './summary';
@@ -50,7 +54,9 @@ import { stripComments } from './summary';
  * sow.schema is the storage schema version, default 1, bump and migrate on shape change.
  */
 const IMPLEMENTED_KEYS: readonly string[] = [
+  'sow.progress.difficulty', // R2: the card's last difficulty choice
   'sow.progress.runSeed',
+  'sow.progress.startBonus', // R2: the par reward held for the next level start
   'sow.progress.unlocked',
   'sow.schema',
   'sow.scores.adventure',
@@ -160,6 +166,8 @@ describe('declared storage keys', () => {
     ADVENTURE_SCORES_KEY,
     ENDLESS_SCORES_KEY,
     SCHEMA_KEY,
+    LAST_DIFFICULTY_KEY,
+    START_BONUS_KEY,
   ];
 
   it('the exported constants are exactly the implemented key set', () => {
@@ -200,6 +208,8 @@ describe('keys written at run time', () => {
     saveDifficulty('hard', store);
     saveMusic(40, store);
     saveMenuTheme('1', store);
+    saveLastDifficulty('insane', store);
+    savePendingBonus({ level: 3, bonus: { kind: 'bomb' } }, store);
     loadRunSeed(() => 123456, store);
     unlockLevel(4, store);
     recordAdventureScore(1, 2500, 1, store);

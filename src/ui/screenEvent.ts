@@ -6,7 +6,7 @@ import type { FlowState } from './flow';
 export type UiScreen = Events['ui:screen']['screen'];
 
 /**
- * Pure: the announced screen for a flow state. boot is title; menu and level select are menu;
+ * Pure: the announced screen for a flow state. boot is title; menu, level select and the Free Play options (R2) are menu;
  * playing and paused are play (a paused run is still the run); settings and results map to themselves.
  */
 export function uiScreenOf(s: FlowState): UiScreen {
@@ -15,6 +15,7 @@ export function uiScreenOf(s: FlowState): UiScreen {
       return 'title';
     case 'menu':
     case 'levels':
+    case 'freeplay':
       return 'menu';
     case 'playing':
     case 'paused':

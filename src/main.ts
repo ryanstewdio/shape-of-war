@@ -14,16 +14,17 @@ import { freshSeed, hash01 } from './core/rng';
 import {
   ensureSchema,
   loadAdventureScores,
-  loadDifficulty,
   loadMenuTheme,
   loadRunSeed,
   loadSettings,
   loadUnlocked,
-  recordAdventureScore,
   recordEndlessScore,
   resetProgress,
   saveMenuTheme,
+  savePendingBonus,
   saveSetting,
+  spaceForDifficulty,
+  takePendingBonus,
   unlockAfter,
   unlockLevel,
   type EffectsTierSetting,
@@ -37,7 +38,7 @@ import { bossTierOf } from './levelgen/boss';
 import type { BossId } from './levelgen/leveldef';
 import { createEndlessGame, createGame, gameState, objectiveClock, setWeaponPickups, stepGame, type GameOptions } from './game/game';
 import type { Difficulty } from './core/difficulty';
-import { awardStars } from './core/stars';
+import type { StartBonus } from './core/bonus';
 import { setShipSpace } from './game/ship';
 import { installAudio, play as playCue } from './audio/synth';
 import { superChargeFraction } from './game/supers';
@@ -74,11 +75,16 @@ import { gateSearch, isDev } from './ui/devGate';
 import { createSplashScreen } from './ui/splash';
 import { createPreviewWorld, previewRect, stepPreview } from './ui/preview';
 import { starsFor } from './game/objective';
-import { fallbackStatus, levelSuccess, objectiveProgress, type ObjectiveSnapshot } from './ui/objective';
+import { fallbackStatus, objectiveProgress, type ObjectiveSnapshot } from './ui/objective';
+import { settleAdventure } from './ui/outcome';
+import { formatClock } from './ui/format';
+import { bonusLabel } from './ui/parReward';
+import { createFreePlayScreen, DEFAULT_FREE_PLAY, type FreePlayChoice } from './ui/freePlay';
+import { freePlayLevel } from './levelgen/freeplay';
 import { createPauseScreen } from './ui/pause';
 import { musicCue, type MusicCue } from './ui/musicFlow';
 import { createBootScreen } from './ui/boot';
-import { armIntro, createIntroScreen, holdIntro, introActive, introCard, introHeld, NO_INTRO, skipIntro, tickIntro, type IntroGate } from './ui/intro';
+import { arenaName, armIntro, createIntroScreen, endlessIntroCard, introActive, introCard, NO_INTRO, startIntro, tickIntro, type IntroGate } from './ui/intro';
 import { createResultsScreen } from './ui/results';
 import { createSettingsModel, createSettingsScreen } from './ui/settings';
 
@@ -138,10 +144,11 @@ function byId(id: string): HTMLElement {
 }
 
 /**
- * Release gate (docs/14 item 4): GameOptions plus the difficulty field. Forge adds
- * GameOptions.difficulty in parallel; until it lands the field rides along on this typed object.
+ * Release gate (docs/14 item 4): GameOptions plus the difficulty field. R2: plus the par reward,
+ * GameOptions.startBonus; Forge adds that field in parallel, so until it lands on main it rides
+ * along on this typed object.
  */
-type ReleaseGameOptions = GameOptions & { difficulty: Difficulty };
+type ReleaseGameOptions = GameOptions & { difficulty: Difficulty; startBonus?: StartBonus };
 
 /**
  * Edge: the query every knob reader may see. Without ?dev=1 the query is stripped from the address
@@ -300,16 +307,20 @@ async function boot(): Promise<void> {
   const menuLevel = (): number => levelQuery.level ?? loadUnlocked();
   let pick: LevelPick = pickLevel(generator, runSeed, menuLevel(), VALID_FIXTURES);
   let level: LevelDef = pick.def;
-  /** Options for every new world; difficulty is read at each level start (settings change between levels). */
-  const gameOptions = (difficulty: Difficulty): ReleaseGameOptions => ({ scoring: scoringPort, difficulty });
+  /** Options for every new world; difficulty is read at each level start (the card changes it between levels). */
+  const gameOptions = (difficulty: Difficulty, startBonus?: StartBonus): ReleaseGameOptions =>
+    startBonus === undefined ? { scoring: scoringPort, difficulty } : { scoring: scoringPort, difficulty, startBonus };
   /** R1: the difficulty the current world was built with; the star cap reads this, not the setting. */
-  let runDifficulty: Difficulty = loadDifficulty();
+  let runDifficulty: Difficulty = 'normal';
+  /** R2: the par reward the current Adventure world started with, kept so a card rebuild keeps it. */
+  let runBonus: StartBonus | null = null;
+  /** R2: the Free Play options of the last Free Play run (session only). */
+  let freePlayChoice: FreePlayChoice = DEFAULT_FREE_PLAY;
   let world: World = createGame(level, gameOptions(runDifficulty));
   let endlessSeed = 0;
-  // V2-A glue point, the one named port call for space physics. Fable replaces the body with
-  // Forge's setShipSpace(world, level) after both branches merge; src/game/ship.ts is not imported
-  // here on purpose. It runs at boot (settingsModel.applyBoot), on every change from the Space
-  // physics row, and whenever startLevel builds a new world, so the level reaches every world.
+  // V2-A glue point, the one named port call for space physics. R2: the Settings row is gone; the
+  // level follows the run's difficulty (spaceForDifficulty) and is applied whenever startLevel
+  // builds a new world.
   const applySpacePhysics = (level: SpaceLevelSetting): void => setShipSpace(world, level);
   // V2-B glue point, the one named port call for weapon pickups. Fable replaces the body with
   // Swarm's setWeaponPickups(world, on) after both branches merge; this branch does not import
@@ -430,19 +441,33 @@ async function boot(): Promise<void> {
     // fraction; this second emit sent the raw geom count, so the ring and hint flickered
     // between two values and read "ready" after one geom. Only the sim emits hud:score now.
     void s;
-    if (flow.mode === 'endless') {
-      hud.setLine(endlessLine(endlessSeed, world.time));
-      hud.setObjective({ label: endlessLabel(bossAlive()), fraction: 0 }); // "Boss" while one lives
+    if (flow.mode === 'endless' || flow.mode === 'freeplay') {
+      hud.setLine(flow.mode === 'endless' ? endlessLine(endlessSeed, world.time) : `Free Play  ${freePlayArenaName()}  ${formatClock(world.time)}`);
+      hud.setObjective({ label: endlessLabel(bossAlive()), fraction: 0, stars: null }); // "Boss" while one lives; no stars
     } else {
       // Reads "Defeat the boss" while the level holds for a living boss (docs/13 boss rule 9).
-      hud.setObjective(objectiveProgress(level.objective, snapshotOf(world), bossAlive()));
+      // R2: the bar fills toward the objective; the thin star line reads the level's thresholds.
+      hud.setObjective(objectiveProgress(level.objective, snapshotOf(world), bossAlive(), level.stars));
     }
   };
 
-  /** Build a fresh world for the flow's current level (start, Next, Retry, Restart). */
-  const startLevel = (mode: 'adventure' | 'endless', index: number): void => {
-    runDifficulty = settingsModel.state.difficulty;
-    if (mode === 'endless') {
+  const freePlayArenaName = (): string => arenaName(level);
+
+  /**
+   * Build a fresh world for the flow's current level (start, Next, Retry, Restart). R2: the
+   * difficulty is the card's last choice (Free Play: its options screen); `rebuild` is a chip tap
+   * on the card, which keeps the par reward the world was first built with.
+   */
+  const startLevel = (mode: 'adventure' | 'endless' | 'freeplay', index: number, rebuild = false): void => {
+    runDifficulty = mode === 'freeplay' ? freePlayChoice.difficulty : settingsModel.state.difficulty;
+    if (!rebuild) runBonus = mode === 'adventure' && !customSeed ? takePendingBonus(index) : null;
+    if (mode === 'freeplay') {
+      endlessSeed = freshSeed();
+      const def = freePlayLevel({ arena: freePlayChoice.arena, barriers: freePlayChoice.barriers, seed: endlessSeed });
+      world = createEndlessGame(def, (seg) => generateEndlessSegment(endlessSeed, seg), gameOptions(runDifficulty));
+      level = world.level;
+      pick = { def: level, source: 'generator', hash: levelHash(def) };
+    } else if (mode === 'endless') {
       endlessSeed = freshSeed(); // every Endless game gets a fresh seed (docs/01 section 2.2)
       level = endlessLevel({ generateEndless, generateEndlessSegment }, endlessSeed);
       pick = { def: level, source: 'generator', hash: levelHash(generateEndless(endlessSeed)) };
@@ -451,7 +476,7 @@ async function boot(): Promise<void> {
     } else {
       pick = pickLevel(generator, runSeed, index, VALID_FIXTURES);
       level = pick.def;
-      world = createGame(level, gameOptions(runDifficulty));
+      world = createGame(level, gameOptions(runDifficulty, runBonus ?? undefined));
       hud.setLevel(index, level.par, pick.hash);
     }
     hud.setSuper(level.superType);
@@ -461,8 +486,8 @@ async function boot(): Promise<void> {
     const forcedTier = forcedBoss === null ? null : bossTierOf(forcedBoss);
     const forcedOn = forcedBoss !== null && forcedTier !== null;
     if (forcedOn) armBossFromSpec(world, { id: forcedBoss as BossId, tier: forcedTier, atSec: 10, hpMul: 1 }, 10);
-    bossStrip = needsBossStrip(mode, level, forcedOn);
-    applySpacePhysics(settingsModel.state.spacePhysics); // new world: push the stored level to it
+    bossStrip = needsBossStrip(mode === 'adventure' ? 'adventure' : 'endless', level, forcedOn); // Free Play runs Endless waves
+    applySpacePhysics(spaceForDifficulty(runDifficulty)); // R2: space physics follows difficulty
     applyWeaponPickups(settingsModel.state.weaponPickups); // and the stored pickups choice
     hud.clearWeapon(); // a new world starts on spread: drop any indicator left from the last run
     hud.clearDrone(); // and with an unarmed drone: drop a drone indicator or combine caption left over
@@ -475,7 +500,7 @@ async function boot(): Promise<void> {
     syncScene();
     lastHudMs = Number.NEGATIVE_INFINITY;
     emitHud();
-    intro = armIntro(mode);
+    if (!rebuild) intro = armIntro(mode); // a chip rebuild keeps the card up
     console.info(`[sow] ${mode} level ${index} ${pick.source} seed ${mode === 'endless' ? endlessSeed : runSeed} hash ${pick.hash}`);
   };
 
@@ -513,7 +538,7 @@ async function boot(): Promise<void> {
     hud.layout(frame, touch !== null);
     // Pause, results and the intro card lay out inside the play rect, clear of the HUD rings.
     const pad = overlayPadding(frame);
-    for (const s of [pauseScreen, results, introScreen]) confine(s.root, pad);
+    for (const s of [pauseScreen, results, introScreen, freePlayScreen]) confine(s.root, pad);
     menu.layout(last.cssW, last.cssH, insets); // the menu panel sizes itself to the safe area, not the HUD frame
     return frame;
   }
@@ -526,7 +551,18 @@ async function boot(): Promise<void> {
     adventure: () => bus.emit('game:start', { mode: 'adventure', levelIndex: adventureLevel() }),
     levels: () => dispatch({ type: 'openLevels' }),
     endless: () => bus.emit('game:start', { mode: 'endless', levelIndex: 1 }),
+    freePlay: () => dispatch({ type: 'openFreePlay' }),
     settings: () => dispatch({ type: 'openSettings' }),
+  });
+  // R2 Free Play options screen. Start keeps the choice for the session and starts the run; the
+  // difficulty picked here also becomes the card's last choice.
+  const freePlayScreen = createFreePlayScreen(uiRoot, {
+    start: (c) => {
+      freePlayChoice = c;
+      settingsModel.setDifficulty(c.difficulty);
+      dispatch({ type: 'start', mode: 'freeplay', levelIndex: 1 });
+    },
+    back: () => dispatch({ type: 'closeFreePlay' }),
   });
   const levelSelect = createLevelSelect(uiRoot, {
     play: (index) => {
@@ -548,6 +584,10 @@ async function boot(): Promise<void> {
     next: () => dispatch({ type: 'next' }),
     retry: () => dispatch({ type: 'retry' }),
     menu: () => dispatch({ type: 'menu' }),
+    // R2 par reward: held for the next level's start (a typed seed run saves nothing).
+    reward: (bonus, nextLevel) => {
+      if (!customSeed) savePendingBonus({ level: nextLevel, bonus });
+    },
   });
   // Neon goes only through applyNeon; Show FPS and glow path through Glow's exported functions.
   const settingsModel = createSettingsModel({
@@ -561,7 +601,6 @@ async function boot(): Promise<void> {
       }
     },
     setVolume: (v) => audio.setVolume(v),
-    setSpacePhysics: (level) => applySpacePhysics(level),
     setWeaponPickups: (on) => applyWeaponPickups(on),
     setEffectsTier: (tier) => applyEffectsTier(tier),
     setTilt: (level) => setTilt(level),
@@ -609,17 +648,17 @@ async function boot(): Promise<void> {
   const introScreen = createIntroScreen(
     uiRoot,
     () => {
-      intro = skipIntro(intro);
+      // R2: Start leaves the card (Endless shows Ready first).
+      intro = startIntro(intro, flow.mode);
       paintIntro();
     },
     (d) => {
-      // R1: a Difficulty tap on the card saves the setting and rebuilds this level at the new
-      // difficulty. The sim has not stepped while the card holds it, so nothing is lost. The card
-      // then waits for a tap so the 1.5 s timer cannot cut the choice off.
-      if (flow.screen !== 'playing' || flow.mode !== 'adventure' || intro.kind !== 'card' || !introActive(intro)) return;
+      // R2: a chip tap saves the last choice and rebuilds this level or Endless run at the new
+      // difficulty (and its space physics). The sim has not stepped while the card holds it, so
+      // nothing is lost; the card stays until Start.
+      if (flow.screen !== 'playing' || flow.mode === 'freeplay' || intro.kind !== 'card' || !introActive(intro)) return;
       settingsModel.setDifficulty(d);
-      if (d !== runDifficulty) startLevel(flow.mode, flow.levelIndex);
-      intro = holdIntro(armIntro(flow.mode));
+      if (d !== runDifficulty) startLevel(flow.mode, flow.levelIndex, true);
       paintIntro();
     },
   );
@@ -630,14 +669,15 @@ async function boot(): Promise<void> {
       return;
     }
     if (intro.kind === 'ready') introScreen.showReady();
-    else {
+    else if (flow.mode === 'adventure') {
       const card = introCard(flow.levelIndex, level, runDifficulty);
-      introScreen.showCard({ ...card, title: `${card.title}  Seed ${runSeed}${customSeed ? ' (typed)' : ''}` }, introHeld(intro));
-    }
+      const seed = `Seed ${runSeed}${customSeed ? ' (typed)' : ''}`;
+      introScreen.showCard({ ...card, kit: `${card.kit}   ${seed}${runBonus === null ? '' : `   Reward: ${bonusLabel(runBonus)}`}` });
+    } else introScreen.showCard(endlessIntroCard(level, runDifficulty));
   }
 
   const paintScreens = (): void => {
-    for (const s of [bootScreen, menu, levelSelect, pauseScreen, results, settingsScreen]) s.hide();
+    for (const s of [bootScreen, menu, levelSelect, freePlayScreen, pauseScreen, results, settingsScreen]) s.hide();
     hud.hide();
     paintIntro();
     switch (flow.screen) {
@@ -654,6 +694,9 @@ async function boot(): Promise<void> {
       }
       case 'levels':
         levelSelect.open(loadUnlocked(), loadAdventureScores());
+        break;
+      case 'freeplay':
+        freePlayScreen.open({ ...freePlayChoice, difficulty: settingsModel.state.difficulty });
         break;
       case 'playing':
         hud.show();
@@ -693,6 +736,16 @@ async function boot(): Promise<void> {
     if (flow.screen !== 'playing' && flow.screen !== 'paused') return;
     emitHud();
     const index = flow.levelIndex;
+    const space = spaceForDifficulty(runDifficulty); // B13: the level in effect as the run ends
+    const arena = arenaName(level);
+    if (flow.mode === 'freeplay') {
+      // R2: Free Play keeps no stars and no bests; the results show score and time.
+      dispatch({
+        type: 'over',
+        result: { mode: 'freeplay', levelIndex: 1, score: p.score, stars: 0, success: false, difficulty: runDifficulty, par: 0, best: 0, newBest: false, hash: pick.hash, space, timeSec: world.time, arena },
+      });
+      return;
+    }
     if (flow.mode === 'endless') {
       const rec = recordEndlessScore(p.score, Date.now());
       dispatch({
@@ -703,37 +756,48 @@ async function boot(): Promise<void> {
           score: p.score,
           stars: 0,
           success: false,
+          difficulty: runDifficulty,
           par: 0,
           best: rec.best,
           newBest: rec.rank === 1,
           hash: pick.hash,
           rank: rec.rank,
           seed: endlessSeed,
-          space: settingsModel.state.spacePhysics, // B13: the level in effect as the run ends
+          space,
+          timeSec: world.time,
+          arena,
         },
       });
       return;
     }
-    // A boss level takes the sim's own verdict: its target can be met and the level then lost while
-    // it holds for the boss. Every other level infers success from the target, as since v1.
-    const success = levelSuccess(level.objective, snapshotOf(world), gameState(world).outcome, level.boss !== undefined);
-    // A typed seed is a session only run: no unlocks and no Adventure table entries.
-    // R1: the score stars capped by the difficulty this world was built with; an Insane win is 4.
-    const earned = awardStars(p.stars, runDifficulty, success);
-    const rec = customSeed ? { best: p.score, newBest: false } : recordAdventureScore(index, p.score, earned, undefined, runDifficulty);
+    // R2 P0: the sim's verdict decides (lives out is always a loss); a loss is 0 stars and is not
+    // saved, so it can never become a best. A typed seed is a session only run: nothing saved.
+    const end = settleAdventure({
+      levelIndex: index,
+      objective: level.objective,
+      snapshot: snapshotOf(world),
+      outcome: gameState(world).outcome,
+      bossLevel: level.boss !== undefined,
+      score: p.score,
+      scoreStars: p.stars,
+      difficulty: runDifficulty,
+      sessionOnly: customSeed,
+    });
+    const success = end.success;
     if (!customSeed && success) unlockLevel(unlockAfter(loadUnlocked(), index, success));
     const result: LevelResult = {
       mode: 'adventure',
       levelIndex: index,
       score: p.score,
-      stars: earned,
+      stars: end.stars,
       success,
       difficulty: runDifficulty,
       par: level.par,
-      best: rec.best,
-      newBest: rec.newBest,
+      best: end.best,
+      newBest: end.newBest,
       hash: pick.hash,
-      space: settingsModel.state.spacePhysics, // B13: the level in effect as the run ends
+      space,
+      arena,
     };
     // The results "Boss defeated" line reports the number the sim paid: scoring.bossBonus, the only copy.
     if (success && bossDown) result.bossBonus = bossBonus(level.par, 'adventure', level.boss?.tier ?? 0);
@@ -770,8 +834,8 @@ async function boot(): Promise<void> {
       // Fallback end check. On a boss level the sim alone decides a win: it holds for the boss.
       if (endCheck && fallbackStatus(level.objective, snapshotOf(world), level.boss !== undefined) !== 'running') {
         const score = scoreOf(world).score;
-        const st = flow.mode === 'endless' ? 0 : starsFor(score, level.stars); // R1: the level's own thresholds (v6 is 1, 1.25, 1.5 x par)
-        bus.emit('game:over', { score, stars: st, levelIndex: flow.levelIndex, mode: flow.mode });
+        const st = flow.mode === 'adventure' ? starsFor(score, level.stars) : 0; // R1: the level's own thresholds (v6 is 1, 1.25, 1.5 x par)
+        bus.emit('game:over', { score, stars: st, levelIndex: flow.levelIndex, mode: flow.mode === 'adventure' ? 'adventure' : 'endless' });
       }
     },
     render(alpha) {
