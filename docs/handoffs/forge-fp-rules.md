@@ -26,4 +26,3 @@ Device: Free Play, infinite lives, 3 min, pierce, pickups off, drift high on a d
 ## Known gaps
 - Permanent weapon HUD shows a full 20 s bar, not an infinity mark.
 - Endless extra life awards do nothing with infinite lives (bombs still award).
-- add_repo tool was not available in this session; push relies on the session's git credentials.
