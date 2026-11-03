@@ -80,7 +80,7 @@ import { settleAdventure } from './ui/outcome';
 import { formatClock } from './ui/format';
 import { bonusLabel } from './ui/parReward';
 import { createFreePlayScreen, DEFAULT_FREE_PLAY, type FreePlayChoice } from './ui/freePlay';
-import { freePlayLevel } from './levelgen/freeplay';
+import { freePlayLevel, freePlaySegment } from './levelgen/freeplay';
 import { createPauseScreen } from './ui/pause';
 import { musicCue, type MusicCue } from './ui/musicFlow';
 import { createBootScreen } from './ui/boot';
@@ -464,7 +464,7 @@ async function boot(): Promise<void> {
     if (mode === 'freeplay') {
       endlessSeed = freshSeed();
       const def = freePlayLevel({ arena: freePlayChoice.arena, barriers: freePlayChoice.barriers, seed: endlessSeed });
-      world = createEndlessGame(def, (seg) => generateEndlessSegment(endlessSeed, seg), gameOptions(runDifficulty));
+      world = createEndlessGame(def, (seg) => freePlaySegment(def, seg), gameOptions(runDifficulty)); // Foundry: spawns follow the chosen arena
       level = world.level;
       pick = { def: level, source: 'generator', hash: levelHash(def) };
     } else if (mode === 'endless') {

@@ -68,7 +68,7 @@ const PRE_RELEASE: readonly (readonly [number, number, string, number, number])[
 ];
 
 /** Seed 7 level 33 is an open drum: pre release hash, and the drift on hash (docs/14 item 8). */
-const OPEN_DRUM = { seed: 7, level: 33, levelHash: '0BDFEF03', pre: 1506431169, drift: 1477443089 } as const;
+const OPEN_DRUM = { seed: 7, level: 33, levelHash: '0BDFEF03', pre: 1506431169, drift: 938860137 } /* R2: drift bursts 4x (forge-r2-enrage); drift off still equals pre release */ as const;
 
 describe('Normal difficulty is the pre release sim', () => {
   it('the Normal table multiplies by exactly 1 and adds exactly 0, on every field', () => {

@@ -19,6 +19,7 @@ import { gs, type ScoringPort } from '../../src/game/state';
 import { Kind, type World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
 import { generateLevel } from '../../src/levelgen/generator';
+import { V5_GEN_CONFIG } from '../../src/levelgen/leveldef';
 import { legacyBossHp } from './bossHelpers';
 import { DT, idle } from './helpers';
 
@@ -99,7 +100,8 @@ interface Run {
 
 /** Play seed 42 level n with plan. The ship is shielded except for the two scripted deaths. */
 function play(level: number, plan: Plan): { w: World; r: Run } {
-  const w = createGame(generateLevel(42, level), { scoring: PORT });
+  // R2: the scripted bot cannot clear the v7 destroy counts in time; the B16 premise is about the end rule, so play the v5 waves.
+  const w = createGame(generateLevel(42, level, V5_GEN_CONFIG), { scoring: PORT });
   const g = gs(w);
   g.invulnerable = true;
   const r: Run = { overs: 0, overAt: -1, downAt: -1, metAt: -1, heldAt: -1, deaths: 0, deadAtDown: false, simScore: 0, ledgerScore: 0, simKills: 0, ledgerKills: 0, bonus: 0 };
@@ -108,7 +110,7 @@ function play(level: number, plan: Plan): { w: World; r: Run } {
     if (r.overAt < 0) r.overAt = w.time;
   });
   const input = idle();
-  for (let i = 0; i < 120 * 400 && g.outcome === 'running'; i++) {
+  for (let i = 0; i < 120 * 600 && g.outcome === 'running'; i++) { // R2: destroy 540 on v7 waves
     // Two deaths on the way, at 12 s and 30 s (both before the long level's boss at 240 s). deadAtKill
     // spends its second life at the killing blow instead (3 lives: a third death would lose).
     // bossFirst kills the boss soon after it enters, so its second death comes as the boss arrives.

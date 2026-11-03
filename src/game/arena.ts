@@ -50,6 +50,11 @@ export function confine(
       break;
     case 'circle':
       confineCircle(arena.width / 2, r, out);
+      // R2 glue (Foundry request): Free Play circle barriers are solid like rectObstacles.
+      for (let pass = 0; pass < 2 && arena.obstacles.length > 0; pass++) {
+        for (const o of arena.obstacles) if (!(passMembrane && o.membrane === true)) pushOutOfBox(o, r, out);
+        confineCircle(arena.width / 2, r, out);
+      }
       break;
     case 'hexagon':
       confineHex(arena.width / 2, r, out);
