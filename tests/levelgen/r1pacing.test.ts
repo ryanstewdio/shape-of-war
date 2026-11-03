@@ -8,6 +8,7 @@ import {
   DEFAULT_GEN_CONFIG,
   GENERATOR_VERSION_V5,
   GENERATOR_VERSION_V6,
+  GENERATOR_VERSION_V7,
   LONG_BANDS,
   V1_GEN_CONFIG,
   V2_GEN_CONFIG,
@@ -233,9 +234,12 @@ describe('flags, versions and validation', () => {
 
   it('every level of the default config is version 6; V5_GEN_CONFIG and an older literal give version 5', () => {
     for (const { def } of rows.slice(0, 200)) expect(def.generatorVersion).toBe(GENERATOR_VERSION_V6);
-    // Boss levels keep the version 5 waves, par and fight tuning.
-    expect(generateLevel(42, 10).generatorVersion).toBe(GENERATOR_VERSION_V5);
-    expect(generateLevel(42, 10).stars).toEqual(generateLevel(42, 10, V5_GEN_CONFIG).stars);
+    // Release gate R2: boss levels take the R1 waves before the boss and report version 7; they keep
+    // the version 5 par rule and stars (1, 2, 4 x par).
+    const b = generateLevel(42, 10);
+    expect(b.generatorVersion).toBe(GENERATOR_VERSION_V7);
+    expect(b.stars).toEqual([b.par, 2 * b.par, 4 * b.par]);
+    expect(generateLevel(42, 10, V5_GEN_CONFIG).generatorVersion).toBe(GENERATOR_VERSION_V5);
     const older = { ...DEFAULT_GEN_CONFIG };
     delete older.enableR1Pacing;
     for (const n of [5, 12, 13]) {

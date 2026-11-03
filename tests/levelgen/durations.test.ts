@@ -19,6 +19,7 @@ import {
   DEFAULT_GEN_CONFIG,
   GENERATOR_VERSION_V5,
   GENERATOR_VERSION_V6,
+  GENERATOR_VERSION_V7,
   LONG_BANDS,
   LONG_CALM_SEC,
   LONG_MIN_LEVEL_SEC,
@@ -79,14 +80,15 @@ describe('expected duration over 500 seeds (default config)', () => {
     for (const [n, s] of sum) expect(s.t / s.c, `level ${n} mean`).toBeGreaterThanOrEqual(LONG_MIN_LEVEL_SEC);
   });
 
-  it('every boss level has at least 240 s of waves before the boss, which enters at 240 s', () => {
+  it('every boss level has at least 200 s of waves before the boss, which enters at 200 s (R2; v5 240 s)', () => {
+    expect(BOSS_LONG_LEVEL_AT_SEC).toBe(200);
     const bad: string[] = [];
     let n5 = 0;
     for (const { seed, n, def } of rows) {
       if (!isBoss(n)) continue;
       n5++;
       const e = estimateDuration(def);
-      if (!e.boss || def.boss?.atSec !== BOSS_LONG_LEVEL_AT_SEC || e.wavesSec < 240) bad.push(`seed ${seed} level ${n}: ${e.wavesSec} s, boss at ${String(def.boss?.atSec)}`);
+      if (!e.boss || def.boss?.atSec !== BOSS_LONG_LEVEL_AT_SEC || e.wavesSec < BOSS_LONG_LEVEL_AT_SEC) bad.push(`seed ${seed} level ${n}: ${e.wavesSec} s, boss at ${String(def.boss?.atSec)}`);
       // The objective is not met before the entrance, so no hold brings the boss in early.
       const o = def.objective;
       const t = o.kind === 'survive' ? o.durationSec : o.kind === 'scoreInTime' ? o.timeLimitSec : destroyClearSec(def.waves, o.count);
@@ -117,11 +119,11 @@ describe('expected duration over 500 seeds (default config)', () => {
     }
   });
 
-  it('every level validates with the default config, needs no re-derive and is version 6 (R1; boss levels 5)', () => {
+  it('every level validates with the default config, needs no re-derive and is version 6 (R1; R2 boss levels 7)', () => {
     const bad: string[] = [];
     for (const { seed, n, def } of rows) {
       const e = validateLevel(def, DEFAULT_GEN_CONFIG).errors;
-      if (e.length > 0 || def.retries !== 0 || def.generatorVersion !== (isBoss(n) ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V6)) bad.push(`seed ${seed} level ${n}: ${e.join('; ')} r${String(def.retries)}`);
+      if (e.length > 0 || def.retries !== 0 || def.generatorVersion !== (isBoss(n) ? GENERATOR_VERSION_V7 : GENERATOR_VERSION_V6)) bad.push(`seed ${seed} level ${n}: ${e.join('; ')} r${String(def.retries)}`);
     }
     expect(bad.slice(0, 5)).toEqual([]);
   }, 60_000); // validating 500 long levels takes about 5.5 s on the cloud VM, over the 5 s default

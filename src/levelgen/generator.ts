@@ -23,6 +23,7 @@ import {
   GENERATOR_VERSION_V4,
   GENERATOR_VERSION_V5,
   GENERATOR_VERSION_V6,
+  GENERATOR_VERSION_V7,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_BREATHER_SEC,
@@ -101,7 +102,7 @@ import {
   obstaclePointDistance,
   validateLevel,
 } from './validate';
-import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards } from './boss';
+import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards } from './boss';
 import { destroyCountFor, inBreather, pulseAt, wholeLevelPar } from './pacing';
 import type { PulseShape } from './pacing';
 import {
@@ -290,7 +291,7 @@ function cylinderArena(seed: number, levelIndex: number, cfg: GenConfig, arenaRn
 }
 
 /** docs/02 section 6.2. Per attempt draws: orientation, length, cx, cy. Stops at the first exhausted obstacle. */
-function placeObstacles(r: Rng, arena: ArenaDef, count: number): Obstacle[] {
+export function placeObstacles(r: Rng, arena: ArenaDef, count: number): Obstacle[] {
   const placed: Obstacle[] = [];
   const hw = arena.width / 2;
   const hh = arena.height / 2;
@@ -600,6 +601,12 @@ interface WaveRun {
    * Absent means the version 5 waves, with no extra draw on the wave stream.
    */
   volatile?: Rng;
+  /**
+   * Release gate R2: waves at or after this second skip the R1 plan (no volatile draw) and play
+   * the version 5 interval and budget, so a boss fight keeps its version 5 wave tuning. Absent
+   * means the R1 plan runs to tEnd.
+   */
+  volatileUntilSec?: number;
 }
 
 // R1 pacing (release gate R1): shorter, jittered wave intervals so the arena never empties, and
@@ -702,7 +709,8 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
     let budget = pulse === null ? ramped : Math.max(1, Math.round(ramped * pulse.budget));
     // R1: the first wave of each breather is a lull; every other wave draws a flavour.
     const breather = run.pulse !== undefined && inBreather(run.pulse, t);
-    const plan = run.volatile === undefined ? null : r1Wave(run.volatile, budget, oldInterval, breather && !wasBreather);
+    const volatileOn = run.volatile !== undefined && (run.volatileUntilSec === undefined || t < run.volatileUntilSec);
+    const plan = run.volatile === undefined || !volatileOn ? null : r1Wave(run.volatile, budget, oldInterval, breather && !wasBreather);
     wasBreather = breather;
     if (plan !== null) budget = plan.budget;
     const snakeRoom = (): number => b.maxLiveSnakes - snakeTimes.filter((s) => s > t - SNAKE_WINDOW_SEC).length;
@@ -940,6 +948,8 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const long = cfg.enableLongLevels === true;
   // Release gate R1: whole level par, volatile waves, more and truly open drums (version 6).
   const r1 = r1LevelOf(levelIndex, cfg);
+  // Release gate R2: boss levels take the R1 waves before the boss (par, stars and the fight stay version 5).
+  const r1Waves = runsR1(cfg);
   const b = long ? longBandParams(band) : BANDS[band];
   // D13: the surface stream is separate, so drawing it here moves no draw of any flat level.
   const surface = pickSurface(seed, levelIndex, cfg);
@@ -965,7 +975,8 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     budgetBonus: 0,
     cylinder: cyl,
     ...(long ? { pulse: longPulse(LONG_BANDS[band]) } : {}),
-    ...(r1 ? { volatile: stream(s, R1_SALT) } : {}),
+    // R2 boss level: the R1 plan stops at the entrance, so the fight keeps the version 5 waves.
+    ...(r1Waves ? { volatile: stream(s, R1_SALT), ...(r1 ? {} : { volatileUntilSec: BOSS_LONG_LEVEL_AT_SEC }) } : {}),
   });
   const v2 = runsV2(cfg, band);
   // The v2 stage only rewrites kinds and entries; atSec is untouched, so the loop fields match v1.
@@ -1014,15 +1025,24 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
  */
 export function withLevelBoss(def: LevelDef, cfg: GenConfig): LevelDef {
   const long = cfg.enableLongLevels === true;
-  const boss = cfg.enableBosses ? bossForLevel(def.levelIndex, long ? BOSS_LONG_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC) : null;
+  const boss = cfg.enableBosses ? bossForLevel(def.levelIndex, bossLevelAtSec(cfg)) : null;
   if (boss === null) return def;
-  // A boss level is never built with the R1 pacing (r1LevelOf), so it keeps version 5 or 3.
-  return { ...def, generatorVersion: long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3, hazards: bossHazards(def.hazards), boss };
+  // Release gate R2: a boss level built with the R1 config has the R1 waves and the 200 s entrance
+  // (version 7); with the R1 pacing off it keeps version 5 (long) or 3.
+  const generatorVersion = runsR1(cfg) ? GENERATOR_VERSION_V7 : long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3;
+  return { ...def, generatorVersion, hazards: bossHazards(def.hazards), boss };
+}
+
+/** Boss entrance second on a level of this config: 200 s (R1 config), 240 s (long levels), else 20 s. */
+export function bossLevelAtSec(cfg: Readonly<GenConfig>): number {
+  if (runsR1(cfg)) return BOSS_LONG_LEVEL_AT_SEC;
+  return cfg.enableLongLevels === true ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
 }
 
 /**
- * True when level n is built with the R1 pacing: the config runs it and the level is not a boss
- * level (boss levels keep their version 5 waves, par and fight tuning; release gate R1 scope).
+ * True when level n is a version 6 level: the config runs the R1 pacing and the level is not a
+ * boss level. Release gate R2: boss levels of that config take the R1 waves as well, but keep the
+ * version 5 par, stars and fight tuning, and report version 7 (withLevelBoss).
  */
 export function r1LevelOf(levelIndex: number, cfg: GenConfig): boolean {
   return runsR1(cfg) && !(cfg.enableBosses && bossForLevel(levelIndex, BOSS_LONG_LEVEL_AT_SEC) !== null);
@@ -1071,6 +1091,15 @@ export function endlessBudgetBonus(segment: number): number {
 
 /** Endless segment s: roster and waves only, atSec relative to segment start, all below 30 s. */
 export function generateEndlessSegment(endlessSeed: number, segment: number, cfg: GenConfig = DEFAULT_GEN_CONFIG): EndlessSegmentDef {
+  return endlessSegmentOn(endlessSeed, segment, cfg, ENDLESS_ARENA, false);
+}
+
+/**
+ * Endless segment s with its spawn points laid out on the given arena (cyl: a drum, spawn points
+ * on the rims and wrapped in u). Same streams and draw order as generateEndlessSegment; on the
+ * fixed Endless arena it is generateEndlessSegment, byte for byte. Release gate R2 Free Play.
+ */
+export function endlessSegmentOn(endlessSeed: number, segment: number, cfg: GenConfig, arena: Readonly<ArenaDef>, cyl: boolean): EndlessSegmentDef {
   const es = endlessSeed >>> 0;
   const seed = segmentSeed(es, segment);
   const effectiveIndex = effectiveIndexOf(segment);
@@ -1079,7 +1108,7 @@ export function generateEndlessSegment(endlessSeed: number, segment: number, cfg
   const v1Roster = generateRoster(stream(seed, SALT.roster), band, cfg);
   const bonus = endlessBudgetBonus(segment);
   const v1List = generateWaveGroups(stream(seed, SALT.waves), {
-    arena: ENDLESS_ARENA,
+    arena,
     roster: v1Roster,
     b,
     tStart: segment === 0 ? FIRST_WAVE_SEC : 0,
@@ -1087,9 +1116,10 @@ export function generateEndlessSegment(endlessSeed: number, segment: number, cfg
     rampOffsetSec: ENDLESS_SEGMENT_SEC * segment,
     fullRamp: band >= 3,
     budgetBonus: bonus,
+    ...(cyl ? { cylinder: true } : {}),
   });
   const v2 = runsV2(cfg, band);
-  const { roster, waves: list } = v2 ? applyV2Enemies(stream(seed, V2_ENEMY_SALT), band, ENDLESS_ARENA, v1Roster, v1List) : { roster: v1Roster, waves: v1List.waves };
+  const { roster, waves: list } = v2 ? applyV2Enemies(stream(seed, V2_ENEMY_SALT), band, arena, v1Roster, v1List, cyl) : { roster: v1Roster, waves: v1List.waves };
   const def: EndlessSegmentDef = {
     version: LEVELDEF_VERSION,
     generatorVersion: v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,

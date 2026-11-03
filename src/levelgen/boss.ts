@@ -10,10 +10,15 @@ export const BOSS_SEGMENT_EVERY = 6;
 /** Wave clock second of the boss entrance on an Adventure level. */
 export const BOSS_LEVEL_AT_SEC = 20;
 /**
- * Release polish (docs/14 item 7): wave clock second of the boss entrance on a long level
- * (GenConfig.enableLongLevels on). At least 4 minutes of regular waves come first.
+ * Release gate R2: wave clock second of the boss entrance on a long level built with the R1
+ * pacing (the default config, GENERATOR_VERSION_V7). Ryan found 240 s a little long.
  */
-export const BOSS_LONG_LEVEL_AT_SEC = 240;
+export const BOSS_LONG_LEVEL_AT_SEC = 200;
+/**
+ * Release polish (docs/14 item 7): the boss entrance on a version 5 long level (enableLongLevels
+ * on, enableR1Pacing off). At least 4 minutes of regular waves come first.
+ */
+export const BOSS_V5_LEVEL_AT_SEC = 240;
 /** Seconds after the segment start of the boss entrance in Endless. */
 export const BOSS_SEGMENT_AT_SEC = 10;
 /** Index in BOSS_SCHEDULE that every pass after the first restarts from (ember, the first tier 2 boss). */
