@@ -340,6 +340,7 @@ const DIFFICULTY_LABELS: Readonly<Record<Difficulty, string>> = {
   easy: 'Easy',
   normal: 'Normal',
   hard: 'Hard',
+  insane: 'Insane',
 };
 
 /** Pure: the text on one Difficulty button, also used on the intro card. */

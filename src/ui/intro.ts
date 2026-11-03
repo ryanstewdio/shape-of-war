@@ -68,7 +68,7 @@ export interface IntroCard {
   difficulty: string;
 }
 
-const DIFFICULTY_NAMES: Readonly<Record<Difficulty, string>> = { easy: 'Easy', normal: 'Normal', hard: 'Hard' };
+const DIFFICULTY_NAMES: Readonly<Record<Difficulty, string>> = { easy: 'Easy', normal: 'Normal', hard: 'Hard', insane: 'Insane' };
 
 /** Pure: the difficulty line on the intro card. */
 export function difficultyIntroLine(d: Difficulty): string {
