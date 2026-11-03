@@ -113,6 +113,10 @@ export interface Events {
   'sim:saw': { on: boolean };
   /** Swarm to Glow and Chorus (GW2 contract stub): a boss shield went up or down at (x, y). */
   'sim:bossShield': { id: BossId; up: boolean; x: number; y: number };
+  /** Forge to Glow and Chorus (R2 contract stub): an enemy passed through a membrane and is now enraged (hot red, faster). */
+  'sim:enrage': { id: number; x: number; y: number };
+  /** Forge to Glow and Chorus (R2 contract stub): an open drum drift burst starts in inSec seconds (telegraph). */
+  'sim:driftBurst': { inSec: number; dir: 1 | -1 };
   /** Swarm to Glow and Chorus: Turbo started (active true, at the ship) or ended. */
   'fx:turbo': { active: boolean; x: number; y: number };
   /** Swarm (A) to Ledger: at most every 100 ms and on change. */
