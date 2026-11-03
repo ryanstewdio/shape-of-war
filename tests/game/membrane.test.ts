@@ -92,12 +92,13 @@ describe('membrane in the sim', () => {
       expect(w.kind[id]).toBe(Kind.Grunt);
       const x0 = w.x[id] ?? 0;
       const overlapping = Math.abs(x0 - BAR_X) < BAR_W / 2 + r;
+      const k = w.enraged[id] === 1 ? 1.5 : 1; // R2: enraged once it has crossed
       stepGame(w, DT, idle());
       const dx = (w.x[id] ?? 0) - x0;
       if (overlapping) {
         expect(dx).toBeCloseTo(full * MEMBRANE_SPEED, 4);
         slowSteps++;
-      } else expect(dx).toBeCloseTo(full, 4);
+      } else expect(dx).toBeCloseTo(full * k, 4);
     }
     expect(w.x[id] ?? 0).toBeGreaterThan(BAR_X + BAR_W / 2 + r);
     expect(slowSteps).toBeGreaterThan(0);

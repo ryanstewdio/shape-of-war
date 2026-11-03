@@ -11,6 +11,7 @@
 import { hash01 } from '../../core/rng';
 import { confineOn, createConfineResult } from '../arena';
 import { enemySpeedScale } from '../state';
+import { enrageTurn } from '../membrane';
 import { moveTo, turnToward } from '../steer';
 import { Kind, type World } from '../world';
 import { dropMine } from './mine';
@@ -253,7 +254,7 @@ export function step(w: World, id: number, dt: number): void {
   st.sinceTurn[id] = dive ? 0 : since;
   if (dive) st.loops[id] = loop + 1;
   st.phase[id] = next;
-  const s = def.speed * enemySpeedScale(w) * dt * (next === ROAM_IN ? DIVE_SPEED_MUL : 1);
+  const s = def.speed * enemySpeedScale(w, id) * dt * (next === ROAM_IN ? DIVE_SPEED_MUL : 1);
   if (next === ROAM_EDGE) {
     moveTo(w, id, x + dir.x * s, y + dir.y * s);
     w.rot[id] = Math.atan2(dir.y, dir.x);
@@ -266,7 +267,7 @@ export function step(w: World, id: number, dt: number): void {
       target = inward.heading;
       st.slide[id] = inward.side;
     }
-    const heading = turnToward(w.rot[id] ?? 0, target, ROAM_TURN * dt);
+    const heading = turnToward(w.rot[id] ?? 0, target, ROAM_TURN * enrageTurn(w, id) * dt);
     moveTo(w, id, x + Math.cos(heading) * s, y + Math.sin(heading) * s);
     w.rot[id] = heading;
   }

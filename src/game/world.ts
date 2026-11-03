@@ -9,7 +9,7 @@ import { confineOn, createConfineResult } from './arena';
 import { createBulletPool, stepBullets, type BulletPool } from './bullets';
 import { createGrid, rebuild, type Grid } from './collide';
 import { createDrift, stepDrift, type DriftState } from './drift';
-import { hasMembrane, membraneMove } from './membrane';
+import { enrageSpeed, hasMembrane, membraneMove } from './membrane';
 import { createShipState, respawnShip, SHIP_RADIUS, stepShip, type ShipState } from './ship';
 
 export const enum Kind {
@@ -87,6 +87,14 @@ export interface World {
   drift: DriftState;
   /** Release polish: true when any obstacle is a membrane (docs/14 item 9). */
   membranes: boolean;
+  /**
+   * R2: 1 when the entity crossed a membrane and is enraged for the rest of its life (render reads
+   * it: hot red; or isEnraged in game.ts). Always 0 on levels without membranes and for bosses,
+   * boss parts, snake bodies and static hazards.
+   */
+  enraged: Uint8Array;
+  /** R2: membrane the entity is inside: 0 for none, else plus or minus (index + 1) by the side it entered from. */
+  memIn: Int16Array;
 }
 
 /** Per kind behaviour. Swarm registers one per enemy kind in W2. */
@@ -135,6 +143,8 @@ export function createWorld(level: LevelDef, capacity: number = ENTITY_CAP, diff
     difficulty,
     drift: createDrift(level),
     membranes: hasMembrane(level.arena),
+    enraged: new Uint8Array(cap),
+    memIn: new Int16Array(cap),
   };
   w.kind[0] = Kind.Ship;
   w.radius[0] = SHIP_RADIUS;
@@ -162,6 +172,8 @@ export function spawn(w: World, kind: Kind, x: number, y: number): number {
   w.hp[id] = 1;
   w.radius[id] = 0;
   w.a[id] = -1;
+  w.enraged[id] = 0;
+  w.memIn[id] = 0;
   w.liveCount++;
   return id;
 }
@@ -230,8 +242,9 @@ const bounce = createConfineResult();
 export function driftEntity(w: World, id: number, dt: number): void {
   let vx = w.vx[id] ?? 0;
   let vy = w.vy[id] ?? 0;
+  const k = dt * enrageSpeed(w, id); // R2: an enraged drifter (wanderer, pinwheel) covers 1.5 x the ground
   const res = w.membranes
-    ? membraneMove(w, id, (w.x[id] ?? 0) + vx * dt, (w.y[id] ?? 0) + vy * dt, bounce)
+    ? membraneMove(w, id, (w.x[id] ?? 0) + vx * k, (w.y[id] ?? 0) + vy * k, bounce)
     : confineOn(w.surface, w.level.arena, (w.x[id] ?? 0) + vx * dt, (w.y[id] ?? 0) + vy * dt, w.radius[id] ?? 0, bounce);
   if (res.hit) {
     const into = vx * res.nx + vy * res.ny;

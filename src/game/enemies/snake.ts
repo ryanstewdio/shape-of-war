@@ -7,6 +7,7 @@
 import { wrapAngle } from '../../core/math';
 import { removeEntity } from '../remove';
 import { enemySpeedScale, gs, SNAKE_PATH, SNAKE_SEGMENTS, SNAKE_SLOTS, spawnFromDef } from '../state';
+import { enrageTurn } from '../membrane';
 import { angleToShip, DEG, moveHeading, turnToward } from '../steer';
 import { Kind, type World } from '../world';
 import type { EnemyDef } from './types';
@@ -111,13 +112,13 @@ export function step(w: World, id: number, dt: number): void {
   const target = angleToShip(w, id);
   let t = w.t[id] ?? 0;
   // w.rot holds the drawn direction (base heading plus weave); recover the base heading from it.
-  let rot = t === 0 ? target : turnToward(baseHeading(w.rot[id] ?? 0, t), target, TURN_RATE * dt);
+  let rot = t === 0 ? target : turnToward(baseHeading(w.rot[id] ?? 0, t), target, TURN_RATE * enrageTurn(w, id) * dt);
   t += Math.max(dt, 1e-6);
   w.t[id] = t;
   const dir = wrapAngle(rot + weave(t));
   rot = dir;
   w.rot[id] = rot;
-  const speed = def.speed * enemySpeedScale(w);
+  const speed = def.speed * enemySpeedScale(w, id);
   w.vx[id] = Math.cos(dir) * speed;
   w.vy[id] = Math.sin(dir) * speed;
   moveHeading(w, id, dir, speed, dt);

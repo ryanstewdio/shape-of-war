@@ -1,9 +1,11 @@
 // Release polish: open drum drift (docs/14 item 8). On a cylinder level with no obstacles every
 // live entity and the ship (while in play) drift along u: DRIFT_BASE u/s always, rising to
-// DRIFT_BURST for BURST_HOLD s every GAP_MIN to GAP_MAX s (start to start), ramping in and out over
-// BURST_RAMP s on either side of the hold. Direction and gaps are hashed from the level seed
-// (hash01, never a PRNG). Telegraph: bus 'sfx' 'spawn' DRIFT_WARN s before each burst ramp starts.
-// Off open drums the state is inactive and stepWorld never calls stepDrift. No allocation.
+// DRIFT_BURST (BURST_FACTOR x the base) for BURST_HOLD s every GAP_MIN to GAP_MAX s (start to
+// start), ramping in and out over BURST_RAMP s on either side of the hold. Every speed is scaled by
+// the difficulty driftScale. Direction and gaps are hashed from the level seed (hash01, never a
+// PRNG). Telegraph (R2): 'sim:driftBurst' { inSec: DRIFT_WARN, dir } and bus 'sfx' 'spawn'
+// DRIFT_WARN s before each burst ramp starts. Off open drums the state is inactive and stepWorld
+// never calls stepDrift. No allocation.
 import { bus } from '../core/events';
 import { hash01 } from '../core/rng';
 import type { LevelDef } from '../levelgen/leveldef';
@@ -11,9 +13,12 @@ import { difficultyOf } from './difficulty';
 import type { World } from './world';
 
 export const DRIFT_BASE = 40;
-export const DRIFT_BURST = 160;
-export const BURST_HOLD = 1.2;
-export const BURST_RAMP = 0.3;
+/** R2: a burst is this many times the base drift. */
+export const BURST_FACTOR = 4;
+export const DRIFT_BURST = DRIFT_BASE * BURST_FACTOR;
+/** R2: full burst speed lasts 1.5 s (was 1.2 s with 0.3 s ramps, too soft to notice). */
+export const BURST_HOLD = 1.5;
+export const BURST_RAMP = 0.15;
 /** Whole burst window: ramp in, hold, ramp out. */
 export const BURST_LEN = BURST_RAMP + BURST_HOLD + BURST_RAMP;
 export const GAP_MIN = 9;
@@ -90,6 +95,9 @@ export function advanceBursts(d: DriftState, t: number): void {
   }
 }
 
+/** Reused 'sim:driftBurst' payload. */
+const burstFx: { inSec: number; dir: 1 | -1 } = { inSec: DRIFT_WARN, dir: 1 };
+
 /** Called by stepWorld after every move, before the wrap: shift every live entity along u. */
 export function stepDrift(w: World, dt: number): void {
   const d = w.drift;
@@ -97,6 +105,8 @@ export function stepDrift(w: World, dt: number): void {
   advanceBursts(d, t);
   if (!d.warned && t >= d.burstAt - DRIFT_WARN) {
     d.warned = true;
+    burstFx.dir = d.dir < 0 ? -1 : 1;
+    bus.emit('sim:driftBurst', burstFx);
     bus.emit('sfx', 'spawn');
   }
   const speed = driftSpeedAt(t - d.burstAt) * difficultyOf(w).driftScale;

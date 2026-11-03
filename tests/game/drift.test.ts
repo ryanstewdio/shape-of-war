@@ -1,9 +1,10 @@
 // Release polish (docs/14 item 8): open drum drift. Cylinder levels with no obstacles drift every
-// live entity and the ship along u at 40 u/s, bursting to 160 u/s for 1.2 s every 9 to 14 s.
+// live entity and the ship along u at 40 u/s, bursting to 160 u/s (4 x) for 1.5 s every 9 to 14 s.
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
 import {
   advanceBursts,
+  BURST_FACTOR,
   BURST_HOLD,
   BURST_LEN,
   BURST_RAMP,
@@ -69,7 +70,7 @@ function stepU(w: World, id: number, input: InputState = idle()): number {
 }
 
 describe('pure profile', () => {
-  it('ramps in over 0.3 s, holds 160 u/s for 1.2 s, ramps out over 0.3 s', () => {
+  it('ramps in over 0.15 s, holds 160 u/s for 1.5 s, ramps out over 0.15 s', () => {
     expect(driftSpeedAt(-1)).toBe(DRIFT_BASE);
     expect(driftSpeedAt(0)).toBe(DRIFT_BASE);
     expect(driftSpeedAt(BURST_RAMP / 2)).toBeCloseTo((DRIFT_BASE + DRIFT_BURST) / 2, 9);
@@ -80,8 +81,8 @@ describe('pure profile', () => {
     expect(burstWeight(BURST_LEN + 5)).toBe(0);
     expect(DRIFT_BASE).toBe(40);
     expect(DRIFT_BURST).toBe(160);
-    expect(BURST_HOLD).toBe(1.2);
-    expect(BURST_RAMP).toBe(0.3);
+    expect(BURST_HOLD).toBe(1.5);
+    expect(BURST_RAMP).toBe(0.15);
   });
 
   it('burst gaps are 9 to 14 s, hashed from the seed and stable', () => {
@@ -216,4 +217,62 @@ describe('drift follows the difficulty driftScale', () => {
       expect(w.drift.speed).toBeCloseTo(DRIFT_BASE * k, 6);
     });
   }
+});
+
+describe('R2: unmistakable bursts', () => {
+  it('a burst is 4 x the base drift and the base is unchanged', () => {
+    expect(BURST_FACTOR).toBe(4);
+    expect(DRIFT_BURST).toBe(DRIFT_BASE * 4);
+    expect(DRIFT_BASE).toBe(40);
+  });
+
+  it("emits 'sim:driftBurst' { inSec: 0.6, dir } 0.6 s before each burst, once each", () => {
+    const w = drum();
+    const got: { t: number; inSec: number; dir: number }[] = [];
+    bus.on('sim:driftBurst', (e) => got.push({ t: w.time, inSec: e.inSec, dir: e.dir }));
+    const at = burstGap(7, 0);
+    const at2 = at + burstGap(7, 1);
+    runTo(w, at2 + BURST_LEN);
+    expect(got.length).toBe(2);
+    expect(DRIFT_WARN).toBe(0.6);
+    expect(got[0]?.inSec).toBe(0.6);
+    expect(got[0]?.dir).toBe(w.drift.dir);
+    // The step that crosses the warn time emits: within one step after it.
+    expect(got[0]?.t ?? 0).toBeGreaterThanOrEqual(at - DRIFT_WARN - DT);
+    expect(got[0]?.t ?? 0).toBeLessThanOrEqual(at - DRIFT_WARN + DT);
+    expect(got[1]?.t ?? 0).toBeCloseTo(at2 - DRIFT_WARN, 1);
+  });
+
+  it('holds the full burst speed for 1.5 s', () => {
+    const w = drum();
+    const at = burstGap(7, 0);
+    runTo(w, at - 0.1);
+    let full = 0;
+    let boosted = 0;
+    while (w.time < at + BURST_LEN + 0.2) {
+      stepGame(w, DT, idle());
+      if (w.drift.speed === DRIFT_BURST) full += DT;
+      if (w.drift.speed > DRIFT_BASE) boosted += DT;
+    }
+    expect(full).toBeGreaterThanOrEqual(1.5 - 2 * DT);
+    expect(full).toBeLessThanOrEqual(1.5 + 2 * DT);
+    expect(boosted).toBeCloseTo(BURST_LEN, 1);
+  });
+
+  it('the burst follows the difficulty driftScale (hard 1.3)', () => {
+    const { w } = makeGame(drumPatch(7), { difficulty: 'hard' });
+    gs(w).invulnerable = true;
+    const at = burstGap(7, 0);
+    runTo(w, at + BURST_RAMP + BURST_HOLD / 2);
+    expect(w.drift.speed).toBeCloseTo(DRIFT_BASE * 4 * 1.3, 6);
+    expect(stepU(w, 0)).toBeCloseTo(w.drift.dir * DRIFT_BASE * 4 * 1.3 * DT, 3);
+  });
+
+  it('off open drums no burst event fires', () => {
+    const { w } = makeGame();
+    let n = 0;
+    bus.on('sim:driftBurst', () => n++);
+    for (let i = 0; i < 120 * 20; i++) stepGame(w, DT, idle());
+    expect(n).toBe(0);
+  });
 });

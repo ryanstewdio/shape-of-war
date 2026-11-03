@@ -66,7 +66,7 @@ export function chooseDestination(w: World, id: number, cycle: number): void {
 export function step(w: World, id: number, dt: number): void {
   const t = w.t[id] ?? 0;
   if (t < DRIFT_SEC) {
-    w.rot[id] = seekShip(w, id, def.speed * enemySpeedScale(w), dt);
+    w.rot[id] = seekShip(w, id, def.speed * enemySpeedScale(w, id), dt);
     const nt = t + dt;
     if (nt >= DRIFT_SEC) chooseDestination(w, id, gs(w).aux[id] ?? 0);
     w.t[id] = nt;
