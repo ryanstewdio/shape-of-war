@@ -16,3 +16,6 @@ Agreed with Ryan on 2026-11-02 after G11. Target: send the tester link before Th
 
 ## Not in scope (Ryan's choice)
 Weaker GPU auto fallback, portrait warning, store builds, in-game feedback form.
+
+## Free Play options (Ryan, 2026-11-03 after R3)
+Setup screen options, all built from existing features: enemy kinds on or off and spawn density (Low, Normal, Swarm); lives (1, 3, 5, infinite) and run length (Endless, or a timed 3, 5 or 10 minute score attack); loadout (starting weapon, weapon pickups on or off, drone type, super type); bosses (off, every 3 minutes, or one chosen boss), gravity wells (off, normal, many), drum drift (off, low, high); arena size (small, medium, large). Not chosen: music choice, saved presets.
