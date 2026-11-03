@@ -23,7 +23,7 @@ export const def: EnemyDef = {
 export const DROP_SEC = 2;
 
 export function step(w: World, id: number, dt: number): void {
-  w.rot[id] = seekShip(w, id, def.speed * enemySpeedScale(w), dt);
+  w.rot[id] = seekShip(w, id, def.speed * enemySpeedScale(w, id), dt);
   let t = (w.t[id] ?? 0) + dt;
   if (t >= DROP_SEC) {
     t -= DROP_SEC;

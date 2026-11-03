@@ -1,5 +1,6 @@
 // Swarm session entry points for wiring in main.ts: createGame replaces createWorld, stepGame
 // replaces stepWorld in the loop's step hook. stepGame allocates nothing.
+import type { StartBonus } from '../core/bonus';
 import type { Difficulty } from '../core/difficulty';
 import { bus } from '../core/events';
 import type { InputState } from '../input/types';
@@ -9,7 +10,7 @@ import { initLevelBoss } from './bosses/index';
 import { bulletHits, orbitHits, separate, shipHits, shipPickups } from './combat';
 import { clearEnemyBullets, stepEnemyBullets } from './enemyBullets';
 import { clearPickup } from './pickup';
-import { pauseSaw, setWeaponPickups, stepWeapons } from './weapons';
+import { equipWeapon, pauseSaw, setWeaponPickups, stepWeapons } from './weapons';
 import { registerSwarmBehaviours } from './defs';
 import { stepDrone } from './drones';
 import { spawnWells, stepWells } from './enemies/gravitywell';
@@ -39,12 +40,35 @@ export interface GameOptions {
   wellNova?: boolean;
   /** Release polish: Settings difficulty (docs/14 item 6). Default normal, bit identical to the v3 sim. */
   difficulty?: Difficulty;
+  /** R2: the par reward chosen on the previous results screen. Absent changes nothing. */
+  startBonus?: StartBonus;
+}
+
+/**
+ * R2: apply a par start bonus to a fresh game. life: one more life; bomb: one more bomb; weapon:
+ * that base weapon active for its normal duration (WEAPON_DURATION), as if collected at the spawn.
+ */
+export function applyStartBonus(w: World, bonus: StartBonus): void {
+  const g = gs(w);
+  switch (bonus.kind) {
+    case 'life':
+      g.lives += 1;
+      break;
+    case 'bomb':
+      g.bombs += 1;
+      break;
+    case 'weapon':
+      equipWeapon(w, bonus.weapon, w.x[0] ?? 0, w.y[0] ?? 0);
+      break;
+  }
 }
 
 export const HUD_INTERVAL = 0.1;
 
 /** Wiring port for Settings "Weapon pickups" (re-exported from weapons.ts). */
 export { setWeaponPickups };
+/** R2 render port: true while entity id is enraged (also readable as World.enraged[id] === 1). */
+export { isEnraged } from './membrane';
 
 export function createGame(level: LevelDef, opts: GameOptions = {}): World {
   registerSwarmBehaviours();
@@ -60,6 +84,7 @@ export function createGame(level: LevelDef, opts: GameOptions = {}): World {
   resetWellState(w); // GW4: level start, Restart and Retry begin with no wells, arrivals or nova snakes
   spawnWells(w);
   initLevelBoss(w); // V3: arms LevelDef.boss when present; nothing otherwise
+  if (opts.startBonus !== undefined) applyStartBonus(w, opts.startBonus);
   watchPause(w);
   return w;
 }

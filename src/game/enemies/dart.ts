@@ -13,8 +13,8 @@ export function step(w: World, id: number, dt: number): void {
   const target = angleToShip(w, id);
   let rot = w.rot[id] ?? 0;
   if ((w.t[id] ?? 0) === 0) rot = target;
-  else rot = turnToward(rot, target, TURN_RATE * turnScale(w) * dt);
+  else rot = turnToward(rot, target, TURN_RATE * turnScale(w, id) * dt);
   w.rot[id] = rot;
-  moveHeading(w, id, rot, def.speed * enemySpeedScale(w), dt);
+  moveHeading(w, id, rot, def.speed * enemySpeedScale(w, id), dt);
   w.t[id] = (w.t[id] ?? 0) + Math.max(dt, 1e-6);
 }

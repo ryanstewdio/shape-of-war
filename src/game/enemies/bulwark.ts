@@ -19,7 +19,7 @@ export function shieldBlocks(w: World, id: number, px: number, py: number): bool
 }
 
 export function step(w: World, id: number, dt: number): void {
-  const h = turnToward(w.rot[id] ?? 0, angleToShip(w, id), TURN_RATE * turnScale(w) * dt);
+  const h = turnToward(w.rot[id] ?? 0, angleToShip(w, id), TURN_RATE * turnScale(w, id) * dt);
   w.rot[id] = h;
-  moveHeading(w, id, h, def.speed * enemySpeedScale(w), dt);
+  moveHeading(w, id, h, def.speed * enemySpeedScale(w, id), dt);
 }

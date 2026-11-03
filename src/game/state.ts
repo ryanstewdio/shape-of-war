@@ -4,6 +4,7 @@ import type { PaletteKey } from '../render/neon';
 import type { EndlessDef, EndlessSegmentDef, SpawnEntry, SuperKind } from '../levelgen/leveldef';
 import { difficultyOf, scaledHp, startingLives } from './difficulty';
 import type { EnemyDef } from './enemies/types';
+import { ENRAGE_SPEED, ENRAGE_TURN } from './membrane';
 import { baseValue } from './scoring';
 import { arenaSpeedFactor } from './tuning';
 import { Kind, spawn, type World } from './world';
@@ -403,15 +404,20 @@ export function spawnFromDef(w: World, def: EnemyDef, x: number, y: number, tele
   return id;
 }
 
-/** Multiplier for enemy linear speeds: speedScale x arena factor x difficulty enemySpeed. */
-export function enemySpeedScale(w: World): number {
+/**
+ * Multiplier for enemy linear speeds: speedScale x arena factor x difficulty enemySpeed. Pass the
+ * entity id for its chase and roam moves: an enraged enemy (R2, membrane.ts) gets ENRAGE_SPEED x.
+ */
+export function enemySpeedScale(w: World, id = 0): number {
   const g = gs(w);
-  return g.speedScale * g.arenaFactor * difficultyOf(w).enemySpeed;
+  const s = g.speedScale * g.arenaFactor * difficultyOf(w).enemySpeed;
+  return id > 0 && w.enraged[id] === 1 ? s * ENRAGE_SPEED : s;
 }
 
-/** Multiplier for enemy turn rates (Dart): speedScale only, per docs/01 section 6.6. */
-export function turnScale(w: World): number {
-  return gs(w).speedScale;
+/** Multiplier for enemy turn rates (Dart): speedScale only, per docs/01 section 6.6. With the id, enraged x ENRAGE_TURN. */
+export function turnScale(w: World, id = 0): number {
+  const s = gs(w).speedScale;
+  return id > 0 && w.enraged[id] === 1 ? s * ENRAGE_TURN : s;
 }
 
 /** Kinds counted against maxLiveEnemies (wave enemies, telegraphs included). */

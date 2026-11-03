@@ -35,7 +35,7 @@ export function isDashing(w: World, id: number): boolean {
 export function step(w: World, id: number, dt: number): void {
   const t = w.t[id] ?? 0;
   if (t < WINDUP_SEC) {
-    w.rot[id] = turnToward(w.rot[id] ?? 0, angleToShip(w, id), TURN_RATE * turnScale(w) * dt);
+    w.rot[id] = turnToward(w.rot[id] ?? 0, angleToShip(w, id), TURN_RATE * turnScale(w, id) * dt);
     w.t[id] = t + dt;
     return;
   }

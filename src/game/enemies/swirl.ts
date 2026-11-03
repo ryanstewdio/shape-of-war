@@ -48,9 +48,11 @@ function dive(w: World, id: number, dt: number, scale: number): void {
 const sd = { x: 0, y: 0 };
 
 export function step(w: World, id: number, dt: number): void {
-  const scale = enemySpeedScale(w);
+  // R2: the dive is the attack and keeps its speed; an enraged Swirl approaches and orbits faster.
+  const base = enemySpeedScale(w);
+  const scale = enemySpeedScale(w, id);
   if (isDiving(w, id)) {
-    dive(w, id, dt, scale);
+    dive(w, id, dt, base);
     return;
   }
   // The orbit centre is the target (ship or live decoy), reached through surface.delta so it is
@@ -65,7 +67,7 @@ export function step(w: World, id: number, dt: number): void {
   if (d <= DIVE_RADIUS) {
     w.rot[id] = Math.atan2(ty, tx);
     w.t[id] = 1e-6;
-    dive(w, id, dt, scale);
+    dive(w, id, dt, base);
     return;
   }
   const theta = Math.atan2(ty, tx) + Math.PI; // target to swirl

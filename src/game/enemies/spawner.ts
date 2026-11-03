@@ -49,7 +49,7 @@ export function emitDarts(w: World, id: number, count: number): number {
 
 export function step(w: World, id: number, dt: number): void {
   const g = gs(w);
-  w.rot[id] = seekShip(w, id, def.speed * enemySpeedScale(w), dt);
+  w.rot[id] = seekShip(w, id, def.speed * enemySpeedScale(w, id), dt);
   const t = (w.t[id] ?? 0) + dt;
   w.t[id] = t;
   const hz = w.level.hazards.spawners[w.a[id] ?? -1];
