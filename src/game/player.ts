@@ -25,7 +25,8 @@ export const DEATH_VIBRATE_MS = 60;
 export function killShip(w: World): void {
   const g = gs(w);
   if (!w.ship.active || g.invulnerable) return;
-  g.lives = Math.max(0, g.lives - 1);
+  g.lives = Math.max(0, g.lives - 1); // Free Play infinite lives: Infinity stays Infinity
+  g.deaths++;
   portResetMultiplier(w);
   g.pointFx.x = w.x[0] ?? 0;
   g.pointFx.y = w.y[0] ?? 0;

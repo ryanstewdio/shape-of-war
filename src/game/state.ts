@@ -104,6 +104,10 @@ export interface GameState {
   lives: number;
   bombs: number;
   kills: number;
+  /** Ship deaths this run (Free Play infinite lives still counts them). */
+  deaths: number;
+  /** Free Play score attack: run length in seconds of w.time, 0 for none (docs/14). */
+  timeLimit: number;
   superCharge: number;
   bombCooldown: number;
   /** Seconds until respawn; 0 while the ship is in play. */
@@ -297,6 +301,8 @@ function createState(w: World): GameState {
     lives: livesAtStart(w),
     bombs: w.level.bombs,
     kills: 0,
+    deaths: 0,
+    timeLimit: 0,
     superCharge: 0,
     bombCooldown: 0,
     deathTimer: 0,

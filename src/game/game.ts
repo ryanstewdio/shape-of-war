@@ -2,6 +2,7 @@
 // replaces stepWorld in the loop's step hook. stepGame allocates nothing.
 import type { StartBonus } from '../core/bonus';
 import type { Difficulty } from '../core/difficulty';
+import type { FreePlayConfig } from '../core/freeplayConfig';
 import { bus } from '../core/events';
 import type { InputState } from '../input/types';
 import type { EndlessDef, LevelDef } from '../levelgen/leveldef';
@@ -10,7 +11,8 @@ import { initLevelBoss } from './bosses/index';
 import { bulletHits, orbitHits, separate, shipHits, shipPickups } from './combat';
 import { clearEnemyBullets, stepEnemyBullets } from './enemyBullets';
 import { clearPickup } from './pickup';
-import { equipWeapon, pauseSaw, setWeaponPickups, stepWeapons } from './weapons';
+import { applyDriftOption } from './drift';
+import { equipWeapon, pauseSaw, setPermanentWeapon, setWeaponPickups, stepWeapons } from './weapons';
 import { registerSwarmBehaviours } from './defs';
 import { stepDrone } from './drones';
 import { spawnWells, stepWells } from './enemies/gravitywell';
@@ -42,6 +44,42 @@ export interface GameOptions {
   difficulty?: Difficulty;
   /** R2: the par reward chosen on the previous results screen. Absent changes nothing. */
   startBonus?: StartBonus;
+  /**
+   * Free Play options, rules side (docs/14): lives, run length, loadout, pickups and drift. Absent
+   * changes nothing. Overrides weaponPickups and the level's drone and super kinds.
+   */
+  freePlay?: FreePlayConfig;
+}
+
+/** Free Play: the level with the config's drone and super kinds (a copy; the caller's level is untouched). */
+export function freePlayLevelRules(level: LevelDef, fp: FreePlayConfig): LevelDef {
+  if (level.drone === fp.drone && level.superType === fp.superType) return level;
+  return { ...level, drone: fp.drone, superType: fp.superType };
+}
+
+/**
+ * Free Play rules on a fresh game (docs/14). lives: exactly 1, 3 or 5, or Infinity for infinite (the
+ * run is never lost; deaths still reset the multiplier and count in gs(w).deaths). length: a score
+ * attack ends the run with success once w.time reaches it (scoreAttackLeft). weapon: equipped at the
+ * spawn for its normal duration, or for the whole run when pickups are off. pickups off: no weapon
+ * or drone pickups drop. drift: off, low (today) or high (2x), open drums only.
+ */
+export function applyFreePlay(w: World, fp: FreePlayConfig): void {
+  const g = gs(w);
+  g.lives = fp.lives === 'infinite' ? Number.POSITIVE_INFINITY : fp.lives;
+  g.timeLimit = fp.length === 'endless' ? 0 : fp.length;
+  setWeaponPickups(w, fp.pickups);
+  if (fp.weapon !== null) {
+    if (fp.pickups) equipWeapon(w, fp.weapon, w.x[0] ?? 0, w.y[0] ?? 0);
+    else setPermanentWeapon(w, fp.weapon);
+  }
+  applyDriftOption(w.drift, fp.drift);
+}
+
+/** Free Play score attack: seconds left (never below 0), or null for a run with no time limit. */
+export function scoreAttackLeft(w: World): number | null {
+  const limit = gs(w).timeLimit;
+  return limit > 0 ? Math.max(0, limit - w.time) : null;
 }
 
 /**
@@ -72,7 +110,8 @@ export { isEnraged } from './membrane';
 
 export function createGame(level: LevelDef, opts: GameOptions = {}): World {
   registerSwarmBehaviours();
-  const w = createWorld(level, opts.capacity, opts.difficulty ?? 'normal');
+  const lv = opts.freePlay === undefined ? level : freePlayLevelRules(level, opts.freePlay);
+  const w = createWorld(lv, opts.capacity, opts.difficulty ?? 'normal');
   const g = gs(w);
   if (opts.mode !== undefined) g.mode = opts.mode;
   if (opts.vibrate !== undefined) g.vibrate = opts.vibrate;
@@ -84,6 +123,7 @@ export function createGame(level: LevelDef, opts: GameOptions = {}): World {
   resetWellState(w); // GW4: level start, Restart and Retry begin with no wells, arrivals or nova snakes
   spawnWells(w);
   initLevelBoss(w); // V3: arms LevelDef.boss when present; nothing otherwise
+  if (opts.freePlay !== undefined) applyFreePlay(w, opts.freePlay);
   if (opts.startBonus !== undefined) applyStartBonus(w, opts.startBonus);
   watchPause(w);
   return w;
