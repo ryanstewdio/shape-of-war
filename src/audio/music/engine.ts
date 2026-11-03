@@ -25,6 +25,7 @@ import { midiToHz } from './scale';
 import type { PlannedNote } from './scheduler';
 import type { Timbre } from './layers';
 import type { Layer } from './track';
+import { TURBO_ARP_DUTY, type TurboHit, type TurboPart } from './turbo';
 import { bedWaveTrim, DEFAULT_TUNE, WAVE_WEIGHT, type BedTimbre } from './tunes';
 
 export const MUSIC_VOICE_CAP = 16;
@@ -251,6 +252,17 @@ export class VoicePool<T> {
     return this.insert(start, end, data, prefer)[0] ?? null;
   }
 
+  /** Remove the voices `pred` accepts and return them. */
+  removeWhere(pred: (d: T) => boolean): T[] {
+    const out: T[] = [];
+    this.entries = this.entries.filter((e) => {
+      if (!pred(e.data)) return true;
+      out.push(e.data);
+      return false;
+    });
+    return out;
+  }
+
   /** Remove every voice and return them. */
   drain(): T[] {
     const out = this.entries.map((e) => e.data);
@@ -397,13 +409,14 @@ export function arpSchedule(midis: readonly number[], noteSec: number, len: numb
  * bed: the base track. motif: enemy motifs and stingers. accent: kill notes, kill chords, hit
  * ticks and deflects. boss: the boss motif and the boss stingers (v3).
  */
-export type VoiceClass = 'bed' | 'motif' | 'accent' | 'boss';
+export type VoiceClass = 'bed' | 'motif' | 'accent' | 'boss' | 'turbo';
 
 /**
- * Who loses a voice first when the pool is full: accents, then enemy motifs, then boss voices,
- * then the bed (docs/13 SPEC 3.9 item 5: boss voices steal enemy motif voices first).
+ * Who loses a voice first when the pool is full: the Turbo layer (R3), accents, then enemy
+ * motifs, then boss voices, then the bed (docs/13 SPEC 3.9 item 5: boss voices steal enemy motif
+ * voices first). A Turbo part never steals: it is dropped when the pool is full.
  */
-export const STEAL_RANK: Readonly<Record<VoiceClass, number>> = { accent: 0, motif: 1, boss: 2, bed: 3 };
+export const STEAL_RANK: Readonly<Record<VoiceClass, number>> = { turbo: -1, accent: 0, motif: 1, boss: 2, bed: 3 };
 
 /** Most boss voices at once: the motif's main line plus one per phase, stingers included (docs/13). */
 export const BOSS_VOICE_MAX = 3;
@@ -446,6 +459,38 @@ export interface VoiceNote {
   readonly arpSec?: number;
 }
 
+/** A Turbo layer part for the engine (turbo.ts turboChunk): one voice, every hit retriggered on it. */
+export interface TurboVoice {
+  readonly part: TurboPart;
+  /** Absolute audio time of the chunk; hit times are offsets from it. */
+  readonly time: number;
+  readonly hits: readonly TurboHit[];
+  /** Peak of a hit at velocity 1. */
+  readonly gain: number;
+}
+
+/** Turbo bass low pass, Hz: a round pump, no fizz. */
+export const TURBO_BASS_LP_HZ = 520;
+export const TURBO_BASS_LP_Q = 1.1;
+/** Turbo hat high pass, Hz; the noise band limit (7 kHz) closes it from above. */
+export const TURBO_HAT_HP_HZ = 5200;
+/** Share of a pumping bass hit's peak it falls to by half its length. */
+export const TURBO_PUMP_DIP = 0.35;
+
+/** Pure: the envelope points (offset seconds, level) of one Turbo hit, retriggered from the floor. */
+export function turboHitEnvelope(part: TurboPart, h: TurboHit, peak: number): { at: number; v: number; ramp: 'set' | 'lin' | 'exp' }[] {
+  const p = Math.max(FLOOR, peak * Math.max(0, h.vel));
+  const len = Math.max(0.01, h.dur);
+  const atk = attackSec(part === 'hat' ? 0.002 : 0.004);
+  const out: { at: number; v: number; ramp: 'set' | 'lin' | 'exp' }[] = [
+    { at: h.at, v: FLOOR, ramp: 'set' },
+    { at: h.at + atk, v: p, ramp: 'lin' },
+  ];
+  if (part === 'bass') out.push({ at: h.at + Math.max(atk + 0.002, len * 0.5), v: Math.max(FLOOR, p * TURBO_PUMP_DIP), ramp: 'exp' });
+  out.push({ at: h.at + Math.max(atk + 0.004, len), v: FLOOR, ramp: 'exp' });
+  return out;
+}
+
 export interface VoiceShape {
   readonly attack: number;
   readonly release: number;
@@ -466,6 +511,7 @@ export function voiceShape(n: VoiceNote): VoiceShape {
 
 const isMotif = (v: Voice): boolean => v.cls === 'motif';
 const isBoss = (v: Voice): boolean => v.cls === 'boss';
+const isTurbo = (v: Voice): boolean => v.cls === 'turbo';
 const stealRank = (v: Voice): number => STEAL_RANK[v.cls];
 
 /** Voices kept free for a stinger, which can arrive at any moment and is never dropped. */
@@ -500,6 +546,18 @@ export interface MusicEngine {
    * oldest enemy motif voice, then the oldest boss voice, then the bed (STEAL_RANK).
    */
   playVoice(n: VoiceNote, cls?: 'motif' | 'accent' | 'boss'): void;
+  /**
+   * Schedule one Turbo layer part (R3) on the Turbo bus. It takes a free voice only: with the
+   * pool full it is dropped (returns false), and any other class may steal it later.
+   */
+  playTurbo(v: TurboVoice): boolean;
+  /**
+   * Open (true) the Turbo bus over `sec` from now, or close it (false): a linear fade to 0 over
+   * `sec`, and every Turbo voice stops at the end of the fade.
+   */
+  turboGate(open: boolean, sec: number): void;
+  /** Turbo voices that will sound at once from now on. */
+  readonly turboVoiceCount: number;
   /** Voices kill accents may take over [t, t + len), given the notes not scheduled yet. */
   accentRoom(t: number, len: number, upcoming: readonly Span[]): number;
   /** Set the long echo to a dotted eighth of this sixteenth length (a no op when unchanged). */
@@ -615,7 +673,12 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
   lfo.connect(lfoDepth);
   lfoDepth.connect(padBus.frequency);
   lfo.start(ctx.currentTime);
-  const graph: NodeLike[] = [lfo, lfoDepth, bassBus, padBus, hatBus, percBus, noiseLp, motifBus, master, out];
+  // R3 Turbo layer: its own bus, closed until Turbo opens it, past the threat lowpass (it must
+  // read at any threat) into the limiter. Every part carries its own tone filters.
+  const turboBus = ctx.createGain();
+  turboBus.gain.value = 0;
+  turboBus.connect(sum);
+  const graph: NodeLike[] = [lfo, lfoDepth, bassBus, padBus, hatBus, percBus, noiseLp, motifBus, turboBus, master, out];
   if (limiter) graph.push(limiter);
   // Echo buses, built once (never during a tick). They return into the master lowpass.
   let slapIn: NodeLike | null = null;
@@ -671,7 +734,7 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
   const noise = noiseFor(ctx);
   let disposed = false;
   let nextId = 1;
-  const stealCount: Record<VoiceClass, number> = { bed: 0, motif: 0, accent: 0, boss: 0 };
+  const stealCount: Record<VoiceClass, number> = { bed: 0, motif: 0, accent: 0, boss: 0, turbo: 0 };
 
   const busFor = (layer: Layer): NodeLike => {
     if (layer === 'bass') return bassBus;
@@ -983,10 +1046,79 @@ export function createMusicEngine(ctx: MusicContext, destination: NodeLike, mast
       tail.connect(env);
       launch(cls, sources, chain, env, motifBus, t, len, n.echo);
     },
+    playTurbo(v: TurboVoice): boolean {
+      if (disposed || !(v.gain > 0) || v.hits.length === 0) return false;
+      const now = ctx.currentTime;
+      const t = Math.max(now, v.time);
+      let len = 0;
+      for (const h of v.hits) len = Math.max(len, h.at + h.dur);
+      if (!(len > 0)) return false;
+      pool.prune(now);
+      // Free voices only: a Turbo part never steals.
+      if (pool.peak(t, t + len) >= pool.cap) return false;
+      const sources: SourceLike[] = [];
+      const chain: NodeLike[] = [];
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(FLOOR, t);
+      for (const h of v.hits) {
+        for (const p of turboHitEnvelope(v.part, h, v.gain)) {
+          if (p.ramp === 'set') env.gain.setValueAtTime(p.v, t + p.at);
+          else if (p.ramp === 'lin') env.gain.linearRampToValueAtTime(p.v, t + p.at);
+          else env.gain.exponentialRampToValueAtTime(p.v, t + p.at);
+        }
+      }
+      if (v.part === 'hat') {
+        const s = ctx.createBufferSource();
+        s.buffer = noise;
+        s.loop = true;
+        const hp = filter(ctx, 'highpass', TURBO_HAT_HP_HZ);
+        const lp = filter(ctx, 'lowpass', NOISE_LP_HZ);
+        s.connect(hp);
+        hp.connect(lp);
+        lp.connect(env);
+        sources.push(s);
+        chain.push(hp, lp);
+      } else {
+        const midis = v.hits.map((h) => h.midi ?? 69);
+        const first = midiToHz(midis[0] ?? 69);
+        const o = v.part === 'arp' ? pulse(TURBO_ARP_DUTY, first, t) : osc('sawtooth', first, t);
+        for (const h of v.hits) o.frequency.setValueAtTime(midiToHz(h.midi ?? 69), t + h.at);
+        // Soft highs: the pulse lead tracks its top note (6x, at most 5 kHz); the bass is a round pump.
+        const lp = v.part === 'arp' ? leadLp(midiToHz(Math.max(...midis)), chain) : filter(ctx, 'lowpass', TURBO_BASS_LP_HZ, TURBO_BASS_LP_Q);
+        if (v.part !== 'arp') chain.push(lp);
+        o.connect(lp);
+        lp.connect(env);
+        sources.push(o);
+      }
+      launch('turbo', sources, chain, env, turboBus, t, len);
+      return true;
+    },
+    turboGate(open: boolean, sec: number): void {
+      if (disposed) return;
+      const now = ctx.currentTime;
+      const d = Math.max(0.01, Number.isFinite(sec) ? sec : 0);
+      turboBus.gain.cancelScheduledValues(now);
+      turboBus.gain.setValueAtTime(turboBus.gain.value, now);
+      turboBus.gain.linearRampToValueAtTime(open ? 1 : 0, now + d);
+      if (open) return;
+      for (const v of pool.removeWhere(isTurbo)) {
+        for (const s of v.sources) safeStop(s, now + d + 0.02);
+        trace?.cut(v.id, now + d + 0.02);
+      }
+    },
+    get turboVoiceCount(): number {
+      return pool.peak(ctx.currentTime, Infinity, isTurbo);
+    },
     accentRoom(t: number, len: number, upcoming: readonly Span[]): number {
       if (disposed) return 0;
       pool.prune(ctx.currentTime);
-      return accentRoomFor(pool.list(), upcoming, t, len);
+      // Turbo voices do not count: an accent may steal them (they rank lowest).
+      return accentRoomFor(
+        pool.list().filter((e) => e.data.cls !== 'turbo'),
+        upcoming,
+        t,
+        len,
+      );
     },
     setStepSec(sec: number): void {
       if (disposed || longDelay === null || !(sec > 0) || sec === echoStep) return;

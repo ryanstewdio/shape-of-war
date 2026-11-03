@@ -152,6 +152,22 @@ import { buildBar, STEPS_PER_BAR, structuralFill, type BarPattern, type FillBar,
 import { isBreakdownBar } from './breakdown';
 import { BATTLE_TUNES, DEFAULT_TUNE, FILL_BARS, tuneById, type TrackId, type Tune, type TuneId } from './tunes';
 import { battleIndexFor, fitBattleNote, xfadeFor, xfadeGain, type Xfade } from './battle';
+import {
+  turboBudget,
+  turboChunk,
+  turboChunkSteps,
+  turboEnd,
+  turboEnvAt,
+  TURBO_FADE_SEC,
+  TURBO_GAINS,
+  TURBO_IGNITION_SEC,
+  turboLayerAt,
+  turboOn,
+  turboPrune,
+  turboStart,
+  type TurboLife,
+  type TurboPart,
+} from './turbo';
 // Battle polish: intro hit, phase intensity, window duck, defeat tonic, weapon and drone cues.
 import {
   cueAllowed,
@@ -188,7 +204,10 @@ export interface NoteLog {
     | 'bossTick'
     | 'battleIntro'
     | 'battleLayer'
-    | 'cue';
+    | 'cue'
+    | 'turbo';
+  /** Turbo layer notes only (R3): which part (turbo.ts). */
+  readonly turboPart?: TurboPart;
   /** Weapon and drone cue notes only: which cue (battlePolish.ts). */
   readonly cueKind?: CueKind;
   /** Window cue notes only: which sound of the cue (bossCue.ts). */
@@ -325,6 +344,10 @@ interface Session {
   /** Weapon and drone cues waiting for the next tick, and the audio time each kind last played. */
   readonly cues: CueKind[];
   readonly cueLast: Record<CueKind, number | null>;
+  /** The Turbo layer (R3, turbo.ts), or null when Turbo is off and its fade is over. */
+  turbo: TurboLife | null;
+  /** First step no Turbo chunk covers yet. */
+  turboNext: number;
 }
 
 interface Playing {
@@ -804,6 +827,7 @@ function onStep(p: Session, step: number, time: number): void {
   p.engine.setStepSec(sec);
   // v3.5: the long echo swells into the breakdown on its first bar line and back out after it.
   if (step % STEPS_PER_BAR === 0) p.engine.setSpace(isBreakdownBar(p.seed, w.tune, w.bar), time);
+  p.turbo = turboPrune(p.turbo, time);
   if (volume === 0) return;
   const barIndex = Math.floor(step / STEPS_PER_BAR);
   const inBar = step % STEPS_PER_BAR;
@@ -824,7 +848,10 @@ function onStep(p: Session, step: number, time: number): void {
   const bossTotal = bossSpec === null ? 0 : bossSpec.gain * booked * bossMotifScale(bossSpec.gain, booked) * bossEnv;
   const lm = layerMix(sumGains(mix.gains), enemies, registry, step, live === null ? null : { duck, total: bossTotal });
   const arpYields = p.arpYield.delete(step);
-  const bedMix = scaleMix(mix, lm.bedScale * xfadeGain(p.xfade, step));
+  // R3 Turbo: the bed ducks 30 percent under the Turbo layer and makes room for it in the budget.
+  const tb = turboBudget(sumGains(mix.gains), lm.bedScale, lm.room, turboEnvAt(p.turbo, time));
+  const bedMix = scaleMix(mix, tb.bedScale * xfadeGain(p.xfade, step));
+  if (step >= p.turboNext && turboLayerAt(p.turbo, time)) playTurboChunk(p, step, inBar, time, w.tune, w.bar, tb.turboScale);
   // Battle polish: while the boss lives on its battle track the window ducks the drums 6 dB and
   // lifts the hook, and each phase adds a drum layer.
   const fight = b !== null && b.downStep === null && w.tune.battle === true;
@@ -1134,6 +1161,53 @@ function onCueEvent(name: string, payload: unknown): void {
   if (kind !== null) queueCue(kind);
 }
 
+/**
+ * R3 Turbo: one chunk of the layer from `step` to the end of its beat, every part one voice. In
+ * the fade the hits past its end are dropped, so nothing outlives the closed Turbo bus.
+ */
+function playTurboChunk(p: Session, step: number, inBar: number, time: number, tune: Tune, bar: number, scale: number): void {
+  const life = p.turbo;
+  if (life === null) return;
+  const steps = turboChunkSteps(inBar);
+  p.turboNext = step + steps;
+  const limit = life.endAt === null ? Infinity : life.endAt + TURBO_FADE_SEC - time;
+  const h = harmonyForBar(bar, tune.key);
+  for (const part of turboChunk(p.seed, bar, inBar, steps, tune.stepSec, h, tune.root)) {
+    const hits = limit === Infinity ? part.hits : part.hits.filter((x) => x.at < limit);
+    const gain = TURBO_GAINS[part.part] * scale;
+    if (hits.length === 0 || !(gain > 0)) continue;
+    if (!p.engine.playTurbo({ part: part.part, time, hits, gain })) continue;
+    if (noteHook) {
+      for (const x of hits) logNote(tune, { role: 'turbo', turboPart: part.part, layer: null, kind: null, step, time: time + x.at, midi: x.midi, gain: gain * x.vel });
+    }
+  }
+}
+
+/**
+ * 'fx:turbo' (R3). Active starts the layer (the engine's Turbo bus opens through the ignition);
+ * active again while it runs extends it, so nothing stacks; active inside the fade restarts it.
+ * Inactive closes the bus over TURBO_FADE_SEC.
+ */
+function onTurbo(active: boolean): void {
+  const p = playing;
+  if (!p) return;
+  const s = p.session;
+  const now = p.ctx.currentTime;
+  const prev = s.turbo;
+  if (active) {
+    const next = turboStart(prev, now);
+    if (next === prev) return;
+    s.turbo = next;
+    s.turboNext = 0;
+    p.engine.turboGate(true, TURBO_IGNITION_SEC);
+  } else {
+    const next = turboEnd(prev, now);
+    if (next === prev) return;
+    s.turbo = next;
+    p.engine.turboGate(false, TURBO_FADE_SEC);
+  }
+}
+
 function onEnter(kind: EnemyKind): void {
   const p = playing;
   if (!p || !(kind in registry)) return;
@@ -1232,6 +1306,8 @@ export function initMusic(opts: MusicOptions = {}): () => void {
       if (source !== null) queueHit({ blocked: false, source });
     }),
     b.on('fx:bomb', () => queueAccent({ type: 'bomb' })),
+    // R3 Turbo layer. The payload object is reused by the sim: read the flag here.
+    b.on('fx:turbo', (p) => onTurbo(p.active === true)),
     // Boss music (v3). The payload objects are reused by the sim: read the fields here.
     b.on('sim:bossEnter', (p) => onBossEnter(p.id, p.tier)),
     b.on('sim:bossPhase', (p) => onBossPhase(p.id, p.phase)),
@@ -1386,6 +1462,8 @@ export function startMusic(seed: number): boolean {
     xfade: null,
     cues: [],
     cueLast: { combine: null, expire: null, droneArm: null, droneExpire: null },
+    turbo: null,
+    turboNext: 0,
   };
   const scheduler: Scheduler = createScheduler({
     clock: { now: () => ctx.currentTime },
@@ -1522,6 +1600,10 @@ export interface MusicState {
   readonly floor: boolean;
   /** True while a defeat stinger rings out after the music stopped. */
   readonly ringing: boolean;
+  /** True while Turbo is on (R3); false once it ended, fade included. */
+  readonly turbo: boolean;
+  /** Turbo layer voices that will sound at once from now on. */
+  readonly turboVoices: number;
 }
 
 /** Read only snapshot for tests and the debug overlay. */
@@ -1551,6 +1633,8 @@ export function musicState(): MusicState {
     duck: p ? duckAt(p.session.boss, p.scheduler.nextStep) : 1,
     floor: p ? floorOn(p.session.boss) : false,
     ringing: ringing !== null,
+    turbo: turboOn(p?.session.turbo ?? null),
+    turboVoices: p?.engine.turboVoiceCount ?? 0,
   };
 }
 export { CUT1_KEEP, LAYER_KINDS } from './layers';

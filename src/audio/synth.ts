@@ -5,6 +5,8 @@ import { bus, type Bus } from '../core/events';
 import { hash01 } from '../core/rng';
 import { installGw2, type Gw2Controller } from './gw2';
 import { createGw2Backend } from './gw2Synth';
+import { installTurboSfx, type TurboController } from './turboSfx';
+import { createTurboBackend } from './turboSynth';
 import {
   clampVolume,
   CUES,
@@ -120,28 +122,34 @@ export function getVolume(): number {
 /** Sound effect cues sounding now, sustained GW2 loops included (tests: the 24 voice cap holds). */
 export function sfxVoiceCount(): number {
   const now = ctx?.currentTime ?? 0;
-  return voices.filter((vc) => vc.end > now).length + gw2Backend.activeLoops();
+  return voices.filter((vc) => vc.end > now).length + loopCount();
 }
 
-// GW2 effects share the master gain (so the volume setting applies) and the voice cap: a
-// sustained loop counts as a voice, and a one shot steals the oldest when the cap is reached.
-const GW2_LOOP_RESERVE = 4;
-const gw2Backend = createGw2Backend({
-  graph: () => (ctx && master && ctx.state === 'running' && volume > 0 ? { ctx, master } : null),
-  noise: noiseBuffer,
-  registerOneShot(start, end, stop): void {
-    const now = start;
-    voices = voices.filter((vc) => vc.end > now);
-    // Four slots stay reserved for the sustained loops (1 saw, 2 whirlpools, 1 shield hum), so
-    // loops that start later cannot push the total over the cap.
-    for (let steal = voiceToSteal(voices.map((vc) => vc.start), MAX_VOICES - GW2_LOOP_RESERVE); steal >= 0; steal = voiceToSteal(voices.map((vc) => vc.start), MAX_VOICES - GW2_LOOP_RESERVE)) {
-      const old = voices[steal];
-      if (old) stopVoice(old, now);
-      voices.splice(steal, 1);
-    }
-    voices.push({ start, end, sources: [{ stop }] });
-  },
-});
+/** Sustained loops sounding now: GW2 (saw, whirlpools, shield hum) and the Turbo hum (R3). */
+function loopCount(): number {
+  return gw2Backend.activeLoops() + turboBackend.activeLoops();
+}
+
+// GW2 and Turbo effects share the master gain (so the volume setting applies) and the voice cap:
+// a sustained loop counts as a voice, and a one shot steals the oldest when the cap is reached.
+// Five slots stay reserved for the sustained loops (1 saw, 2 whirlpools, 1 shield hum, 1 Turbo
+// hum), so loops that start later cannot push the total over the cap.
+const LOOP_RESERVE = 5;
+const sfxGraph = (): { ctx: AudioContext; master: GainNode } | null => (ctx && master && ctx.state === 'running' && volume > 0 ? { ctx, master } : null);
+
+function registerOneShot(start: number, end: number, stop: (at: number) => void): void {
+  const now = start;
+  voices = voices.filter((vc) => vc.end > now);
+  for (let steal = voiceToSteal(voices.map((vc) => vc.start), MAX_VOICES - LOOP_RESERVE); steal >= 0; steal = voiceToSteal(voices.map((vc) => vc.start), MAX_VOICES - LOOP_RESERVE)) {
+    const old = voices[steal];
+    if (old) stopVoice(old, now);
+    voices.splice(steal, 1);
+  }
+  voices.push({ start, end, sources: [{ stop }] });
+}
+
+const gw2Backend = createGw2Backend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
+const turboBackend = createTurboBackend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
 
 function stopVoice(vc: Voice, at: number): void {
   for (const s of vc.sources) {
@@ -223,8 +231,8 @@ export function play(cue: CueName): void {
   const lim = limiterFor(cue);
   if (lim && !lim.allow(now)) return;
   voices = voices.filter((vc) => vc.end > now);
-  const steal = voiceToSteal(voices.map((vc) => vc.start), MAX_VOICES - gw2Backend.activeLoops());
-  if (steal >= 0) {
+  // A loop that started since the last cue can leave the list one over: steal until it fits.
+  for (let steal = voiceToSteal(voices.map((vc) => vc.start), MAX_VOICES - loopCount()); steal >= 0 && voices.length > 0; steal = voiceToSteal(voices.map((vc) => vc.start), MAX_VOICES - loopCount())) {
     const old = voices[steal];
     if (old) stopVoice(old, now);
     voices.splice(steal, 1);
@@ -262,8 +270,11 @@ export function installAudio(opts: AudioOptions): () => void {
   // replaces that explode, so the small kill sound never doubles it.
   let bossDown = false;
   const gw2: Gw2Controller = installGw2(b, gw2Backend);
+  // R3 Turbo: ignition sweep, engine hum, power down sweep (turboSfx.ts).
+  const turbo: TurboController = installTurboSfx(b, turboBackend);
   const offs = [
     gw2.dispose,
+    turbo.dispose,
     // combat emits fx:kill then sfx explode, so the colour decides the explode sound.
     b.on('fx:kill', (p) => {
       bigKill = isBigKillColour(p.colour);

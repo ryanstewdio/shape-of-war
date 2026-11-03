@@ -179,6 +179,8 @@ export interface LayerMix {
   readonly motifScale: number;
   /** Summed motif gain after the scale. */
   readonly motifTotal: number;
+  /** Gain the bed may sum to (the bed is scaled to fit it); the Turbo layer shares it (turbo.ts). */
+  readonly room: number;
 }
 
 /**
@@ -200,7 +202,7 @@ export function layerMix(bedSum: number, set: LayerSet, registry: LayerRegistry,
   const bossPart = boss === null ? 0 : BOSS_STING_GAIN + BOSS_CUE_RESERVE + Math.max(0, boss.total);
   const room = Math.max(0, GAIN_CEILING - STINGER_GAIN - ACCENT_RESERVE - HIT_RESERVE - enemy - bossPart);
   const bedScale = bedSum > room && bedSum > 0 ? room / bedSum : 1;
-  return { bedScale, motifScale, motifTotal };
+  return { bedScale, motifScale, motifTotal, room };
 }
 
 /** Pure: a melodic voice's level against the bed it sits on, dB (20 log10 of the gain ratio). */
