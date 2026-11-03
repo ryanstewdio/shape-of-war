@@ -14,12 +14,14 @@ import { freshSeed, hash01 } from './core/rng';
 import {
   ensureSchema,
   loadAdventureScores,
+  loadFreePlaySetup,
   loadMenuTheme,
   loadRunSeed,
   loadSettings,
   loadUnlocked,
   recordEndlessScore,
   resetProgress,
+  saveFreePlaySetup,
   saveMenuTheme,
   savePendingBonus,
   saveSetting,
@@ -80,7 +82,7 @@ import { settleAdventure } from './ui/outcome';
 import { formatClock } from './ui/format';
 import { bonusLabel } from './ui/parReward';
 import { createFreePlayScreen, DEFAULT_FREE_PLAY, type FreePlayChoice } from './ui/freePlay';
-import { buildFreePlayRun, freePlayResult, snapshotOf } from './ui/freePlayRun';
+import { buildFreePlayRun, freePlayLine, freePlayResult, snapshotOf } from './ui/freePlayRun';
 import { levelFoes, newFoes, type FoeSource } from './ui/enemyIntro';
 import { createPauseScreen } from './ui/pause';
 import { musicCue, type MusicCue } from './ui/musicFlow';
@@ -300,8 +302,8 @@ async function boot(): Promise<void> {
   let runDifficulty: Difficulty = 'normal';
   /** R2: the par reward the current Adventure world started with, kept so a card rebuild keeps it. */
   let runBonus: StartBonus | null = null;
-  /** R2: the Free Play options of the last Free Play run (session only). */
-  let freePlayChoice: FreePlayChoice = DEFAULT_FREE_PLAY;
+  /** The Free Play options of the last Free Play run; arena, barriers and config persist (sow.settings.freePlay). */
+  let freePlayChoice: FreePlayChoice = { ...DEFAULT_FREE_PLAY, ...loadFreePlaySetup() };
   let world: World = createGame(level, gameOptions(runDifficulty));
   let endlessSeed = 0;
   // V2-A glue point, the one named port call for space physics. R2: the Settings row is gone; the
@@ -428,7 +430,7 @@ async function boot(): Promise<void> {
     // between two values and read "ready" after one geom. Only the sim emits hud:score now.
     void s;
     if (flow.mode === 'endless' || flow.mode === 'freeplay') {
-      hud.setLine(flow.mode === 'endless' ? endlessLine(endlessSeed, world.time) : `Free Play  ${freePlayArenaName()}  ${formatClock(world.time)}`);
+      hud.setLine(flow.mode === 'endless' ? endlessLine(endlessSeed, world.time) : freePlayLine(freePlayArenaName(), freePlayChoice.config.length, world.time));
       hud.setObjective({ label: endlessLabel(bossAlive()), fraction: 0, stars: null }); // "Boss" while one lives; no stars
     } else {
       // Reads "Defeat the boss" while the level holds for a living boss (docs/13 boss rule 9).
@@ -468,6 +470,7 @@ async function boot(): Promise<void> {
       hud.setLevel(index, level.par, pick.hash);
     }
     hud.setSuper(level.superType);
+    hud.setInfiniteLives(mode === 'freeplay' && freePlayChoice.config.lives === 'infinite');
     resetScore(world);
     // Temporary debug hook (docs/12 shared rule 8): ?boss=<id> forces that boss on this level at 10 s.
     const forcedBoss = new URLSearchParams(gated.search).get('boss'); // dev gated: null without ?dev=1
@@ -547,6 +550,7 @@ async function boot(): Promise<void> {
   const freePlayScreen = createFreePlayScreen(uiRoot, {
     start: (c) => {
       freePlayChoice = c;
+      saveFreePlaySetup({ arena: c.arena, barriers: c.barriers, config: c.config });
       settingsModel.setDifficulty(c.difficulty);
       dispatch({ type: 'start', mode: 'freeplay', levelIndex: 1 });
     },
@@ -752,7 +756,9 @@ async function boot(): Promise<void> {
     const arena = arenaName(level);
     if (flow.mode === 'freeplay') {
       // R2: Free Play keeps no stars and no bests; the results show score and time.
-      dispatch({ type: 'over', result: freePlayResult({ score: p.score, difficulty: runDifficulty, hash: pick.hash, space, timeSec: world.time, arena }) });
+      const length = freePlayChoice.config.length;
+      const won = gameState(world).outcome === 'won'; // a score attack whose clock ran out
+      dispatch({ type: 'over', result: freePlayResult({ score: p.score, difficulty: runDifficulty, hash: pick.hash, space, timeSec: world.time, arena, length, won }) });
       return;
     }
     if (flow.mode === 'endless') {

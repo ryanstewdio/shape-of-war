@@ -39,6 +39,8 @@ export interface LevelResult {
   arena?: string;
   /** R3: the level's three star targets (LevelDef.stars), for the results score bar. Adventure only. */
   starTargets?: readonly [number, number, number];
+  /** Free Play options: the timed run length in seconds; absent for an Endless length. */
+  scoreAttackSec?: number;
   /** R3: the boss's name on a boss level win, for the labelled boss bonus line. */
   bossName?: string;
 }
