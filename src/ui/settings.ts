@@ -1,7 +1,7 @@
 // Settings screen (docs/01 section 10, docs/03 sections 7 and 8, SPEC 4). Neon slider 0 to 100
 // over a live preview arena, Volume slider, Music slider (v2, 0 is off), Space physics (Off, Low,
 // Medium, High; v2), Weapon pickups (On, Off; v2), Effects (Low, Standard, High; v2), 3D tilt (Off, Low, High; v3), Difficulty (Easy, Normal,
-// Hard; release polish, applied from the next level start), Show FPS,
+// Hard, Insane; release polish and R1, applied from the next level start), Show FPS,
 // Bloom / Fallback, Play seed, Reset progress, and a hidden debug menu behind five taps on the
 // version label. The same screen opens from the menu and from the pause screen.
 // The model is pure apart from injected effects, so tests drive it with fakes. applyNeon is
@@ -354,7 +354,7 @@ export interface DifficultyButtonState {
   selected: boolean;
 }
 
-/** Pure: the three Difficulty buttons in order (Easy, Normal, Hard) with the current one marked. */
+/** Pure: the four Difficulty buttons in order (Easy, Normal, Hard, Insane) with the current one marked. */
 export function difficultyButtonStates(current: Difficulty): DifficultyButtonState[] {
   return DIFFICULTIES.map((difficulty) => ({ difficulty, label: difficultyLabel(difficulty), selected: difficulty === current }));
 }
@@ -533,7 +533,7 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
   tiltBtns.append(...tiltButtons);
   tiltRow.append(el('div', 'sow-choice-label', TILT_ROW_LABEL), tiltBtns);
 
-  // Difficulty: label with Easy, Normal and Hard buttons, the same row shape as Effects.
+  // Difficulty: label with Easy, Normal, Hard and Insane buttons, the same row shape as Effects.
   const difficultyRow = el('div', 'sow-choice');
   difficultyRow.setAttribute('role', 'group');
   difficultyRow.setAttribute('aria-label', DIFFICULTY_ROW_LABEL);

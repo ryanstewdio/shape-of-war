@@ -143,6 +143,15 @@ describe('docs/13 key table', () => {
     expect(documented).toContain(DIFFICULTY_KEY);
   });
 
+  it('R1: the difficulty row lists all four values, Insane included, and no new key is added', () => {
+    const row = section.split('\n').find((l) => l.startsWith(`| \`${DIFFICULTY_KEY}\``)) ?? '';
+    for (const v of ['easy', 'normal', 'hard', 'insane']) {
+      expect(row).toContain(`\`${v}\``);
+      expect(settings.parseDifficulty(v)).toBe(v);
+    }
+    expect(section).toContain('optional `difficulty` field');
+  });
+
   it('documents no key that is neither implemented nor tilt', () => {
     expect(documented.filter((k) => !implementedKeys().includes(k) && k !== TILT_KEY)).toEqual([]);
   });

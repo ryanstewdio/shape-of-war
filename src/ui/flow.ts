@@ -4,7 +4,9 @@
 // 'boot' is the "Tap to start" screen (B7); its tap is also the fullscreen and audio unlock
 // gesture. The level intro card and the Endless "Ready" text run inside 'playing' with the sim
 // held by the intro gate in ui/intro.ts.
+import type { Difficulty } from '../core/difficulty';
 import type { SpaceLevelSetting } from '../core/settings';
+import type { StarCount } from '../core/stars';
 export type ScreenId = 'boot' | 'menu' | 'levels' | 'playing' | 'paused' | 'results' | 'settings';
 export type Mode = 'adventure' | 'endless';
 
@@ -12,8 +14,11 @@ export interface LevelResult {
   mode: Mode;
   levelIndex: number;
   score: number;
-  stars: 0 | 1 | 2 | 3;
+  /** R1: score stars capped by difficulty; 4 only for an Insane win. */
+  stars: StarCount;
   success: boolean;
+  /** R1: the difficulty the run was played on (Adventure). Absent reads as not shown. */
+  difficulty?: Difficulty;
   par: number;
   best: number;
   newBest: boolean;
