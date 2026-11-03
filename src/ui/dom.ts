@@ -106,6 +106,23 @@ export const UI_CSS = `
 .sow-card .sow-row { width: 100%; flex-wrap: nowrap; }
 .sow-card .sow-choice { width: 100%; }
 .sow-card.sow-intro, .sow-card.sow-results { padding: 20px; gap: 16px; }
+.sow-card.sow-fp-card { overflow: hidden; gap: 10px; }
+.sow-fp-body { width: 100%; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  touch-action: pan-y; display: flex; flex-direction: column; gap: 14px; padding: 2px 4px; box-sizing: border-box; }
+.sow-fp-section { width: 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px 10px 12px; box-sizing: border-box;
+  border: 1px solid hsla(185, 90%, 55%, 0.35); border-radius: 10px; text-align: left; }
+.sow-fp-body .sow-btn { touch-action: pan-y; }
+.sow-fp-head { font-size: 13px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: hsl(185, 90%, 70%); }
+.sow-fp-wrap { flex-wrap: wrap; }
+.sow-choice .sow-fp-wrap .sow-btn { flex: 1 1 84px; }
+.sow-fp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; width: 100%; }
+.sow-btn.sow-fp-foe { min-width: 0; min-height: ${MIN_HIT_PX}px; padding: 4px; display: flex; flex-direction: column;
+  align-items: center; gap: 2px; font-size: 13px; opacity: 0.5; }
+.sow-btn.sow-fp-foe.sow-on { opacity: 1; }
+.sow-fp-enemies { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.sow-fp-enemies .sow-btn { min-width: 0; min-height: ${MIN_HIT_PX}px; font-size: 14px; padding: 6px 4px; flex: 1 1 0; }
+.sow-fp-note { opacity: 0.75; }
+.sow-fp-foot { flex: 0 0 auto; }
 .sow-block { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .sow-block-label { font-size: 12px; letter-spacing: 0.1em; opacity: 0.65; }
 .sow-block-body { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }

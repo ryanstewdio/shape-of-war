@@ -40,7 +40,9 @@ const TILT_KEY = 'sow.settings.tilt';
 const DIFFICULTY_KEY = 'sow.settings.difficulty';
 /** R2 (docs/13 key table): the card's last difficulty choice and the par reward held for the next level. */
 const R2_KEYS: readonly string[] = ['sow.progress.difficulty', 'sow.progress.startBonus'];
-const ALLOWED_EXTRA: readonly string[] = [TILT_KEY, DIFFICULTY_KEY, ...R2_KEYS];
+/** Free Play options (docs/14, docs/13 key table): the last setup screen choice, one JSON key. */
+const FREE_PLAY_KEY = 'sow.settings.freePlay';
+const ALLOWED_EXTRA: readonly string[] = [TILT_KEY, DIFFICULTY_KEY, ...R2_KEYS, FREE_PLAY_KEY];
 
 /** Every key the settings module implements: the exported *_KEY constants plus prefix + each Settings field. */
 function implementedKeys(): string[] {
@@ -78,11 +80,16 @@ function sowLiterals(text: string): string[] {
 describe('storage keys after v3', () => {
   const keys = implementedKeys();
 
-  it('the implemented set is exactly the v2 set, plus at most tilt, difficulty and the two R2 progress keys', () => {
+  it('the implemented set is exactly the v2 set, plus at most tilt, difficulty, the two R2 progress keys and freePlay', () => {
     const extra = keys.filter((k) => !V2_KEYS.includes(k));
     expect(extra.filter((k) => !ALLOWED_EXTRA.includes(k)), 'a key outside the v2 set and outside docs/13').toEqual([]);
     expect(keys.filter((k) => V2_KEYS.includes(k)).sort()).toEqual([...V2_KEYS].sort());
     expect(keys.length).toBeLessThanOrEqual(V2_KEYS.length + ALLOWED_EXTRA.length);
+  });
+
+  it('registers sow.settings.freePlay with the settings prefix', () => {
+    expect(keys).toContain(FREE_PLAY_KEY);
+    expect(settings.FREE_PLAY_KEY).toBe(FREE_PLAY_KEY);
   });
 
   it('registers sow.settings.difficulty with the settings prefix', () => {
@@ -144,6 +151,7 @@ describe('docs/13 key table', () => {
     expect(documented).toContain(TILT_KEY);
     expect(documented).toContain(DIFFICULTY_KEY);
     for (const k of R2_KEYS) expect(documented, k).toContain(k);
+    expect(documented).toContain(FREE_PLAY_KEY);
     for (const k of R2_KEYS) expect(settings.LAST_DIFFICULTY_KEY === k || settings.START_BONUS_KEY === k, k).toBe(true);
   });
 

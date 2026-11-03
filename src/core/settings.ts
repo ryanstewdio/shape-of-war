@@ -4,6 +4,8 @@
 // then to defaults.
 import type { StartBonus } from './bonus';
 import type { Difficulty } from './difficulty';
+import { DEFAULT_FREE_PLAY, type FreePlayConfig } from './freeplayConfig';
+import { BOSS_IDS, ENEMY_KINDS, V2_ENEMY_KINDS, type EnemyKind, type FreePlayArena } from '../levelgen/leveldef';
 import { asStarCount, type StarCount } from './stars';
 
 export interface Settings {
@@ -607,4 +609,91 @@ export function unlockAfter(unlocked: number, index: number, success: boolean): 
 /** Pure: true if level `index` can be started from level select. */
 export function isUnlocked(unlocked: number, index: number): boolean {
   return Number.isInteger(index) && index >= FIRST_LEVEL && index <= Math.max(FIRST_LEVEL, unlocked);
+}
+
+// Free Play options (docs/14 "Free Play options"): the last setup screen choice, one JSON key
+// { arena, barriers, config }. Difficulty stays in sow.progress.difficulty. Each field is checked
+// on its own, so one bad field falls back to its default and the rest survive.
+
+export const FREE_PLAY_KEY = `${SETTINGS_PREFIX}freePlay`;
+
+export interface FreePlaySetup {
+  readonly arena: FreePlayArena;
+  readonly barriers: boolean;
+  readonly config: FreePlayConfig;
+}
+
+export const DEFAULT_FREE_PLAY_SETUP: FreePlaySetup = Object.freeze({ arena: 'rect', barriers: false, config: DEFAULT_FREE_PLAY });
+
+/** Every enemy kind the setup screen offers, in screen order. */
+export const FREE_PLAY_ENEMY_KINDS: readonly EnemyKind[] = [...ENEMY_KINDS, ...V2_ENEMY_KINDS];
+
+function oneOf<T>(v: unknown, allowed: readonly T[], def: T): T {
+  const hit = allowed.find((a) => a === v);
+  return hit === undefined ? def : hit;
+}
+
+function field(o: object, k: string): unknown {
+  return k in o ? (o as Record<string, unknown>)[k] : undefined;
+}
+
+/** Pure: a list of enemy kinds, known kinds only, no repeats, in FREE_PLAY_ENEMY_KINDS order. */
+export function parseEnemyKinds(v: unknown): EnemyKind[] {
+  if (!Array.isArray(v)) return [];
+  const raw: readonly unknown[] = v;
+  return FREE_PLAY_ENEMY_KINDS.filter((k) => raw.includes(k));
+}
+
+/** Pure: a FreePlayConfig from untrusted JSON; each bad or missing field takes its default. */
+export function parseFreePlayConfig(v: unknown): FreePlayConfig {
+  const d = DEFAULT_FREE_PLAY;
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return d;
+  const g = (k: string): unknown => field(v, k);
+  return {
+    enemies: parseEnemyKinds(g('enemies')),
+    density: oneOf(g('density'), ['low', 'normal', 'swarm'] as const, d.density),
+    lives: oneOf(g('lives'), [1, 3, 5, 'infinite'] as const, d.lives),
+    length: oneOf(g('length'), ['endless', 180, 300, 600] as const, d.length),
+    weapon: g('weapon') === null ? null : oneOf(g('weapon'), ['spread', 'rapid', 'pierce', 'orbit'] as const, d.weapon),
+    pickups: typeof g('pickups') === 'boolean' ? g('pickups') === true : d.pickups,
+    drone: oneOf(g('drone'), ['attack', 'collect', 'ram'] as const, d.drone),
+    superType: oneOf(g('superType'), ['homing', 'detonate', 'turbo'] as const, d.superType),
+    bosses: oneOf(g('bosses'), ['off', 'every3', ...BOSS_IDS] as const, d.bosses),
+    wells: oneOf(g('wells'), ['off', 'normal', 'many'] as const, d.wells),
+    drift: oneOf(g('drift'), ['off', 'low', 'high'] as const, d.drift),
+    size: oneOf(g('size'), ['small', 'medium', 'large'] as const, d.size),
+  };
+}
+
+/** Pure: the stored setup, or the default for anything missing or malformed. */
+export function parseFreePlaySetup(raw: string | null): FreePlaySetup {
+  const d = DEFAULT_FREE_PLAY_SETUP;
+  if (raw === null || raw === '') return d;
+  let v: unknown;
+  try {
+    v = JSON.parse(raw);
+  } catch {
+    return d;
+  }
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return d;
+  const barriers = field(v, 'barriers');
+  return {
+    arena: oneOf(field(v, 'arena'), ['rect', 'circle', 'drum'] as const, d.arena),
+    barriers: typeof barriers === 'boolean' ? barriers : d.barriers,
+    config: parseFreePlayConfig(field(v, 'config')),
+  };
+}
+
+/** Pure: the JSON stored for a setup (validated first, so only known values are written). */
+export function encodeFreePlaySetup(s: FreePlaySetup): string {
+  const v = parseFreePlaySetup(JSON.stringify(s));
+  return JSON.stringify({ arena: v.arena, barriers: v.barriers, config: v.config });
+}
+
+export function loadFreePlaySetup(storage: StorageLike | null = defaultStorage()): FreePlaySetup {
+  return parseFreePlaySetup(readRaw(storage, FREE_PLAY_KEY));
+}
+
+export function saveFreePlaySetup(s: FreePlaySetup, storage: StorageLike | null = defaultStorage()): void {
+  writeRaw(storage, FREE_PLAY_KEY, encodeFreePlaySetup(s));
 }

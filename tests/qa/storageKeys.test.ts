@@ -44,6 +44,9 @@ import {
   START_BONUS_KEY,
   saveLastDifficulty,
   savePendingBonus,
+  FREE_PLAY_KEY,
+  DEFAULT_FREE_PLAY_SETUP,
+  saveFreePlaySetup,
 } from '../../src/core/settings';
 import type { StorageLike } from '../../src/core/settings';
 import { stripComments } from './summary';
@@ -66,6 +69,7 @@ const IMPLEMENTED_KEYS: readonly string[] = [
   'sow.settings.weaponPickups',
   'sow.settings.effects',
   'sow.settings.difficulty',
+  'sow.settings.freePlay', // Free Play options: the last setup screen choice (docs/14)
   'sow.settings.menuTheme',
   'sow.settings.music',
   'sow.settings.neon',
@@ -168,6 +172,7 @@ describe('declared storage keys', () => {
     SCHEMA_KEY,
     LAST_DIFFICULTY_KEY,
     START_BONUS_KEY,
+    FREE_PLAY_KEY,
   ];
 
   it('the exported constants are exactly the implemented key set', () => {
@@ -210,6 +215,7 @@ describe('keys written at run time', () => {
     saveMenuTheme('1', store);
     saveLastDifficulty('insane', store);
     savePendingBonus({ level: 3, bonus: { kind: 'bomb' } }, store);
+    saveFreePlaySetup(DEFAULT_FREE_PLAY_SETUP, store);
     loadRunSeed(() => 123456, store);
     unlockLevel(4, store);
     recordAdventureScore(1, 2500, 1, store);

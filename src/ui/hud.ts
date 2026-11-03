@@ -116,14 +116,19 @@ export interface HudText {
 
 export const LIFE_ICON = '▲';
 export const BOMB_ICON = '●';
+/** Free Play infinite lives: the life icon and an infinity sign. */
+export const INFINITE_LIVES_TEXT = `${LIFE_ICON} \u221e`;
 
-/** Pure: display strings for a hud:score payload. */
-export function hudText(p: HudScore): HudText {
+/**
+ * Pure: display strings for a hud:score payload. `infiniteLives` (a Free Play run with infinite
+ * lives) shows the infinity sign; so does a positive non finite lives count from the sim.
+ */
+export function hudText(p: HudScore, infiniteLives = false): HudText {
   const charge = Number.isFinite(p.superCharge) ? Math.max(0, Math.min(1, p.superCharge)) : 0;
   return {
     score: formatInt(p.score),
     mult: `x${formatInt(p.multiplier)}`,
-    lives: iconRun(LIFE_ICON, p.lives),
+    lives: infiniteLives || (p.lives > 0 && !Number.isFinite(p.lives)) ? INFINITE_LIVES_TEXT : iconRun(LIFE_ICON, p.lives),
     bombs: iconRun(BOMB_ICON, p.bombs),
     bombCount: String(Math.max(0, Math.floor(p.bombs))),
     charge,
@@ -222,6 +227,8 @@ export interface Hud {
   setLevel(levelIndex: number, par: number, hash: string): void;
   /** Free text in the level line slot (Endless seed and clock). */
   setLine(text: string): void;
+  /** Free Play infinite lives: the lives slot shows the infinity sign until set off. */
+  setInfiniteLives(on: boolean): void;
   setObjective(p: ObjectiveProgress): void;
   /** Super kind for the ring label. */
   setSuper(kind: SuperKind): void;
@@ -304,6 +311,7 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   weaponBar.setAttribute('data-hud', 'weapon-bar');
   weaponFill.setAttribute('data-hud', 'weapon-fill');
   let gate: WeaponGate = { ...WEAPON_GATE_START };
+  let infiniteLives = false;
   // Drone indicator (GW1): mode name and a countdown bar beside the weapon indicator. Its
   // opacity and flash follow the pure clock in indicator.ts; a short CSS transition smooths the
   // 100 ms steps, as on the boss banner.
@@ -449,7 +457,7 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
     show: () => root.classList.add('sow-open'),
     hide: () => root.classList.remove('sow-open'),
     update(p) {
-      const t = hudText(p);
+      const t = hudText(p, infiniteLives);
       score.textContent = t.score;
       mult.textContent = t.mult;
       lives.textContent = t.lives;
@@ -458,6 +466,10 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
       const deg = Math.round(t.charge * 360);
       superRing.style.background = `conic-gradient(hsla(55, 95%, 60%, 0.55) ${deg}deg, transparent ${deg}deg)`;
       superTip.textContent = superHint(t.charge);
+    },
+    setInfiniteLives(on) {
+      infiniteLives = on;
+      if (on) lives.textContent = INFINITE_LIVES_TEXT;
     },
     setSuper(kind) {
       superName.textContent = superLabel(kind);

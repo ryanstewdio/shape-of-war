@@ -200,15 +200,15 @@ describe('Free Play flow', () => {
     expect(arena.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true']);
     root.all().find((e) => e.tag === 'button' && e.textContent === 'Start')?.tap();
     root.all().find((e) => e.tag === 'button' && e.textContent === 'Back')?.tap();
-    expect(started).toEqual([{ difficulty: 'insane', arena: 'drum', barriers: true }]);
+    expect(started).toEqual([{ difficulty: 'insane', arena: 'drum', barriers: true, config: DEFAULT_FREE_PLAY.config }]);
     expect(backs).toBe(1);
-    expect(screen.current()).toEqual({ difficulty: 'insane', arena: 'drum', barriers: true });
+    expect(screen.current()).toEqual({ difficulty: 'insane', arena: 'drum', barriers: true, config: DEFAULT_FREE_PLAY.config });
   });
 
   it('labels and summary', () => {
     expect(FREE_PLAY_ARENAS.map(arenaLabel)).toEqual(['Rectangle', 'Circle', 'Drum']);
     expect([barriersLabel(true), barriersLabel(false)]).toEqual(['On', 'Off']);
-    expect(freePlaySummary({ difficulty: 'easy', arena: 'circle', barriers: false })).toBe('Easy, Circle arena, barriers off');
+    expect(freePlaySummary({ ...DEFAULT_FREE_PLAY, difficulty: 'easy', arena: 'circle', barriers: false })).toBe('Easy, Circle arena, barriers off, Endless');
   });
 });
 

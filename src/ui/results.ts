@@ -125,6 +125,11 @@ export interface ResultText {
   primary: PrimaryButton;
 }
 
+/** Pure: "Score attack 5:00" for a timed Free Play length in seconds. */
+export function scoreAttackLabel(sec: number): string {
+  return `Score attack ${formatClock(sec)}`;
+}
+
 function subLine(head: string, r: LevelResult): string {
   return r.arena === undefined || r.arena === '' ? head : `${head}  ${r.arena} arena`;
 }
@@ -155,7 +160,11 @@ export function resultLines(r: LevelResult): ResultText {
     primary: 'retry' as const,
   };
   if (r.mode === 'freeplay') {
-    return { ...none, title: 'Game over', sub: subLine('Free Play', r), score: formatInt(r.score), difficulty, best: '', detail: details([time]), badge: '', physics };
+    // Free Play options: a timed run reads "Score attack 5:00"; running the clock out is "Time up".
+    const timed = r.scoreAttackSec === undefined ? null : scoreAttackLabel(r.scoreAttackSec);
+    const head = timed === null ? 'Free Play' : `Free Play  ${timed}`;
+    const title = timed !== null && r.success ? 'Time up' : 'Game over';
+    return { ...none, title, sub: subLine(head, r), score: formatInt(r.score), difficulty, best: '', detail: details([time]), badge: '', physics };
   }
   if (r.mode === 'endless') {
     return {
