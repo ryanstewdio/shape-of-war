@@ -52,6 +52,7 @@ import type {
   ArenaDef,
   Band,
   BandParams,
+  BossSpec,
   EndlessDef,
   EndlessSegmentDef,
   EnemyKind,
@@ -125,7 +126,7 @@ import {
 import type { SurfaceKind } from '../core/surface';
 import { applyDrumPattern, pickDrumPattern } from './drum';
 import type { DrumPattern } from './drum';
-import { ALL_ENEMY_KINDS, V2_ENEMY_SALT, V2_SPAWN_UNIT, planV2Roster, swapGroupKind, v2GroupCount } from './v2enemies';
+import { ALL_ENEMY_KINDS, V2_ENEMY_SALT, V2_SPAWN_UNIT, isV2Kind, planV2Roster, swapGroupKind, v2GroupCount } from './v2enemies';
 
 /** Stage salts, docs/02 section 2. */
 export const SALT = {
@@ -611,6 +612,32 @@ interface WaveRun {
    * means the R1 plan runs to tEnd.
    */
   volatileUntilSec?: number;
+  /**
+   * Free Play density: each wave's budget times this, rounded, at least 1. Absent means 1 (no
+   * change to any draw).
+   */
+  budgetScale?: number;
+}
+
+/**
+ * Kind a snake group falls back to when the snake cap is full: grunt when the roster has it (every
+ * generated roster does), else the cheapest other roster kind, else null (the group stays empty).
+ * Free Play rosters may lack grunt.
+ */
+export function snakeFallbackKind(roster: readonly RosterEntry[]): EnemyKind | null {
+  if (roster.some((e) => e.kind === 'grunt')) return 'grunt';
+  let best: EnemyKind | null = null;
+  for (const e of roster) if (e.kind !== 'snake' && (best === null || SPAWN_COST[e.kind] < SPAWN_COST[best])) best = e.kind;
+  return best;
+}
+
+/** Roster entries affordable at gb units; when none is (a Free Play roster), the cheapest entry alone. */
+function affordable(roster: readonly RosterEntry[], gb: number): readonly RosterEntry[] {
+  const fits = roster.filter((e) => SPAWN_COST[e.kind] <= gb);
+  if (fits.length > 0 || roster.length === 0) return fits;
+  let best = roster[0] as RosterEntry;
+  for (const e of roster) if (SPAWN_COST[e.kind] < SPAWN_COST[best.kind]) best = e;
+  return [best];
 }
 
 // R1 pacing (release gate R1): shorter, jittered wave intervals so the arena never empties, and
@@ -711,6 +738,7 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
     const step = b.intervalStartSec + (b.intervalEndSec - b.intervalStartSec) * u;
     const oldInterval = pulse === null ? step : step * pulse.interval;
     let budget = pulse === null ? ramped : Math.max(1, Math.round(ramped * pulse.budget));
+    if (run.budgetScale !== undefined) budget = Math.max(1, Math.round(budget * run.budgetScale));
     // R1: the first wave of each breather is a lull; every other wave draws a flavour.
     const breather = run.pulse !== undefined && inBreather(run.pulse, t);
     const volatileOn = run.volatile !== undefined && (run.volatileUntilSec === undefined || t < run.volatileUntilSec);
@@ -735,7 +763,7 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
     let first: SpawnPattern | null = null;
     for (let g = 0; g < nGroups; g++) {
       const gb = share + (g === 0 ? budget - share * nGroups : 0);
-      const fits = roster.filter((e) => SPAWN_COST[e.kind] <= gb);
+      const fits = affordable(roster, gb);
       let kind = rngPick(
         r,
         fits.map((e) => e.kind),
@@ -744,18 +772,26 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
       // R1 swarm: every group of the wave is the roster's small fast kind.
       if (plan?.flavour === 'swarm') kind = swarmKind(roster, gb);
       let count = 0;
+      let noKind = false;
       if (kind === 'snake') {
         const room = b.maxLiveSnakes - snakeTimes.filter((s) => s > t - SNAKE_WINDOW_SEC).length;
-        if (room <= 0) kind = 'grunt';
+        // Free Play: a snake only roster has no fallback, so the group stays empty.
+        const fallback = room <= 0 ? snakeFallbackKind(roster) : null;
+        if (room <= 0 && fallback !== null) kind = fallback;
+        else if (room <= 0) noKind = true;
         else {
-          count = Math.min(Math.floor(gb / SPAWN_COST.snake), room);
+          count = Math.min(Math.max(1, Math.floor(gb / SPAWN_COST.snake)), room);
           for (let k = 0; k < count; k++) snakeTimes.push(t);
         }
       }
-      if (kind === 'dart') {
-        for (let p = 0; p < Math.floor(gb / SPAWN_COST.dart); p++) count += rngInt(r, 5, 8);
+      // Units of the group: gb, or one of the kind when a Free Play roster can afford nothing.
+      const units = Math.max(gb, SPAWN_COST[kind]);
+      if (noKind) {
+        count = 0;
+      } else if (kind === 'dart') {
+        for (let p = 0; p < Math.floor(units / SPAWN_COST.dart); p++) count += rngInt(r, 5, 8);
       } else if (kind !== 'snake') {
-        count = Math.floor(gb / SPAWN_COST[kind]);
+        count = Math.floor(units / SPAWN_COST[kind]);
       }
       const pattern = patternFor(r, kind);
       first ??= pattern;
@@ -1106,6 +1142,21 @@ export function endlessBudgetBonus(segment: number): number {
   return Math.max(0, segment - ENDLESS_BAND4_SEGMENT) * ENDLESS_BUDGET_PER_SEGMENT;
 }
 
+/**
+ * Free Play options on a segment (freeplay.ts). Every field absent leaves the segment as
+ * endlessSegmentOn makes it without tweaks.
+ */
+export interface SegmentTweaks {
+  /** Explicit roster (the chosen enemy kinds); replaces the drawn roster and skips the v2 stage. */
+  readonly roster?: readonly RosterEntry[];
+  /** Wave budget multiplier (density). */
+  readonly budgetScale?: number;
+  /** maxLiveEnemies override (Swarm density). */
+  readonly maxLiveEnemies?: number;
+  /** The segment's boss, or null for none; replaces bossForSegment. */
+  readonly boss?: BossSpec | null;
+}
+
 /** Endless segment s: roster and waves only, atSec relative to segment start, all below 30 s. */
 export function generateEndlessSegment(endlessSeed: number, segment: number, cfg: GenConfig = DEFAULT_GEN_CONFIG): EndlessSegmentDef {
   return endlessSegmentOn(endlessSeed, segment, cfg, ENDLESS_ARENA, false);
@@ -1116,13 +1167,13 @@ export function generateEndlessSegment(endlessSeed: number, segment: number, cfg
  * on the rims and wrapped in u). Same streams and draw order as generateEndlessSegment; on the
  * fixed Endless arena it is generateEndlessSegment, byte for byte. Release gate R2 Free Play.
  */
-export function endlessSegmentOn(endlessSeed: number, segment: number, cfg: GenConfig, arena: Readonly<ArenaDef>, cyl: boolean): EndlessSegmentDef {
+export function endlessSegmentOn(endlessSeed: number, segment: number, cfg: GenConfig, arena: Readonly<ArenaDef>, cyl: boolean, tweaks?: SegmentTweaks): EndlessSegmentDef {
   const es = endlessSeed >>> 0;
   const seed = segmentSeed(es, segment);
   const effectiveIndex = effectiveIndexOf(segment);
   const band = bandOf(effectiveIndex);
   const b = BANDS[band];
-  const v1Roster = generateRoster(stream(seed, SALT.roster), band, cfg);
+  const v1Roster = tweaks?.roster?.map((e) => ({ ...e })) ?? generateRoster(stream(seed, SALT.roster), band, cfg);
   const bonus = endlessBudgetBonus(segment);
   const v1List = generateWaveGroups(stream(seed, SALT.waves), {
     arena,
@@ -1134,12 +1185,15 @@ export function endlessSegmentOn(endlessSeed: number, segment: number, cfg: GenC
     fullRamp: band >= 3,
     budgetBonus: bonus,
     ...(cyl ? { cylinder: true } : {}),
+    ...(tweaks?.budgetScale !== undefined ? { budgetScale: tweaks.budgetScale } : {}),
   });
-  const v2 = runsV2(cfg, band);
+  // An explicit roster is final: the v2 stage never swaps its kinds.
+  const v2 = tweaks?.roster === undefined && runsV2(cfg, band);
   const { roster, waves: list } = v2 ? applyV2Enemies(stream(seed, V2_ENEMY_SALT), band, arena, v1Roster, v1List, cyl) : { roster: v1Roster, waves: v1List.waves };
+  const schedule = scheduleOf(b, list, -1, 0, bonus);
   const def: EndlessSegmentDef = {
     version: LEVELDEF_VERSION,
-    generatorVersion: v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
+    generatorVersion: v2 || roster.some((e) => isV2Kind(e.kind)) ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
     endlessSeed: es,
     segment,
     seed,
@@ -1147,11 +1201,12 @@ export function endlessSegmentOn(endlessSeed: number, segment: number, cfg: GenC
     band,
     roster,
     speedScale: speedScaleFor(effectiveIndex),
-    waves: scheduleOf(b, list, -1, 0, bonus),
+    waves: tweaks?.maxLiveEnemies !== undefined ? { ...schedule, maxLiveEnemies: tweaks.maxLiveEnemies } : schedule,
   };
   // V3: a boss segment (a positive multiple of 6) carries the boss last and version 3. Endless has
   // no hazards, so rule 12 has nothing to remove. Flag off or any other segment: v2.1 bytes.
-  const boss = cfg.enableBosses ? bossForSegment(segment) : null;
+  // Free Play options may name the boss instead (tweaks.boss, null for none).
+  const boss = tweaks?.boss !== undefined ? tweaks.boss : cfg.enableBosses ? bossForSegment(segment) : null;
   return deepFreeze(boss === null ? def : { ...def, generatorVersion: GENERATOR_VERSION_V3, boss });
 }
 
