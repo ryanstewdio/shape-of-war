@@ -1,14 +1,20 @@
-// Release polish: open drum drift (docs/14 item 8). On a cylinder level with no obstacles every
-// live entity and the ship (while in play) drift along u: DRIFT_BASE u/s always, rising to
+// Release polish: open drum drift (docs/14 item 8). On a cylinder level with no obstacles the
+// drum runs a current along u: DRIFT_BASE u/s always, rising to
 // DRIFT_BURST (BURST_FACTOR x the base) for BURST_HOLD s every GAP_MIN to GAP_MAX s (start to
 // start), ramping in and out over BURST_RAMP s on either side of the hold. Every speed is scaled by
 // the difficulty driftScale. Direction and gaps are hashed from the level seed (hash01, never a
 // PRNG). Telegraph (R2): 'sim:driftBurst' { inSec: DRIFT_WARN, dir } and bus 'sfx' 'spawn'
 // DRIFT_WARN s before each burst ramp starts. Off open drums the state is inactive and stepWorld
 // never calls stepDrift. No allocation.
+// R3 (Ryan: "the drum does not actually spin faster or create any challenge"): moving everything
+// together gave no relative motion, so the drift is now a current. The ship (while in play) takes
+// the full speed, player bullets DRIFT_BULLET_SHARE of it and every other entity only
+// DRIFT_ENEMY_SHARE. In a burst the ship must fight the current while the field slides past it.
+// The camera follows the ship, so the drum still reads as turning with the flow.
 import { bus } from '../core/events';
 import { hash01 } from '../core/rng';
 import type { LevelDef } from '../levelgen/leveldef';
+import { STYLE_ORBIT } from './bullets';
 import { difficultyOf } from './difficulty';
 import type { World } from './world';
 
@@ -25,6 +31,11 @@ export const GAP_MIN = 9;
 export const GAP_MAX = 14;
 /** Seconds before a burst ramp starts that the telegraph cue is emitted. */
 export const DRIFT_WARN = 0.6;
+
+/** R3: share of the drift speed every non ship entity takes (enemies lag the current). */
+export const DRIFT_ENEMY_SHARE = 0.25;
+/** R3: share of the drift speed player bullets take (orbit blades follow the ship and are skipped). */
+export const DRIFT_BULLET_SHARE = 0.5;
 
 const SALT_DIR = 0x64726674;
 const SALT_GAP = 0x62727374;
@@ -98,7 +109,7 @@ export function advanceBursts(d: DriftState, t: number): void {
 /** Reused 'sim:driftBurst' payload. */
 const burstFx: { inSec: number; dir: 1 | -1 } = { inSec: DRIFT_WARN, dir: 1 };
 
-/** Called by stepWorld after every move, before the wrap: shift every live entity along u. */
+/** Called by stepWorld after every move, before the wrap: shift the ship, bullets and entities along u. */
 export function stepDrift(w: World, dt: number): void {
   const d = w.drift;
   const t = w.time;
@@ -112,9 +123,16 @@ export function stepDrift(w: World, dt: number): void {
   const speed = driftSpeedAt(t - d.burstAt) * difficultyOf(w).driftScale;
   d.speed = speed;
   const dx = d.dir * speed * dt;
-  const start = w.ship.active ? 0 : 1;
-  for (let id = start; id < w.cap; id++) {
+  if (w.ship.active && w.alive[0] === 1) w.x[0] = (w.x[0] ?? 0) + dx;
+  const ex = dx * DRIFT_ENEMY_SHARE;
+  for (let id = 1; id < w.cap; id++) {
     if (w.alive[id] !== 1) continue;
-    w.x[id] = (w.x[id] ?? 0) + dx;
+    w.x[id] = (w.x[id] ?? 0) + ex;
+  }
+  const p = w.bullets;
+  const bx = dx * DRIFT_BULLET_SHARE;
+  for (let b = 0; b < p.cap; b++) {
+    if (p.alive[b] !== 1 || p.style[b] === STYLE_ORBIT) continue;
+    p.x[b] = (p.x[b] ?? 0) + bx;
   }
 }

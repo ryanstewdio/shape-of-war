@@ -181,6 +181,8 @@ export interface GameState {
   superActive: SuperKind | null;
   /** Seconds left on the timed super. */
   superTimer: number;
+  /** R3: total seconds granted to the running Turbo (base plus kill extensions), capped. */
+  turboTotal: number;
   /** Seconds until the drone returns after Detonate. */
   droneAbsent: number;
   /** Homing scratch: targetable enemy ids rebuilt each step. */
@@ -339,6 +341,7 @@ function createState(w: World): GameState {
     arenaFactor: arenaSpeedFactor(w.level.arena),
     superActive: null,
     superTimer: 0,
+    turboTotal: 0,
     droneAbsent: 0,
     targets: new Int32Array(cap),
     targetCount: 0,
