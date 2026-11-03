@@ -1,8 +1,9 @@
 // Par against a simulated competent run (fix(par), device finding G4). See parSim.ts for the model.
 import { describe, expect, it } from 'vitest';
 import { computePar, generateLevel } from '../../src/levelgen/generator';
-import { bandOf } from '../../src/levelgen/leveldef';
+import { V5_GEN_CONFIG, bandOf } from '../../src/levelgen/leveldef';
 import type { EnemyKind, ObjectiveDef, WaveSchedule } from '../../src/levelgen/leveldef';
+import { wholeLevelPar } from '../../src/levelgen/pacing';
 import { simulateScore } from './parSim';
 
 const RUN_SEEDS = [0, 1, 0xdeadbeef, 0x4e464f4c] as const;
@@ -56,8 +57,35 @@ describe('parSim', () => {
 
   it('computePar matches the par the generator stores', () => {
     for (const s of RUN_SEEDS) {
-      const d = generateLevel(s, 14);
+      const d = generateLevel(s, 14, V5_GEN_CONFIG);
       expect(computePar(d.waves, d.objective).par).toBe(d.par);
+    }
+  });
+});
+
+// Release gate R1 (version 6): par is the whole level score of a competent player, so the
+// simulated run (more geoms collected than par assumes, never dies) lands above par.
+describe('R1 whole level par versus simulated score', () => {
+  const rows = RUN_SEEDS.flatMap((s) =>
+    LEVELS.filter((n) => n % 5 !== 0).map((n) => {
+      const d = generateLevel(s, n);
+      return { s, n, ratio: simulateScore(d).score / d.par, top: d.stars[2] / d.par };
+    }),
+  );
+
+  it('the simulated run scores between 1 and 2.5 x par on the non boss levels 1 to 40 of 4 seeds', () => {
+    for (const r of rows) {
+      expect(r.ratio, `seed ${r.s} level ${r.n}`).toBeGreaterThanOrEqual(1);
+      expect(r.ratio, `seed ${r.s} level ${r.n}`).toBeLessThanOrEqual(2.5);
+      expect(r.top).toBeCloseTo(1.5, 1);
+    }
+  });
+
+  it('computePar is no longer the stored par; wholeLevelPar is', () => {
+    for (const s of RUN_SEEDS) {
+      const d = generateLevel(s, 14);
+      expect(wholeLevelPar(d.waves, d.objective).par).toBe(d.par);
+      expect(computePar(d.waves, d.objective).par).toBeLessThan(d.par);
     }
   });
 });
@@ -65,7 +93,7 @@ describe('parSim', () => {
 describe('par versus simulated competent score', () => {
   const rows = RUN_SEEDS.flatMap((s) =>
     LEVELS.map((n) => {
-      const d = generateLevel(s, n);
+      const d = generateLevel(s, n, V5_GEN_CONFIG);
       return { s, n, par: d.par, ratio: d.par / simulateScore(d).score };
     }),
   );

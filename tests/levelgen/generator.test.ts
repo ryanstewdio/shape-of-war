@@ -2,7 +2,7 @@
 // section 1; generateEndless(seed) of docs/05 is the additive Endless game definition.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as gen from '../../src/levelgen/generator';
-import { BANDS, DEFAULT_GEN_CONFIG, ENDLESS_ARENA, MAX_RETRIES, V1_GEN_CONFIG, V4_GEN_CONFIG, bandOf, levelSeed } from '../../src/levelgen/leveldef';
+import { BANDS, DEFAULT_GEN_CONFIG, ENDLESS_ARENA, MAX_RETRIES, V1_GEN_CONFIG, V4_GEN_CONFIG, V5_GEN_CONFIG, bandOf, levelSeed } from '../../src/levelgen/leveldef';
 import type { GenConfig, LevelDef } from '../../src/levelgen/leveldef';
 import {
   FOLD_SAFE_RECTS,
@@ -197,13 +197,18 @@ describe('generator', { timeout: 30_000 }, () => {
       expect([...kinds].sort()).toEqual(['destroy', 'scoreInTime', 'survive']);
     });
 
-    it('par and stars: multiple of 500, at least 1000, stars 1x 2x 4x, target at most par', () => {
+    it('par and stars: multiple of 500, at least 1000, stars 1x 2x 4x (R1: 1x 1.25x 1.5x), target at most par', () => {
+      const grid = (v: number): number => Math.round(v / 500) * 500;
       for (const s of seeds(200)) {
         for (const n of BAND_SAMPLE_LEVELS) {
           const d = gen.generateLevel(s, n);
+          const v5 = gen.generateLevel(s, n, V5_GEN_CONFIG);
           expect(d.par % 500).toBe(0);
           expect(d.par).toBeGreaterThanOrEqual(1000);
-          expect(d.stars).toEqual([d.par, 2 * d.par, 4 * d.par]);
+          expect(v5.stars).toEqual([v5.par, 2 * v5.par, 4 * v5.par]);
+          // Boss levels keep version 5 stars.
+          expect(d.stars).toEqual(d.boss === undefined ? [d.par, grid(1.25 * d.par), grid(1.5 * d.par)] : v5.stars);
+          if (v5.objective.kind === 'scoreInTime') expect(v5.objective.target).toBeLessThanOrEqual(v5.par);
           if (d.objective.kind === 'scoreInTime') expect(d.objective.target).toBeLessThanOrEqual(d.par);
         }
       }

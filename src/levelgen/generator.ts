@@ -22,6 +22,7 @@ import {
   GENERATOR_VERSION_V3,
   GENERATOR_VERSION_V4,
   GENERATOR_VERSION_V5,
+  GENERATOR_VERSION_V6,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_BREATHER_SEC,
@@ -38,6 +39,7 @@ import {
   longBandParams,
   round1,
   round2,
+  runsR1,
   segmentSeed,
   speedScaleFor,
 } from './leveldef';
@@ -100,10 +102,11 @@ import {
   validateLevel,
 } from './validate';
 import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards } from './boss';
-import { destroyCountFor, pulseAt } from './pacing';
+import { destroyCountFor, inBreather, pulseAt, wholeLevelPar } from './pacing';
 import type { PulseShape } from './pacing';
 import {
   CYLINDER_CHANCE,
+  R1_CYLINDER_CHANCE,
   SURFACE_SALT,
   canonX,
   cylDist,
@@ -254,7 +257,7 @@ export function generateCylinderArena(r: Rng, band: Band): ArenaDef {
  */
 export function pickSurface(seed: number, levelIndex: number, cfg: GenConfig): SurfaceKind {
   if (!cfg.enableCylinder || !cylinderEligible(levelIndex)) return 'flat';
-  return chance(mulberry32(deriveSeed(seed, SURFACE_SALT)), CYLINDER_CHANCE) ? 'cylinder' : 'flat';
+  return chance(mulberry32(deriveSeed(seed, SURFACE_SALT)), runsR1(cfg) ? R1_CYLINDER_CHANCE : CYLINDER_CHANCE) ? 'cylinder' : 'flat';
 }
 
 /**
@@ -282,7 +285,8 @@ function cylinderArena(seed: number, levelIndex: number, cfg: GenConfig, arenaRn
   const base = generateCylinderArena(arenaRng, band);
   const d = drumDraw(seed, levelIndex, cfg);
   // Release polish: ring membranes ride on the long level flag, drawn after every ring draw.
-  return d === null ? base : applyDrumPattern(base, d.pattern, d.r, cfg.enableLongLevels === true);
+  // R1: an open drum drops the C0 bars, so it really has no barriers.
+  return d === null ? base : applyDrumPattern(base, d.pattern, d.r, cfg.enableLongLevels === true, runsR1(cfg));
 }
 
 /** docs/02 section 6.2. Per attempt draws: orientation, length, cx, cy. Stops at the first exhausted obstacle. */
@@ -591,6 +595,71 @@ interface WaveRun {
   cylinder?: boolean;
   /** Release polish: intensity pulses (calm opening, peaks, breathers). Absent means the plain ramp. */
   pulse?: PulseShape;
+  /**
+   * R1 pacing: the stream the wave flavours and interval jitter are drawn from (needs pulse).
+   * Absent means the version 5 waves, with no extra draw on the wave stream.
+   */
+  volatile?: Rng;
+}
+
+// R1 pacing (release gate R1): shorter, jittered wave intervals so the arena never empties, and
+// wave flavours for volatility. Read only when WaveRun.volatile is set.
+
+/** Salt of the R1 flavour stream. ASCII "R1PA". */
+export const R1_SALT = 0x52315041;
+/** R1 interval: the version 5 interval times this, times a jitter, clamped to the min and max. */
+export const R1_INTERVAL_SCALE = 0.5;
+export const R1_JITTER_MIN = 0.75;
+export const R1_JITTER_MAX = 1.25;
+export const R1_MIN_INTERVAL_SEC = 1.2;
+export const R1_MAX_INTERVAL_SEC = 2.8;
+/** Spawn rate over version 5 at the same moment (before flavours; the flavour mix adds about 20 percent). */
+export const R1_RATE_BOOST = 1;
+/** Least enemies in a wave other than a lull. */
+export const R1_MIN_WAVE = 3;
+/** Seconds from a lull to the next wave. */
+export const R1_LULL_NEXT_SEC = 2.6;
+export const R1_FLAVOURS = ['normal', 'surge', 'swarm'] as const;
+export type R1Flavour = (typeof R1_FLAVOURS)[number] | 'lull';
+export const R1_FLAVOUR_WEIGHTS: Readonly<Record<(typeof R1_FLAVOURS)[number], number>> = Object.freeze({ normal: 55, surge: 20, swarm: 25 });
+/** Budget multiplier per flavour: a surge is 2.5 x a normal wave, a swarm 1.75 x (the lull is 1 enemy). */
+export const R1_FLAVOUR_BUDGET: Readonly<Record<R1Flavour, number>> = Object.freeze({ normal: 0.8, surge: 2, swarm: 1.4, lull: 0 });
+
+/** Swarm kind of a roster: darts when present and affordable, else grunts (always present). */
+export function swarmKind(roster: readonly RosterEntry[], budget: number): EnemyKind {
+  return roster.some((e) => e.kind === 'dart') && budget >= SPAWN_COST.dart ? 'dart' : 'grunt';
+}
+
+/** Lull kind: the costliest roster kind that comes one at a time (no dart packs; snake only with room). */
+export function lullKind(roster: readonly RosterEntry[], snakeRoom: boolean): EnemyKind {
+  let best: EnemyKind = 'grunt';
+  for (const e of roster) {
+    if (e.kind === 'dart' || (e.kind === 'snake' && !snakeRoom)) continue;
+    if (SPAWN_COST[e.kind] > SPAWN_COST[best]) best = e.kind;
+  }
+  return best;
+}
+
+interface R1Wave {
+  flavour: R1Flavour;
+  budget: number;
+  /** Seconds to the next wave. */
+  interval: number;
+}
+
+/**
+ * R1 plan of one wave. Draws (volatile stream): flavour, then the interval jitter; none for the
+ * lull (the first wave of a breather). The budget is rescaled to the shorter interval.
+ */
+function r1Wave(v: Rng, budget: number, oldInterval: number, lull: boolean): R1Wave {
+  if (lull) {
+    return { flavour: 'lull', budget: 1, interval: R1_LULL_NEXT_SEC };
+  }
+  const flavour = weightedKey(v, R1_FLAVOURS, R1_FLAVOUR_WEIGHTS);
+  const jitter = range(v, R1_JITTER_MIN, R1_JITTER_MAX);
+  const interval = round1(Math.min(R1_MAX_INTERVAL_SEC, Math.max(R1_MIN_INTERVAL_SEC, oldInterval * R1_INTERVAL_SCALE * jitter)));
+  const scaled = (budget * interval * R1_RATE_BOOST) / oldInterval;
+  return { flavour, budget: Math.max(R1_MIN_WAVE, Math.round(scaled * R1_FLAVOUR_BUDGET[flavour])), interval };
 }
 
 function rampU(run: WaveRun, t: number): number {
@@ -623,11 +692,30 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
   const waves: WaveDef[] = [];
   const groups: GroupRec[] = [];
   const snakeTimes: number[] = [];
+  let wasBreather = false;
   for (let t = run.tStart, i = 0; t < run.tEnd; i++) {
     const u = rampU(run, t);
     const ramped = Math.round(b.budgetStart + (b.budgetEnd - b.budgetStart) * u) + run.budgetBonus;
     const pulse = run.pulse === undefined ? null : pulseAt(run.pulse, t);
-    const budget = pulse === null ? ramped : Math.max(1, Math.round(ramped * pulse.budget));
+    const step = b.intervalStartSec + (b.intervalEndSec - b.intervalStartSec) * u;
+    const oldInterval = pulse === null ? step : step * pulse.interval;
+    let budget = pulse === null ? ramped : Math.max(1, Math.round(ramped * pulse.budget));
+    // R1: the first wave of each breather is a lull; every other wave draws a flavour.
+    const breather = run.pulse !== undefined && inBreather(run.pulse, t);
+    const plan = run.volatile === undefined ? null : r1Wave(run.volatile, budget, oldInterval, breather && !wasBreather);
+    wasBreather = breather;
+    if (plan !== null) budget = plan.budget;
+    const snakeRoom = (): number => b.maxLiveSnakes - snakeTimes.filter((s) => s > t - SNAKE_WINDOW_SEC).length;
+    if (plan?.flavour === 'lull') {
+      const kind = lullKind(roster, snakeRoom() > 0);
+      if (kind === 'snake') snakeTimes.push(t);
+      const pattern = patternFor(r, kind);
+      const emitted = emitGroup(r, run.arena, kind, 1, pattern, 0, run.cylinder === true);
+      groups.push({ wave: i, first: 0, count: emitted.length, kind, units: 1, startSec: 0 });
+      waves.push({ index: i, atSec: t, pattern, entries: emitted });
+      t = round1(t + plan.interval);
+      continue;
+    }
     let nGroups = rngInt(r, b.groupsPerWave.min, b.groupsPerWave.max);
     while (nGroups > budget) nGroups--;
     const share = Math.floor(budget / nGroups);
@@ -641,6 +729,8 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
         fits.map((e) => e.kind),
         fits.map((e) => e.weight),
       );
+      // R1 swarm: every group of the wave is the roster's small fast kind.
+      if (plan?.flavour === 'swarm') kind = swarmKind(roster, gb);
       let count = 0;
       if (kind === 'snake') {
         const room = b.maxLiveSnakes - snakeTimes.filter((s) => s > t - SNAKE_WINDOW_SEC).length;
@@ -661,9 +751,18 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
       groups.push({ wave: i, first: entries.length, count: emitted.length, kind, units: gb, startSec: g * GROUP_START_STEP_SEC });
       entries.push(...emitted);
     }
+    // R1: a wave too small to keep the arena busy (one weaver, one snake) gets grunts to R1_MIN_WAVE.
+    if (plan !== null && entries.length < R1_MIN_WAVE) {
+      const fill = R1_MIN_WAVE - entries.length;
+      const startSec = nGroups * GROUP_START_STEP_SEC;
+      const pattern = patternFor(r, 'grunt');
+      first ??= pattern;
+      const emitted = emitGroup(r, run.arena, 'grunt', fill, pattern, startSec, run.cylinder === true);
+      groups.push({ wave: i, first: entries.length, count: emitted.length, kind: 'grunt', units: fill, startSec });
+      entries.push(...emitted);
+    }
     waves.push({ index: i, atSec: t, pattern: first ?? 'edges', entries });
-    const step = b.intervalStartSec + (b.intervalEndSec - b.intervalStartSec) * u;
-    t = round1(t + (pulse === null ? step : step * pulse.interval));
+    t = round1(t + (plan !== null ? plan.interval : oldInterval));
   }
   return { waves, groups };
 }
@@ -839,6 +938,8 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const band = bandOf(levelIndex);
   // Release polish: the long tables replace the objective ranges and the ramp; nothing else moves.
   const long = cfg.enableLongLevels === true;
+  // Release gate R1: whole level par, volatile waves, more and truly open drums (version 6).
+  const r1 = r1LevelOf(levelIndex, cfg);
   const b = long ? longBandParams(band) : BANDS[band];
   // D13: the surface stream is separate, so drawing it here moves no draw of any flat level.
   const surface = pickSurface(seed, levelIndex, cfg);
@@ -864,6 +965,7 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     budgetBonus: 0,
     cylinder: cyl,
     ...(long ? { pulse: longPulse(LONG_BANDS[band]) } : {}),
+    ...(r1 ? { volatile: stream(s, R1_SALT) } : {}),
   });
   const v2 = runsV2(cfg, band);
   // The v2 stage only rewrites kinds and entries; atSec is untouched, so the loop fields match v1.
@@ -872,13 +974,17 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const waves = scheduleOf(b, list, loop.from, loop.period);
   if (longObjective !== null && objective.kind === 'destroy') objective = { kind: 'destroy', count: destroyCountFor(waves, longObjective.clearSec) };
   const hazards = generateHazards(stream(s, SALT.hazards), arena, b, cfg, objective, cyl);
-  const { par, target } = computePar(waves, objective);
-  if (objective.kind === 'scoreInTime') objective = { ...objective, target: long ? scaledTarget(waves, objective.timeLimitSec, BANDS[band].scoreTimeSec.max, par) : target };
+  const whole = r1 ? wholeLevelPar(waves, objective) : null;
+  const legacy = whole === null ? computePar(waves, objective) : null;
+  const par = whole?.par ?? legacy?.par ?? PAR_MIN;
+  if (objective.kind === 'scoreInTime') {
+    objective = { ...objective, target: long ? scaledTarget(waves, objective.timeLimitSec, BANDS[band].scoreTimeSec.max, par) : (legacy?.target ?? PAR_MIN) };
+  }
   const def: LevelDef = {
     version: LEVELDEF_VERSION,
     // D13: a cylinder level reports GENERATOR_VERSION_V4; every flat level keeps its v3 version.
-    // Release polish: every long level reports GENERATOR_VERSION_V5 instead.
-    generatorVersion: long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
+    // Release polish: every long level reports GENERATOR_VERSION_V5 instead; R1: version 6.
+    generatorVersion: r1 ? GENERATOR_VERSION_V6 : long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
     runSeed,
     levelIndex,
     seed,
@@ -894,7 +1000,7 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     waves,
     hazards,
     par,
-    stars: [par, 2 * par, 4 * par],
+    stars: whole === null ? [par, 2 * par, 4 * par] : whole.stars,
     surface,
     retries: attempt,
   };
@@ -910,7 +1016,16 @@ export function withLevelBoss(def: LevelDef, cfg: GenConfig): LevelDef {
   const long = cfg.enableLongLevels === true;
   const boss = cfg.enableBosses ? bossForLevel(def.levelIndex, long ? BOSS_LONG_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC) : null;
   if (boss === null) return def;
+  // A boss level is never built with the R1 pacing (r1LevelOf), so it keeps version 5 or 3.
   return { ...def, generatorVersion: long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3, hazards: bossHazards(def.hazards), boss };
+}
+
+/**
+ * True when level n is built with the R1 pacing: the config runs it and the level is not a boss
+ * level (boss levels keep their version 5 waves, par and fight tuning; release gate R1 scope).
+ */
+export function r1LevelOf(levelIndex: number, cfg: GenConfig): boolean {
+  return runsR1(cfg) && !(cfg.enableBosses && bossForLevel(levelIndex, BOSS_LONG_LEVEL_AT_SEC) !== null);
 }
 
 /** Pulse shape of a long level in a band. */

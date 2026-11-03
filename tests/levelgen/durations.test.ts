@@ -18,6 +18,7 @@ import {
   BANDS,
   DEFAULT_GEN_CONFIG,
   GENERATOR_VERSION_V5,
+  GENERATOR_VERSION_V6,
   LONG_BANDS,
   LONG_CALM_SEC,
   LONG_MIN_LEVEL_SEC,
@@ -26,6 +27,7 @@ import {
   V2_GEN_CONFIG,
   V3_GEN_CONFIG,
   V4_GEN_CONFIG,
+  V5_GEN_CONFIG,
   bandOf,
   expandSpawns,
   levelSeed,
@@ -115,11 +117,11 @@ describe('expected duration over 500 seeds (default config)', () => {
     }
   });
 
-  it('every level validates with the default config, needs no re-derive and is version 5', () => {
+  it('every level validates with the default config, needs no re-derive and is version 6 (R1; boss levels 5)', () => {
     const bad: string[] = [];
     for (const { seed, n, def } of rows) {
       const e = validateLevel(def, DEFAULT_GEN_CONFIG).errors;
-      if (e.length > 0 || def.retries !== 0 || def.generatorVersion !== GENERATOR_VERSION_V5) bad.push(`seed ${seed} level ${n}: ${e.join('; ')} r${String(def.retries)}`);
+      if (e.length > 0 || def.retries !== 0 || def.generatorVersion !== (isBoss(n) ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V6)) bad.push(`seed ${seed} level ${n}: ${e.join('; ')} r${String(def.retries)}`);
     }
     expect(bad.slice(0, 5)).toEqual([]);
   }, 60_000); // validating 500 long levels takes about 5.5 s on the cloud VM, over the 5 s default
@@ -241,6 +243,8 @@ describe('membranes', () => {
   it('the rings keep their bars and open gaps: removing the membranes leaves the flag off drum layout covered', () => {
     for (const d of rings.slice(0, 40)) {
       const off = generateLevel(d.runSeed, d.levelIndex, { ...DEFAULT_GEN_CONFIG, enableLongLevels: false });
+      // R1 raises the drum share to 40 percent: a level drawn between 35 and 40 is flat with the flag off.
+      if (off.surface !== 'cylinder') continue;
       // Same rows; every membrane lies inside a flag off bar (the flag off drum has the same draws).
       expect(ringRows(d.arena.obstacles).sort()).toEqual(ringRows(off.arena.obstacles).sort());
       expect(d.arena.obstacles.filter((o) => o.membrane !== true).length).toBe(off.arena.obstacles.length);
@@ -295,7 +299,9 @@ describe('flags, versions and Endless', () => {
   it('only the default turns the long levels on; V1, V2, V3 and V4 leave them off', () => {
     expect(DEFAULT_GEN_CONFIG.enableLongLevels).toBe(true);
     for (const c of [V1_GEN_CONFIG, V2_GEN_CONFIG, V3_GEN_CONFIG, V4_GEN_CONFIG]) expect(c.enableLongLevels).toBe(false);
-    expect({ ...V4_GEN_CONFIG, enableLongLevels: true }).toEqual(DEFAULT_GEN_CONFIG);
+    expect({ ...V4_GEN_CONFIG, enableLongLevels: true, enableR1Pacing: true }).toEqual(DEFAULT_GEN_CONFIG);
+    expect({ ...V5_GEN_CONFIG, enableR1Pacing: true }).toEqual(DEFAULT_GEN_CONFIG);
+    expect(V5_GEN_CONFIG.enableLongLevels).toBe(true);
   });
 
   it('a config without the field (an older literal) builds the flag off level', () => {
