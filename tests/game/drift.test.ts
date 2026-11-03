@@ -205,3 +205,15 @@ describe('drift in the sim', () => {
     expect(run()).toEqual(run());
   });
 });
+
+describe('drift follows the difficulty driftScale', () => {
+  const scales = { easy: 0.7, normal: 1, hard: 1.3, insane: 1.6 } as const;
+  for (const [d, k] of Object.entries(scales) as [keyof typeof scales, number][]) {
+    it(`${d}: drift speed is ${k} x the base speed`, () => {
+      const { w } = makeGame(drumPatch(7), { difficulty: d });
+      gs(w).invulnerable = true;
+      stepGame(w, DT, idle());
+      expect(w.drift.speed).toBeCloseTo(DRIFT_BASE * k, 6);
+    });
+  }
+});

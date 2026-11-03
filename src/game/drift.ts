@@ -7,6 +7,7 @@
 import { bus } from '../core/events';
 import { hash01 } from '../core/rng';
 import type { LevelDef } from '../levelgen/leveldef';
+import { difficultyOf } from './difficulty';
 import type { World } from './world';
 
 export const DRIFT_BASE = 40;
@@ -98,7 +99,7 @@ export function stepDrift(w: World, dt: number): void {
     d.warned = true;
     bus.emit('sfx', 'spawn');
   }
-  const speed = driftSpeedAt(t - d.burstAt);
+  const speed = driftSpeedAt(t - d.burstAt) * difficultyOf(w).driftScale;
   d.speed = speed;
   const dx = d.dir * speed * dt;
   const start = w.ship.active ? 0 : 1;

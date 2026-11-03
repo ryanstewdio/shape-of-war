@@ -5,7 +5,7 @@
 // State: w.t is seconds into the dive (0 while orbiting), w.rot the travel heading (locked
 // during the dive). Render contract: position and rotation only.
 import { enemySpeedScale } from '../state';
-import { angleToShip, distToShip, entityHash, moveTo, moveToHit } from '../steer';
+import { entityHash, moveTo, moveToHit, targetOf } from '../steer';
 import { Kind, type World } from '../world';
 import type { EnemyDef } from './types';
 
@@ -53,21 +53,30 @@ export function step(w: World, id: number, dt: number): void {
     dive(w, id, dt, scale);
     return;
   }
-  const d = distToShip(w, id);
+  // The orbit centre is the target (ship or live decoy), reached through surface.delta so it is
+  // the short way round on a cylinder. Orbiting the ship while measuring to a decoy bunched Swirls.
+  const x0 = w.x[id] ?? 0;
+  const y0 = w.y[id] ?? 0;
+  const t = targetOf(w, id);
+  w.surface.delta(x0, y0, w.x[t] ?? 0, w.y[t] ?? 0, sd);
+  const tx = sd.x;
+  const ty = sd.y;
+  const d = Math.sqrt(tx * tx + ty * ty);
   if (d <= DIVE_RADIUS) {
-    w.rot[id] = angleToShip(w, id);
+    w.rot[id] = Math.atan2(ty, tx);
     w.t[id] = 1e-6;
     dive(w, id, dt, scale);
     return;
   }
-  const x0 = w.x[id] ?? 0;
-  const y0 = w.y[id] ?? 0;
-  const theta = angleToShip(w, id) + Math.PI; // ship to swirl
+  const theta = Math.atan2(ty, tx) + Math.PI; // target to swirl
   const radial = (d > ORBIT_RADIUS ? APPROACH_SPEED : CLOSE_SPEED) * scale * dt;
   // No clamp at DIVE_RADIUS: the next step sees d under it and commits.
   const nd = d - radial > 0 ? d - radial : 0;
   const nth = theta + orbitDir(w, id) * angularSpeed(d) * scale * dt;
-  moveTo(w, id, (w.x[0] ?? 0) + Math.cos(nth) * nd, (w.y[0] ?? 0) + Math.sin(nth) * nd);
+  // Centre in the swirl's own frame (unwrapped next to it), so moveTo wraps or confines the result.
+  const cx = x0 + tx;
+  const cy = y0 + ty;
+  moveTo(w, id, cx + Math.cos(nth) * nd, cy + Math.sin(nth) * nd);
   w.surface.delta(x0, y0, w.x[id] ?? 0, w.y[id] ?? 0, sd);
   const mx = sd.x;
   const my = sd.y;
