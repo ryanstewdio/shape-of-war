@@ -19,6 +19,15 @@ export const BOSS_LONG_LEVEL_AT_SEC = 200;
  * on, enableR1Pacing off). At least 4 minutes of regular waves come first.
  */
 export const BOSS_V5_LEVEL_AT_SEC = 240;
+/**
+ * Release gate R3: the boss entrance on a version 8 level (the default config). Two minutes of
+ * dense waves, then a fight of about BOSS_FIGHT_SEC: about 5 minutes in all.
+ */
+export const BOSS_R3_LEVEL_AT_SEC = 120;
+/** Expected seconds of a boss fight (Ryan, R3: "about 3 minutes", accepted). Par counts the waves of this window. */
+export const BOSS_FIGHT_SEC = 180;
+/** Share of par the game pays as the boss kill bonus (src/game/scoring.ts BOSS_BONUS_SHARE), copied to keep levelgen standalone. */
+export const BOSS_BONUS_SHARE = 0.25;
 /** Seconds after the segment start of the boss entrance in Endless. */
 export const BOSS_SEGMENT_AT_SEC = 10;
 /** Index in BOSS_SCHEDULE that every pass after the first restarts from (ember, the first tier 2 boss). */

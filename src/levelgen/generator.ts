@@ -24,6 +24,7 @@ import {
   GENERATOR_VERSION_V5,
   GENERATOR_VERSION_V6,
   GENERATOR_VERSION_V7,
+  GENERATOR_VERSION_V8,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_BREATHER_SEC,
@@ -40,7 +41,10 @@ import {
   longBandParams,
   round1,
   round2,
+  r3BandParams,
+  r3ObjectiveTable,
   runsR1,
+  runsR3,
   segmentSeed,
   speedScaleFor,
 } from './leveldef';
@@ -102,8 +106,8 @@ import {
   obstaclePointDistance,
   validateLevel,
 } from './validate';
-import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards } from './boss';
-import { destroyCountFor, inBreather, pulseAt, wholeLevelPar } from './pacing';
+import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards } from './boss';
+import { R3_COLLECT_RATE, bossLevelPar, destroyCountFor, inBreather, pulseAt, wholeLevelPar } from './pacing';
 import type { PulseShape } from './pacing';
 import {
   CYLINDER_CHANCE,
@@ -950,7 +954,11 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const r1 = r1LevelOf(levelIndex, cfg);
   // Release gate R2: boss levels take the R1 waves before the boss (par, stars and the fight stay version 5).
   const r1Waves = runsR1(cfg);
-  const b = long ? longBandParams(band) : BANDS[band];
+  // Release gate R3: 3.5 minute non boss levels, the boss at 120 s, whole level par everywhere (version 8).
+  const r3 = runsR3(cfg);
+  const bossLevel = cfg.enableBosses && bossForLevel(levelIndex) !== null;
+  const objTable = r3 ? r3ObjectiveTable(band, bossLevel) : LONG_BANDS[band];
+  const b = r3 ? r3BandParams(band, bossLevel) : long ? longBandParams(band) : BANDS[band];
   // D13: the surface stream is separate, so drawing it here moves no draw of any flat level.
   const surface = pickSurface(seed, levelIndex, cfg);
   const cyl = surface === 'cylinder';
@@ -959,7 +967,7 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const loadout = stream(s, SALT.loadout);
   const drone = pickAllowed(loadout, DRONE_KINDS, b.droneWeights, cfg.drones, 'attack');
   const superType = pickAllowed(loadout, SUPER_KINDS, b.superWeights, cfg.supers, 'turbo');
-  const longObjective = long ? generateLongObjective(stream(s, SALT.objective), b, LONG_BANDS[band]) : null;
+  const longObjective = long ? generateLongObjective(stream(s, SALT.objective), b, objTable) : null;
   let objective = longObjective === null ? generateObjective(stream(s, SALT.objective), b) : longObjective.objective;
   const timed = longObjective === null ? objectiveTimeSec(objective) : longObjective.clearSec;
   const scheduleSec =
@@ -976,7 +984,7 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     cylinder: cyl,
     ...(long ? { pulse: longPulse(LONG_BANDS[band]) } : {}),
     // R2 boss level: the R1 plan stops at the entrance, so the fight keeps the version 5 waves.
-    ...(r1Waves ? { volatile: stream(s, R1_SALT), ...(r1 ? {} : { volatileUntilSec: BOSS_LONG_LEVEL_AT_SEC }) } : {}),
+    ...(r1Waves ? { volatile: stream(s, R1_SALT), ...(bossLevel ? { volatileUntilSec: bossLevelAtSec(cfg) } : {}) } : {}),
   });
   const v2 = runsV2(cfg, band);
   // The v2 stage only rewrites kinds and entries; atSec is untouched, so the loop fields match v1.
@@ -985,7 +993,13 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const waves = scheduleOf(b, list, loop.from, loop.period);
   if (longObjective !== null && objective.kind === 'destroy') objective = { kind: 'destroy', count: destroyCountFor(waves, longObjective.clearSec) };
   const hazards = generateHazards(stream(s, SALT.hazards), arena, b, cfg, objective, cyl);
-  const whole = r1 ? wholeLevelPar(waves, objective) : null;
+  const whole = r3
+    ? bossLevel
+      ? bossLevelPar(waves, objective, bossLevelAtSec(cfg))
+      : wholeLevelPar(waves, objective, R3_COLLECT_RATE)
+    : r1
+      ? wholeLevelPar(waves, objective)
+      : null;
   const legacy = whole === null ? computePar(waves, objective) : null;
   const par = whole?.par ?? legacy?.par ?? PAR_MIN;
   if (objective.kind === 'scoreInTime') {
@@ -995,7 +1009,7 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     version: LEVELDEF_VERSION,
     // D13: a cylinder level reports GENERATOR_VERSION_V4; every flat level keeps its v3 version.
     // Release polish: every long level reports GENERATOR_VERSION_V5 instead; R1: version 6.
-    generatorVersion: r1 ? GENERATOR_VERSION_V6 : long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
+    generatorVersion: r3 ? GENERATOR_VERSION_V8 : r1 ? GENERATOR_VERSION_V6 : long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
     runSeed,
     levelIndex,
     seed,
@@ -1029,12 +1043,14 @@ export function withLevelBoss(def: LevelDef, cfg: GenConfig): LevelDef {
   if (boss === null) return def;
   // Release gate R2: a boss level built with the R1 config has the R1 waves and the 200 s entrance
   // (version 7); with the R1 pacing off it keeps version 5 (long) or 3.
-  const generatorVersion = runsR1(cfg) ? GENERATOR_VERSION_V7 : long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3;
+  // Release gate R3: version 8 with the R3 length on.
+  const generatorVersion = runsR3(cfg) ? GENERATOR_VERSION_V8 : runsR1(cfg) ? GENERATOR_VERSION_V7 : long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3;
   return { ...def, generatorVersion, hazards: bossHazards(def.hazards), boss };
 }
 
-/** Boss entrance second on a level of this config: 200 s (R1 config), 240 s (long levels), else 20 s. */
+/** Boss entrance second on a level of this config: 120 s (R3), 200 s (R1 config), 240 s (long levels), else 20 s. */
 export function bossLevelAtSec(cfg: Readonly<GenConfig>): number {
+  if (runsR3(cfg)) return BOSS_R3_LEVEL_AT_SEC;
   if (runsR1(cfg)) return BOSS_LONG_LEVEL_AT_SEC;
   return cfg.enableLongLevels === true ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
 }
@@ -1042,7 +1058,8 @@ export function bossLevelAtSec(cfg: Readonly<GenConfig>): number {
 /**
  * True when level n is a version 6 level: the config runs the R1 pacing and the level is not a
  * boss level. Release gate R2: boss levels of that config take the R1 waves as well, but keep the
- * version 5 par, stars and fight tuning, and report version 7 (withLevelBoss).
+ * version 5 par, stars and fight tuning, and report version 7 (withLevelBoss). Release gate R3:
+ * with enableR3Length on as well every level is version 8 instead (buildLevel reads runsR3 first).
  */
 export function r1LevelOf(levelIndex: number, cfg: GenConfig): boolean {
   return runsR1(cfg) && !(cfg.enableBosses && bossForLevel(levelIndex, BOSS_LONG_LEVEL_AT_SEC) !== null);

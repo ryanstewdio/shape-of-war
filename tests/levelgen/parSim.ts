@@ -7,6 +7,8 @@
 import { ENEMY_BASE, ENEMY_GEOMS, expandSpawns } from '../../src/levelgen/leveldef';
 import type { LevelDef } from '../../src/levelgen/leveldef';
 import { KILL_RATE, MAX_EST_SEC } from '../../src/levelgen/validate';
+import { bossWavesSec } from '../../src/levelgen/pacing';
+import { bossBonus } from '../../src/game/scoring';
 
 export const SIM_COLLECT_RATE = 0.7;
 export const REACTION_SEC = 1.5;
@@ -63,4 +65,16 @@ export function simulateScore(def: Pick<LevelDef, 'objective' | 'waves'>, stopAt
     if (stopAtTarget && o.kind === 'scoreInTime' && score >= o.target) break;
   }
   return { score, kills, geoms, multiplier, windowSec: o.kind === 'destroy' ? lastT : T };
+}
+
+/**
+ * Release gate R3: the scripted strong run of a whole boss level. The same player over the waves
+ * before and during the fight (to the entrance plus BOSS_FIGHT_SEC, or the hold if the objective
+ * is met first), plus the game's own boss kill bonus on the level's par. Throws on a non boss level.
+ */
+export function simulateBossLevel(def: Pick<LevelDef, 'objective' | 'waves' | 'boss' | 'par'>): SimResult {
+  if (def.boss === undefined) throw new Error('not a boss level');
+  const T = bossWavesSec(def.waves, def.objective, def.boss.atSec);
+  const r = simulateScore({ waves: def.waves, objective: { kind: 'survive', durationSec: T } });
+  return { ...r, score: r.score + bossBonus(def.par, 'adventure', def.boss.tier) };
 }

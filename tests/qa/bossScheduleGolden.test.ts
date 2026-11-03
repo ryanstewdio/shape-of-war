@@ -10,9 +10,9 @@
 // generator version 3, every other level and segment carries none, rule 12 holds, all of it
 // validates and survives a JSON round trip.
 import { describe, expect, it } from 'vitest';
-import { BOSS_LONG_LEVEL_AT_SEC, BOSS_SCHEDULE, bossForLevel, bossForSegment, bossOfNumber } from '../../src/levelgen/boss';
+import { BOSS_R3_LEVEL_AT_SEC, BOSS_SCHEDULE, bossForLevel, bossForSegment, bossOfNumber } from '../../src/levelgen/boss';
 import { generateEndlessSegment, generateLevel } from '../../src/levelgen/generator';
-import { DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V3, GENERATOR_VERSION_V7 } from '../../src/levelgen/leveldef';
+import { DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V3, GENERATOR_VERSION_V8 } from '../../src/levelgen/leveldef';
 import type { BossId, BossTier } from '../../src/levelgen/leveldef';
 import { validateLevel, validateSegment } from '../../src/levelgen/validate';
 
@@ -150,10 +150,10 @@ describe('boss schedule golden: the real generator follows the table', { timeout
         }
         bosses++;
         // Release polish: the default config builds long levels (was LEVEL_AT_SEC and version 3).
-        // Release gate R2: with the R1 pacing the entrance is at 200 s and the version is 7.
-        const want = { id: row[1], tier: row[2], atSec: BOSS_LONG_LEVEL_AT_SEC, hpMul: row[3] };
+        // Release gate R3: with the R3 length the entrance is at 120 s and the version is 8 (R2: 200 s, 7).
+        const want = { id: row[1], tier: row[2], atSec: BOSS_R3_LEVEL_AT_SEC, hpMul: row[3] };
         if (JSON.stringify(def.boss) !== JSON.stringify(want)) bad.push(id + ': boss ' + JSON.stringify(def.boss));
-        if (def.generatorVersion !== GENERATOR_VERSION_V7) bad.push(id + ': version ' + String(def.generatorVersion));
+        if (def.generatorVersion !== GENERATOR_VERSION_V8) bad.push(id + ': version ' + String(def.generatorVersion));
         if (def.hazards.spawners.length > 0 || def.hazards.wells.length > 1) bad.push(id + ': rule 12 broken');
       }
     }

@@ -206,8 +206,8 @@ describe('generator', { timeout: 30_000 }, () => {
           expect(d.par % 500).toBe(0);
           expect(d.par).toBeGreaterThanOrEqual(1000);
           expect(v5.stars).toEqual([v5.par, 2 * v5.par, 4 * v5.par]);
-          // Boss levels keep the version 5 star rule (R2: on their own par, the R1 waves change it).
-          expect(d.stars).toEqual(d.boss === undefined ? [d.par, grid(1.25 * d.par), grid(1.5 * d.par)] : [d.par, 2 * d.par, 4 * d.par]);
+          // R3 (version 8): boss levels take the R1 stars too (R2 boss levels kept 1x 2x 4x).
+          expect(d.stars).toEqual([d.par, grid(1.25 * d.par), grid(1.5 * d.par)]);
           if (v5.objective.kind === 'scoreInTime') expect(v5.objective.target).toBeLessThanOrEqual(v5.par);
           if (d.objective.kind === 'scoreInTime') expect(d.objective.target).toBeLessThanOrEqual(d.par);
         }
