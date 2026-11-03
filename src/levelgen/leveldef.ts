@@ -35,6 +35,13 @@ export const GENERATOR_VERSION_V5 = 5;
  * levels stay version 5. Either flag off: versions 1 to 5 as before, byte for byte.
  */
 export const GENERATOR_VERSION_V6 = 6;
+/**
+ * Release gate R2. Generator version of a boss level built with enableLongLevels and
+ * enableR1Pacing both on (the default config): the R1 waves before the boss, the boss entrance at
+ * BOSS_LONG_LEVEL_AT_SEC (200 s), the version 5 par and stars. Also the version of every Free Play
+ * EndlessDef (freePlayLevel). Versions 1 to 6 are unchanged, byte for byte.
+ */
+export const GENERATOR_VERSION_V7 = 7;
 
 /**
  * Version 6 star thresholds as multiples of par, each rounded to the 500 grid: a strong player
@@ -42,8 +49,8 @@ export const GENERATOR_VERSION_V6 = 6;
  */
 export const R1_STAR_MULS: readonly [number, number, number] = [1, 1.25, 1.5];
 
-/** True when a def carries the long level tables (version 5 or 6). */
-export const isLongVersion = (v: number): boolean => v === GENERATOR_VERSION_V5 || v === GENERATOR_VERSION_V6;
+/** True when a def carries the long level tables (version 5, 6 or 7). */
+export const isLongVersion = (v: number): boolean => v === GENERATOR_VERSION_V5 || v === GENERATOR_VERSION_V6 || v === GENERATOR_VERSION_V7;
 
 /** V3 boss ids, in schedule order (docs/13). A BossView id is the index in this list. */
 export const BOSS_IDS = ['warden', 'brood', 'spindle', 'ember', 'mirage', 'gravitas', 'bastion', 'tempest', 'twins', 'prism'] as const;
@@ -265,7 +272,8 @@ export interface GenConfig {
   /**
    * Release gate R1. On together with enableLongLevels: whole level par and 1, 1.25, 1.5 par
    * stars, volatile waves without dead air, cylinder levels 40 percent of eligible levels and open
-   * drums without barriers; reports GENERATOR_VERSION_V6 (boss levels are left at version 5). Optional; only true turns it on, so
+   * drums without barriers; reports GENERATOR_VERSION_V6 (R2: boss levels get the R1 waves before a 200 s entrance and report
+   * GENERATOR_VERSION_V7). Optional; only true turns it on, so
    * absent or false is byte identical to version 5. Default on. Endless never reads it.
    */
   enableR1Pacing?: boolean;
@@ -702,6 +710,21 @@ export interface EndlessDef {
   /** Spawn units added per segment from ENDLESS_BAND4_SEGMENT onward: the unbounded ramp. */
   budgetPerSegment: number;
   band4Segment: number;
+  /** Release gate R2: present only on a Free Play def (freePlayLevel). Absent on plain Endless. */
+  freePlay?: FreePlayInfo;
+}
+
+/** Release gate R2: the Free Play arena choice. */
+export type FreePlayArena = 'rect' | 'circle' | 'drum';
+
+/** What a Free Play def was built from, plus its deterministic re-derive count. */
+export interface FreePlayInfo {
+  arena: FreePlayArena;
+  barriers: boolean;
+  /** Drum with barriers: the layout drawn ('rings' or 'pillars'); null otherwise. */
+  drumPattern: 'rings' | 'pillars' | null;
+  /** Re-derives (0 to MAX_RETRIES) before the def passed validateFreePlay. */
+  retries: number;
 }
 
 /** Recursive Object.freeze. Returns its argument. */

@@ -14,6 +14,7 @@ import {
   GENERATOR_VERSION_V4,
   GENERATOR_VERSION_V5,
   GENERATOR_VERSION_V6,
+  GENERATOR_VERSION_V7,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_MIN_REPEAT_SEC,
@@ -30,7 +31,7 @@ import {
   speedScaleFor,
 } from './leveldef';
 import { DRUM_BAR_THICK, MEMBRANE_MAX, MEMBRANE_MIN } from './drum';
-import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_SEGMENT_AT_SEC, bossForLevel, bossForSegment, bossTierOf, sameBoss } from './boss';
+import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_V5_LEVEL_AT_SEC, BOSS_SEGMENT_AT_SEC, bossForLevel, bossForSegment, bossTierOf, sameBoss } from './boss';
 import type {
   ArenaDef,
   Band,
@@ -444,7 +445,7 @@ function checkJson(c: Collector, def: unknown): void {
 function checkVersions(c: Collector, version: number, generatorVersion: number): void {
   c.check('J3', (report) => {
     if (version !== LEVELDEF_VERSION) report(`version ${version} !== ${LEVELDEF_VERSION}`);
-    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6];
+    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7];
     if (!known.includes(generatorVersion)) report(`generatorVersion ${generatorVersion} not ${known.join(', ')}`);
   });
 }
@@ -497,9 +498,10 @@ function checkBoss(c: Collector, boss: BossSpec | undefined, generatorVersion: n
         report(`boss ${String(boss.id)} tier ${boss.tier} at ${boss.atSec} s x${boss.hpMul} !== schedule ${want.id} tier ${want.tier} at ${want.atSec} s x${want.hpMul}`);
       }
       if (generatorVersion !== GENERATOR_VERSION_V3 && !isLongVersion(generatorVersion)) {
-        report(`boss present with generatorVersion ${generatorVersion}, want ${GENERATOR_VERSION_V3}, ${GENERATOR_VERSION_V5} or ${GENERATOR_VERSION_V6}`);
+        report(`boss present with generatorVersion ${generatorVersion}, want ${GENERATOR_VERSION_V3}, ${GENERATOR_VERSION_V5}, ${GENERATOR_VERSION_V6} or ${GENERATOR_VERSION_V7}`);
       }
     } else {
+      if (generatorVersion === GENERATOR_VERSION_V7 && unit === 'level') report(`generatorVersion ${GENERATOR_VERSION_V7} without a boss`);
       if (generatorVersion === GENERATOR_VERSION_V3) report(`generatorVersion ${GENERATOR_VERSION_V3} without a boss`);
       if (want !== null && opts?.enableBosses === true) report(`${unit} ${index} is a boss ${unit} (${want.id}) but has no boss`);
     }
@@ -679,7 +681,8 @@ function checkWaves(c: Collector, ws: WaveSchedule, arena: ArenaDef, roster: rea
   });
 }
 
-function checkArena(c: Collector, arena: ArenaDef, cylinder = false): void {
+/** circleObstacles (Free Play only): a circle arena may carry 0 to MAX_OBSTACLES obstacles. */
+function checkArena(c: Collector, arena: ArenaDef, cylinder = false, circleObstacles = false): void {
   c.check('A1', (report) => {
     const { shape, width: w, height: h } = arena;
     if (!ARENA_SHAPES.includes(shape)) report(`unknown arena shape ${String(shape)}`);
@@ -724,6 +727,8 @@ function checkArena(c: Collector, arena: ArenaDef, cylinder = false): void {
     const max = cylinder ? CYLINDER_MAX_OBSTACLES : MAX_OBSTACLES;
     if (arena.shape === 'rectObstacles') {
       if (n < 1 || n > max) report(`rectObstacles has ${n} obstacles, want 1 to ${max}`);
+    } else if (circleObstacles && arena.shape === 'circle') {
+      if (n > max) report(`circle has ${n} obstacles, want 0 to ${max}`);
     } else if (n !== 0) {
       report(`${arena.shape} has ${n} obstacles, want 0`);
     }
@@ -935,7 +940,9 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   checkCylinder(c, def);
   checkV2Content(c, def.generatorVersion, band, () => namedKinds(def.roster, def.waves));
   const o = def.objective;
-  const bossAt = isLongVersion(def.generatorVersion) ? BOSS_LONG_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
+  // Release gate R2: version 7 (the R1 config) brings the boss in at 200 s, versions 5 and 6 at 240 s.
+  const v = def.generatorVersion;
+  const bossAt = v === GENERATOR_VERSION_V7 ? BOSS_LONG_LEVEL_AT_SEC : isLongVersion(v) ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
   checkBoss(c, def.boss, def.generatorVersion, {
     want: bossForLevel(def.levelIndex, bossAt),
     unit: 'level',
@@ -955,11 +962,17 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   c.check('J9', (report) => {
     // Release gate R1: on a long level, version 6 exactly when the R1 flag is on and the level has
     // no boss (boss levels keep version 5), when the caller says.
+    // Release gate R2: a boss level of that config is version 7 exactly.
     if (opts?.enableLongLevels !== true) return;
     const v6 = def.generatorVersion === GENERATOR_VERSION_V6;
-    const flag = opts.enableR1Pacing === true && def.boss === undefined;
+    const v7 = def.generatorVersion === GENERATOR_VERSION_V7;
+    const r1 = opts.enableR1Pacing === true;
+    const flag = r1 && def.boss === undefined;
+    const flag7 = r1 && def.boss !== undefined;
     if (flag && !v6) report(`generatorVersion ${def.generatorVersion} with enableR1Pacing on, want ${GENERATOR_VERSION_V6}`);
     if (!flag && v6) report(`generatorVersion ${GENERATOR_VERSION_V6} with enableR1Pacing off or on a boss level`);
+    if (flag7 && !v7) report(`generatorVersion ${def.generatorVersion} on a boss level with enableR1Pacing on, want ${GENERATOR_VERSION_V7}`);
+    if (!flag7 && v7) report(`generatorVersion ${GENERATOR_VERSION_V7} with enableR1Pacing off or on a level without a boss`);
   });
   c.check('J5', (report) => {
     const r = def.retries;
@@ -1077,6 +1090,18 @@ export function validateEndless(def: EndlessDef): ValidationResult {
  * and the boss checks B1 to B3 and J7 against bossForSegment (atSec 10, no objective clock).
  */
 export function validateSegment(seg: EndlessSegmentDef, opts?: BossCheckOptions): ValidationResult {
+  return segmentChecks(seg, ENDLESS_ARENA, false, opts);
+}
+
+/**
+ * Release gate R2: validates a Free Play segment (endlessSegmentOn on the def's arena) with every
+ * validateSegment check, W4 run on the Free Play arena (wrapped on a drum).
+ */
+export function validateFreePlaySegment(seg: EndlessSegmentDef, def: EndlessDef, opts?: BossCheckOptions): ValidationResult {
+  return segmentChecks(seg, def.arena, def.surface === 'cylinder', opts);
+}
+
+function segmentChecks(seg: EndlessSegmentDef, arena: ArenaDef, cylinder: boolean, opts: BossCheckOptions | undefined): ValidationResult {
   const c = new Collector();
   checkJson(c, seg);
   checkVersions(c, seg.version, seg.generatorVersion);
@@ -1091,11 +1116,18 @@ export function validateSegment(seg: EndlessSegmentDef, opts?: BossCheckOptions)
   });
   checkRoster(c, seg.roster, band);
   checkSpeed(c, seg.speedScale, effective);
-  checkWaves(c, seg.waves, ENDLESS_ARENA, seg.roster, {
-    firstAtSec: seg.segment === 0 ? FIRST_WAVE_SEC : 0,
-    maxLive: BANDS[band].maxLiveEnemies,
-    segmentSec: ENDLESS_SEGMENT_SEC,
-  });
+  checkWaves(
+    c,
+    seg.waves,
+    arena,
+    seg.roster,
+    {
+      firstAtSec: seg.segment === 0 ? FIRST_WAVE_SEC : 0,
+      maxLive: BANDS[band].maxLiveEnemies,
+      segmentSec: ENDLESS_SEGMENT_SEC,
+    },
+    cylinder,
+  );
   c.check('S1', (report) => {
     seg.waves.waves.forEach((w, i) => {
       if (!(w.atSec >= 0 && w.atSec < ENDLESS_SEGMENT_SEC)) report(`wave ${i} atSec ${w.atSec} outside 0 to ${ENDLESS_SEGMENT_SEC}`);
@@ -1103,5 +1135,77 @@ export function validateSegment(seg: EndlessSegmentDef, opts?: BossCheckOptions)
   });
   checkV2Content(c, seg.generatorVersion, band, () => namedKinds(seg.roster, seg.waves));
   checkBoss(c, seg.boss, seg.generatorVersion, { want: bossForSegment(seg.segment), unit: 'segment', index: seg.segment, atSec: BOSS_SEGMENT_AT_SEC, timedSec: null }, opts);
+  return c.result();
+}
+
+// Release gate R2: Free Play (freeplay.ts). The arena follows the player's options, so the fixed
+// arena rule E1 is replaced by FP1 and FP2; everything else matches validateEndless.
+
+/** Free Play rect arena: the Endless arena size. */
+export const FREE_PLAY_RECT: Readonly<{ width: number; height: number }> = Object.freeze({ width: ENDLESS_ARENA.width, height: ENDLESS_ARENA.height });
+/** Free Play circle arena diameter. */
+export const FREE_PLAY_CIRCLE = 1100;
+
+/**
+ * Validates a Free Play EndlessDef: J1 to J3, V1, FP1 (mode, kit, clocks, version 7, the freePlay
+ * record), FP2 (the arena follows the options), A1 to A7 and F1 on the arena (wrapped on a drum),
+ * and the E2 roster.
+ */
+export function validateFreePlay(def: EndlessDef): ValidationResult {
+  const c = new Collector();
+  checkJson(c, def);
+  checkVersions(c, def.version, def.generatorVersion);
+  checkSurface(c, def.surface, true);
+  const fp = def.freePlay;
+  c.check('FP1', (report) => {
+    if (fp === undefined) report('freePlay record missing');
+    else if (!isInt(fp.retries) || fp.retries < 0 || fp.retries > MAX_RETRIES) report(`retries ${fp.retries} not an integer 0 to ${MAX_RETRIES}`);
+    if (def.generatorVersion !== GENERATOR_VERSION_V7) report(`generatorVersion ${def.generatorVersion} !== ${GENERATOR_VERSION_V7}`);
+    if (def.mode !== 'endless') report(`mode ${String(def.mode)} !== 'endless'`);
+    if (def.objective.kind !== 'none') report(`objective ${String(def.objective.kind)} !== 'none'`);
+    if (!isInt(def.endlessSeed) || def.endlessSeed < 0 || def.endlessSeed > 0xffffffff) report(`endlessSeed ${def.endlessSeed} not a uint32`);
+    if (def.hazards.wells.length !== 0 || def.hazards.spawners.length !== 0) report('Free Play has no hazards');
+    if (def.drone !== 'attack' || def.superType !== 'turbo') report(`kit ${String(def.drone)}, ${String(def.superType)} !== attack, turbo`);
+    if (def.lives !== LIVES || def.bombs !== BOMBS) report(`start lives ${def.lives}, bombs ${def.bombs} !== ${LIVES}, ${BOMBS}`);
+    if (def.segmentSec !== ENDLESS_SEGMENT_SEC) report(`segmentSec ${def.segmentSec} !== ${ENDLESS_SEGMENT_SEC}`);
+    if (!(def.budgetPerSegment > 0)) report(`budgetPerSegment ${def.budgetPerSegment} not positive: ramp must be unbounded`);
+  });
+  c.check('FP2', (report) => {
+    if (fp === undefined) return;
+    const a = def.arena;
+    const n = a.obstacles.length;
+    const cyl = def.surface === 'cylinder';
+    if (n > 0 !== fp.barriers) report(`barriers ${String(fp.barriers)} with ${n} obstacles`);
+    if (a.obstacles.some((o) => o.membrane === true)) report('Free Play has no membranes');
+    if ((fp.drumPattern !== null) !== (fp.arena === 'drum' && fp.barriers)) report(`drumPattern ${String(fp.drumPattern)} on ${fp.arena}, barriers ${String(fp.barriers)}`);
+    switch (fp.arena) {
+      case 'rect':
+        if (cyl) report('rect Free Play on a cylinder');
+        if (a.shape !== (fp.barriers ? 'rectObstacles' : 'rect')) report(`rect Free Play shape ${a.shape}`);
+        if (a.width !== FREE_PLAY_RECT.width || a.height !== FREE_PLAY_RECT.height) report(`rect Free Play size ${a.width} x ${a.height}`);
+        break;
+      case 'circle':
+        if (cyl) report('circle Free Play on a cylinder');
+        if (a.shape !== 'circle' || a.width !== FREE_PLAY_CIRCLE || a.height !== FREE_PLAY_CIRCLE) report(`circle Free Play arena ${a.shape} ${a.width} x ${a.height}`);
+        break;
+      case 'drum':
+        if (!cyl) report(`drum Free Play surface ${String(def.surface)}`);
+        if (a.shape !== (fp.barriers ? 'rectObstacles' : 'rect')) report(`drum Free Play shape ${a.shape}`);
+        if (!isInt(a.width / CYLINDER_WIDTH_STEP)) report(`drum width ${a.width} not a multiple of ${CYLINDER_WIDTH_STEP}`);
+        break;
+      default:
+        report(`unknown Free Play arena ${String(fp.arena)}`);
+    }
+  });
+  checkArena(c, def.arena, def.surface === 'cylinder', true);
+  c.check('E2', (report) => {
+    const seen = new Set<string>();
+    for (const e of def.roster) {
+      if (!isKind(e.kind) || seen.has(e.kind) || !(e.weight > 0)) report(`bad roster entry ${String(e.kind)} weight ${e.weight}`);
+      seen.add(e.kind);
+    }
+    if (!seen.has('grunt')) report('roster lacks grunt');
+    if (def.roster.length < 3 || def.roster.length > ALL_ENEMY_KINDS.length) report(`roster size ${def.roster.length} outside 3 to ${ALL_ENEMY_KINDS.length}`);
+  });
   return c.result();
 }
