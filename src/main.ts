@@ -36,7 +36,7 @@ import { readBoss, type BossView } from './game/bosses/view';
 import { armBossFromSpec } from './game/bosses/index';
 import { bossTierOf } from './levelgen/boss';
 import type { BossId } from './levelgen/leveldef';
-import { createEndlessGame, createGame, gameState, objectiveClock, setWeaponPickups, stepGame, type GameOptions } from './game/game';
+import { createEndlessGame, createGame, gameState, setWeaponPickups, stepGame, type GameOptions } from './game/game';
 import type { Difficulty } from './core/difficulty';
 import type { StartBonus } from './core/bonus';
 import { setShipSpace } from './game/ship';
@@ -67,7 +67,7 @@ import { aspectClass, createHud, due, type AspectClass } from './ui/hud';
 import { hudFrame, overlayPadding, type HudFrame } from './ui/hudFrame';
 import { pickLevel, parseLevelQuery, type GeneratorModule, type LevelPick } from './ui/levelSource';
 import { resolveAudio } from './ui/audioPort';
-import { needsBossStrip } from './ui/boss';
+import { bossName, needsBossStrip } from './ui/boss';
 import { endlessLabel, endlessLevel, endlessLine } from './ui/endless';
 import { createLevelSelect } from './ui/levelSelect';
 import { continueLabel, createMenuScreen, footerLine } from './ui/menu';
@@ -75,12 +75,13 @@ import { gateSearch, isDev } from './ui/devGate';
 import { createSplashScreen } from './ui/splash';
 import { createPreviewWorld, previewRect, stepPreview } from './ui/preview';
 import { starsFor } from './game/objective';
-import { fallbackStatus, objectiveProgress, type ObjectiveSnapshot } from './ui/objective';
+import { fallbackStatus, objectiveProgress } from './ui/objective';
 import { settleAdventure } from './ui/outcome';
 import { formatClock } from './ui/format';
 import { bonusLabel } from './ui/parReward';
 import { createFreePlayScreen, DEFAULT_FREE_PLAY, type FreePlayChoice } from './ui/freePlay';
-import { freePlayLevel, freePlaySegment } from './levelgen/freeplay';
+import { buildFreePlayRun, freePlayResult, snapshotOf } from './ui/freePlayRun';
+import { levelFoes, newFoes, type FoeSource } from './ui/enemyIntro';
 import { createPauseScreen } from './ui/pause';
 import { musicCue, type MusicCue } from './ui/musicFlow';
 import { createBootScreen } from './ui/boot';
@@ -180,21 +181,6 @@ function readQuery(search: string): { stress: number; particles: number; sprite:
     sprite: q.get('glow') === 'sprite',
     debug: q.get('debug') === '1',
   };
-}
-
-/**
- * Structural read of a number the sim may expose (lives, bombs, superCharge) on World or on
- * World.ship. Swarm adds these in W2; until then the caller's default applies.
- */
-function simNumber(w: World, key: 'lives' | 'bombs' | 'superCharge'): number | null {
-  // Glue: Swarm keeps these in gameState(w), not on World (Swarm fixes hand-off).
-  const v = gameState(w)[key];
-  return typeof v === 'number' && Number.isFinite(v) ? v : null;
-}
-
-function snapshotOf(w: World): ObjectiveSnapshot {
-  const s = scoreOf(w);
-  return { elapsedSec: objectiveClock(w), score: s.score, kills: s.kills, lives: simNumber(w, 'lives') }; // B16: the objective reads the wave clock, not w.time
 }
 
 /**
@@ -463,12 +449,12 @@ async function boot(): Promise<void> {
     if (!rebuild) runBonus = mode === 'adventure' && !customSeed ? takePendingBonus(index) : null;
     if (mode === 'freeplay') {
       endlessSeed = freshSeed();
-      const def = freePlayLevel({ arena: freePlayChoice.arena, barriers: freePlayChoice.barriers, seed: endlessSeed });
-      world = createEndlessGame(def, (seg) => freePlaySegment(def, seg), gameOptions(runDifficulty)); // Foundry: spawns follow the chosen arena
-      // R3 glue: world.level is the sim's Endless shell (objective none), which the fallback end check read
-      // as met at once. Use the UI Endless level like Endless does, built from the Free Play segments.
-      level = endlessLevel({ generateEndless: () => def, generateEndlessSegment: (_seed, seg) => freePlaySegment(def, seg) }, endlessSeed);
-      pick = { def: level, source: 'generator', hash: levelHash(def) };
+      // R3: the sim runs the Free Play def; the UI reads the Endless style level built from the same
+      // segments, whose objective never comes due, so only losing every life ends the run (ui/freePlayRun.ts).
+      const run = buildFreePlayRun(freePlayChoice, endlessSeed, gameOptions(runDifficulty));
+      world = run.world;
+      level = run.level;
+      pick = { def: level, source: 'generator', hash: run.hash };
     } else if (mode === 'endless') {
       endlessSeed = freshSeed(); // every Endless game gets a fresh seed (docs/01 section 2.2)
       level = endlessLevel({ generateEndless, generateEndlessSegment }, endlessSeed);
@@ -672,10 +658,34 @@ async function boot(): Promise<void> {
     }
     if (intro.kind === 'ready') introScreen.showReady();
     else if (flow.mode === 'adventure') {
-      const card = introCard(flow.levelIndex, level, runDifficulty);
-      const seed = `Seed ${runSeed}${customSeed ? ' (typed)' : ''}`;
-      introScreen.showCard({ ...card, kit: `${card.kit}   ${seed}${runBonus === null ? '' : `   Reward: ${bonusLabel(runBonus)}`}` });
-    } else introScreen.showCard(endlessIntroCard(level, runDifficulty));
+      // R3: the card names the goal, the victory rule, new enemies, the loadout and the seed.
+      introScreen.showCard(
+        introCard(flow.levelIndex, level, runDifficulty, {
+          newFoes: newFoes(level, earlierLevels(flow.levelIndex)),
+          seed: `${runSeed}${customSeed ? ' (typed)' : ''}`,
+          reward: runBonus === null ? '' : bonusLabel(runBonus),
+        }),
+      );
+    } else introScreen.showCard(endlessIntroCard(level, runDifficulty, { newFoes: levelFoes(level), seed: String(endlessSeed) }));
+  }
+  /**
+   * R3: the levels of this run before `index`, for the new enemy list. Built through pickLevel like
+   * the level itself and cached per run seed, so each earlier level is generated once a session.
+   */
+  const foeCache = new Map<string, FoeSource>();
+  function earlierLevels(index: number): FoeSource[] {
+    const out: FoeSource[] = [];
+    for (let i = 1; i < Math.floor(index); i++) {
+      const key = `${runSeed}:${i}`;
+      let src = foeCache.get(key);
+      if (src === undefined) {
+        const def = pickLevel(generator, runSeed, i, VALID_FIXTURES).def;
+        src = { roster: def.roster, hazards: def.hazards };
+        foeCache.set(key, src);
+      }
+      out.push(src);
+    }
+    return out;
   }
 
   const paintScreens = (): void => {
@@ -742,10 +752,7 @@ async function boot(): Promise<void> {
     const arena = arenaName(level);
     if (flow.mode === 'freeplay') {
       // R2: Free Play keeps no stars and no bests; the results show score and time.
-      dispatch({
-        type: 'over',
-        result: { mode: 'freeplay', levelIndex: 1, score: p.score, stars: 0, success: false, difficulty: runDifficulty, par: 0, best: 0, newBest: false, hash: pick.hash, space, timeSec: world.time, arena },
-      });
+      dispatch({ type: 'over', result: freePlayResult({ score: p.score, difficulty: runDifficulty, hash: pick.hash, space, timeSec: world.time, arena }) });
       return;
     }
     if (flow.mode === 'endless') {
@@ -800,7 +807,9 @@ async function boot(): Promise<void> {
       hash: pick.hash,
       space,
       arena,
+      starTargets: level.stars,
     };
+    if (level.boss !== undefined) result.bossName = bossName(level.boss.id);
     // The results "Boss defeated" line reports the number the sim paid: scoring.bossBonus, the only copy.
     if (success && bossDown) result.bossBonus = bossBonus(level.par, 'adventure', level.boss?.tier ?? 0);
     dispatch({ type: 'over', result });

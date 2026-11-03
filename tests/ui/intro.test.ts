@@ -5,20 +5,37 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BOSS_IDS } from '../../src/levelgen/leveldef';
 import { BOSS_NAMES } from '../../src/ui/boss';
 import { bootFlow, reduceFlow, simRunning, type FlowAction } from '../../src/ui/flow';
+import { SUPER_DURATION, TURBO_PIERCE, TURBO_SCALE, TURBO_SPEED_SCALE } from '../../src/game/supers';
+import { UI_CSS } from '../../src/ui/dom';
 import {
   arenaName,
   armIntro,
   bossIntroLine,
   createIntroScreen,
   endlessIntroCard,
+  ENDLESS_GOAL,
+  ENDLESS_VICTORY,
+  ENEMIES_LABEL,
+  GOAL_LABEL,
   INTRO_SEC,
   introActive,
   introCard,
+  labelled,
+  LOADOUT_LABEL,
+  loadoutItems,
   NO_INTRO,
+  objectiveSentence,
   READY_TEXT,
+  SEED_LABEL,
   START_LABEL,
+  STARS_LABEL,
+  starCapLine,
+  starTargets,
   startIntro,
   tickIntro,
+  TURBO_NUMBERS,
+  turboText,
+  VICTORY_LABEL,
 } from '../../src/ui/intro';
 import { asParent, installFakeDocument, type FakeEl } from './fakeDom';
 
@@ -91,29 +108,57 @@ describe('R2 intro gate', () => {
   });
 });
 
-describe('R2 intro card text', () => {
+describe('R3 intro card text', () => {
   const arena = { shape: 'circle', width: 900, height: 900, cornerRadius: 0, obstacles: [], spawnPoint: { x: 0, y: 0 } } as const;
 
-  it('title line with level and arena, objective in one sentence, star marks as numbers, drone and super', () => {
-    const card = introCard(7, {
-      objective: { kind: 'destroy', count: 40 },
-      par: 1500,
-      stars: [1500, 3000, 6000],
-      drone: 'collect',
-      superType: 'detonate',
-      arena: { ...arena, obstacles: [] },
-    });
+  it('title line, goal and victory, labelled star targets with the cap, loadout and seed', () => {
+    const card = introCard(
+      7,
+      { objective: { kind: 'destroy', count: 530 }, par: 2100000, stars: [2100000, 2600000, 3200000], drone: 'collect', superType: 'detonate', arena: { ...arena, obstacles: [] } },
+      'normal',
+      { seed: '12345' },
+    );
     expect(card.title).toBe('Level 7  Circle arena');
-    expect(card.objective).toBe('Destroy 40 enemies.');
-    expect(card.stars).toBe('★ 1,500   ★★ 3,000   ★★★ 6,000');
-    expect(card.kit).toBe('Collect drone   Detonate super');
+    expect(card.goal).toBe('Destroy 530 enemies before your lives run out');
+    expect(card.victory).toBe('530 kills with a life left');
+    expect(card.stars.map(labelled)).toEqual(['1 star: 2.1M', '2 stars: 2.6M', '3 stars: 3.2M']);
+    expect(card.starCap).toBe('Normal: max 2 stars');
+    expect(card.loadout.map(labelled)).toEqual(['Drone: Collect', 'Super: Detonate (your drone explodes and destroys the enemies around it)']);
+    expect(card.seed).toBe('12345');
+    expect(card.enemies).toEqual([]);
   });
 
-  it('timed objectives read as clock text; a boss level adds the boss to the sentence', () => {
-    const def = { objective: { kind: 'survive', durationSec: 90 } as const, par: 1000, stars: [1000, 2000, 4000] as [number, number, number], drone: 'attack' as const, superType: 'homing' as const };
-    expect(introCard(1, def).objective).toBe('Survive 1:30.');
+  it('goal sentences: survive, score in time and boss (R3 brief wording)', () => {
+    const def = { objective: { kind: 'survive', durationSec: 210 } as const, stars: [1000, 2000, 4000] as [number, number, number], drone: 'attack' as const, superType: 'homing' as const };
+    expect(introCard(1, def).goal).toBe('Survive 3:30');
+    expect(introCard(1, def).victory).toBe('3:30 survived with a life left');
     expect(introCard(1, def).title).toBe('Level 1');
-    expect(introCard(1, { ...def, boss: { id: 'warden', tier: 1, atSec: 20, hpMul: 1 } }).objective).toBe('Survive 1:30, then defeat the boss.');
+    const score = { ...def, objective: { kind: 'scoreInTime', target: 2100000, timeLimitSec: 210 } as const };
+    expect(introCard(1, score).goal).toBe('Score 2.1M in 3:30');
+    expect(introCard(1, score).victory).toBe('2.1M points when the 3:30 clock runs out with a life left');
+    const boss = { ...def, boss: { id: 'warden', tier: 1, atSec: 20, hpMul: 1 } as const };
+    expect(introCard(5, boss).goal).toBe(`Clear the waves, then defeat ${BOSS_NAMES.warden}`);
+    expect(introCard(5, boss).victory).toBe(`3:30 survived, then ${BOSS_NAMES.warden} destroyed, with a life left`);
+    expect(objectiveSentence(def)).toBe('Survive 3:30.');
+  });
+
+  it('star cap per difficulty', () => {
+    expect(starCapLine('easy')).toBe('Easy: max 1 star');
+    expect(starCapLine('normal')).toBe('Normal: max 2 stars');
+    expect(starCapLine('hard')).toBe('Hard: max 3 stars');
+    expect(starCapLine('insane')).toBe('Insane: max 3 stars, plus a 4th for a win');
+    expect(starTargets([1000, 1250, 1500]).map(labelled)).toEqual(['1 star: 1,000', '2 stars: 1,250', '3 stars: 1,500']);
+  });
+
+  it('Turbo text is built from the supers.ts numbers', () => {
+    expect(TURBO_NUMBERS).toEqual({ fire: TURBO_SCALE, speed: TURBO_SPEED_SCALE, pierce: TURBO_PIERCE, durationSec: SUPER_DURATION });
+    const pct = Math.round((TURBO_SPEED_SCALE - 1) * 100);
+    const fire = TURBO_SCALE === 2 ? 'doubles fire rate' : `${TURBO_SCALE}x fire rate`;
+    expect(turboText()).toBe(`${fire}, ${pct}% faster ship, shots pierce ${TURBO_PIERCE} ${TURBO_PIERCE === 1 ? 'enemy' : 'enemies'}, ${SUPER_DURATION} s`);
+    expect(turboText({ fire: 2, speed: 1.25, pierce: 1, durationSec: 5 })).toBe('doubles fire rate, 25% faster ship, shots pierce 1 enemy, 5 s');
+    expect(turboText({ fire: 2.5, speed: 1.35, pierce: 2, durationSec: 10 })).toBe('2.5x fire rate, 35% faster ship, shots pierce 2 enemies, 10 s');
+    expect(loadoutItems('attack', 'turbo').map(labelled)).toEqual(['Drone: Attack', `Super: Turbo (${turboText()})`]);
+    expect(loadoutItems('ram', 'homing', 'Extra life').map(labelled)).toEqual(['Drone: Ram', `Super: Homing (shots home on nearby enemies, ${SUPER_DURATION} s)`, 'Reward: Extra life']);
   });
 
   it('arena names: drum for a cylinder surface, else by shape', () => {
@@ -125,41 +170,85 @@ describe('R2 intro card text', () => {
     expect(arenaName({})).toBe('');
   });
 
-  it('the Endless card has the arena title, a sentence and no stars', () => {
-    const c = endlessIntroCard({ arena: { ...arena, shape: 'rect', obstacles: [] } }, 'hard');
+  it('the Endless card has the arena title, a goal, no victory target and no stars', () => {
+    const c = endlessIntroCard({ arena: { ...arena, shape: 'rect', obstacles: [] }, drone: 'attack', superType: 'turbo' }, 'hard', { seed: '9' });
     expect(c.title).toBe('Endless  Rectangle arena');
-    expect(c.stars).toBe('');
+    expect(c.goal).toBe(ENDLESS_GOAL);
+    expect(c.victory).toBe(ENDLESS_VICTORY);
+    expect(c.stars).toEqual([]);
+    expect(c.starCap).toBe('');
+    expect(c.loadout.map((v) => v.label)).toEqual(['Drone', 'Super']);
     expect(c.choice).toBe('hard');
   });
 
   describe('screen', () => {
     afterEach(() => vi.unstubAllGlobals());
+    const byIntro = (root: FakeEl, k: string): FakeEl | undefined => root.all().find((e) => e.getAttribute('data-intro') === k);
+    const def = { objective: { kind: 'destroy', count: 5 } as const, stars: [10, 20, 40] as [number, number, number], drone: 'attack' as const, superType: 'turbo' as const };
 
     it('Start is the only way off the card; a tap on the card background does nothing', () => {
       const root = installFakeDocument();
       let starts = 0;
       const screen = createIntroScreen(asParent(root), () => void starts++);
-      screen.showCard(introCard(2, { objective: { kind: 'destroy', count: 5 }, par: 10, stars: [10, 20, 40], drone: 'attack', superType: 'homing' }, 'normal'));
+      screen.showCard(introCard(2, def, 'normal'));
       root.children[0]?.tap();
       expect(starts).toBe(0);
-      const start = root.all().find((e) => e.getAttribute('data-intro') === 'start');
+      const start = byIntro(root, 'start');
       expect(start?.textContent).toBe(START_LABEL);
       start?.tap();
       expect(starts).toBe(1);
     });
 
-    it('the Ready text hides the chips, stars and Start', () => {
+    it('blocks top to bottom: title, goal, chips and Start, star targets, new enemies, loadout, seed last', () => {
       const root = installFakeDocument();
       const screen = createIntroScreen(asParent(root), () => undefined);
+      screen.showCard(introCard(1, def, 'normal', { newFoes: ['grunt', 'dart'], seed: '77' }));
+      const card = root.children[0]?.children[0];
+      const order = (card?.children ?? []).map((e) => e.getAttribute('data-intro') ?? (e.all().some((x) => x.getAttribute('data-intro') === 'start') ? 'play' : ''));
+      expect(order).toEqual(['title', 'goal', 'play', 'stars', 'enemies', 'loadout', 'seed']);
+      const text = (k: string): string => (byIntro(root, k)?.all() ?? [])
+        .filter((e) => e.children.length === 0 && e.textContent !== '')
+        .map((e) => e.textContent)
+        .join('|');
+      expect(text('goal')).toContain(GOAL_LABEL);
+      expect(text('goal')).toContain('Destroy 5 enemies before your lives run out');
+      expect(text('goal')).toContain(`${VICTORY_LABEL}: `);
+      expect(text('stars')).toContain(STARS_LABEL);
+      expect(text('stars')).toContain('1 star|10|2 stars|20|3 stars|40');
+      expect(text('stars')).toContain('Normal: max 2 stars');
+      expect(text('enemies')).toContain(ENEMIES_LABEL);
+      expect(text('enemies')).toContain('Grunt|chaser');
+      expect(text('enemies')).toContain('Dart|swarm');
+      expect(byIntro(root, 'enemies')?.all().filter((e) => e.tag === 'canvas').map((e) => e.getAttribute('data-foe'))).toEqual(['grunt', 'dart']);
+      expect(text('loadout')).toContain(`${LOADOUT_LABEL}|Drone: |Attack|Super: |Turbo (${turboText()})`);
+      expect(byIntro(root, 'seed')?.textContent).toBe(`${SEED_LABEL}: 77`);
+      for (const k of ['goal', 'stars', 'enemies', 'loadout', 'seed']) expect(byIntro(root, k)?.style.display, k).toBe('');
+    });
+
+    it('hides empty blocks: no new enemies, no stars in Endless, no seed', () => {
+      const root = installFakeDocument();
+      const screen = createIntroScreen(asParent(root), () => undefined);
+      screen.showCard(endlessIntroCard({}, 'normal'));
+      for (const k of ['stars', 'enemies', 'loadout', 'seed']) expect(byIntro(root, k)?.style.display, k).toBe('none');
+      expect(byIntro(root, 'goal')?.style.display).toBe('');
+    });
+
+    it('the Ready text hides the chips, goal, stars and Start', () => {
+      const root = installFakeDocument();
+      const screen = createIntroScreen(asParent(root), () => undefined);
+      screen.showCard(introCard(1, def, 'normal', { newFoes: ['grunt'], seed: '1' }));
       screen.showReady();
-      for (const k of ['difficulty', 'stars', 'start']) expect(root.all().find((e) => e.getAttribute('data-intro') === k)?.style.display, k).toBe('none');
+      for (const k of ['difficulty', 'goal', 'stars', 'enemies', 'loadout', 'seed', 'start']) expect(byIntro(root, k)?.style.display, k).toBe('none');
+    });
+
+    it('the card is padded 20 px with at least 16 px between blocks', () => {
+      expect(UI_CSS).toContain('.sow-card.sow-intro, .sow-card.sow-results { padding: 20px; gap: 16px; }');
     });
   });
 });
 
-// V3-A: the card shows "Boss: <name>" on a boss level (docs/13 section 9).
-describe('V3-A intro card boss line', () => {
-  afterEach(() => vi.unstubAllGlobals());
+// V3-A: the boss name on the card (docs/13 section 9); R3 puts it in the goal sentence.
+describe('V3-A intro card boss name', () => {
   const def = {
     objective: { kind: 'survive', durationSec: 90 } as const,
     par: 4000,
@@ -168,15 +257,12 @@ describe('V3-A intro card boss line', () => {
     superType: 'homing' as const,
   };
 
-  it('a boss level adds "Boss: <name>" from BOSS_NAMES', () => {
-    expect(introCard(5, { ...def, boss: { id: 'warden', tier: 1, atSec: 20, hpMul: 1 } }).boss).toBe('Boss: Warden');
-    expect(introCard(50, { ...def, boss: { id: 'prism', tier: 4, atSec: 20, hpMul: 1 } }).boss).toBe('Boss: Prism');
-  });
-
-  it('every boss id gets its own line', () => {
+  it('every boss id is named in the goal from BOSS_NAMES', () => {
+    for (const id of BOSS_IDS) expect(introCard(5, { ...def, boss: { id, tier: 1, atSec: 20, hpMul: 1 } }).goal).toBe(`Clear the waves, then defeat ${BOSS_NAMES[id]}`);
     const lines = BOSS_IDS.map((id) => bossIntroLine({ id, tier: 1, atSec: 20, hpMul: 1 }));
     expect(lines).toEqual(BOSS_IDS.map((id) => `Boss: ${BOSS_NAMES[id]}`));
     expect(new Set(lines).size).toBe(10);
+    expect(bossIntroLine(undefined)).toBe('');
   });
 
   it('follows an edit of BOSS_NAMES, the const Ryan edits: no name is written in intro.ts', () => {
@@ -185,36 +271,9 @@ describe('V3-A intro card boss line', () => {
     expect(src).toContain('bossName');
   });
 
-  it('a level with no boss has no line, and the other card lines are unchanged', () => {
+  it('a boss changes only the goal and victory lines', () => {
     const plain = introCard(7, def);
-    expect(plain.boss).toBe('');
-    expect(bossIntroLine(undefined)).toBe('');
     const withBoss = introCard(7, { ...def, boss: { id: 'brood', tier: 1, atSec: 20, hpMul: 1 } });
-    expect({ ...withBoss, boss: '', objective: plain.objective }).toEqual(plain);
-  });
-
-  describe('screen', () => {
-    const bossEl = (root: FakeEl): FakeEl | undefined => root.all().find((e) => e.getAttribute('data-intro') === 'boss');
-    const build = () => {
-      const root = installFakeDocument();
-      const screen = createIntroScreen(asParent(root), () => undefined);
-      return { root, screen };
-    };
-
-    it('shows the line on a boss card and hides it on a plain one', () => {
-      const { root, screen } = build();
-      screen.showCard(introCard(5, { ...def, boss: { id: 'warden', tier: 1, atSec: 20, hpMul: 1 } }));
-      expect(bossEl(root)?.textContent).toBe('Boss: Warden');
-      expect(bossEl(root)?.style.display).toBe('');
-      screen.showCard(introCard(6, def));
-      expect(bossEl(root)?.style.display).toBe('none');
-    });
-
-    it('the Endless Ready text never shows it, even right after a boss card', () => {
-      const { root, screen } = build();
-      screen.showCard(introCard(5, { ...def, boss: { id: 'warden', tier: 1, atSec: 20, hpMul: 1 } }));
-      screen.showReady();
-      expect(bossEl(root)?.style.display).toBe('none');
-    });
+    expect({ ...withBoss, goal: plain.goal, victory: plain.victory }).toEqual(plain);
   });
 });
