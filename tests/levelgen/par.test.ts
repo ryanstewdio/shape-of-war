@@ -1,7 +1,7 @@
 // Par against a simulated competent run (fix(par), device finding G4). See parSim.ts for the model.
 import { describe, expect, it } from 'vitest';
 import { computePar, generateLevel } from '../../src/levelgen/generator';
-import { V5_GEN_CONFIG, bandOf } from '../../src/levelgen/leveldef';
+import { V5_GEN_CONFIG, V6_GEN_CONFIG, bandOf } from '../../src/levelgen/leveldef';
 import type { EnemyKind, ObjectiveDef, WaveSchedule } from '../../src/levelgen/leveldef';
 import { wholeLevelPar } from '../../src/levelgen/pacing';
 import { simulateScore } from './parSim';
@@ -63,12 +63,13 @@ describe('parSim', () => {
   });
 });
 
-// Release gate R1 (version 6): par is the whole level score of a competent player, so the
-// simulated run (more geoms collected than par assumes, never dies) lands above par.
+// Release gate R1 (version 6, V6_GEN_CONFIG since R3): par is the whole level score of a competent
+// player, so the simulated run (more geoms collected than par assumes, never dies) lands above par.
+// The version 8 band (1 to 1.5 x par, boss levels too) is in r3length.test.ts.
 describe('R1 whole level par versus simulated score', () => {
   const rows = RUN_SEEDS.flatMap((s) =>
     LEVELS.filter((n) => n % 5 !== 0).map((n) => {
-      const d = generateLevel(s, n);
+      const d = generateLevel(s, n, V6_GEN_CONFIG);
       return { s, n, ratio: simulateScore(d).score / d.par, top: d.stars[2] / d.par };
     }),
   );
@@ -83,7 +84,7 @@ describe('R1 whole level par versus simulated score', () => {
 
   it('computePar is no longer the stored par; wholeLevelPar is', () => {
     for (const s of RUN_SEEDS) {
-      const d = generateLevel(s, 14);
+      const d = generateLevel(s, 14, V6_GEN_CONFIG);
       expect(wholeLevelPar(d.waves, d.objective).par).toBe(d.par);
       expect(computePar(d.waves, d.objective).par).toBeLessThan(d.par);
     }

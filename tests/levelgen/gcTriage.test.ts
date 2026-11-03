@@ -17,19 +17,21 @@ const EARLY_FRAC = 0.6;
  * The six first appearances claimed in run 0155. Release polish (long levels, generator version 5)
  * moved every hash: was, in order, 93A4C56E, CC6859DC, 5BD14124, F383CDC7, F9779FC2, 66AF8BD7.
  * Release gate R1 (version 6: whole level par, volatile waves) moved them again: at version 5
- * they were 184C1369, 66985C67, 18F95442, AC6E0C94, A537DF3D, 373D700E.
+ * they were 184C1369, 66985C67, 18F95442, AC6E0C94, A537DF3D, 373D700E. Release gate R3 (version 8:
+ * 3.5 minute objectives, shorter ramp) moved them again: at version 6 they were 7AFE6A2E,
+ * 19541E27, C91F9CAD, ECE6591B, B7252DF2, 0AD5EE06.
  */
 const CASES: readonly { level: number; kind: EnemyKind; hash: string }[] = [
-  { level: 6, kind: 'charger', hash: '7AFE6A2E' },
-  { level: 7, kind: 'swirl', hash: '19541E27' },
-  { level: 9, kind: 'splime', hash: 'C91F9CAD' },
+  { level: 6, kind: 'charger', hash: '6BBCE41E' },
+  { level: 7, kind: 'swirl', hash: 'D54392E1' },
+  { level: 9, kind: 'splime', hash: 'FAFC6B5B' },
   // D13 C0: seed 42 level 16 is now a cylinder level (was D736C51F flat at 374a7b9). Drum-maps:
   // a pillars drum (was 712BC1C1 open drum at 8d5c989).
-  { level: 16, kind: 'bulwark', hash: 'ECE6591B' },
+  { level: 16, kind: 'bulwark', hash: 'B0AC13A4' },
   // D13 C0: seed 42 level 17 is now a cylinder level too (was 43CADCE4 flat at 374a7b9). Drum-maps:
   // a pillars drum (was BCC2F1B8 open drum at 8d5c989).
-  { level: 17, kind: 'blink', hash: 'B7252DF2' },
-  { level: 31, kind: 'sower', hash: '0AD5EE06' },
+  { level: 17, kind: 'blink', hash: '78B75D48' },
+  { level: 31, kind: 'sower', hash: '524D746B' },
 ];
 
 interface EarlySpawn {

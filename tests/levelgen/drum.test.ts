@@ -29,7 +29,7 @@ import {
 } from '../../src/levelgen/drum';
 import type { DrumPattern } from '../../src/levelgen/drum';
 import { drumPatternFor, generateLevel, levelHash } from '../../src/levelgen/generator';
-import { DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V6, V3_GEN_CONFIG, V4_GEN_CONFIG, V5_GEN_CONFIG, fmix32, levelSeed } from '../../src/levelgen/leveldef';
+import { DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V6, GENERATOR_VERSION_V8, V3_GEN_CONFIG, V4_GEN_CONFIG, V5_GEN_CONFIG, V6_GEN_CONFIG, fmix32, levelSeed } from '../../src/levelgen/leveldef';
 import type { ArenaDef, LevelDef } from '../../src/levelgen/leveldef';
 import {
   CONNECT_CLEARANCE,
@@ -270,13 +270,17 @@ describe('drum patterns in the generator', () => {
   });
 });
 
+/** The config that builds a long level of this version (8: default, 6: V6, else V5). */
+const configOfVersion = (v: number): typeof DEFAULT_GEN_CONFIG =>
+  v === GENERATOR_VERSION_V8 ? DEFAULT_GEN_CONFIG : v === GENERATOR_VERSION_V6 ? V6_GEN_CONFIG : V5_GEN_CONFIG;
+
 function expectDrum(d: LevelDef, p: DrumPattern): void {
   const at = `seed ${d.runSeed} level ${d.levelIndex} ${p}`;
   const a = d.arena;
   const W = a.width;
   expect(d.surface, at).toBe('cylinder');
   expect(W % CYLINDER_WIDTH_STEP, at).toBe(0);
-  expect(validateLevel(d, d.generatorVersion === GENERATOR_VERSION_V6 ? DEFAULT_GEN_CONFIG : V5_GEN_CONFIG).errors, at).toEqual([]);
+  expect(validateLevel(d, configOfVersion(d.generatorVersion)).errors, at).toEqual([]);
   expect(d.retries, at).toBe(0);
   const flood = drumFlood(a, COARSE, CONNECT_CLEARANCE);
   expect(flood.top && flood.bottom, `${at} rims reachable`).toBe(true);

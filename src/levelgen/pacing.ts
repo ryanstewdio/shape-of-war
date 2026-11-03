@@ -3,8 +3,9 @@
 // estimates. A competent player kills KILL_RATE of the spawns (the par model), so a destroy clear
 // lands on the spawn numbered ceil(count / KILL_RATE).
 import { ENEMY_BASE, ENEMY_GEOMS, R1_STAR_MULS, expandSpawns, forEachSpawn } from './leveldef';
-import type { LevelDef, ObjectiveDef, WaveSchedule } from './leveldef';
+import type { EnemyKind, LevelDef, ObjectiveDef, WaveSchedule } from './leveldef';
 import { KILL_RATE, MAX_EST_SEC, PAR_MIN, PAR_STEP } from './validate';
+import { BOSS_BONUS_SHARE, BOSS_FIGHT_SEC } from './boss';
 
 export interface PulseShape {
   /** Seconds of calmer opening. */
@@ -120,6 +121,11 @@ const toParGrid = (v: number): number => Math.max(PAR_MIN, Math.round(v / PAR_ST
 export function wholeLevelScore(w: WaveSchedule, o: ObjectiveDef, killRate: number = KILL_RATE, collectRate: number = R1_COLLECT_RATE): number {
   const all = expandSpawns(w, o.kind === 'destroy' ? MAX_EST_SEC : o.kind === 'survive' ? o.durationSec : o.timeLimitSec);
   const n = o.kind === 'destroy' ? Math.min(all.length, spawnsNeeded(o.count, killRate)) : all.length;
+  return scoreOfFirst(all, n, killRate, collectRate);
+}
+
+/** The R1 formula over the first n spawns of a time sorted list. */
+function scoreOfFirst(all: readonly { kind: EnemyKind }[], n: number, killRate: number, collectRate: number): number {
   let score = 0;
   let geoms = 0;
   for (let i = 0; i < n; i++) {
@@ -131,9 +137,34 @@ export function wholeLevelScore(w: WaveSchedule, o: ObjectiveDef, killRate: numb
   return score;
 }
 
+/** The R1 formula over every spawn before tSec (a boss level's waves before and during the fight). */
+export function scoreUntil(w: WaveSchedule, tSec: number, killRate: number = KILL_RATE, collectRate: number = R1_COLLECT_RATE): number {
+  const all = expandSpawns(w, tSec);
+  return scoreOfFirst(all, all.length, killRate, collectRate);
+}
+
 /** R1 par (on the 500 grid, at least PAR_MIN) and its stars at R1_STAR_MULS x par, each on the grid. */
-export function wholeLevelPar(w: WaveSchedule, o: ObjectiveDef): { par: number; stars: [number, number, number] } {
-  const par = toParGrid(wholeLevelScore(w, o));
+export function wholeLevelPar(w: WaveSchedule, o: ObjectiveDef, collectRate: number = R1_COLLECT_RATE): { par: number; stars: [number, number, number] } {
+  const par = toParGrid(wholeLevelScore(w, o, KILL_RATE, collectRate));
+  return { par, stars: r1Stars(par) };
+}
+
+// Release gate R3 (version 8): whole level par on boss levels too. A boss level's waves play from
+// the start to the end of the fight (the entrance plus BOSS_FIGHT_SEC), or to the objective time if
+// that comes first (the hold stops the waves). The boss kill pays BOSS_BONUS_SHARE of par on top,
+// so par P solves P = S + share x P: P = S / (1 - share).
+
+/** Geoms collected per geom dropped in the version 8 par. Calibrated on the scripted strong run. */
+export const R3_COLLECT_RATE = 0.5;
+
+/** Seconds of waves a boss level plays for a competent player: to the end of the fight or the hold. */
+export function bossWavesSec(w: WaveSchedule, o: ObjectiveDef, atSec: number): number {
+  return Math.min(objectiveSec(o, w), atSec + BOSS_FIGHT_SEC);
+}
+
+/** Version 8 boss level par: the waves before and during the fight plus the boss bonus, on the grid. */
+export function bossLevelPar(w: WaveSchedule, o: ObjectiveDef, atSec: number, collectRate: number = R3_COLLECT_RATE): { par: number; stars: [number, number, number] } {
+  const par = toParGrid(scoreUntil(w, bossWavesSec(w, o, atSec), KILL_RATE, collectRate) / (1 - BOSS_BONUS_SHARE));
   return { par, stars: r1Stars(par) };
 }
 

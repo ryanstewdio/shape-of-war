@@ -29,6 +29,7 @@ import {
   V3_GEN_CONFIG,
   V4_GEN_CONFIG,
   V5_GEN_CONFIG,
+  V6_GEN_CONFIG,
   bandOf,
   expandSpawns,
   levelSeed,
@@ -62,9 +63,9 @@ interface Row {
   def: LevelDef;
 }
 const rows: Row[] = [];
-for (let i = 0; i < SEEDS; i++) for (let k = 0; k < 5; k++) rows.push({ seed: seedAt(i), n: (i % 10) + 1 + 10 * k, def: generateLevel(seedAt(i), (i % 10) + 1 + 10 * k) });
+for (let i = 0; i < SEEDS; i++) for (let k = 0; k < 5; k++) rows.push({ seed: seedAt(i), n: (i % 10) + 1 + 10 * k, def: generateLevel(seedAt(i), (i % 10) + 1 + 10 * k, V6_GEN_CONFIG) });
 
-describe('expected duration over 500 seeds (default config)', () => {
+describe('expected duration over 500 seeds (R2 config, V6_GEN_CONFIG; R3 in r3length.test.ts)', () => {
   it('every non boss level needs at least 300 s, and each level index averages at least 300 s', () => {
     const bad: string[] = [];
     const sum = new Map<number, { t: number; c: number }>();
@@ -119,10 +120,10 @@ describe('expected duration over 500 seeds (default config)', () => {
     }
   });
 
-  it('every level validates with the default config, needs no re-derive and is version 6 (R1; R2 boss levels 7)', () => {
+  it('every level validates with V6_GEN_CONFIG, needs no re-derive and is version 6 (R1; R2 boss levels 7)', () => {
     const bad: string[] = [];
     for (const { seed, n, def } of rows) {
-      const e = validateLevel(def, DEFAULT_GEN_CONFIG).errors;
+      const e = validateLevel(def, V6_GEN_CONFIG).errors;
       if (e.length > 0 || def.retries !== 0 || def.generatorVersion !== (isBoss(n) ? GENERATOR_VERSION_V7 : GENERATOR_VERSION_V6)) bad.push(`seed ${seed} level ${n}: ${e.join('; ')} r${String(def.retries)}`);
     }
     expect(bad.slice(0, 5)).toEqual([]);
@@ -301,8 +302,9 @@ describe('flags, versions and Endless', () => {
   it('only the default turns the long levels on; V1, V2, V3 and V4 leave them off', () => {
     expect(DEFAULT_GEN_CONFIG.enableLongLevels).toBe(true);
     for (const c of [V1_GEN_CONFIG, V2_GEN_CONFIG, V3_GEN_CONFIG, V4_GEN_CONFIG]) expect(c.enableLongLevels).toBe(false);
-    expect({ ...V4_GEN_CONFIG, enableLongLevels: true, enableR1Pacing: true }).toEqual(DEFAULT_GEN_CONFIG);
-    expect({ ...V5_GEN_CONFIG, enableR1Pacing: true }).toEqual(DEFAULT_GEN_CONFIG);
+    expect({ ...V4_GEN_CONFIG, enableLongLevels: true, enableR1Pacing: true, enableR3Length: true }).toEqual(DEFAULT_GEN_CONFIG);
+    expect({ ...V5_GEN_CONFIG, enableR1Pacing: true, enableR3Length: true }).toEqual(DEFAULT_GEN_CONFIG);
+    expect({ ...V6_GEN_CONFIG, enableR3Length: true }).toEqual(DEFAULT_GEN_CONFIG);
     expect(V5_GEN_CONFIG.enableLongLevels).toBe(true);
   });
 

@@ -1,5 +1,6 @@
 // Release gate R1 (Ryan, build a1aa5e3): whole level par and stars, no dead air, volatile waves,
-// more drums and truly open open drums, all behind GenConfig.enableR1Pacing (version 6).
+// more drums and truly open open drums, all behind GenConfig.enableR1Pacing (version 6). Since R3
+// the version 6 rows are built with V6_GEN_CONFIG; the version 8 rules are in r3length.test.ts.
 import { describe, expect, it } from 'vitest';
 import { BOSS_EVERY } from '../../src/levelgen/boss';
 import { cylinderEligible } from '../../src/levelgen/cylinder';
@@ -15,6 +16,7 @@ import {
   V3_GEN_CONFIG,
   V4_GEN_CONFIG,
   V5_GEN_CONFIG,
+  V6_GEN_CONFIG,
   bandOf,
   levelSeed,
 } from '../../src/levelgen/leveldef';
@@ -43,7 +45,7 @@ const rows: { seed: number; n: number; def: LevelDef }[] = [];
 for (let i = 0; i < 500; i++) {
   for (let k = 0; k < 5; k++) {
     const n = (i % 10) + 1 + 10 * k;
-    if (!isBoss(n)) rows.push({ seed: seedAt(i), n, def: generateLevel(seedAt(i), n) });
+    if (!isBoss(n)) rows.push({ seed: seedAt(i), n, def: generateLevel(seedAt(i), n, V6_GEN_CONFIG) });
   }
 }
 
@@ -167,7 +169,7 @@ describe('whole level par and stars', () => {
   });
 
   it('a version 6 level 6 par is far above its version 5 par (more spawns and the whole level multiplier)', () => {
-    for (let i = 0; i < 20; i++) expect(generateLevel(seedAt(i), 6).par).toBeGreaterThan(4 * generateLevel(seedAt(i), 6, V5_GEN_CONFIG).par);
+    for (let i = 0; i < 20; i++) expect(generateLevel(seedAt(i), 6, V6_GEN_CONFIG).par).toBeGreaterThan(4 * generateLevel(seedAt(i), 6, V5_GEN_CONFIG).par);
   });
 });
 
@@ -232,11 +234,11 @@ describe('flags, versions and validation', () => {
     }
   });
 
-  it('every level of the default config is version 6; V5_GEN_CONFIG and an older literal give version 5', () => {
+  it('every level of V6_GEN_CONFIG (the default before R3) is version 6; V5_GEN_CONFIG and an older literal give version 5', () => {
     for (const { def } of rows.slice(0, 200)) expect(def.generatorVersion).toBe(GENERATOR_VERSION_V6);
     // Release gate R2: boss levels take the R1 waves before the boss and report version 7; they keep
     // the version 5 par rule and stars (1, 2, 4 x par).
-    const b = generateLevel(42, 10);
+    const b = generateLevel(42, 10, V6_GEN_CONFIG);
     expect(b.generatorVersion).toBe(GENERATOR_VERSION_V7);
     expect(b.stars).toEqual([b.par, 2 * b.par, 4 * b.par]);
     expect(generateLevel(42, 10, V5_GEN_CONFIG).generatorVersion).toBe(GENERATOR_VERSION_V5);
@@ -249,12 +251,12 @@ describe('flags, versions and validation', () => {
   });
 
   it('J9 ties version 6 to the flag; P1 rejects version 5 stars on version 6 and the reverse', () => {
-    const v6 = structuredClone(generateLevel(42, 13));
+    const v6 = structuredClone(generateLevel(42, 13, V6_GEN_CONFIG));
     const v5 = structuredClone(generateLevel(42, 13, V5_GEN_CONFIG));
-    expect(validateLevel(v6, DEFAULT_GEN_CONFIG).errors).toEqual([]);
+    expect(validateLevel(v6, V6_GEN_CONFIG).errors).toEqual([]);
     expect(validateLevel(v5, V5_GEN_CONFIG).errors).toEqual([]);
     expect(ids(validateLevel(v6, V5_GEN_CONFIG).errors)).toContain('J9');
-    expect(ids(validateLevel(v5, DEFAULT_GEN_CONFIG).errors)).toContain('J9');
+    expect(ids(validateLevel(v5, V6_GEN_CONFIG).errors)).toContain('J9');
     v6.stars = [v6.par, 2 * v6.par, 4 * v6.par];
     expect(ids(validateLevel(v6).errors)).toContain('P1');
     v5.stars = r1Stars(v5.par);

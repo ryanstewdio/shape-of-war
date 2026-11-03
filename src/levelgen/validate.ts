@@ -15,12 +15,15 @@ import {
   GENERATOR_VERSION_V5,
   GENERATOR_VERSION_V6,
   GENERATOR_VERSION_V7,
+  GENERATOR_VERSION_V8,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_MIN_REPEAT_SEC,
   MAX_RETRIES,
   R1_STAR_MULS,
+  hasR1Stars,
   isLongVersion,
+  r3ObjectiveTable,
   SPAWN_PATTERNS,
   SUPER_KINDS,
   bandOf,
@@ -31,7 +34,7 @@ import {
   speedScaleFor,
 } from './leveldef';
 import { DRUM_BAR_THICK, MEMBRANE_MAX, MEMBRANE_MIN } from './drum';
-import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_V5_LEVEL_AT_SEC, BOSS_SEGMENT_AT_SEC, bossForLevel, bossForSegment, bossTierOf, sameBoss } from './boss';
+import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, BOSS_SEGMENT_AT_SEC, bossForLevel, bossForSegment, bossTierOf, sameBoss } from './boss';
 import type {
   ArenaDef,
   Band,
@@ -445,7 +448,7 @@ function checkJson(c: Collector, def: unknown): void {
 function checkVersions(c: Collector, version: number, generatorVersion: number): void {
   c.check('J3', (report) => {
     if (version !== LEVELDEF_VERSION) report(`version ${version} !== ${LEVELDEF_VERSION}`);
-    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7];
+    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8];
     if (!known.includes(generatorVersion)) report(`generatorVersion ${generatorVersion} not ${known.join(', ')}`);
   });
 }
@@ -469,6 +472,8 @@ export interface LevelCheckOptions extends BossCheckOptions {
   enableLongLevels?: boolean;
   /** Release gate R1: with enableLongLevels true, true or false makes J9 tie GENERATOR_VERSION_V6 to the flag. */
   enableR1Pacing?: boolean;
+  /** Release gate R3: with enableLongLevels and enableR1Pacing true, J10 ties GENERATOR_VERSION_V8 to this flag. */
+  enableR3Length?: boolean;
 }
 
 interface BossRules {
@@ -498,7 +503,7 @@ function checkBoss(c: Collector, boss: BossSpec | undefined, generatorVersion: n
         report(`boss ${String(boss.id)} tier ${boss.tier} at ${boss.atSec} s x${boss.hpMul} !== schedule ${want.id} tier ${want.tier} at ${want.atSec} s x${want.hpMul}`);
       }
       if (generatorVersion !== GENERATOR_VERSION_V3 && !isLongVersion(generatorVersion)) {
-        report(`boss present with generatorVersion ${generatorVersion}, want ${GENERATOR_VERSION_V3}, ${GENERATOR_VERSION_V5}, ${GENERATOR_VERSION_V6} or ${GENERATOR_VERSION_V7}`);
+        report(`boss present with generatorVersion ${generatorVersion}, want ${GENERATOR_VERSION_V3}, ${GENERATOR_VERSION_V5}, ${GENERATOR_VERSION_V6}, ${GENERATOR_VERSION_V7} or ${GENERATOR_VERSION_V8}`);
       }
     } else {
       if (generatorVersion === GENERATOR_VERSION_V7 && unit === 'level') report(`generatorVersion ${GENERATOR_VERSION_V7} without a boss`);
@@ -768,7 +773,8 @@ function checkArena(c: Collector, arena: ArenaDef, cylinder = false, circleObsta
 
 function checkObjective(c: Collector, def: LevelDef, band: Band): void {
   const long = isLongVersion(def.generatorVersion);
-  const l = LONG_BANDS[band];
+  // Release gate R3: version 8 reads the R3 tables (boss levels keep the LONG_BANDS objectives).
+  const l = def.generatorVersion === GENERATOR_VERSION_V8 ? r3ObjectiveTable(band, def.boss !== undefined) : LONG_BANDS[band];
   const b = long ? { ...BANDS[band], surviveSec: l.surviveSec, scoreTimeSec: l.scoreTimeSec } : BANDS[band];
   const o = def.objective;
   c.check('O1', (report) => {
@@ -812,8 +818,8 @@ function checkObjective(c: Collector, def: LevelDef, band: Band): void {
     const p = def.par;
     if (!(p >= PAR_MIN) || p % PAR_STEP !== 0) report(`par ${p} not a multiple of ${PAR_STEP} at least ${PAR_MIN}`);
     const s = def.stars;
-    // Release gate R1: version 6 stars sit at R1_STAR_MULS x par, each on the PAR_STEP grid.
-    const muls = def.generatorVersion === GENERATOR_VERSION_V6 ? R1_STAR_MULS : ([1, 2, 4] as const);
+    // Release gate R1: version 6 stars sit at R1_STAR_MULS x par, each on the PAR_STEP grid (R3: version 8 too).
+    const muls = hasR1Stars(def.generatorVersion) ? R1_STAR_MULS : ([1, 2, 4] as const);
     const want = muls.map((m) => (m === 1 ? p : Math.max(PAR_MIN, Math.round((m * p) / PAR_STEP) * PAR_STEP)));
     if (s.length !== 3 || s.some((v, i) => v !== want[i])) report(`stars [${s.join(', ')}] !== [${muls.map((m) => `${m} x par`).join(', ')}] for par ${p}`);
   });
@@ -942,7 +948,8 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   const o = def.objective;
   // Release gate R2: version 7 (the R1 config) brings the boss in at 200 s, versions 5 and 6 at 240 s.
   const v = def.generatorVersion;
-  const bossAt = v === GENERATOR_VERSION_V7 ? BOSS_LONG_LEVEL_AT_SEC : isLongVersion(v) ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
+  // Release gate R3: version 8 at 120 s.
+  const bossAt = v === GENERATOR_VERSION_V8 ? BOSS_R3_LEVEL_AT_SEC : v === GENERATOR_VERSION_V7 ? BOSS_LONG_LEVEL_AT_SEC : isLongVersion(v) ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
   checkBoss(c, def.boss, def.generatorVersion, {
     want: bossForLevel(def.levelIndex, bossAt),
     unit: 'level',
@@ -966,13 +973,23 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
     if (opts?.enableLongLevels !== true) return;
     const v6 = def.generatorVersion === GENERATOR_VERSION_V6;
     const v7 = def.generatorVersion === GENERATOR_VERSION_V7;
-    const r1 = opts.enableR1Pacing === true;
+    // Release gate R3: with the R3 length on, J10 owns the version instead.
+    const r1 = opts.enableR1Pacing === true && opts.enableR3Length !== true;
     const flag = r1 && def.boss === undefined;
     const flag7 = r1 && def.boss !== undefined;
     if (flag && !v6) report(`generatorVersion ${def.generatorVersion} with enableR1Pacing on, want ${GENERATOR_VERSION_V6}`);
     if (!flag && v6) report(`generatorVersion ${GENERATOR_VERSION_V6} with enableR1Pacing off or on a boss level`);
     if (flag7 && !v7) report(`generatorVersion ${def.generatorVersion} on a boss level with enableR1Pacing on, want ${GENERATOR_VERSION_V7}`);
     if (!flag7 && v7) report(`generatorVersion ${GENERATOR_VERSION_V7} with enableR1Pacing off or on a level without a boss`);
+  });
+  c.check('J10', (report) => {
+    // Release gate R3: on a long level, version 8 exactly when the R1 pacing and the R3 length are
+    // both on (boss or not), when the caller says.
+    if (opts?.enableLongLevels !== true) return;
+    const flag = opts.enableR1Pacing === true && opts.enableR3Length === true;
+    const v8 = def.generatorVersion === GENERATOR_VERSION_V8;
+    if (flag && !v8) report(`generatorVersion ${def.generatorVersion} with enableR3Length on, want ${GENERATOR_VERSION_V8}`);
+    if (!flag && v8) report(`generatorVersion ${GENERATOR_VERSION_V8} with enableR1Pacing or enableR3Length off`);
   });
   c.check('J5', (report) => {
     const r = def.retries;
