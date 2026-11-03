@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LevelResult } from '../../src/ui/flow';
 import { continueLabel, GAME_TITLE, SHOW_ENDLESS } from '../../src/ui/menu';
-import { badgeText, bossLine, createResultsScreen, parFraction, physicsLine, resultLines } from '../../src/ui/results';
+import { labelled } from '../../src/ui/intro';
+import { badgeText, bossLine, createResultsScreen, parFraction, physicsLine, resultLines, scoreBar } from '../../src/ui/results';
 import { asParent, installFakeDocument, type FakeEl } from './fakeDom';
 
 const base: LevelResult = {
@@ -18,27 +19,42 @@ const base: LevelResult = {
   hash: '0badf00d',
 };
 
-describe('results screen text (R2 layout)', () => {
-  it('success: headline, title line, score against par, stars, best, hash, Next', () => {
-    const t = resultLines({ ...base, arena: 'Circle' });
-    expect(t.title).toBe('Level 2 complete');
-    expect(t.sub).toBe('Circle arena');
+describe('results screen text (R3 layout)', () => {
+  it('success: Victory, title line, labelled score block, stars earned with the cap, best, level code, Next', () => {
+    const t = resultLines({ ...base, arena: 'Circle', difficulty: 'normal', stars: 2, starTargets: [1000, 2000, 4000] });
+    expect(t.title).toBe('Victory');
+    expect(t.sub).toBe('Level 2  Circle arena');
     expect(t.score).toBe('4,500');
-    expect(t.par).toBe('Score 4,500 / Par 1,000');
+    expect(t.par).toBe('Par: 1,000');
     expect(t.parFill).toBe(1);
+    expect(t.parMarks).toEqual([0.25, 0.5, 1]);
     expect(t.showPar).toBe(true);
-    expect(t.stars).toBe('★★★');
-    expect(t.best).toBe('Best 4,500  New best');
-    expect(t.detail).toBe('Level #0badf00d');
+    expect(t.targets.map((c) => [labelled(c), c.hit])).toEqual([
+      ['1 star: 1,000', true],
+      ['2 stars: 2,000', true],
+      ['3 stars: 4,000', true],
+    ]);
+    expect(t.stars).toBe('★★☆');
+    expect(t.starCap).toBe('Normal: max 2 stars');
+    expect(t.best).toBe('Best: 4,500  New best');
+    expect(t.detail).toBe('Level code: 0badf00d');
     expect(t.parReached).toBe(true);
     expect(t.primary).toBe('next');
   });
 
-  it('failure: no new best flag, no par reward, Retry', () => {
+  it('the bar runs against the third star target; targets not reached are not lit', () => {
+    const t = resultLines({ ...base, score: 1500, starTargets: [1000, 1250, 2000] });
+    expect(t.parFill).toBe(0.75);
+    expect(t.parMarks).toEqual([0.5, 0.625, 1]);
+    expect(t.targets.map((c) => c.hit)).toEqual([true, true, false]);
+    expect(scoreBar({ score: 500, par: 1000 })).toEqual({ fill: 0.5, marks: [] });
+  });
+
+  it('failure: Defeated, no new best flag, no par reward, Retry', () => {
     const t = resultLines({ ...base, success: false, stars: 0, score: 200, best: 4500, newBest: false });
-    expect(t.title).toBe('Level 2 failed');
+    expect(t.title).toBe('Defeated');
     expect(t.stars).toBe('☆☆☆');
-    expect(t.best).toBe('Best 4,500');
+    expect(t.best).toBe('Best: 4,500');
     expect(t.parFill).toBeCloseTo(0.2);
     expect(t.parReached).toBe(false);
     expect(t.primary).toBe('retry');
@@ -46,15 +62,28 @@ describe('results screen text (R2 layout)', () => {
 
   it('Free Play shows score and time only: no stars, no best, no par', () => {
     const t = resultLines({ ...base, mode: 'freeplay', success: false, stars: 0, par: 0, best: 0, newBest: false, timeSec: 192, arena: 'Drum' });
-    expect(t.title).toBe('Free Play over');
-    expect(t.sub).toBe('Drum arena');
+    expect(t.title).toBe('Game over');
+    expect(t.sub).toBe('Free Play  Drum arena');
     expect(t.score).toBe('4,500');
-    expect(t.detail).toBe('Time 3:12');
+    expect(t.detail).toBe('Time: 3:12');
     expect(t.stars).toBe('');
     expect(t.best).toBe('');
     expect(t.showPar).toBe(false);
     expect(t.parReached).toBe(false);
     expect(t.primary).toBe('retry');
+  });
+
+  it('every shown line carries a label: no unlabelled run of words', () => {
+    const lines = (r: LevelResult): string[] => {
+      const t = resultLines(r);
+      return [t.par, t.best, t.boss, t.physics, t.difficulty, ...t.detail.split('\n')].filter((x) => x !== '');
+    };
+    const all = [
+      ...lines({ ...base, difficulty: 'hard', space: 'medium', bossBonus: 500, bossName: 'Warden', starTargets: [1000, 2000, 4000] }),
+      ...lines({ ...base, mode: 'endless', success: false, seed: 4, timeSec: 61 }),
+      ...lines({ ...base, mode: 'freeplay', success: false, par: 0, timeSec: 61 }),
+    ];
+    for (const l of all) expect(l, l).toMatch(/^[A-Z][A-Za-z ]+: /);
   });
 
   it('parFraction is score over par, clamped, and 0 without par', () => {
@@ -82,6 +111,23 @@ describe('results screen text (R2 layout)', () => {
       expect(calls).toEqual(['next', 'retry', 'menu']);
     });
 
+    it('R3 order: headline, score block, best, details, reward, buttons; the bar has marks at the first two targets', () => {
+      const root = installFakeDocument();
+      const screen = createResultsScreen(asParent(root), { next: () => undefined, retry: () => undefined, menu: () => undefined });
+      screen.showResult({ ...base, difficulty: 'normal', stars: 2, starTargets: [1000, 2000, 4000] });
+      const card = root.children[0]?.children[0];
+      const tag = (e: FakeEl): string => e.getAttribute('data-results') ?? (e.all().some((x) => x.getAttribute('data-results') === 'title') ? 'head' : e.all().some((x) => x.getAttribute('data-results') === 'primary') ? 'buttons' : '');
+      expect((card?.children ?? []).map(tag)).toEqual(['head', 'scoreBlock', 'best', 'boss', 'detail', 'physics', 'reward', 'buttons']);
+      const block = card?.children[1];
+      const leaves = (block?.all() ?? []).filter((e) => e.children.length === 0 && e.textContent !== '').map((e) => e.textContent);
+      expect(leaves.slice(0, 3)).toEqual(['Score', '4,500', 'Par: 1,000']);
+      expect(leaves).toContain('1 star');
+      expect(leaves).toContain('Stars earned: ');
+      expect(leaves).toContain('Normal: max 2 stars');
+      const marks = root.all().filter((e) => e.getAttribute('data-results') === 'mark').map((e) => e.style.left);
+      expect(marks).toEqual(['calc(25% - 1px)', 'calc(50% - 1px)']);
+    });
+
     it('the par bar fills with score against par and hides in Free Play', () => {
       const root = installFakeDocument();
       const screen = createResultsScreen(asParent(root), { next: () => undefined, retry: () => undefined, menu: () => undefined });
@@ -102,9 +148,9 @@ describe('Endless results', () => {
     expect(t.title).toBe('Game over');
     expect(t.badge).toBe('New high score');
     expect(t.stars).toBe('');
-    expect(t.best).toBe('Best 12,000');
-    expect(t.detail).toBe('Endless seed 99');
-    expect(resultLines({ ...endless, timeSec: 75 }).detail).toBe('Time 1:15\nEndless seed 99');
+    expect(t.best).toBe('Best: 12,000');
+    expect(t.detail).toBe('Seed: 99');
+    expect(resultLines({ ...endless, timeSec: 75 }).detail).toBe('Time: 1:15\nSeed: 99');
   });
   it('lower ranks and misses', () => {
     expect(badgeText({ ...endless, rank: 4 })).toBe('Top 10: #4');
@@ -159,7 +205,7 @@ describe('B13 Space physics on the results screen', () => {
   });
 });
 
-// V3-A: "Boss defeated, bonus N" on a win with a boss (docs/13 SPEC 3.6 rule 6).
+// V3-A: the boss bonus line on a win with a boss (docs/13 SPEC 3.6 rule 6); R3 labels it "Boss bonus: N".
 describe('boss results line', () => {
   afterEach(() => vi.unstubAllGlobals());
   const bossWin: LevelResult = { ...base, levelIndex: 5, par: 4000, score: 9000, bossBonus: 1000 };
@@ -167,15 +213,15 @@ describe('boss results line', () => {
   const screenOf = (root: FakeEl): ReturnType<typeof createResultsScreen> =>
     createResultsScreen(asParent(root), { next: () => undefined, retry: () => undefined, menu: () => undefined });
 
-  it('reads "Boss defeated, bonus N" with thousands separators on a win with a boss', () => {
-    expect(bossLine(bossWin)).toBe('Boss defeated, bonus 1,000');
-    expect(resultLines(bossWin).boss).toBe('Boss defeated, bonus 1,000');
-    expect(bossLine({ ...bossWin, bossBonus: 500 })).toBe('Boss defeated, bonus 500');
-    expect(bossLine({ ...bossWin, bossBonus: 12500 })).toBe('Boss defeated, bonus 12,500');
+  it('reads "Boss bonus: N (boss defeated)" with thousands separators on a win with a boss', () => {
+    expect(bossLine(bossWin)).toBe('Boss bonus: 1,000 (boss defeated)');
+    expect(resultLines(bossWin).boss).toBe('Boss bonus: 1,000 (boss defeated)');
+    expect(bossLine({ ...bossWin, bossBonus: 500 })).toBe('Boss bonus: 500 (boss defeated)');
+    expect(bossLine({ ...bossWin, bossBonus: 12500 })).toBe('Boss bonus: 12,500 (boss defeated)');
   });
 
   it('a bonus of 0 still reports the kill', () => {
-    expect(bossLine({ ...bossWin, bossBonus: 0 })).toBe('Boss defeated, bonus 0');
+    expect(bossLine({ ...bossWin, bossBonus: 0 })).toBe('Boss bonus: 0 (boss defeated)');
   });
 
   it('no line without a boss: a normal win, a normal loss', () => {
@@ -198,14 +244,15 @@ describe('boss results line', () => {
     const a = resultLines(bossWin);
     const b = resultLines({ ...bossWin, bossBonus: undefined });
     expect({ ...a, boss: '' }).toEqual(b);
-    expect(a.title).toBe('Level 5 complete');
+    expect(a.title).toBe('Victory');
+    expect(bossLine({ ...bossWin, bossName: 'Warden' })).toBe('Boss bonus: 1,000 (Warden defeated)');
   });
 
   it('the screen draws the line and hides it on the next result without a boss', () => {
     const root = installFakeDocument();
     const screen = screenOf(root);
     screen.showResult(bossWin);
-    expect(bossEl(root)?.textContent).toBe('Boss defeated, bonus 1,000');
+    expect(bossEl(root)?.textContent).toBe('Boss bonus: 1,000 (boss defeated)');
     expect(bossEl(root)?.style.display).toBe('');
     screen.showResult(base);
     expect(bossEl(root)?.textContent).toBe('');

@@ -246,7 +246,7 @@ describe('difficulty on the intro card', () => {
     expect(main).toContain("runDifficulty = mode === 'freeplay' ? freePlayChoice.difficulty : settingsModel.state.difficulty;");
     expect(main).toContain('createGame(level, gameOptions(runDifficulty, runBonus ?? undefined))');
     expect(main).toContain('gameOptions(runDifficulty));');
-    expect(main).toContain('introCard(flow.levelIndex, level, runDifficulty)');
+    expect(main).toContain('introCard(flow.levelIndex, level, runDifficulty, {');
     expect(main).toContain('difficulty: runDifficulty,');
     expect(main).toContain('applySpacePhysics(spaceForDifficulty(runDifficulty));');
     expect(main).toContain('settleAdventure({');

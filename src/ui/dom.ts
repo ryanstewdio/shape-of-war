@@ -105,6 +105,28 @@ export const UI_CSS = `
 .sow-btn.sow-big { min-width: 0; flex: 1 1 0; min-height: 56px; font-size: 20px; font-weight: 700; letter-spacing: 0.06em; }
 .sow-card .sow-row { width: 100%; flex-wrap: nowrap; }
 .sow-card .sow-choice { width: 100%; }
+.sow-card.sow-intro, .sow-card.sow-results { padding: 20px; gap: 16px; }
+.sow-block { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.sow-block-label { font-size: 12px; letter-spacing: 0.1em; opacity: 0.65; }
+.sow-block-body { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.sow-play { gap: 10px; }
+.sow-play .sow-btn.sow-big { flex: 0 0 auto; width: 100%; }
+.sow-kv { font-size: clamp(14px, 3.2vmin, 18px); line-height: 1.35; }
+.sow-k { opacity: 0.7; }
+.sow-v { font-weight: 600; }
+.sow-goal { font-weight: 700; }
+.sow-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
+.sow-col { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px;
+  border: 1px solid hsla(55, 95%, 62%, 0.4); border-radius: 8px; }
+.sow-col.sow-col-hit { border-color: hsl(55, 95%, 62%); box-shadow: 0 0 8px hsla(55, 95%, 55%, 0.5); }
+.sow-col-label { font-size: 12px; opacity: 0.75; }
+.sow-col-value { font-size: clamp(16px, 3.8vmin, 22px); font-weight: 700; color: hsl(55, 95%, 70%); }
+.sow-foe { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 360px; }
+.sow-foe-icon { flex: 0 0 auto; }
+.sow-foe-name { flex: 1 1 auto; text-align: left; font-weight: 600; }
+.sow-foe-type { font-size: 13px; opacity: 0.75; }
+.sow-seed { font-size: 12px; opacity: 0.55; }
+.sow-par-mark { position: absolute; top: 0; bottom: 0; width: 2px; background: hsla(55, 95%, 70%, 0.9); }
 .sow-results-score { font-size: clamp(26px, 7vmin, 56px) !important; }
 .sow-par { width: 100%; display: flex; flex-direction: column; gap: 4px; }
 .sow-par-bar { position: relative; height: 10px; border-radius: 5px; overflow: hidden; border: 1px solid hsla(190, 60%, 90%, 0.6); }
