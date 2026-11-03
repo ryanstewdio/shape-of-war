@@ -20,7 +20,8 @@ import { gs } from '../state';
 import { angleBetween, distBetween, moveTo, stepToward } from '../steer';
 import { Kind, type World } from '../world';
 import { bossBurst, crackBody, HAZARD_OVERLAP, livePart, spawnPart, spawnRing, spawnTether } from './core';
-import { circlesOverlap, hazardTelegraph, wrapPi } from './kit';
+import { circlesOverlap, wrapPi } from './kit';
+import { bossTele } from './scale';
 import type { BossState } from './state';
 import { HAZARD, HAZARD_RECHECK_SEC, TWINS } from './table';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
@@ -106,7 +107,7 @@ function stepRings(w: World, id: number, bs: BossState, b: number, dt: number, a
 /** The second body kills the ship on contact once its telegraph has shown (it slides out of the first). */
 function secondContact(w: World, bs: BossState, b: number): boolean {
   if (!w.ship.active || w.ship.invuln > 0 || gs(w).invulnerable) return false;
-  if ((w.t[b] ?? 0) < hazardTelegraph(bs.row.tier)) return false;
+  if ((w.t[b] ?? 0) < bossTele(bs)) return false;
   return circlesOverlap(w.x[0] ?? 0, w.y[0] ?? 0, SHIP_RADIUS, w.x[b] ?? 0, w.y[b] ?? 0, w.radius[b] ?? 0);
 }
 

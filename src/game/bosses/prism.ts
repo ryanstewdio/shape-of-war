@@ -34,6 +34,7 @@ import {
 import { circlesOverlap, wrapPi } from './kit';
 import type { BossState } from './state';
 import { HAZARD_RECHECK_SEC, MAX_PARTS, PRISM } from './table';
+import { minionCount } from './scale';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
 
 const DEG = Math.PI / 180;
@@ -163,7 +164,8 @@ function placeParts(w: World, id: number, bs: BossState, kit: number, spawnNew: 
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
   const pods = kit === 1;
-  const n = pods ? PRISM.pods : PRISM.turrets;
+  // R1: the pod echo of Brood scales with addScale inside the part slots; turrets stay four.
+  const n = pods ? minionCount(PRISM.pods, bs.addScale, MAX_PARTS) : PRISM.turrets;
   const off = pods ? PRISM.podOrbit : PRISM.turretOffset;
   for (let k = 0; k < n; k++) {
     const a = pods ? wrapPi(bs.angle + (k * TAU) / n) : wrapPi((w.rot[id] ?? 0) + QUARTER / 2 + k * QUARTER);

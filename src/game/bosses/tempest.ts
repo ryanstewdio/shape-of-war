@@ -52,7 +52,8 @@ import { spawnFromDef } from '../state';
 import { angleBetween, moveToHit, stepToward, targetOf } from '../steer';
 import { Kind, type World } from '../world';
 import { bossEnraged, clearHazards, crackBody, livePart, markerLife, spawnLaneMarker, spawnPart, wallDistance } from './core';
-import { hazardTelegraph, pointDist, wrapPi } from './kit';
+import { pointDist, wrapPi } from './kit';
+import { bossTele } from './scale';
 import { fanHeading, inShotRange } from './shots';
 import { bossOf, type BossState } from './state';
 import { BOSS_TABLE, ENRAGE_RATE, MAX_PARTS, TEMPEST, TEMPESTLING } from './table';
@@ -166,7 +167,7 @@ function lap(w: World, id: number, bs: BossState, dt: number, adt: number): void
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
   bs.n2 = spawnLaneMarker(w, bs, x, y, heading, rayToWall(w, x, y, heading, w.radius[id] ?? 0), TEMPEST.markerHalfWidth);
-  setMove(bs, TempestMove.Windup, hazardTelegraph(bs.row.tier));
+  setMove(bs, TempestMove.Windup, bossTele(bs));
 }
 
 export function reset(w: World, id: number, bs: BossState, first: boolean): void {
@@ -701,7 +702,7 @@ export function fireDashFan(w: World, bs: BossState, id: number, dashHeading: nu
   }
   if (w.ship.active && !inShotRange(pointDist(mx, my, w.x[0] ?? 0, w.y[0] ?? 0))) return false;
   const tier = bs.row.tier;
-  const tele = hazardTelegraph(tier);
+  const tele = bossTele(bs);
   const n = TEMPESTLING.fanCount;
   const spread = TEMPESTLING.fanSpreadDeg * DEG;
   let firstId = -1;

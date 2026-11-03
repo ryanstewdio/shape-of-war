@@ -19,6 +19,7 @@ import { angleBetween, targetOf, turnToward } from '../steer';
 import { Kind, type World } from '../world';
 import { spawnLaneMarker } from './core';
 import { hazardTelegraph, phaseSpeedUp, reflectHeading } from './kit';
+import { bossTele } from './scale';
 import { fireVolley } from './shots';
 import type { BossState } from './state';
 import { BOSS_SHOTS, EMBER, emberFanRest, SHOT_RECHECK_SEC } from './table';
@@ -41,10 +42,10 @@ export function speedFor(phase: number): number {
   return phaseSpeedUp(EMBER.speedUp, phase);
 }
 
-/** Pure: wind up seconds in a phase, never under the tier telegraph. */
-export function windupFor(phase: number, tier: number): number {
+/** Pure: wind up seconds in a phase, never under the tier telegraph (times teleScale, R1 Insane). */
+export function windupFor(phase: number, tier: number, teleScale = 1): number {
   const t = EMBER.windupSec / speedFor(phase);
-  const tele = hazardTelegraph(tier);
+  const tele = hazardTelegraph(tier) * teleScale;
   return t > tele ? t : tele;
 }
 
@@ -97,7 +98,7 @@ function lockOn(w: World, id: number, bs: BossState): boolean {
 
 function startWindup(bs: BossState, extra: number): void {
   bs.n2 = -1;
-  setMove(bs, EmberMove.Windup, extra + windupFor(bs.phase, bs.row.tier));
+  setMove(bs, EmberMove.Windup, extra + windupFor(bs.phase, bs.row.tier, bs.teleScale));
 }
 
 /** Called when a dash ends. wall: the dash touched a wall (stun, no fan); else rest, with the fan if its row exists. */
@@ -126,7 +127,7 @@ function stepFan(w: World, id: number, bs: BossState, dt: number, adt: number): 
     if (bs.shotWait > 0) return;
   }
   const rate = dt > 0 ? adt / dt : 1;
-  if (bs.t3 / rate < hazardTelegraph(bs.row.tier)) {
+  if (bs.t3 / rate < bossTele(bs)) {
     bs.t2 = 0; // too late to launch inside the rest: no fan this time
     return;
   }
@@ -138,7 +139,7 @@ function stepFan(w: World, id: number, bs: BossState, dt: number, adt: number): 
 }
 
 function windup(w: World, id: number, bs: BossState, dt: number, adt: number): void {
-  const tele = hazardTelegraph(bs.row.tier);
+  const tele = bossTele(bs);
   if (bs.n2 < 0) {
     const rot = turnToward(w.rot[id] ?? 0, angleBetween(w, id, targetOf(w, id)), EMBER.turnRate * dt);
     w.rot[id] = rot;

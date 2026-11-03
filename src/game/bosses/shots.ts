@@ -17,7 +17,8 @@ import {
 } from '../enemyBullets';
 import { angleBetween, targetOf } from '../steer';
 import type { World } from '../world';
-import { hazardTelegraph, pointDist } from './kit';
+import { pointDist } from './kit';
+import { bossTele } from './scale';
 import type { BossState } from './state';
 import { SHOT_VOLLEY_MAX, type ShotRow } from './table';
 
@@ -65,7 +66,7 @@ export function fireVolley(w: World, id: number, bs: BossState, row: ShotRow, sp
   // The range test always uses the ship, even when the aim is the decoy.
   if (w.ship.active && !inShotRange(pointDist(mx, my, w.x[0] ?? 0, w.y[0] ?? 0))) return false;
   const tier = bs.row.tier;
-  const tele = hazardTelegraph(tier);
+  const tele = bossTele(bs);
   const speed = shotSpeed(row, speedMul * bs.levelScale); // release polish: the level scale
   const n = volleyCount(row);
   const spread = (row.spreadDeg ?? 0) * DEG;

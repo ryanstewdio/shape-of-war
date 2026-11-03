@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/core/events';
 import { damageBoss } from '../../src/game/bosses/core';
-import { BOSS_TABLE, HORNET, MAX_HORNETS, WARDEN, WARDEN_SHIELD } from '../../src/game/bosses/table';
+import { BOSS_TABLE, HORNET, HORNET_CAP, MAX_HORNETS, WARDEN, WARDEN_SHIELD } from '../../src/game/bosses/table';
 import { dropRingActive, dropRingHeading, ringEvery } from '../../src/game/bosses/warden';
 import { enemyBulletsOf } from '../../src/game/enemyBullets';
 import { stepGame } from '../../src/game/game';
@@ -49,7 +49,8 @@ function liveBullets(w: World): number[] {
 describe('warden GW2 numbers', () => {
   it('HP 520, 10 Hornets in a pool of 10 at 300 u/s, rings 3.7 s and 2.8 s, 2.0 s shield window', () => {
     expect(LEGACY_BOSS_HP.warden).toBe(520); // release polish raised the row (bossScale tests)
-    expect(MAX_HORNETS).toBe(10);
+    expect(HORNET_CAP).toBe(10); // R1: the live cap at Normal
+    expect(MAX_HORNETS).toBe(16); // R1: the slot pool, for Insane
     expect(WARDEN_SHIELD.hornetsMin).toBe(10);
     expect(WARDEN_SHIELD.hornetsMax).toBe(10);
     expect(HORNET.speed).toBe(300);

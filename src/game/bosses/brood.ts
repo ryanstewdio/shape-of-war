@@ -21,9 +21,10 @@ import { dropSlime } from '../enemies/slime';
 import { angleBetween, distBetween, moveHeading, moveTo, moveToHit, stepToward, targetOf, turnToward } from '../steer';
 import { Kind, type World } from '../world';
 import { bossAdt, clearHazards, countParts, crackBody, livePart, spawnAdd, spawnLaneMarker, spawnPart } from './core';
-import { hazardTelegraph, wrapPi } from './kit';
+import { wrapPi } from './kit';
+import { bossTele, minionCount } from './scale';
 import { bossOf, type BossState } from './state';
-import { BROOD, BROODLING, MAX_PARTS } from './table';
+import { BROOD, BROODLING, MAX_ADDS, MAX_PARTS } from './table';
 import { BossMode, PartType, type BossDef } from './types';
 import { removeEntity } from '../remove';
 
@@ -107,7 +108,7 @@ function summon(w: World, id: number, bs: BossState): void {
   const def = dart.def;
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
-  const n = addsPerWaveFor(bs.phase);
+  const n = minionCount(addsPerWaveFor(bs.phase), bs.addScale, MAX_ADDS);
   const d = (w.radius[id] ?? 0) + BROOD.addPad + def.radius;
   const target = targetOf(w, id);
   const front = distBetween(w, id, target) >= BROOD.addFrontMinDist;
@@ -143,7 +144,7 @@ function startWindup(w: World, id: number, bs: BossState): void {
   const length = chargeSpeedFor(bs.phase) * BROOD.chargeSec + (w.radius[id] ?? 0);
   dropMarker(w, bs);
   bs.n2 = spawnLaneMarker(w, bs, w.x[id] ?? 0, w.y[id] ?? 0, heading, length, BROOD.markerHalfWidth);
-  setMove(bs, BroodMove.Windup, hazardTelegraph(bs.row.tier));
+  setMove(bs, BroodMove.Windup, bossTele(bs));
 }
 
 /** Seek the target (flee false) or run from it (flee true), turn limited. */
@@ -326,7 +327,7 @@ function slotOf(bs: BossState, id: number): number {
 function launchDarts(w: World, id: number, bs: BossState): void {
   const d = (w.radius[id] ?? 0) + BROOD.addPad + dart.def.radius;
   const toShip = angleBetween(w, id, targetOf(w, id));
-  const n = BROODLING.dartsPerWave;
+  const n = minionCount(BROODLING.dartsPerWave, bs.addScale, MAX_ADDS);
   for (let k = 0; k < n; k++) {
     const a = toShip + (k - (n - 1) / 2) * BROODLING.dartSpreadDeg * DEG;
     spawnAdd(w, bs, dart.def, (w.x[id] ?? 0) + Math.cos(a) * d, (w.y[id] ?? 0) + Math.sin(a) * d);
