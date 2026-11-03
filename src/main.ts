@@ -465,7 +465,9 @@ async function boot(): Promise<void> {
       endlessSeed = freshSeed();
       const def = freePlayLevel({ arena: freePlayChoice.arena, barriers: freePlayChoice.barriers, seed: endlessSeed });
       world = createEndlessGame(def, (seg) => freePlaySegment(def, seg), gameOptions(runDifficulty)); // Foundry: spawns follow the chosen arena
-      level = world.level;
+      // R3 glue: world.level is the sim's Endless shell (objective none), which the fallback end check read
+      // as met at once. Use the UI Endless level like Endless does, built from the Free Play segments.
+      level = endlessLevel({ generateEndless: () => def, generateEndlessSegment: (_seed, seg) => freePlaySegment(def, seg) }, endlessSeed);
       pick = { def: level, source: 'generator', hash: levelHash(def) };
     } else if (mode === 'endless') {
       endlessSeed = freshSeed(); // every Endless game gets a fresh seed (docs/01 section 2.2)
