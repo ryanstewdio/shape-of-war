@@ -22,6 +22,13 @@ export interface ObjectiveInput {
   bossPending?: boolean;
   /** True once the level's boss died through the boss rules: an Adventure level is won at once. */
   bossDown?: boolean;
+  /**
+   * Free Play score attack (docs/14): run length in seconds, absent or 0 for none. Losing every life
+   * still fails the run; otherwise it ends with success once elapsed reaches the limit, in any mode.
+   */
+  timeLimit?: number;
+  /** Seconds the run has played (w.time), read only with timeLimit. */
+  elapsed?: number;
 }
 
 /** Pure: the objective's success test alone (no lives, no boss). Endless never succeeds. */
@@ -40,6 +47,11 @@ export function objectiveMet(s: ObjectiveInput): boolean {
 
 /** Pure: outcome for the given counters. */
 export function evaluateObjective(s: ObjectiveInput): Outcome {
+  const limit = s.timeLimit ?? 0;
+  if (limit > 0) {
+    if (s.lives <= 0) return 'lost';
+    if ((s.elapsed ?? 0) >= limit) return 'won';
+  }
   if (s.mode === 'endless') return s.lives <= 0 ? 'lost' : 'running';
   // Boss levels (DECISIONS, option 1): the boss kill wins at once, like a destroy objective's last
   // kill it takes precedence over a death on the same step. Until then only losing every life ends
@@ -80,6 +92,8 @@ const scratch: ObjectiveInput = {
   clock: 0,
   bossPending: false,
   bossDown: false,
+  timeLimit: 0,
+  elapsed: 0,
 };
 
 /** Update the outcome; emits 'game:over' exactly once when the level ends. Stars are 0 on failure and in Endless. */
@@ -94,6 +108,8 @@ export function stepObjective(w: World): Outcome {
     scratch.clock = g.waveClock;
     scratch.bossPending = bossPending(w);
     scratch.bossDown = bossSlain(w);
+    scratch.timeLimit = g.timeLimit;
+    scratch.elapsed = w.time;
     g.outcome = evaluateObjective(scratch);
     // Boss rule 9: a success while the boss is pending holds the level (waves stop, it enrages).
     if (scratch.bossPending && g.outcome === 'running' && objectiveMet(scratch)) setBossHold(w);

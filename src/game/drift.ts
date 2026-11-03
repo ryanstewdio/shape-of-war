@@ -54,6 +54,8 @@ export interface DriftState {
   warned: boolean;
   /** Drift speed of the latest step, u/s (render and HUD may read it). */
   speed: number;
+  /** Free Play drift option (docs/14): 1 low (today), 2 high. Off clears active instead. */
+  scale: number;
 }
 
 /** Pure: true when the level drifts (cylinder surface, no obstacles). */
@@ -94,6 +96,7 @@ export function createDrift(level: LevelDef): DriftState {
     burstAt: burstGap(seed, 0),
     warned: false,
     speed: 0,
+    scale: 1,
   };
 }
 
@@ -109,6 +112,18 @@ export function advanceBursts(d: DriftState, t: number): void {
 /** Reused 'sim:driftBurst' payload. */
 const burstFx: { inSec: number; dir: 1 | -1 } = { inSec: DRIFT_WARN, dir: 1 };
 
+/** Free Play drift scale (docs/14): off none, low 1 (today), high 2. */
+export const FREE_PLAY_DRIFT_HIGH = 2;
+
+/**
+ * Apply the Free Play drift option to a world's drift state. Drum only: off an open drum the state
+ * stays inactive whatever the option. off stops it, low leaves it as today, high doubles every speed.
+ */
+export function applyDriftOption(d: DriftState, option: 'off' | 'low' | 'high'): void {
+  if (option === 'off') d.active = false;
+  d.scale = option === 'high' ? FREE_PLAY_DRIFT_HIGH : 1;
+}
+
 /** Called by stepWorld after every move, before the wrap: shift the ship, bullets and entities along u. */
 export function stepDrift(w: World, dt: number): void {
   const d = w.drift;
@@ -120,7 +135,7 @@ export function stepDrift(w: World, dt: number): void {
     bus.emit('sim:driftBurst', burstFx);
     bus.emit('sfx', 'spawn');
   }
-  const speed = driftSpeedAt(t - d.burstAt) * difficultyOf(w).driftScale;
+  const speed = driftSpeedAt(t - d.burstAt) * difficultyOf(w).driftScale * d.scale;
   d.speed = speed;
   const dx = d.dir * speed * dt;
   if (w.ship.active && w.alive[0] === 1) w.x[0] = (w.x[0] ?? 0) + dx;

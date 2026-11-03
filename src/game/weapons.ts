@@ -470,6 +470,11 @@ export interface WeaponState extends DropCounter {
   timer: number;
   /** Settings "Weapon pickups". Off: no pickups spawn and the counter does not run. */
   pickupsOn: boolean;
+  /**
+   * Free Play (docs/14): a starting weapon with pickups off lasts the whole run. Its timer never
+   * runs down, and after a death it is equipped again at the respawn. Null otherwise.
+   */
+  permanent: BaseWeaponKind | null;
   /** Drops spawned so far (the hash01 index). */
   dropIndex: number;
   /** Weapon of the previous drop, null before the first. */
@@ -506,6 +511,7 @@ function createWeaponState(): WeaponState {
     newer: null,
     timer: 0,
     pickupsOn: true,
+    permanent: null,
     kills: 0,
     nextDropAt: FIRST_DROP_KILL,
     pending: false,
@@ -545,6 +551,16 @@ export function setWeaponPickups(w: World, on: boolean): void {
   const s = weaponState(w);
   s.pickupsOn = on;
   if (!on) s.pending = false;
+}
+
+/**
+ * Free Play port: kind lasts the whole run (equipped now, never expires, back after each respawn).
+ * null clears it; the current weapon then runs out normally. Spread is the default, so it is null.
+ */
+export function setPermanentWeapon(w: World, kind: BaseWeaponKind | null): void {
+  const s = weaponState(w);
+  s.permanent = kind === 'spread' ? null : kind;
+  if (s.permanent !== null && w.ship.active) equipWeapon(w, s.permanent, w.x[0] ?? 0, w.y[0] ?? 0);
 }
 
 export function currentWeapon(w: World): WeaponKind {
@@ -844,8 +860,10 @@ export function placeBlades(w: World, dt = 0): void {
 /** Weapon timer, the shield and the throttled 'hud:weapon'. Call after stepWorld. */
 export function stepWeapons(w: World, dt: number): void {
   const s = weaponState(w);
+  if (s.permanent !== null && s.kind === 'spread' && w.ship.active) equipWeapon(w, s.permanent, w.x[0] ?? 0, w.y[0] ?? 0);
   if (s.kind === 'spread') return;
-  s.timer -= dt;
+  if (s.permanent === null) s.timer -= dt;
+  else s.timer = WEAPON_DURATION;
   if (s.timer <= 1e-9) {
     resetWeapon(w, true);
     return;
