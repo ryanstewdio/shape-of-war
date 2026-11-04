@@ -39,6 +39,7 @@ import {
 import { formatInt, iconRun } from './format';
 import { aspectClass, type AspectClass, type HudBox, type HudFrame } from './hudFrame';
 import type { ObjectiveProgress } from './objective';
+import { CAP_EM, setVectorText, vectorBox } from './vectorFont';
 import { weaponHue } from './weaponHue';
 
 export { aspectClass, type AspectClass };
@@ -269,6 +270,16 @@ export interface Hud {
   listen(bus: Bus): () => void;
 }
 
+/** Smallest cap height in px at which the vector HUD score still reads on the cover screen. */
+export const HUD_SCORE_MIN_CAP = 12;
+/** The widest score the HUD plans for. */
+export const HUD_SCORE_SAMPLE = '99,999,999';
+
+/** Pure: true when the vector score is tall enough to read and the widest score fits its box. */
+export function vectorScoreFits(b: HudBox, sample = HUD_SCORE_SAMPLE): boolean {
+  return b.size * CAP_EM >= HUD_SCORE_MIN_CAP && vectorBox(sample).wEm * b.size <= b.w;
+}
+
 function setBox(e: HTMLElement, b: HudBox, text: boolean): void {
   const s = e.style;
   s.left = `${b.x}px`;
@@ -294,7 +305,9 @@ function place(e: HTMLElement, r: Rect, d: number): void {
 /** DOM edge. `now` is the clock for the hud:weapon throttle, injected for tests. */
 export function createHud(parent: HTMLElement, now: () => number = () => performance.now()): Hud {
   const root = el('div', 'sow-hud');
-  const score = el('div', 'sow-hud-item', '0');
+  const score = el('div', 'sow-hud-item');
+  let shownScore = '0';
+  setVectorText(score, shownScore, { tone: 'white' });
   const mult = el('div', 'sow-hud-item', 'x1');
   mult.style.color = 'hsl(95, 100%, 65%)';
   // Weapon indicator: text and a bar, no pointer target (the whole HUD is pointer-events: none).
@@ -458,7 +471,10 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
     hide: () => root.classList.remove('sow-open'),
     update(p) {
       const t = hudText(p, infiniteLives);
-      score.textContent = t.score;
+      if (t.score !== shownScore) {
+        shownScore = t.score;
+        setVectorText(score, t.score, { tone: 'white' });
+      }
       mult.textContent = t.mult;
       lives.textContent = t.lives;
       bombs.textContent = t.bombs;

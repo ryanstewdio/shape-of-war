@@ -28,6 +28,7 @@ import { button, createScreen, el, type Screen } from './dom';
 import { foeLines, iconCanvas, type FoeKind, type FoeLine } from './enemyIntro';
 import { formatClock, formatCompact } from './format';
 import { DIFFICULTY_ROW_LABEL, difficultyButtonStates, difficultyLabel } from './settings';
+import { setVectorText } from './vectorFont';
 
 /** Seconds the Endless and Free Play "Ready" text holds the sim. */
 export const INTRO_SEC = 1.5;
@@ -398,6 +399,7 @@ export function createIntroScreen(parent: HTMLElement, onStart: () => void, onDi
   diff.append(...chips);
   const start = button(START_LABEL, onStart);
   start.classList.add('sow-big');
+  setVectorText(start, START_LABEL, { tone: 'white' });
   start.setAttribute('data-intro', 'start');
   play.append(diff, start); // R6: the chips alone, no "Difficulty" label
   const stars = block('stars', STARS_LABEL);
@@ -426,7 +428,7 @@ export function createIntroScreen(parent: HTMLElement, onStart: () => void, onDi
   return {
     ...s,
     showCard(c) {
-      head.textContent = c.title;
+      setVectorText(head, c.title);
       goalText.textContent = c.goal;
       victory.textContent = c.victory;
       starCols.replaceChildren(
@@ -453,7 +455,7 @@ export function createIntroScreen(parent: HTMLElement, onStart: () => void, onDi
       show(false);
     },
     showReady() {
-      head.textContent = READY_TEXT;
+      setVectorText(head, READY_TEXT);
       show(true);
     },
   };

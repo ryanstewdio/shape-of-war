@@ -4,6 +4,7 @@
 // after a pointerdown on the splash itself, so it never falls through to the boot screen.
 import { createScreen, el, type Screen } from './dom';
 import { GAME_TITLE } from './menu';
+import { setVectorText } from './vectorFont';
 
 /** How long the splash holds before it closes on its own. */
 export const SPLASH_MS = 1200;
@@ -50,7 +51,9 @@ export function createSplashScreen(parent: HTMLElement, onDone: () => void, time
   const s = createScreen(parent);
   s.root.classList.add('sow-splash');
   s.root.style.background = '#000';
-  s.root.append(el('div', 'sow-title sow-splash-title', GAME_TITLE));
+  const title = el('div', 'sow-title sow-splash-title');
+  setVectorText(title, GAME_TITLE);
+  s.root.append(title);
   let gate = armSplash();
   const close = (next: SplashGate): void => {
     if (!gate.open) return;

@@ -133,8 +133,6 @@ export const UI_CSS = `
 .sow-sbar-val { font-size: 12px; font-weight: 600; }
 .sow-details { width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
 .sow-btn.sow-big.sow-details-toggle { flex: 0 0 auto; width: 100%; }
-.sow-btn.sow-details-toggle::after { content: " +"; }
-.sow-btn.sow-details-toggle[aria-expanded="true"]::after { content: " -"; }
 .sow-details-body { display: flex; flex-direction: column; gap: 6px; padding: 4px 8px 0; text-align: left; }
 .sow-details-body .sow-kv { font-size: 14px; }
 .sow-card.sow-fp-card { overflow: hidden; gap: 10px; }
@@ -205,10 +203,17 @@ export const UI_CSS = `
 .sow-splash-title { font-size: clamp(34px, 10vmin, 84px); white-space: nowrap; opacity: 0.4;
   animation: sow-splash-pulse 1200ms ease-in-out forwards; }
 @keyframes sow-splash-pulse {
-  0% { opacity: 0.4; text-shadow: 0 0 4px hsl(185, 90%, 55%), 0 0 10px hsl(185, 90%, 45%); }
-  50% { opacity: 1; text-shadow: 0 0 14px hsl(185, 95%, 60%), 0 0 40px hsl(185, 95%, 50%), 0 0 70px hsl(300, 90%, 60%); }
-  100% { opacity: 0.9; text-shadow: 0 0 8px hsl(185, 90%, 55%), 0 0 22px hsl(185, 90%, 45%); } }
+  0% { opacity: 0.4; filter: brightness(0.7); text-shadow: 0 0 4px hsl(185, 90%, 55%), 0 0 10px hsl(185, 90%, 45%); }
+  50% { opacity: 1; filter: brightness(1.7); text-shadow: 0 0 14px hsl(185, 95%, 60%), 0 0 40px hsl(185, 95%, 50%), 0 0 70px hsl(300, 90%, 60%); }
+  100% { opacity: 0.9; filter: brightness(1); text-shadow: 0 0 8px hsl(185, 90%, 55%), 0 0 22px hsl(185, 90%, 45%); } }
 @media (prefers-reduced-motion: reduce) { .sow-splash-title { animation: none; opacity: 1; } }
+.sow-vec { display: inline-block; vertical-align: middle; overflow: visible; fill: none; stroke: currentColor;
+  stroke-linecap: square; stroke-linejoin: miter; stroke-miterlimit: 3; }
+.sow-vec-host { line-height: 1; }
+/* The HUD score box clips text; the vector score is sized to fit (vectorScoreFits), so let its glow spill. */
+.sow-hud-item.sow-vec-host { overflow: visible !important; }
+.sow-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 `;
 
 /** Insert the shared stylesheet once. */
