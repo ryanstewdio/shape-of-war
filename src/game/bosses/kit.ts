@@ -186,18 +186,49 @@ export function hazardHits(
   }
 }
 
-/** Scratch for surface deltas in hazardHitsOn. */
+/** Scratch for surface deltas in the seam aware helpers. */
 const sd = { x: 0, y: 0 };
 
 /**
- * hazardHits on a surface: seam aware on a drum (forge-leaver, Foundry's R5 request). The ship
- * centre is taken to its nearest image around the hazard anchor (x, y) through surface.delta, and
- * a tether's far end (vx, vy) likewise, so a hazard reaching across the u seam hits the ship on the
- * other side. A surface that does not wrap calls hazardHits with the raw numbers, so flat play is
- * bit identical. Known limit: a lane or sweep arm longer than half the drum tests the nearest image.
+ * How far from its anchor (x, y) a hazard can reach a ship centre, with the hazard fields as the
+ * render contract stores them: the bound on the images hazardHitsOn has to test on a drum.
+ */
+export function hazardReach(type: number, shipR: number, radius: number, vx: number, vy: number): number {
+  switch (type) {
+    case HazardType.Lane:
+      return Math.abs(vx) + radius + shipR;
+    case HazardType.Ring:
+      return Math.abs(radius) + HAZARD.ringBand;
+    case HazardType.Sweep:
+      return Math.abs(vx) + radius;
+    case HazardType.Tether:
+      return Math.hypot(vx, vy) + radius;
+    default:
+      return 0;
+  }
+}
+
+/** Most images either side of the nearest one a hit test walks (a ring wider than two drums is not a thing). */
+const MAX_IMAGES = 3;
+
+/** Images either side of the nearest one a reach of reach needs on a wrapped axis of length L. */
+export function imagesFor(reach: number, L: number): number {
+  if (!(L > 0) || !(reach > 0)) return 0;
+  const k = Math.ceil(reach / L + 0.5);
+  return k > MAX_IMAGES ? MAX_IMAGES : k;
+}
+
+/**
+ * hazardHits on a surface: seam aware on a drum (forge-leaver, then swarm-r6-drumboss). The ship
+ * centre is taken to its nearest image around the hazard anchor (x, y) through surface.delta, and a
+ * tether's far end (vx, vy) likewise. A hazard that reaches more than half way round the drum (a
+ * Warden ring grown past the seam, a long lane or sweep arm) is tested against every ship image
+ * within its reach, so a ring that wraps round and crosses the ship from the far side hits, as the
+ * drum draws it. A surface that does not wrap calls hazardHits with the raw numbers, so flat play
+ * is bit identical.
  */
 export function hazardHitsOn(
-  surface: Pick<Surface, 'topology' | 'delta'>,
+  surface: Pick<Surface, 'topology' | 'delta' | 'width' | 'height'>,
   type: number,
   px: number,
   py: number,
@@ -209,15 +240,57 @@ export function hazardHitsOn(
   vx: number,
   vy: number,
 ): boolean {
-  if (!surface.topology.wrapU && !surface.topology.wrapV) return hazardHits(type, px, py, shipR, x, y, rot, radius, vx, vy);
+  const wu = surface.topology.wrapU;
+  const wv = surface.topology.wrapV;
+  if (!wu && !wv) return hazardHits(type, px, py, shipR, x, y, rot, radius, vx, vy);
   surface.delta(x, y, px, py, sd);
   const sx = x + sd.x;
   const sy = y + sd.y;
+  let ex = vx;
+  let ey = vy;
   if (type === HazardType.Tether) {
     surface.delta(x, y, vx, vy, sd);
-    return hazardHits(type, sx, sy, shipR, x, y, rot, radius, x + sd.x, y + sd.y);
+    ex = x + sd.x;
+    ey = y + sd.y;
   }
-  return hazardHits(type, sx, sy, shipR, x, y, rot, radius, vx, vy);
+  const reach = hazardReach(type, shipR, radius, ex - x, ey - y);
+  const W = surface.width;
+  const H = surface.height;
+  const ku = wu ? imagesFor(reach, W) : 0;
+  const kv = wv ? imagesFor(reach, H) : 0;
+  for (let i = -ku; i <= ku; i++) {
+    for (let j = -kv; j <= kv; j++) {
+      if (hazardHits(type, sx + i * W, sy + j * H, shipR, x, y, rot, radius, ex, ey)) return true;
+    }
+  }
+  return false;
+}
+
+/** circlesOverlap with the offset taken through the surface (the short way across a drum seam). */
+export function circlesOverlapOn(
+  surface: Pick<Surface, 'delta'>,
+  ax: number,
+  ay: number,
+  ar: number,
+  bx: number,
+  by: number,
+  br: number,
+): boolean {
+  surface.delta(ax, ay, bx, by, sd);
+  const rr = ar + br;
+  return sd.x * sd.x + sd.y * sd.y <= rr * rr;
+}
+
+/** pointDist through the surface (the short way across a drum seam). */
+export function pointDistOn(surface: Pick<Surface, 'delta'>, ax: number, ay: number, bx: number, by: number): number {
+  surface.delta(ax, ay, bx, by, sd);
+  return Math.sqrt(sd.x * sd.x + sd.y * sd.y);
+}
+
+/** Angle from (ax, ay) to (bx, by) through the surface (the short way across a drum seam). */
+export function angleToOn(surface: Pick<Surface, 'delta'>, ax: number, ay: number, bx: number, by: number): number {
+  surface.delta(ax, ay, bx, by, sd);
+  return Math.atan2(sd.y, sd.x);
 }
 
 /**

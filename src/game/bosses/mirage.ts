@@ -16,13 +16,14 @@
 // not a body split: bs.split stays false). Ability scratch (bs.abl): 0 and 1 last position, 2 and 3
 // the one before, 4 copy countdown (0 idle), 5 respawn clock, 6 1 once split, 7 positions known.
 import { bus } from '../../core/events';
-import { isInside } from '../arena';
+import { isInsideOn } from '../arena';
+import type { Surface } from '../../core/surface';
 import { removeEntity } from '../remove';
 import { SHIP_RADIUS } from '../ship';
 import { angleBetween, entityHash, inFrontArc, moveTo, targetOf } from '../steer';
 import { Kind, type World } from '../world';
 import { crackBody, livePart, spawnLane, spawnPart, spawnRingMarker } from './core';
-import { hazardHits, pointDist, wrapPi } from './kit';
+import { hazardHitsOn, pointDistOn, wrapPi } from './kit';
 import type { BossState } from './state';
 import { HAZARD_RECHECK_SEC, MIRAGE, MIRROR } from './table';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
@@ -59,8 +60,8 @@ export function arcHalf(): number {
 }
 
 /** Pure: true when a hit at (hx, hy) on a body at (x, y) whose arc centre is rot gets through. */
-export function throughArc(x: number, y: number, rot: number, hx: number, hy: number): boolean {
-  return inFrontArc(x, y, rot, hx, hy, arcHalf());
+export function throughArc(x: number, y: number, rot: number, hx: number, hy: number, surface?: Surface): boolean {
+  return inFrontArc(x, y, rot, hx, hy, arcHalf(), surface);
 }
 
 /** Pure: the first lane's angle for a burst, given the bearing from the boss to the ship. */
@@ -105,7 +106,8 @@ function mark(w: World, id: number, bs: BossState): boolean {
   const h2 = entityHash(w, id, n * 2 + 1);
   for (let k = 0; k < MIRAGE.warpTries; k++) {
     warpCandidate(tx, ty, h1, h2, k, cand);
-    if (!isInside(w.level.arena, cand.x, cand.y, r)) continue;
+    w.surface.wrap(cand); // R6 drum: a landing point past the seam is its image on the strip (flat: no op)
+    if (!isInsideOn(w.surface, w.level.arena, cand.x, cand.y, r)) continue;
     const m = spawnRingMarker(w, bs, cand.x, cand.y, r, MIRAGE.markSec);
     if (m < 0) return false; // hazard cap: never warp unmarked
     bs.t1 = cand.x;
@@ -121,7 +123,7 @@ function mark(w: World, id: number, bs: BossState): boolean {
 /** True when the ship (never the decoy) is clear of the landing spot. */
 function spotClear(w: World, bs: BossState, r: number): boolean {
   if (!w.ship.active) return true;
-  return pointDist(w.x[0] ?? 0, w.y[0] ?? 0, bs.t1, bs.t2) > r + SHIP_RADIUS + MIRAGE.landPad;
+  return pointDistOn(w.surface, w.x[0] ?? 0, w.y[0] ?? 0, bs.t1, bs.t2) > r + SHIP_RADIUS + MIRAGE.landPad;
 }
 
 /** Fire the eight lane burst, or wait 0.3 s when any lane would cover the ship now. */
@@ -133,7 +135,7 @@ function burst(w: World, id: number, bs: BossState): void {
   if (w.ship.active) {
     for (let k = 0; k < n; k++) {
       const a = a0 + (k * TAU) / n;
-      if (hazardHits(HazardType.Lane, w.x[0] ?? 0, w.y[0] ?? 0, SHIP_RADIUS, x, y, a, MIRAGE.laneHalfWidth, MIRAGE.laneLength, 0)) {
+      if (hazardHitsOn(w.surface, HazardType.Lane, w.x[0] ?? 0, w.y[0] ?? 0, SHIP_RADIUS, x, y, a, MIRAGE.laneHalfWidth, MIRAGE.laneLength, 0)) {
         bs.retry = HAZARD_RECHECK_SEC;
         bs.n2 = MirageWarp.Lanes;
         return;
@@ -211,7 +213,7 @@ export function onPhase(w: World, id: number, bs: BossState, phase: number): voi
 
 /** Shield arc: a hit counts only through the open arc. */
 export function gate(w: World, id: number, bs: BossState, hx: number, hy: number): boolean {
-  return throughArc(w.x[id] ?? 0, w.y[id] ?? 0, w.rot[id] ?? 0, hx, hy);
+  return throughArc(w.x[id] ?? 0, w.y[id] ?? 0, w.rot[id] ?? 0, hx, hy, w.surface);
 }
 
 export function entryHome(d: number): number {

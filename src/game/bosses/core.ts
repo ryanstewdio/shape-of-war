@@ -23,7 +23,7 @@ import { Kind, spawn, type World } from '../world';
 import { difficultyOf } from '../difficulty';
 import { BOSS_IDS, type BossSpec } from '../../levelgen/leveldef';
 import {
-  circlesOverlap,
+  circlesOverlapOn,
   clampLaneHalfWidth,
   clampRingGapHalf,
   clampSweepArms,
@@ -451,7 +451,7 @@ export function bossContacts(w: World, dt: number): boolean {
   }
   if (w.ship.invuln > 0 || g.invulnerable) return false;
   const id = bossHittable(w);
-  if (id > 0 && circlesOverlap(sx, sy, SHIP_RADIUS, w.x[id] ?? 0, w.y[id] ?? 0, w.radius[id] ?? 0)) {
+  if (id > 0 && circlesOverlapOn(w.surface, sx, sy, SHIP_RADIUS, w.x[id] ?? 0, w.y[id] ?? 0, w.radius[id] ?? 0)) {
     killShip(w);
     return true;
   }
@@ -459,7 +459,7 @@ export function bossContacts(w: World, dt: number): boolean {
     // Broodlings (and Gravitants, Tempestlings) are the body now: contact with any of them kills.
     for (let k = 0; k < MAX_PARTS; k++) {
       const p = livePart(w, bs, k);
-      if (p > 0 && isBodyPart(w.a[p] ?? -1) && circlesOverlap(sx, sy, SHIP_RADIUS, w.x[p] ?? 0, w.y[p] ?? 0, w.radius[p] ?? 0)) {
+      if (p > 0 && isBodyPart(w.a[p] ?? -1) && circlesOverlapOn(w.surface, sx, sy, SHIP_RADIUS, w.x[p] ?? 0, w.y[p] ?? 0, w.radius[p] ?? 0)) {
         killShip(w);
         return true;
       }
@@ -468,7 +468,7 @@ export function bossContacts(w: World, dt: number): boolean {
   // Hornets kill on contact once past their add telegraph (Mirrors never do).
   for (let k = 0; k < MAX_HORNETS; k++) {
     const p = liveHornet(w, bs, k);
-    if (p > 0 && (w.t[p] ?? 0) >= HORNET.armSec && circlesOverlap(sx, sy, SHIP_RADIUS, w.x[p] ?? 0, w.y[p] ?? 0, w.radius[p] ?? 0)) {
+    if (p > 0 && (w.t[p] ?? 0) >= HORNET.armSec && circlesOverlapOn(w.surface, sx, sy, SHIP_RADIUS, w.x[p] ?? 0, w.y[p] ?? 0, w.radius[p] ?? 0)) {
       killShip(w);
       return true;
     }
@@ -502,9 +502,9 @@ export function isBossTarget(w: World, id: number): boolean {
   return false;
 }
 
-/** True when a circle at (x, y) of radius r touches the boss body (direct test, the body is too big for the grid). */
+/** True when a circle at (x, y) of radius r touches the boss body (direct test, the body is too big for the grid; seam aware on a drum). */
 export function bossBodyContact(w: World, boss: number, x: number, y: number, r: number): boolean {
-  return circlesOverlap(x, y, r, w.x[boss] ?? 0, w.y[boss] ?? 0, w.radius[boss] ?? 0);
+  return circlesOverlapOn(w.surface, x, y, r, w.x[boss] ?? 0, w.y[boss] ?? 0, w.radius[boss] ?? 0);
 }
 
 /** BOSS_DAMAGE for a player bullet style. Drone shots are spread style and deal the same 10. */
@@ -853,6 +853,7 @@ export function spawnHazard(
   w.radius[id] = radius;
   w.vx[id] = vx;
   w.vy[id] = vy;
+  wrapHazardAnchor(w, id, type === HazardType.Tether);
   w.hp[id] = 0;
   bs.hzTele[id] = type === HazardType.Pull ? 0 : bossTele(bs);
   bs.hzRate[id] = rate;
@@ -860,6 +861,31 @@ export function spawnHazard(
   bs.hzFollow[id] = follow ? 1 : 0;
   bs.hzMarker[id] = 0;
   return id;
+}
+
+const wp = { x: 0, y: 0 };
+
+/**
+ * On a drum, keep a hazard's anchor (and a tether's far end) on the canonical strip, as the sim
+ * keeps every body: a ring centred past the seam (an anchor orbit, a body offset) would otherwise
+ * sit outside u in [-W/2, W/2). Hit tests go through surface.delta, so this only keeps the stored
+ * numbers tidy for render. No op on a flat surface (bit identical).
+ */
+function wrapHazardAnchor(w: World, id: number, tether: boolean): void {
+  if (!w.surface.topology.wrapU && !w.surface.topology.wrapV) return;
+  wp.x = w.x[id] ?? 0;
+  wp.y = w.y[id] ?? 0;
+  w.surface.wrap(wp);
+  w.x[id] = wp.x;
+  w.y[id] = wp.y;
+  w.prevX[id] = wp.x;
+  w.prevY[id] = wp.y;
+  if (!tether) return;
+  wp.x = w.vx[id] ?? 0;
+  wp.y = w.vy[id] ?? 0;
+  w.surface.wrap(wp);
+  w.vx[id] = wp.x;
+  w.vy[id] = wp.y;
 }
 
 /**
@@ -884,6 +910,7 @@ export function spawnLaneMarker(w: World, bs: BossState, x: number, y: number, r
   bs.hzLife[id] = markerLife(tele);
   bs.hzFollow[id] = 0;
   bs.hzMarker[id] = 1;
+  wrapHazardAnchor(w, id, false);
   return id;
 }
 
@@ -962,6 +989,7 @@ export function spawnRingMarker(w: World, bs: BossState, x: number, y: number, r
   bs.hzLife[id] = life > 0 && life < cap ? life : cap;
   bs.hzFollow[id] = 0;
   bs.hzMarker[id] = 1;
+  wrapHazardAnchor(w, id, false);
   return id;
 }
 

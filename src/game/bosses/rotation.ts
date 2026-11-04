@@ -9,10 +9,10 @@
 // rotation keeps its own launch tracker, so fx:bossShot fires once per rotation volley too. Speeds follow
 // the level scale and are clamped by the pool. No allocation, no PRNG.
 import { bus } from '../../core/events';
-import { isInside } from '../arena';
+import { isInsideOn } from '../arena';
 import { clampEnemyBulletSpeed, ENEMY_BULLET_MIN_RANGE, ENEMY_BULLET_RADIUS, enemyBulletsOf, spawnEnemyBullet } from '../enemyBullets';
 import { Kind, type World } from '../world';
-import { pointDist } from './kit';
+import { angleToOn, pointDistOn } from './kit';
 import { bossTele } from './scale';
 import type { BossState } from './state';
 import { ENRAGE_AFTER_SEC, ENRAGE_RATE, ROTATION, SHOT_RECHECK_SEC, SHOT_VOLLEY_MAX } from './table';
@@ -118,15 +118,15 @@ function fire(w: World, bs: BossState, id: number): boolean {
   const sy = w.y[0] ?? 0;
   const bx = w.x[id] ?? 0;
   const by = w.y[id] ?? 0;
-  const bearing = Math.atan2(sy - by, sx - bx);
+  const bearing = angleToOn(w.surface, bx, by, sx, sy);
   const r = w.radius[id] ?? 0;
   let mx = bx + Math.cos(bearing) * r;
   let my = by + Math.sin(bearing) * r;
-  if (!isInside(w.level.arena, mx, my, ENEMY_BULLET_RADIUS)) {
+  if (!isInsideOn(w.surface, w.level.arena, mx, my, ENEMY_BULLET_RADIUS)) {
     mx = bx;
     my = by;
   }
-  if (pointDist(mx, my, sx, sy) < ENEMY_BULLET_MIN_RANGE) return false;
+  if (pointDistOn(w.surface, mx, my, sx, sy) < ENEMY_BULLET_MIN_RANGE) return false;
   const pattern = patternAt(bs.rotCount);
   const n = patternBullets(pattern, bs.phase);
   const tier = bs.row.tier;
@@ -138,7 +138,7 @@ function fire(w: World, bs: BossState, id: number): boolean {
     // Burst and pincer bullets leave from the body edge on their own heading.
     const ox = pattern === Pattern.Fan ? mx : bx + Math.cos(a) * r;
     const oy = pattern === Pattern.Fan ? my : by + Math.sin(a) * r;
-    const inside = isInside(w.level.arena, ox, oy, ENEMY_BULLET_RADIUS);
+    const inside = isInsideOn(w.surface, w.level.arena, ox, oy, ENEMY_BULLET_RADIUS);
     const b = spawnEnemyBullet(w, inside ? ox : bx, inside ? oy : by, a, speed, ENEMY_BULLET_RADIUS, tier, tele);
     if (firstId < 0) firstId = b;
   }

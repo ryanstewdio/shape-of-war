@@ -83,15 +83,15 @@ describe('R5 bosses', () => {
     }
   });
 
-  it('a drum keeps Warden and Brood: the ladder alternates them, other chosen bosses fight as Warden', () => {
-    expect([1, 2, 3, 4].map((j) => freePlayBossFor('every3', 3 + 10 * (j - 1), true)?.id)).toEqual(['warden', 'brood', 'warden', 'brood']);
+  it('R6: a drum honours the chosen boss and the full ladder, like a flat arena', () => {
+    for (let j = 1; j <= 12; j++) expect(freePlayBossFor('every3', 3 + 10 * (j - 1), true)).toEqual(freePlayBossFor('every3', 3 + 10 * (j - 1), false));
     expect(freePlayBossFor('brood', 3, true)?.id).toBe('brood');
-    expect(freePlayBossFor('gravitas', 3, true)).toEqual({ id: 'warden', tier: 1, atSec: 10, hpMul: 1 });
+    expect(freePlayBossFor('gravitas', 3, true)).toEqual({ id: 'gravitas', tier: 2, atSec: 10, hpMul: 1 });
     expect(freePlayBossFor('off', 3, true)).toBeNull();
-    expect(FREE_PLAY_DRUM_BOSSES).toEqual(['warden', 'brood']);
+    expect(FREE_PLAY_DRUM_BOSSES).toEqual(['warden', 'brood', 'spindle', 'ember', 'mirage', 'gravitas', 'bastion', 'tempest', 'twins', 'prism']);
     const d = freePlayLevel({ arena: 'drum', barriers: false, seed: 4, config: cfg({ bosses: 'tempest' }) });
     expectValidRun(d);
-    expect(entrances(d).map((x) => x.id)).toEqual(['warden', 'warden']);
+    expect(entrances(d).map((x) => x.id)).toEqual(['tempest', 'tempest']);
   });
 
   it('off: no boss in 11 minutes', () => {

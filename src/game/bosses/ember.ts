@@ -12,7 +12,7 @@
 // the rest. A wall hit stuns with no fan. Scratch: n0 move state, t3 state seconds left, dir dash
 // heading, n1 bounces used, t1 1 when this dash touched a wall, t0 dash distance since the last
 // Mine, n2 marker id, t2 1 while this rest still owes its fan, shotWait the fan recheck.
-import { confine, createConfineResult } from '../arena';
+import { confineOn, createConfineResult } from '../arena';
 import { dropMine } from '../enemies/mine';
 import { removeEntity } from '../remove';
 import { angleBetween, targetOf, turnToward } from '../steer';
@@ -164,7 +164,7 @@ function windup(w: World, id: number, bs: BossState, dt: number, adt: number): v
 
 function dash(w: World, id: number, bs: BossState, dt: number): void {
   const step = dashSpeedFor(bs.phase) * dt;
-  const r = confine(w.level.arena, (w.x[id] ?? 0) + Math.cos(bs.dir) * step, (w.y[id] ?? 0) + Math.sin(bs.dir) * step, w.radius[id] ?? 0, res);
+  const r = confineOn(w.surface, w.level.arena, (w.x[id] ?? 0) + Math.cos(bs.dir) * step, (w.y[id] ?? 0) + Math.sin(bs.dir) * step, w.radius[id] ?? 0, res);
   w.x[id] = r.x;
   w.y[id] = r.y;
   w.rot[id] = bs.dir;

@@ -31,7 +31,7 @@ import {
   spawnTether,
   wallDistance,
 } from './core';
-import { circlesOverlap, wrapPi } from './kit';
+import { circlesOverlapOn, wrapPi } from './kit';
 import type { BossState } from './state';
 import { HAZARD_RECHECK_SEC, MAX_PARTS, PRISM } from './table';
 import { minionCount } from './scale';
@@ -105,11 +105,15 @@ function applyCycle(bs: BossState): void {
   bs.mode = st === PrismStage.Window ? BossMode.Vulnerable : st === PrismStage.White ? BossMode.Attacking : BossMode.Guarded;
 }
 
+/** Scratch for surface deltas. */
+const dv = { x: 0, y: 0 };
+
 function drift(w: World, id: number, bs: BossState, dt: number): void {
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
-  const dx = bs.homeX - x;
-  const dy = bs.homeY - y;
+  w.surface.delta(x, y, bs.homeX, bs.homeY, dv); // flat: home minus body; drum: the short way
+  const dx = dv.x;
+  const dy = dv.y;
   const d = Math.sqrt(dx * dx + dy * dy);
   const step = PRISM.driftSpeed * dt;
   if (d <= step || d <= PRISM.arriveDist) {
@@ -219,7 +223,7 @@ function stepWarp(w: World, id: number, bs: BossState, adt: number): void {
     bs.t2 -= adt;
     if (bs.t2 > 0) return;
     const clear = (w.radius[id] ?? 0) + PRISM.landPad;
-    if (w.ship.active && circlesOverlap(w.x[0] ?? 0, w.y[0] ?? 0, 0, bs.homeX, bs.homeY, clear)) {
+    if (w.ship.active && circlesOverlapOn(w.surface, w.x[0] ?? 0, w.y[0] ?? 0, 0, bs.homeX, bs.homeY, clear)) {
       bs.t2 = HAZARD_RECHECK_SEC;
       return;
     }

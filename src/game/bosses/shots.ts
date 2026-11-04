@@ -7,7 +7,7 @@
 // clamped to ENEMY_BULLET_SPEED_MAX, so phase speed ups and enrage never pass it. No allocation,
 // no PRNG.
 import { bus } from '../../core/events';
-import { isInside } from '../arena';
+import { isInsideOn } from '../arena';
 import {
   clampEnemyBulletSpeed,
   ENEMY_BULLET_MIN_RANGE,
@@ -17,7 +17,7 @@ import {
 } from '../enemyBullets';
 import { angleBetween, targetOf } from '../steer';
 import type { World } from '../world';
-import { pointDist } from './kit';
+import { pointDistOn } from './kit';
 import { bossTele } from './scale';
 import type { BossState } from './state';
 import { SHOT_VOLLEY_MAX, type ShotRow } from './table';
@@ -59,12 +59,12 @@ export function fireVolley(w: World, id: number, bs: BossState, row: ShotRow, sp
   const by = w.y[id] ?? 0;
   let mx = bx + Math.cos(heading) * r;
   let my = by + Math.sin(heading) * r;
-  if (!isInside(w.level.arena, mx, my, ENEMY_BULLET_RADIUS)) {
+  if (!isInsideOn(w.surface, w.level.arena, mx, my, ENEMY_BULLET_RADIUS)) {
     mx = bx;
     my = by;
   }
   // The range test always uses the ship, even when the aim is the decoy.
-  if (w.ship.active && !inShotRange(pointDist(mx, my, w.x[0] ?? 0, w.y[0] ?? 0))) return false;
+  if (w.ship.active && !inShotRange(pointDistOn(w.surface, mx, my, w.x[0] ?? 0, w.y[0] ?? 0))) return false;
   const tier = bs.row.tier;
   const tele = bossTele(bs);
   const speed = shotSpeed(row, speedMul * bs.levelScale); // release polish: the level scale

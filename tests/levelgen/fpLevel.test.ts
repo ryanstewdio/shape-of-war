@@ -189,7 +189,7 @@ describe('bosses', () => {
     expect([3, 13, 23].map((s) => freePlaySegment(flat, s).boss?.id)).toEqual(['warden', 'brood', 'spindle']);
   });
 
-  it('a chosen boss on the R5 cadence on a flat arena; a drum fights it as Warden', () => {
+  it('a chosen boss on the R5 cadence on a flat arena; a drum fights it too (R6)', () => {
     const d = freePlayLevel({ arena: 'circle', barriers: true, seed: 6, config: cfg({ bosses: 'prism' }) });
     expectValid(d, [...SEGMENTS, 3, 13]);
     for (const s of [...SEGMENTS, 3, 13]) {
@@ -198,7 +198,7 @@ describe('bosses', () => {
       else expect(b).toBeUndefined();
     }
     const drum = freePlayLevel({ arena: 'drum', barriers: false, seed: 6, config: cfg({ bosses: 'prism' }) });
-    expect(freePlaySegment(drum, 3).boss).toMatchObject({ id: 'warden', tier: 1 });
+    expect(freePlaySegment(drum, 3).boss).toMatchObject({ id: 'prism', tier: 4 });
   });
 
   it('B1 catches a boss the options did not ask for', () => {
