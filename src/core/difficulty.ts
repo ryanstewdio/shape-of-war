@@ -22,12 +22,14 @@ export interface DifficultyTable {
   readonly driftScale: number;
   /** R5 stub: multiplier on the level's maxLiveEnemies cap, so Insane peaks reach Free Play Swarm density (Forge). */
   readonly liveCapScale: number;
+  /** R6 stub: multiplier on par and the three star targets for this difficulty (Foundry calibrates, Ledger applies). */
+  readonly parScale: number;
 }
 
 export const DIFFICULTY: Readonly<Record<Difficulty, DifficultyTable>> = Object.freeze({
-  easy: { enemySpeed: 0.8, enemyHp: 0.75, spawnRate: 0.87, bossScale: 0.65, extraLives: 2, addScale: 0.75, driftScale: 0.7, liveCapScale: 0.9 },
-  normal: { enemySpeed: 1, enemyHp: 1, spawnRate: 1, bossScale: 1, extraLives: 0, addScale: 1, driftScale: 1, liveCapScale: 1 },
-  hard: { enemySpeed: 1.15, enemyHp: 1.3, spawnRate: 1.15, bossScale: 1.35, extraLives: -1, addScale: 1.25, driftScale: 1.3, liveCapScale: 1.15 },
+  easy: { enemySpeed: 0.8, enemyHp: 0.75, spawnRate: 0.87, bossScale: 0.65, extraLives: 2, addScale: 0.75, driftScale: 0.7, liveCapScale: 0.9, parScale: 1 },
+  normal: { enemySpeed: 1, enemyHp: 1, spawnRate: 1, bossScale: 1, extraLives: 0, addScale: 1, driftScale: 1, liveCapScale: 1, parScale: 1 },
+  hard: { enemySpeed: 1.15, enemyHp: 1.3, spawnRate: 1.15, bossScale: 1.35, extraLives: -1, addScale: 1.25, driftScale: 1.3, liveCapScale: 1.15, parScale: 1 },
   // R1 (Ryan): Insane is 20 percent harder than Hard. R5 (Ryan): spawn density steps of about 15 percent.
-  insane: { enemySpeed: 1.38, enemyHp: 1.56, spawnRate: 1.32, bossScale: 1.62, extraLives: -1, addScale: 1.6, driftScale: 1.6, liveCapScale: 1.6 },
+  insane: { enemySpeed: 1.38, enemyHp: 1.56, spawnRate: 1.32, bossScale: 1.62, extraLives: -1, addScale: 1.6, driftScale: 1.6, liveCapScale: 1.6, parScale: 1 },
 });
