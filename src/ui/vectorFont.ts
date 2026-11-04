@@ -1,91 +1,100 @@
-// Vector headline font (Ryan, after R6): an original stroke font drawn in code, in the spirit of
-// vector arcade lettering. No font files: every glyph is straight segments and a few arcs on a
-// 4 wide by 6 tall grid (y down, 0 at the cap line, 6 on the baseline), with chamfered corners for
-// the slightly squared look and one stroke width for every glyph. Headlines only: the title, screen
-// headlines, the big results score, the main card buttons and the HUD score. Body text keeps the
-// clean UI font.
+// Pixel headline font (Ryan, font check on 4a49922): an original arcade style pixel font drawn in
+// code. No font files: every glyph is a bitmap on a 5 wide by 7 tall cell grid (y down, row 0 at
+// the cap line, row 6 on the baseline), drawn as one SVG path of square cells with crispEdges.
+// Headlines only: the title, screen headlines, the big results score and the main card buttons.
+// The HUD score and body text keep the plain UI font.
+// Cells are whole CSS px: the cell is the host font size over 10, rounded to an integer (cellPx),
+// and the stylesheet applies the same rounding with CSS round(), so cells stay sharp on the cover
+// and main screens at every size the call sites use (PIXEL_SITES).
 // Lower case letters draw as capitals. A lower case "x" with no letter either side ("x3", "3 x 4")
 // draws as a small multiply sign; inside a word ("Next") it is a capital.
-// The colours come from BASE_PALETTE at the saturation applyNeon last set and the glow follows its
-// glow alpha: main.ts calls syncVectorFontStyle from an onNeonChanged listener, as it does for the
-// 4th star, so this module never sets a neon value itself.
+// Colours come from BASE_PALETTE at the saturation applyNeon last set and the glow follows its
+// glow alpha: main.ts calls syncVectorFontStyle from an onNeonChanged listener, so this module
+// never sets a neon value itself. Each line also draws a 1 cell drop shadow in a darker shade of
+// its own hue at low alpha (never black).
 // Accessibility: the SVG is aria-hidden; the host carries the text in an aria-label and a visually
 // hidden span, so screen readers and tests read the words.
 import { BASE_PALETTE, type PaletteKey } from '../render/neon';
 
-/** One glyph: its width in grid units and its path on the grid (absolute M, L, A and Z only). */
+/** One glyph: rows top to bottom, '#' a lit cell, '.' empty. Every row has the glyph's width. */
 export interface Glyph {
   readonly w: number;
-  readonly d: string;
+  readonly rows: readonly string[];
 }
 
-/** Grid height in units (cap line to baseline). */
-export const GRID_H = 6;
-/** Gap between two glyphs in grid units, before any extra letter spacing. */
+/** Grid width in cells (the widest glyph). */
+export const GRID_W = 5;
+/** Grid height in cells (cap line to baseline). */
+export const GRID_H = 7;
+/** Gap between two glyphs in cells. */
 export const GLYPH_GAP = 1;
-/** Stroke width in grid units, the same for every glyph. */
-export const STROKE_UNITS = 0.6;
+/** Shadow offset in cells, right and down. */
+export const SHADOW_CELLS = 1;
+/** Cell size in em before rounding to whole px: a 20 px host draws 2 px cells, 14 px capitals. */
+export const CELL_EM = 0.1;
 
-const O_PATH = 'M1 0 L3 0 L4 1 L4 5 L3 6 L1 6 L0 5 L0 1 Z';
-const P_PATH = 'M0 6 L0 0 L3 0 L4 1 L4 2 L3 3 L0 3';
+const g = (art: string): Glyph => {
+  const rows = art.trim().split(/\s+/);
+  return { w: rows[0]?.length ?? 0, rows };
+};
 
-/** The glyph table. Original design: drawn on the grid for this game, not traced from any font. */
+/** The glyph table. Original design: drawn cell by cell for this game, not traced from any font. */
 export const GLYPHS: Readonly<Record<string, Glyph>> = {
-  A: { w: 4, d: 'M0 6 L0 2 L2 0 L4 2 L4 6 M0 4 L4 4' },
-  B: { w: 4, d: 'M0 0 L3 0 L4 1 L4 2 L3 3 L0 3 M3 3 L4 4 L4 5 L3 6 L0 6 L0 0' },
-  C: { w: 4, d: 'M4 0 L1 0 L0 1 L0 5 L1 6 L4 6' },
-  D: { w: 4, d: 'M0 0 L2.5 0 L4 1.5 L4 4.5 L2.5 6 L0 6 Z' },
-  E: { w: 4, d: 'M4 0 L0 0 L0 6 L4 6 M0 3 L3 3' },
-  F: { w: 4, d: 'M4 0 L0 0 L0 6 M0 3 L3 3' },
-  G: { w: 4, d: 'M4 1 L3 0 L1 0 L0 1 L0 5 L1 6 L3 6 L4 5 L4 3 L2 3' },
-  H: { w: 4, d: 'M0 0 L0 6 M4 0 L4 6 M0 3 L4 3' },
-  I: { w: 2, d: 'M0 0 L2 0 M1 0 L1 6 M0 6 L2 6' },
-  J: { w: 4, d: 'M4 0 L4 5 L3 6 L1 6 L0 5 L0 4' },
-  K: { w: 4, d: 'M0 0 L0 6 M4 0 L1 3 L4 6 M0 3 L1 3' },
-  L: { w: 4, d: 'M0 0 L0 6 L4 6' },
-  M: { w: 4, d: 'M0 6 L0 0 L2 3 L4 0 L4 6' },
-  N: { w: 4, d: 'M0 6 L0 0 L4 6 L4 0' },
-  O: { w: 4, d: O_PATH },
-  P: { w: 4, d: P_PATH },
-  Q: { w: 4, d: `${O_PATH} M2.5 4.5 L4 6` },
-  R: { w: 4, d: `${P_PATH} M2 3 L4 6` },
-  S: { w: 4, d: 'M4 0 L1 0 L0 1 L0 2 L1 3 L3 3 L4 4 L4 5 L3 6 L0 6' },
-  T: { w: 4, d: 'M0 0 L4 0 M2 0 L2 6' },
-  U: { w: 4, d: 'M0 0 L0 5 L1 6 L3 6 L4 5 L4 0' },
-  V: { w: 4, d: 'M0 0 L2 6 L4 0' },
-  W: { w: 4, d: 'M0 0 L1 6 L2 3 L3 6 L4 0' },
-  X: { w: 4, d: 'M0 0 L4 6 M4 0 L0 6' },
-  Y: { w: 4, d: 'M0 0 L2 3 L4 0 M2 3 L2 6' },
-  Z: { w: 4, d: 'M0 0 L4 0 L0 6 L4 6' },
-  '0': { w: 4, d: 'M0 2 A2 2 0 0 1 4 2 L4 4 A2 2 0 0 1 0 4 Z' },
-  '1': { w: 3, d: 'M0 1 L1.5 0 L1.5 6 M0 6 L3 6' },
-  '2': { w: 4, d: 'M0 2 A2 2 0 0 1 4 2 L0 6 L4 6' },
-  '3': { w: 4, d: 'M0 0 L4 0 L1.5 2.5 L3 2.5 L4 3.5 L4 5 L3 6 L0 6' },
-  '4': { w: 4, d: 'M3 6 L3 0 L0 4 L4 4' },
-  '5': { w: 4, d: 'M4 0 L0 0 L0 2.5 L3 2.5 L4 3.5 L4 5 L3 6 L0 6' },
-  '6': { w: 4, d: 'M3.5 0 L1 0 L0 1 L0 5 L1 6 L3 6 L4 5 L4 3.5 L3 2.5 L0 2.5' },
-  '7': { w: 4, d: 'M0 0 L4 0 L1.5 6' },
-  '8': { w: 4, d: 'M1 0 L3 0 L4 1 L4 2 L3 3 L1 3 L0 2 L0 1 Z M1 3 L3 3 L4 4 L4 5 L3 6 L1 6 L0 5 L0 4 Z' },
-  '9': { w: 4, d: 'M4 3.5 L1 3.5 L0 2.5 L0 1 L1 0 L3 0 L4 1 L4 5 L3 6 L0.5 6' },
-  '.': { w: 1, d: 'M0.5 5.6 L0.5 6' },
-  ',': { w: 1, d: 'M0.5 5.4 L0.5 6 L0 7' },
-  ':': { w: 1, d: 'M0.5 1.6 L0.5 2 M0.5 5.6 L0.5 6' },
-  '!': { w: 1, d: 'M0.5 0 L0.5 4 M0.5 5.6 L0.5 6' },
-  '?': { w: 4, d: 'M0 2 A2 2 0 0 1 4 2 L2 4 L2 4.4 M2 5.6 L2 6' },
-  '-': { w: 4, d: 'M0.5 3 L3.5 3' },
-  '+': { w: 4, d: 'M0.5 3 L3.5 3 M2 1.5 L2 4.5' },
-  '/': { w: 4, d: 'M0 6 L4 0' },
-  '%': { w: 4, d: 'M0 6 L4 0 M0.5 0.5 L1.5 0.5 L1.5 1.5 L0.5 1.5 Z M2.5 4.5 L3.5 4.5 L3.5 5.5 L2.5 5.5 Z' },
-  '#': { w: 4, d: 'M1.5 1 L1 5 M3 1 L2.5 5 M0 2.3 L4 2.3 M0 3.7 L4 3.7' },
-  x: { w: 4, d: 'M0.5 3 L3.5 6 M3.5 3 L0.5 6' },
-  ' ': { w: 3, d: '' },
+  A: g('.###. #...# #...# ##### #...# #...# #...#'),
+  B: g('####. #...# #...# ####. #...# #...# ####.'),
+  C: g('.#### #.... #.... #.... #.... #.... .####'),
+  D: g('###.. #..#. #...# #...# #...# #..#. ###..'),
+  E: g('##### #.... #.... ####. #.... #.... #####'),
+  F: g('##### #.... #.... ####. #.... #.... #....'),
+  G: g('.#### #.... #.... #.### #...# #...# .###.'),
+  H: g('#...# #...# #...# ##### #...# #...# #...#'),
+  I: g('### .#. .#. .#. .#. .#. ###'),
+  J: g('..### ...#. ...#. ...#. ...#. #..#. .##..'),
+  K: g('#...# #..#. #.#.. ##... #.#.. #..#. #...#'),
+  L: g('#.... #.... #.... #.... #.... #.... #####'),
+  M: g('#...# ##.## #.#.# #.#.# #...# #...# #...#'),
+  N: g('#...# ##..# #.#.# #..## #...# #...# #...#'),
+  O: g('.###. #...# #...# #...# #...# #...# .###.'),
+  P: g('####. #...# #...# ####. #.... #.... #....'),
+  Q: g('.###. #...# #...# #...# #.#.# #..#. .##.#'),
+  R: g('####. #...# #...# ####. #.#.. #..#. #...#'),
+  S: g('.#### #.... #.... .###. ....# ....# ####.'),
+  T: g('##### ..#.. ..#.. ..#.. ..#.. ..#.. ..#..'),
+  U: g('#...# #...# #...# #...# #...# #...# .###.'),
+  V: g('#...# #...# #...# #...# #...# .#.#. ..#..'),
+  W: g('#...# #...# #...# #.#.# #.#.# ##.## #...#'),
+  X: g('#...# #...# .#.#. ..#.. .#.#. #...# #...#'),
+  Y: g('#...# #...# .#.#. ..#.. ..#.. ..#.. ..#..'),
+  Z: g('##### ....# ...#. ..#.. .#... #.... #####'),
+  '0': g('.###. #...# #..## #.#.# ##..# #...# .###.'),
+  '1': g('..#.. .##.. ..#.. ..#.. ..#.. ..#.. .###.'),
+  '2': g('.###. #...# ....# ...#. ..#.. .#... #####'),
+  '3': g('####. ....# ....# .###. ....# ....# ####.'),
+  '4': g('...#. ..##. .#.#. #..#. ##### ...#. ...#.'),
+  '5': g('##### #.... ####. ....# ....# #...# .###.'),
+  '6': g('..##. .#... #.... ####. #...# #...# .###.'),
+  '7': g('##### ....# ...#. ..#.. .#... .#... .#...'),
+  '8': g('.###. #...# #...# .###. #...# #...# .###.'),
+  '9': g('.###. #...# #...# .#### ....# ...#. .##..'),
+  '.': g('. . . . . . #'),
+  ',': g('.. .. .. .. .# .# #.'),
+  ':': g('. . # . . . #'),
+  '!': g('# # # # # . #'),
+  '?': g('.###. #...# ....# ...#. ..#.. ..... ..#..'),
+  '-': g('..... ..... ..... .###. ..... ..... .....'),
+  '+': g('..... ..#.. ..#.. ##### ..#.. ..#.. .....'),
+  '/': g('....# ....# ...#. ..#.. .#... #.... #....'),
+  '%': g('##..# ##..# ...#. ..#.. .#... #..## #..##'),
+  '#': g('.#.#. .#.#. ##### .#.#. ##### .#.#. .#.#.'),
+  x: g('..... ..... #...# .#.#. ..#.. .#.#. #...#'),
+  ' ': g('... ... ... ... ... ... ...'),
 };
 
 /** Every character with its own glyph. */
 export const SUPPORTED_CHARS = Object.keys(GLYPHS).join('');
 
-/** Any character without a glyph draws as an open box the size of a capital. */
-export const FALLBACK_GLYPH: Glyph = { w: 4, d: 'M0 0 L4 0 L4 6 L0 6 Z' };
+/** Any character without a glyph draws as a hollow box the size of a capital. */
+export const FALLBACK_GLYPH: Glyph = g('##### #...# #...# #...# #...# #...# #####');
 
 /** Pure: the glyph for one character. Lower case maps to capitals except "x"; unknown is a box. */
 export function glyphFor(ch: string): Glyph {
@@ -101,98 +110,111 @@ export function glyphAt(chars: readonly string[], i: number): Glyph {
   return glyphFor(ch);
 }
 
-/** Pure: how far one character moves the pen, in grid units, gap included. Always positive. */
+/** Pure: how far one character moves the pen, in cells, gap included. Always positive. */
 export function glyphAdvance(ch: string): number {
   return glyphFor(ch).w + GLYPH_GAP;
 }
 
-function num(v: number): string {
-  const r = Math.round(v * 100) / 100;
-  return Object.is(r, -0) ? '0' : String(r);
-}
+/** One horizontal run of lit cells: x, y and length, in cells. */
+export type CellRun = readonly [x: number, y: number, n: number];
 
-/** Pure: a grid path scaled by `unit` and moved right by `dx`. */
-export function placePath(d: string, unit: number, dx: number): string {
-  const tokens = d.match(/[MLAZ]|-?\d*\.?\d+/g) ?? [];
-  const out: string[] = [];
-  let i = 0;
-  const next = (): number => Number(tokens[i++] ?? 0);
-  while (i < tokens.length) {
-    const cmd = tokens[i++];
-    if (cmd === 'M' || cmd === 'L') {
-      const x = next();
-      const y = next();
-      out.push(`${cmd}${num(x * unit + dx)} ${num(y * unit)}`);
-    } else if (cmd === 'A') {
-      const rx = next();
-      const ry = next();
-      const rot = next();
-      const large = next();
-      const sweep = next();
-      const x = next();
-      const y = next();
-      out.push(`A${num(rx * unit)} ${num(ry * unit)} ${num(rot)} ${large} ${sweep} ${num(x * unit + dx)} ${num(y * unit)}`);
-    } else if (cmd === 'Z') {
-      out.push('Z');
+/** Pure: the lit runs of one glyph moved right by `dx` cells. */
+export function glyphRuns(glyph: Glyph, dx = 0): CellRun[] {
+  const out: CellRun[] = [];
+  glyph.rows.forEach((row, y) => {
+    let x = 0;
+    while (x < row.length) {
+      if (row[x] !== '#') {
+        x += 1;
+        continue;
+      }
+      const start = x;
+      while (row[x] === '#') x += 1;
+      out.push([start + dx, y, x - start]);
     }
-  }
-  return out.join(' ');
+  });
+  return out;
 }
 
-export interface VectorLayout {
-  /** SVG path data for the whole line, pen starting at x 0, cap line at y 0. */
-  readonly d: string;
-  /** Advance width in px, from the left edge of the first glyph to the right edge of the last. */
+export interface PixelLayout {
+  /** Every lit run of the line, pen starting at x 0, cap line at y 0, in cells. */
+  readonly runs: readonly CellRun[];
+  /** Width in cells from the left edge of the first glyph to the right edge of the last. */
   readonly width: number;
-  /** Cap height in px (the size asked for). */
-  readonly height: number;
-  /** One grid unit in px. */
-  readonly unit: number;
-  /** Stroke width in px. */
-  readonly stroke: number;
+}
+
+/** Pure: lay out one line on the cell grid. */
+export function layoutPixels(text: string): PixelLayout {
+  const runs: CellRun[] = [];
+  const chars = [...text];
+  let x = 0;
+  let width = 0;
+  for (let i = 0; i < chars.length; i += 1) {
+    const glyph = glyphAt(chars, i);
+    runs.push(...glyphRuns(glyph, x));
+    width = x + glyph.w;
+    x = width + GLYPH_GAP;
+  }
+  return { runs, width };
+}
+
+/** Pure: SVG path data for runs, one closed rectangle per run, integers only. */
+export function runsPath(runs: readonly CellRun[]): string {
+  return runs.map(([x, y, n]) => `M${x} ${y}h${n}v1h${-n}z`).join('');
+}
+
+/** Pure: the cell size in whole CSS px for a host font size in px (never below 1). */
+export function cellPx(fontPx: number): number {
+  if (!Number.isFinite(fontPx) || fontPx <= 0) return 1;
+  return Math.max(1, Math.round(fontPx * CELL_EM));
 }
 
 /**
- * Pure: lay out one line. `size` is the cap height in px, `letterSpacing` extra px between glyphs
- * (negative values count as 0, so the width always grows with the text).
+ * The host font sizes each call site can take, in CSS px (from the dom.ts rules and the menu
+ * layout). Tests check that every integer size in each range draws whole px cells.
  */
-export function layoutVector(text: string, size: number, letterSpacing = 0): VectorLayout {
-  const h = Number.isFinite(size) ? Math.max(0, size) : 0;
-  const unit = h / GRID_H;
-  const extra = Number.isFinite(letterSpacing) ? Math.max(0, letterSpacing) : 0;
-  const parts: string[] = [];
-  let x = 0;
-  let width = 0;
-  const chars = [...text];
-  for (let i = 0; i < chars.length; i += 1) {
-    const g = glyphAt(chars, i);
-    if (g.d !== '') parts.push(placePath(g.d, unit, x));
-    width = x + g.w * unit;
-    x = width + GLYPH_GAP * unit + extra;
-  }
-  return { d: parts.join(' '), width, height: h, unit, stroke: STROKE_UNITS * unit };
+export const PIXEL_SITES = {
+  title: { min: 28, max: 64 },
+  splashTitle: { min: 34, max: 84 },
+  menuTitle: { min: 18, max: 52 },
+  cardTitle: { min: 22, max: 44 },
+  resultsScore: { min: 26, max: 56 },
+  parReached: { min: 20, max: 34 },
+  bigButton: { min: 20, max: 20 },
+} as const satisfies Record<string, { min: number; max: number }>;
+
+/** Pure: the SVG geometry for a line: path, view box and size in cells (shadow included). */
+export function pixelBox(text: string): { d: string; viewBox: string; wCells: number; hCells: number } {
+  const L = layoutPixels(text);
+  const wCells = L.width + SHADOW_CELLS;
+  const hCells = GRID_H + SHADOW_CELLS;
+  return { d: runsPath(L.runs), viewBox: `0 0 ${wCells} ${hCells}`, wCells, hCells };
+}
+
+/** Pure: the drawn width in px of `text` at a host font size, shadow included. */
+export function pixelWidthPx(text: string, fontPx: number): number {
+  return pixelBox(text).wCells * cellPx(fontPx);
 }
 
 // ---- Neon look -----------------------------------------------------------------------------
 
-/** Headline tones: stroke colour and glow colour, both palette keys. */
+/** Headline tones: fill colour and glow colour, both palette keys. */
 export const VECTOR_TONES = {
-  cyan: { stroke: 'cyan', glow: 'cyan' },
-  white: { stroke: 'white', glow: 'cyan' },
-  yellow: { stroke: 'yellow', glow: 'yellow' },
-  green: { stroke: 'geom', glow: 'green' },
-  red: { stroke: 'red', glow: 'red' },
-} as const satisfies Record<string, { stroke: PaletteKey; glow: PaletteKey }>;
+  cyan: { fill: 'cyan', glow: 'cyan' },
+  white: { fill: 'white', glow: 'cyan' },
+  yellow: { fill: 'yellow', glow: 'yellow' },
+  green: { fill: 'geom', glow: 'green' },
+  red: { fill: 'red', glow: 'red' },
+} as const satisfies Record<string, { fill: PaletteKey; glow: PaletteKey }>;
 
 export type VectorTone = keyof typeof VECTOR_TONES;
 
 export const VECTOR_CLASS = 'sow-vec';
 export const VECTOR_HOST_CLASS = 'sow-vec-host';
 export const VECTOR_STYLE_ID = 'sow-vec-style';
-/** The SVG is this many em tall (padding included); the cap height comes out near 0.72 em. */
-export const CAP_EM = 0.72;
-/** Room round the glyphs in the view box, in grid units, for the stroke, the comma tail and the glow. */
-const PAD_UNITS = 1;
+/** Shadow lightness and alpha: a dark shade of the tone's hue, never black. */
+export const SHADOW_LIGHTNESS = 0.24;
+export const SHADOW_ALPHA = 0.5;
 
 function clamp01(v: number): number {
   return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
@@ -202,12 +224,20 @@ function pct(v: number): string {
   return `${Math.round(v * 1000) / 10}%`;
 }
 
+function hsla(key: PaletteKey, saturation: number, light: number, alpha: number): string {
+  const mul = Number.isFinite(saturation) ? Math.max(0, saturation) : 1;
+  const [h, s] = BASE_PALETTE[key];
+  return `hsla(${h}, ${pct(clamp01(s * mul))}, ${pct(light)}, ${Math.round(clamp01(alpha) * 100) / 100})`;
+}
+
 /** Pure: the CSS colour of a palette key at a neon saturation multiplier, kept bright for text. */
 export function toneColour(key: PaletteKey, saturation: number, alpha = 1): string {
-  const mul = Number.isFinite(saturation) ? Math.max(0, saturation) : 1;
-  const [h, s, l] = BASE_PALETTE[key];
-  const a = clamp01(alpha);
-  return `hsla(${h}, ${pct(clamp01(s * mul))}, ${pct(Math.max(0.62, l))}, ${Math.round(a * 100) / 100})`;
+  return hsla(key, saturation, Math.max(0.62, BASE_PALETTE[key][2]), alpha);
+}
+
+/** Pure: the drop shadow colour of a tone: same hue, darker, low alpha. */
+export function shadowColour(tone: VectorTone, saturation: number): string {
+  return hsla(VECTOR_TONES[tone].fill, saturation, SHADOW_LIGHTNESS, SHADOW_ALPHA);
 }
 
 /** Pure: glow blur radius in px at a glow alpha from the neon state (0 to 1). */
@@ -215,7 +245,7 @@ export function glowBlur(glowAlpha: number): number {
   return Math.round((2 + 7 * clamp01(glowAlpha)) * 10) / 10;
 }
 
-/** Pure: the stylesheet for vector headlines at the current neon saturation and glow alpha. */
+/** Pure: the stylesheet for pixel headlines at the current neon saturation and glow alpha. */
 export function vectorFontCss(saturation: number, glowAlpha: number): string {
   const blur = glowBlur(glowAlpha);
   const a = 0.45 + 0.5 * clamp01(glowAlpha);
@@ -223,14 +253,16 @@ export function vectorFontCss(saturation: number, glowAlpha: number): string {
     .map((t) => {
       const k = VECTOR_TONES[t];
       const glow = toneColour(k.glow, saturation, a);
-      return `.${VECTOR_CLASS}.${VECTOR_CLASS}-${t} { stroke: ${toneColour(k.stroke, saturation)};
-  filter: drop-shadow(0 0 ${blur}px ${glow}) drop-shadow(0 0 ${Math.round(blur * 2.4)}px ${glow}); }`;
+      const sel = `.${VECTOR_CLASS}.${VECTOR_CLASS}-${t}`;
+      return `${sel} { filter: drop-shadow(0 0 ${blur}px ${glow}) drop-shadow(0 0 ${Math.round(blur * 2.4)}px ${glow}); }
+${sel} .${VECTOR_CLASS}-fg { fill: ${toneColour(k.fill, saturation)}; }
+${sel} .${VECTOR_CLASS}-sh { fill: ${shadowColour(t, saturation)}; }`;
     })
     .join('\n');
   return `${tones}\n`;
 }
 
-/** DOM edge: create or refresh the vector headline stylesheet. Call from an onNeonChanged listener. */
+/** DOM edge: create or refresh the pixel headline stylesheet. Call from an onNeonChanged listener. */
 export function syncVectorFontStyle(saturation: number, glowAlpha: number, doc: Document = document): void {
   const css = vectorFontCss(saturation, glowAlpha);
   let s = doc.getElementById(VECTOR_STYLE_ID);
@@ -242,16 +274,6 @@ export function syncVectorFontStyle(saturation: number, glowAlpha: number, doc: 
   if (s.textContent !== css) s.textContent = css;
 }
 
-/** Pure: the SVG geometry for a line: view box and size in em, so it follows the host font size. */
-export function vectorBox(text: string): { d: string; viewBox: string; wEm: number; hEm: number; stroke: number } {
-  const L = layoutVector(text, GRID_H);
-  const vbW = Math.max(L.width, 0) + 2 * PAD_UNITS;
-  const vbH = GRID_H + 2 * PAD_UNITS;
-  const hEm = (CAP_EM * vbH) / GRID_H;
-  const r = (v: number): number => Math.round(v * 1000) / 1000;
-  return { d: L.d, viewBox: `${-PAD_UNITS} ${-PAD_UNITS} ${r(vbW)} ${vbH}`, wEm: r((hEm * vbW) / vbH), hEm: r(hEm), stroke: STROKE_UNITS };
-}
-
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export interface VectorTextOptions {
@@ -261,24 +283,30 @@ export interface VectorTextOptions {
 }
 
 /**
- * DOM edge: draw `text` in the vector font inside `host`, replacing its children. The SVG is
- * aria-hidden; the host gets an aria-label and a visually hidden span with the text.
+ * DOM edge: draw `text` in the pixel font inside `host`, replacing its children. The SVG is
+ * aria-hidden; the host gets an aria-label and a visually hidden span with the text. The SVG size
+ * is set in cells (--sow-cw, --sow-ch); the shared stylesheet turns cells into whole px.
  */
 export function setVectorText(host: HTMLElement, text: string, opts: VectorTextOptions = {}): void {
   const tone = opts.tone ?? 'cyan';
   const drawn = opts.drawn ?? text;
-  const box = vectorBox(drawn);
+  const box = pixelBox(drawn);
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('class', `${VECTOR_CLASS} ${VECTOR_CLASS}-${tone}`);
   svg.setAttribute('viewBox', box.viewBox);
+  svg.setAttribute('shape-rendering', 'crispEdges');
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
-  svg.setAttribute('style', `width: ${box.wEm}em; height: ${box.hEm}em`);
+  svg.setAttribute('style', `--sow-cw: ${box.wCells}; --sow-ch: ${box.hCells}`);
   svg.setAttribute('data-vec', drawn);
-  const path = document.createElementNS(SVG_NS, 'path');
-  path.setAttribute('d', box.d);
-  path.setAttribute('stroke-width', String(box.stroke));
-  svg.append(path);
+  const shadow = document.createElementNS(SVG_NS, 'path');
+  shadow.setAttribute('class', `${VECTOR_CLASS}-sh`);
+  shadow.setAttribute('d', box.d);
+  shadow.setAttribute('transform', `translate(${SHADOW_CELLS} ${SHADOW_CELLS})`);
+  const fg = document.createElementNS(SVG_NS, 'path');
+  fg.setAttribute('class', `${VECTOR_CLASS}-fg`);
+  fg.setAttribute('d', box.d);
+  svg.append(shadow, fg);
   const sr = document.createElement('span');
   sr.className = 'sow-sr';
   sr.textContent = text;
