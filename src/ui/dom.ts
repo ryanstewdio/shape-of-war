@@ -133,8 +133,12 @@ export const UI_CSS = `
 .sow-sbar-val { font-size: 12px; font-weight: 600; }
 .sow-details { width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
 .sow-btn.sow-big.sow-details-toggle { flex: 0 0 auto; width: 100%; }
-.sow-details-body { display: flex; flex-direction: column; gap: 6px; padding: 4px 8px 0; text-align: left; }
-.sow-details-body .sow-kv { font-size: 14px; }
+.sow-details-body { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: 10px 16px;
+  align-items: baseline; padding: 16px; box-sizing: border-box; width: 100%;
+  border: 1px solid hsla(0, 0%, 100%, 0.25); border-radius: 10px; text-align: left; }
+.sow-details-body .sow-kv { display: contents; font-size: 14px; }
+.sow-details-body .sow-k { margin-right: 0; opacity: 0.7; overflow-wrap: anywhere; }
+.sow-details-body .sow-v { min-width: 0; text-align: right; overflow-wrap: anywhere; }
 .sow-card.sow-fp-card { overflow: hidden; gap: 10px; }
 .sow-fp-body { width: 100%; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   touch-action: pan-y; display: flex; flex-direction: column; gap: 14px; padding: 2px 4px; box-sizing: border-box; }
