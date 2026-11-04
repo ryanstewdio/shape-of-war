@@ -8,6 +8,7 @@ import type { StartBonus } from '../core/bonus';
 import type { BaseWeaponKind } from '../core/events';
 import { button, el } from './dom';
 import type { LevelResult } from './flow';
+import { setVectorText } from './vectorFont';
 
 export const PAR_REACHED = 'Par reached';
 export const REWARD_PROMPT = 'Choose a reward for the next level';
@@ -158,7 +159,8 @@ export interface RewardChooser {
 export function createRewardChooser(onPick: (b: StartBonus, nextLevel: number) => void): RewardChooser {
   const root = el('div', 'sow-reward');
   root.setAttribute('data-results', 'reward');
-  const head = el('div', 'sow-par-reached', PAR_REACHED);
+  const head = el('div', 'sow-par-reached');
+  setVectorText(head, PAR_REACHED, { tone: 'yellow' });
   const prompt = el('div', 'sow-small', REWARD_PROMPT);
   const groups = el('div', 'sow-reward-groups');
   const opts = rewardOptions();

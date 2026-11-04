@@ -6,9 +6,15 @@
 // R6 (Ryan, gate R5): the toggle is a big button like Next and Menu (sow-big: size, border, glow);
 // open or closed shows only in its "+" or "-" suffix and aria-expanded, never as a selected look.
 import { button, el } from './dom';
+import { setVectorText } from './vectorFont';
 import type { LabelledValue } from './intro';
 
 export const DETAILS_LABEL = 'Details';
+
+/** Pure: what the toggle draws: the label and its "+" (closed) or "-" (open) suffix. */
+export function detailsDrawn(open: boolean): string {
+  return `${DETAILS_LABEL} ${open ? '-' : '+'}`;
+}
 
 /** Pure: "Label value" (R5 wording: "Seed 42", "Kills 412", "Time 3:31"). */
 export function inline(v: LabelledValue): string {
@@ -49,6 +55,7 @@ export function createDetails(attr: string): DetailsRow {
     open = v;
     body.style.display = open ? '' : 'none';
     toggle.setAttribute('aria-expanded', String(open));
+    setVectorText(toggle, DETAILS_LABEL, { tone: 'white', drawn: detailsDrawn(open) });
   }
   root.append(toggle, body);
   setOpen(false);

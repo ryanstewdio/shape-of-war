@@ -11,6 +11,7 @@
 import type { Insets, Rect } from '../input/types';
 import { button, createScreen, el, MIN_HIT_PX, type Screen } from './dom';
 import { aspectClass } from './hudFrame';
+import { setVectorText } from './vectorFont';
 
 export const GAME_TITLE = 'Shapes of War';
 export const SHOW_ENDLESS = true;
@@ -213,7 +214,8 @@ export function createMenuScreen(parent: HTMLElement, actions: MenuActions): Men
   const s = createScreen(parent);
   s.root.classList.add('sow-menu');
   const panel = el('div', 'sow-menu-panel');
-  const title = el('div', 'sow-title', GAME_TITLE);
+  const title = el('div', 'sow-title');
+  setVectorText(title, GAME_TITLE);
   title.style.gridArea = 'title';
   const rowsBox = el('div', 'sow-menu-rows');
   rowsBox.style.gridArea = 'rows';

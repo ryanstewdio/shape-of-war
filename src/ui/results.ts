@@ -25,6 +25,7 @@ import { fourthStarEl, hasFourthStar } from './fourthStar';
 import { starCapLine, type LabelledValue } from './intro';
 import { createRewardChooser, earnsParReward } from './parReward';
 import { difficultyLabel, SPACE_ROW_LABEL, spaceLabel } from './settings';
+import { setVectorText, type VectorTone } from './vectorFont';
 
 export interface ResultsActions {
   next(): void;
@@ -253,6 +254,12 @@ export interface ResultsScreen extends Screen {
   showResult(r: LevelResult): void;
 }
 
+/** Pure: the headline colour: green for an Adventure win, red for a loss, cyan otherwise. */
+export function headlineTone(r: Pick<LevelResult, 'mode' | 'success'>): VectorTone {
+  if (r.mode !== 'adventure') return 'cyan';
+  return r.success ? 'green' : 'red';
+}
+
 const pct = (f: number): string => `${Math.round(f * 1000) / 10}%`;
 
 export function createResultsScreen(parent: HTMLElement, actions: ResultsActions): ResultsScreen {
@@ -309,6 +316,7 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
   primary.setAttribute('data-results', 'primary');
   const menu = button('Menu', actions.menu);
   menu.classList.add('sow-big');
+  setVectorText(menu, 'Menu', { tone: 'white' });
   row.append(primary, menu);
   const details = createDetails('data-results');
   card.append(headBox, scoreBox, best, reward.root, row, details.root);
@@ -321,14 +329,14 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
     ...s,
     showResult(r) {
       const t = resultLines(r);
-      title.textContent = t.title;
+      setVectorText(title, t.title, { tone: headlineTone(r) });
       card.classList.toggle('sow-win', r.mode === 'adventure' && r.success);
       card.classList.toggle('sow-lose', r.mode === 'adventure' && !r.success);
       showText(sub, t.sub);
       showText(diff, t.difficulty);
       diff.classList.toggle('sow-diff-insane', r.difficulty === 'insane');
       showText(badge, t.badge);
-      score.textContent = t.score;
+      setVectorText(score, t.score);
       par.replaceChildren();
       if (t.par !== '') par.append(el('span', 'sow-k', PAR_LABEL), el('span', 'sow-v', t.par.slice(PAR_LABEL.length + 1)));
       par.style.display = t.par === '' ? 'none' : '';
@@ -372,7 +380,7 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
       details.fill(t.details);
       reward.open(r);
       primaryKind = t.primary;
-      primary.textContent = PRIMARY_LABEL[t.primary];
+      setVectorText(primary, PRIMARY_LABEL[t.primary], { tone: 'white' });
       s.show();
     },
   };

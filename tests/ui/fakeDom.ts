@@ -60,8 +60,10 @@ export class FakeEl {
     this.children.push(...nodes);
   }
 
+  /** Like the real DOM, the text afterwards is the children's text joined. */
   replaceChildren(...nodes: FakeEl[]): void {
     this.children.splice(0, this.children.length, ...nodes);
+    this.textContent = nodes.map((n) => n.textContent).join('');
   }
 
   setAttribute(name: string, value: string): void {
@@ -110,7 +112,10 @@ export class FakeEl {
 
 /** Stub the global document so el() builds FakeEl nodes. Returns a root to pass as the parent. */
 export function installFakeDocument(): FakeEl {
-  vi.stubGlobal('document', { createElement: (tag: string) => new FakeEl(tag) });
+  vi.stubGlobal('document', {
+    createElement: (tag: string) => new FakeEl(tag),
+    createElementNS: (_ns: string, tag: string) => new FakeEl(tag),
+  });
   return new FakeEl('div');
 }
 

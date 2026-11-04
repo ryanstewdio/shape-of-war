@@ -26,6 +26,7 @@ import { button, createScreen, el, type Screen } from './dom';
 import { FOE_INFO, iconCanvas } from './enemyIntro';
 import { scoreAttackLabel } from './results';
 import { DIFFICULTY_ROW_LABEL, difficultyLabel } from './settings';
+import { setVectorText } from './vectorFont';
 
 export const FREE_PLAY_TITLE = 'Free Play';
 export const ARENA_ROW_LABEL = 'Arena';
@@ -218,7 +219,8 @@ export function createFreePlayScreen(parent: HTMLElement, actions: FreePlayActio
   const s = createScreen(parent);
   s.root.classList.add('sow-card-screen');
   const card = el('div', 'sow-card sow-fp-card');
-  const title = el('div', 'sow-title', FREE_PLAY_TITLE);
+  const title = el('div', 'sow-title');
+  setVectorText(title, FREE_PLAY_TITLE);
   const note = el('div', 'sow-small', 'Endless waves on your rules. No stars, no bests.');
   let choice: FreePlayChoice = DEFAULT_FREE_PLAY;
   const set = (patch: Partial<Omit<FreePlayChoice, 'config'>>): void => {
@@ -246,6 +248,7 @@ export function createFreePlayScreen(parent: HTMLElement, actions: FreePlayActio
   const drift = choiceRow(DRIFT_ROW_LABEL, FREE_PLAY_DRIFTS, wordLabel, (v) => setCfg({ drift: v }));
   const start = button('Start', () => actions.start(choice));
   start.classList.add('sow-big');
+  setVectorText(start, 'Start', { tone: 'white' });
   const back = button('Back', actions.back);
   back.classList.add('sow-big');
   function paint(): void {

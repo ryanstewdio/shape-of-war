@@ -61,6 +61,7 @@ import { setTilt } from './render/tilt';
 import { createScreenAnnouncer } from './ui/screenEvent';
 import { applyNeon, currentNeon, getNeonState, onNeonChanged } from './render/neon';
 import { syncFourthStarStyle } from './ui/fourthStar';
+import { syncVectorFontStyle } from './ui/vectorFont';
 import { createRenderer, type GameRenderer, type StickCircleLike } from './render/renderer';
 import { attachTouch, type TouchHandle } from './input/touch';
 import { createCuePort, type SimSnapshot } from './ui/cueFlow';
@@ -951,6 +952,9 @@ async function boot(): Promise<void> {
   // R1: the iridescent 4th star follows the neon palette; this listener only reads what applyNeon set.
   onNeonChanged((p) => syncFourthStarStyle(p.saturation, p.glowAlpha));
   syncFourthStarStyle(getNeonState().params.saturation, getNeonState().params.glowAlpha);
+  // Vector headlines: stroke colour and glow follow the neon state; this listener only reads it.
+  onNeonChanged((p) => syncVectorFontStyle(p.saturation, p.glowAlpha));
+  syncVectorFontStyle(getNeonState().params.saturation, getNeonState().params.glowAlpha);
   settingsModel.applyBoot(); // applyNeon(stored neon), volume, Show FPS, glow path, space physics, weapon pickups
   installAudio({ volume: settings.volume }); // Glue: Glow's synth listens on the bus; unlock happens on the first gesture
   // V2-D: bus wiring for the music engine, after the audio unlock path is installed. It starts
