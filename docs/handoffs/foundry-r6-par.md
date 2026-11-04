@@ -1,5 +1,5 @@
 HAND-OFF foundry: r6-par
-Branch: feat/foundry-r6-par  Head: see git log (push blocked, see Requests)
+Branch: feat/foundry-r6-par  Head: see git log (pushed to origin)
 Files changed: src/core/difficulty.ts (parScale only), src/levelgen/validate.ts (snake floor constants), tests/levelgen/fpLevel.test.ts, tests/levelgen/r5fp.test.ts, tests/levelgen/r6snakes.test.ts (new), tests/game/parCalibration.test.ts (new), docs/handoffs/foundry-r6-par.md
 Tests added: r6snakes 4 (setup screen default and wells off, real sim), parCalibration 3 (1 gated by PAR_CALIBRATE=1); fpLevel and r5fp updated to the new floor
 npm test: 4576 pass, 1 fail (generator "200 levels under 500 ms", fails on main too: the accepted perf exception)  npm run build: pass
@@ -16,5 +16,5 @@ How to verify on device:
 2. Settings Easy, level 1: the results bar shows par at 0.8 x the Normal par (when Ledger applies parScale).
 3. Optional: PAR_CALIBRATE=1 npx vitest run tests/game/parCalibration.test.ts --silent=false prints the ratios.
 Dependencies requested: none
-Requests (changes outside my ownership): 1) Ledger: apply parScale to par and the stars, if not done yet. 2) Fable: decide whether par should follow a human collect rate (decision below). 3) Grant push access: add_repo is not available in this session, so git push gets a 403 from the proxy.
+Requests (changes outside my ownership): 1) Ledger: apply parScale to par and the stars, if not done yet. 2) Fable: decide whether par should follow a human collect rate (decision below).
 Known gaps: Ryan's 129k vs about 600k Easy par stays unresolved. A lower collect rate in par (for example 0.3 instead of 0.5) would lower par on every level; that is a decision for Fable, not a band 1 tweak. Destroy levels score lower than survive levels for a player who kills everything, because the count is met sooner.
