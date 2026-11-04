@@ -1128,7 +1128,7 @@ export function validateSegment(seg: EndlessSegmentDef, opts?: BossCheckOptions)
  * validateSegment check, W4 run on the Free Play arena (wrapped on a drum).
  */
 export function validateFreePlaySegment(seg: EndlessSegmentDef, def: EndlessDef, opts?: BossCheckOptions): ValidationResult {
-  return segmentChecks(seg, def.arena, def.surface === 'cylinder', opts, def.freePlay?.options);
+  return segmentChecks(seg, def.arena, def.surface === 'cylinder', opts, def.freePlay?.options, def.roster);
 }
 
 /**
@@ -1136,7 +1136,14 @@ export function validateFreePlaySegment(seg: EndlessSegmentDef, def: EndlessDef,
  * R1 with FP5 (the roster is exactly the chosen kinds) and J6 reads no band; Swarm raises the W7
  * maxLiveEnemies; the boss follows freePlayBossFor.
  */
-function segmentChecks(seg: EndlessSegmentDef, arena: ArenaDef, cylinder: boolean, opts: BossCheckOptions | undefined, fp?: FreePlayLevelOptions): ValidationResult {
+function segmentChecks(
+  seg: EndlessSegmentDef,
+  arena: ArenaDef,
+  cylinder: boolean,
+  opts: BossCheckOptions | undefined,
+  fp?: FreePlayLevelOptions,
+  catalogue: readonly RosterEntry[] = [],
+): ValidationResult {
   const c = new Collector();
   checkJson(c, seg);
   checkVersions(c, seg.version, seg.generatorVersion);
@@ -1150,7 +1157,16 @@ function segmentChecks(seg: EndlessSegmentDef, arena: ArenaDef, cylinder: boolea
     if (seg.band !== band) report(`band ${seg.band} !== bandOf(${effective}) ${band}`);
   });
   const chosen = fp !== undefined && fp.enemies.length > 0 ? fp.enemies : null;
-  if (chosen === null) checkRoster(c, seg.roster, band);
+  // R5: the Free Play snake may join any band's roster; R1 judges the rest.
+  const snakeFloor = fp !== undefined && freePlaySnakeAllowed(fp, catalogue) && seg.segment >= FREE_PLAY_SNAKE_FROM_SEGMENT;
+  if (snakeFloor) {
+    c.check('FP6', (report) => {
+      const n = seg.waves.waves.reduce((k, w) => k + w.entries.filter((e) => e.kind === 'snake').length, 0);
+      if (n < FREE_PLAY_SNAKES_PER_SEGMENT) report(`${n} snakes, want at least ${FREE_PLAY_SNAKES_PER_SEGMENT}`);
+      if (!seg.roster.some((e) => e.kind === 'snake')) report('roster lacks the allowed snake');
+    });
+  }
+  if (chosen === null) checkRoster(c, snakeFloor ? seg.roster.filter((e) => e.kind !== 'snake') : seg.roster, band);
   else {
     c.check('FP5', (report) => {
       const kinds = seg.roster.map((e) => e.kind);
@@ -1194,10 +1210,15 @@ export const FREE_PLAY_CIRCLE = 1100;
 
 /** Arena size multiplier per option, applied to every arena dimension. */
 export const FREE_PLAY_SIZE_SCALE: Readonly<Record<FreePlaySize, number>> = Object.freeze({ small: 0.75, medium: 1, large: 1.3 });
-/** Spawn count multiplier per density option (each wave's budget). */
-export const FREE_PLAY_DENSITY_SCALE: Readonly<Record<FreePlayDensity, number>> = Object.freeze({ low: 0.6, normal: 1, swarm: 1.8 });
+/** Spawn count multiplier per density option (each wave's budget). R5 (Ryan): Swarm 1.8 to 1.95, about 7 percent more spawns and 8 percent more live cap. */
+export const FREE_PLAY_DENSITY_SCALE: Readonly<Record<FreePlayDensity, number>> = Object.freeze({ low: 0.6, normal: 1, swarm: 1.95 });
 /** Live enemy ceiling for Swarm: src/game/world.ts ENTITY_CAP, copied to keep levelgen standalone. */
 export const FREE_PLAY_ENTITY_CAP = 512;
+/**
+ * R5 (Ryan: wells normal placed none). Free Play is an Endless run and the game adds no well
+ * arrivals in Endless, so the level side places them: wells 'normal' 1 to 2, 'many' 2 to 4.
+ */
+export const FREE_PLAY_NORMAL_WELLS: Readonly<{ min: number; max: number }> = Object.freeze({ min: 1, max: 2 });
 /** Gravity wells with wells 'many'. The game holds at most 4 (src/game/state.ts MAX_WELLS). */
 export const FREE_PLAY_MANY_WELLS: Readonly<{ min: number; max: number }> = Object.freeze({ min: 2, max: 4 });
 /** Least distance from a Free Play well to the ship spawn point, u (fits the small circle). */
@@ -1214,7 +1235,22 @@ export function freePlayArenaSize(kind: FreePlayArena, size: FreePlaySize): { wi
   return { width: ten(FREE_PLAY_RECT.width), height: ten(FREE_PLAY_RECT.height) };
 }
 
-/** maxLiveEnemies of a Free Play segment: the band value, raised 1.8x for Swarm up to the entity cap. */
+/** R5: snake spawns every Free Play segment from FREE_PLAY_SNAKE_FROM_SEGMENT holds at least. */
+export const FREE_PLAY_SNAKES_PER_SEGMENT = 1;
+/** R5: the first segment with the snake floor (0:30, after the calm opening segment). */
+export const FREE_PLAY_SNAKE_FROM_SEGMENT = 1;
+
+/** Well count range of a wells option, or null for 'off'. */
+export function freePlayWellRange(wells: FreePlayLevelOptions['wells']): Readonly<{ min: number; max: number }> | null {
+  return wells === 'many' ? FREE_PLAY_MANY_WELLS : wells === 'normal' ? FREE_PLAY_NORMAL_WELLS : null;
+}
+
+/** R5: the snake is allowed in a Free Play run: chosen, or no kinds chosen and the catalogue has it. Independent of wells. */
+export function freePlaySnakeAllowed(o: FreePlayLevelOptions, catalogue: readonly RosterEntry[]): boolean {
+  return o.enemies.length > 0 ? o.enemies.includes('snake') : catalogue.some((e) => e.kind === 'snake');
+}
+
+/** maxLiveEnemies of a Free Play segment: the band value, raised by the Swarm scale up to the entity cap. */
 export function freePlayMaxLive(bandMax: number, density: FreePlayDensity): number {
   return density === 'swarm' ? Math.min(FREE_PLAY_ENTITY_CAP, Math.round(bandMax * FREE_PLAY_DENSITY_SCALE.swarm)) : bandMax;
 }
@@ -1237,16 +1273,16 @@ function checkFreePlayOptions(c: Collector, o: FreePlayLevelOptions, roster: rea
   });
 }
 
-/** FP4: wells 'many' places 2 to 4 wells inside the arena, clear of the spawn, obstacles and each other. */
-function checkFreePlayWells(c: Collector, def: EndlessDef, many: boolean): void {
+/** FP4: wells 'normal' places 1 to 2 wells and 'many' 2 to 4, inside the arena, clear of the spawn, obstacles and each other. */
+function checkFreePlayWells(c: Collector, def: EndlessDef, range: Readonly<{ min: number; max: number }> | null): void {
   c.check('FP4', (report) => {
     const wells = def.hazards.wells;
     if (def.hazards.spawners.length !== 0) report('Free Play has no hazard spawners');
-    if (!many) {
-      if (wells.length !== 0) report(`${wells.length} wells without wells 'many'`);
+    if (range === null) {
+      if (wells.length !== 0) report(`${wells.length} wells with wells off`);
       return;
     }
-    const { min, max } = FREE_PLAY_MANY_WELLS;
+    const { min, max } = range;
     if (wells.length < min || wells.length > max) report(`${wells.length} wells, want ${min} to ${max}`);
     const g = geometryOf(def.arena, def.surface === 'cylinder');
     wells.forEach((w, i) => {
@@ -1285,7 +1321,7 @@ export function validateFreePlay(def: EndlessDef): ValidationResult {
   });
   const options = fp?.options;
   if (options !== undefined) checkFreePlayOptions(c, options, def.roster);
-  checkFreePlayWells(c, def, options?.wells === 'many');
+  checkFreePlayWells(c, def, options === undefined ? null : freePlayWellRange(options.wells));
   c.check('FP2', (report) => {
     if (fp === undefined) return;
     const a = def.arena;

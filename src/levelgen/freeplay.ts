@@ -20,7 +20,6 @@ import type { ArenaDef, EndlessDef, EndlessSegmentDef, FreePlayArena, FreePlayIn
 import { ALL_ENEMY_KINDS } from './v2enemies';
 import {
   FREE_PLAY_DENSITY_SCALE,
-  FREE_PLAY_MANY_WELLS,
   FREE_PLAY_WELL_PAIR,
   FREE_PLAY_WELL_SPAWN_CLEAR,
   MAX_OBSTACLES,
@@ -28,6 +27,8 @@ import {
   WELL_OBSTACLE,
   freePlayArenaSize,
   freePlayMaxLive,
+  freePlaySnakeAllowed,
+  freePlayWellRange,
   insideArena,
   obstaclePointDistance,
   validateFreePlay,
@@ -94,11 +95,11 @@ export function levelOptionsOf(config: FreePlayConfig, catalogue: readonly Roste
 }
 
 /**
- * Wells 'many': FREE_PLAY_MANY_WELLS.min to max wells. Draws: the count, then per well up to
- * FREE_PLAY_WELL_ATTEMPTS points (u then v on a drum, x then y flat); stops at the first well
- * with no valid point. The rules are validate.ts FP4.
+ * Free Play wells: range.min to range.max wells (freePlayWellRange: 'normal' 1 to 2, 'many' 2 to
+ * 4). Draws: the count, then per well up to FREE_PLAY_WELL_ATTEMPTS points (u then v on a drum, x
+ * then y flat); stops at the first well with no valid point. The rules are validate.ts FP4.
  */
-export function placeFreePlayWells(r: Rng, arena: ArenaDef, cyl: boolean): Vec2[] {
+export function placeFreePlayWells(r: Rng, arena: ArenaDef, cyl: boolean, range: Readonly<{ min: number; max: number }>): Vec2[] {
   const W = arena.width;
   const H = arena.height;
   const dist = (a: Vec2, b: Vec2): number => (cyl ? cylDist(a, b, W) : Math.hypot(a.x - b.x, a.y - b.y));
@@ -106,7 +107,7 @@ export function placeFreePlayWells(r: Rng, arena: ArenaDef, cyl: boolean): Vec2[
   const obstacle = (p: Vec2): number => Math.min(Infinity, ...arena.obstacles.map((o) => (cyl ? cylObstacleDistance(o, p, W) : obstaclePointDistance(o, p))));
   const r1 = (v: number): number => Math.round(v * 10) / 10 + 0;
   const wells: Vec2[] = [];
-  const n = rngInt(r, FREE_PLAY_MANY_WELLS.min, FREE_PLAY_MANY_WELLS.max);
+  const n = rngInt(r, range.min, range.max);
   for (let i = 0; i < n; i++) {
     let placed = false;
     for (let a = 0; a < FREE_PLAY_WELL_ATTEMPTS && !placed; a++) {
@@ -130,7 +131,8 @@ function buildFreePlay(o: FreePlayOptions, attempt: number, cfg: GenConfig): End
   const options = o.config === undefined ? null : levelOptionsOf(o.config, endless.roster);
   const { arena, drumPattern } = freePlayArena(mulberry32(streamSeed(s, FREE_PLAY_SALT)), o.arena, o.barriers, options?.size ?? 'medium');
   const cyl = o.arena === 'drum';
-  const wells = options?.wells === 'many' ? placeFreePlayWells(mulberry32(streamSeed(s, FREE_PLAY_WELLS_SALT)), arena, cyl) : [];
+  const range = options === null ? null : freePlayWellRange(options.wells);
+  const wells = range === null ? [] : placeFreePlayWells(mulberry32(streamSeed(s, FREE_PLAY_WELLS_SALT)), arena, cyl, range);
   const freePlay: FreePlayInfo = { arena: o.arena, barriers: o.barriers, drumPattern, retries: attempt, ...(options === null ? {} : { options }) };
   return {
     ...endless,
@@ -169,7 +171,8 @@ export function freePlaySegment(def: EndlessDef, segment: number, cfg: GenConfig
 /**
  * The options as segment tweaks. Enemies: the chosen kinds with their catalogue weights (none
  * chosen: the drawn roster and v2 stage). Density: the wave budget scale, Swarm also raising
- * maxLiveEnemies. Bosses: freePlayBossFor, none with the boss flag off. No draw.
+ * maxLiveEnemies. Bosses: freePlayBossFor, none with the boss flag off. Snakes (R5): with the
+ * snake allowed by the enemy toggles, whatever the wells, the snake floor (withFreePlaySnakes). No draw.
  */
 export function segmentTweaks(def: EndlessDef, options: FreePlayLevelOptions, segment: number, cfg: GenConfig = DEFAULT_GEN_CONFIG): SegmentTweaks {
   const weight = (k: string): number => def.roster.find((e) => e.kind === k)?.weight ?? 1;
@@ -179,5 +182,6 @@ export function segmentTweaks(def: EndlessDef, options: FreePlayLevelOptions, se
     ...(options.density !== 'normal' ? { budgetScale: FREE_PLAY_DENSITY_SCALE[options.density] } : {}),
     ...(options.density === 'swarm' ? { maxLiveEnemies: freePlayMaxLive(BANDS[band].maxLiveEnemies, 'swarm') } : {}),
     boss: cfg.enableBosses ? freePlayBossFor(options.bosses, segment, def.surface === 'cylinder') : null,
+    ...(freePlaySnakeAllowed(options, def.roster) ? { snakeWeight: weight('snake') } : {}),
   };
 }

@@ -109,14 +109,42 @@ export function sameBoss(a: BossSpec, b: BossSpec): boolean {
 }
 
 /**
- * Free Play options (docs/14): the boss of segment s. 'off': none. 'every3': the Endless tier ladder
- * (bossForSegment, every 180 s). A BossId: that boss every 180 s, its hit point multiplier from
- * the ladder's pass at the same boss number. A drum keeps no boss either way. Pure, no draw.
+ * R5 (Ryan, build 405facc: "Bosses should appear within 2 minutes, then if endless appear again
+ * after 5 minutes"): Free Play boss segments. The first is FREE_PLAY_BOSS_FIRST_SEGMENT (entrance
+ * at 3 x 30 + 10 = 100 s on the wave clock), then one every FREE_PLAY_BOSS_EVERY_SEGMENTS (300 s
+ * after the previous entrance: 400 s, 700 s and so on). The plain Endless ladder (bossForSegment,
+ * every 180 s) is unchanged.
+ */
+export const FREE_PLAY_BOSS_FIRST_SEGMENT = 3;
+export const FREE_PLAY_BOSS_EVERY_SEGMENTS = 10;
+/**
+ * Bosses a drum keeps. Every boss steers through steer.ts, which wraps across the u seam since
+ * V3-H C0, but these two also centre every attack on their own body (Warden's rings, Brood's
+ * charge lane and pods), so nothing they make is laid out on the flat arena centre or its walls.
+ */
+export const FREE_PLAY_DRUM_BOSSES: readonly BossId[] = Object.freeze<BossId[]>(['warden', 'brood']);
+
+/** Boss number (1 based) of Free Play segment s, or null when s carries no boss. */
+export function freePlayBossNumber(segment: number): number | null {
+  if (!Number.isInteger(segment) || segment < FREE_PLAY_BOSS_FIRST_SEGMENT) return null;
+  const k = segment - FREE_PLAY_BOSS_FIRST_SEGMENT;
+  return k % FREE_PLAY_BOSS_EVERY_SEGMENTS === 0 ? 1 + k / FREE_PLAY_BOSS_EVERY_SEGMENTS : null;
+}
+
+/**
+ * Free Play options (docs/14): the boss of segment s. 'off': none. 'every3': the tier ladder
+ * (bossOfNumber) on the Free Play cadence. A BossId: that boss each time, its hit point multiplier
+ * from the ladder's pass at the same boss number. A drum keeps only FREE_PLAY_DRUM_BOSSES: the
+ * ladder alternates them, and a chosen boss outside them fights as Warden. Pure, no draw.
  */
 export function freePlayBossFor(bosses: 'off' | 'every3' | BossId, segment: number, cylinder: boolean): BossSpec | null {
-  if (bosses === 'off' || cylinder) return null;
-  const ladder = bossForSegment(segment);
-  if (bosses === 'every3' || ladder === null) return ladder;
-  const tier = bossTierOf(bosses);
-  return tier === null ? null : { id: bosses, tier, atSec: ladder.atSec, hpMul: ladder.hpMul };
+  if (bosses === 'off') return null;
+  const j = freePlayBossNumber(segment);
+  const ladder = j === null ? null : bossOfNumber(j, BOSS_SEGMENT_AT_SEC);
+  if (j === null || ladder === null) return null;
+  let id: BossId;
+  if (bosses === 'every3') id = cylinder ? (FREE_PLAY_DRUM_BOSSES[(j - 1) % FREE_PLAY_DRUM_BOSSES.length] ?? 'warden') : ladder.id;
+  else id = cylinder && !FREE_PLAY_DRUM_BOSSES.includes(bosses) ? 'warden' : bosses;
+  const tier = bossTierOf(id);
+  return tier === null ? null : { id, tier, atSec: ladder.atSec, hpMul: ladder.hpMul };
 }
