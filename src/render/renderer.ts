@@ -678,6 +678,8 @@ import {
   spikeHalfWidth,
   spikeStretch,
   spikeTriangle,
+  markSpikeMask,
+  bulletDrawCode,
   toothTip,
   type SpikePose,
 } from './spikeSaw';
@@ -5024,14 +5026,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const sh = shieldOf(ws.kind);
     const cap = w.bullets.cap;
     if (spikeMask.length < cap) spikeMask = new Uint8Array(cap);
-    else spikeMask.fill(0);
     sawLevel = sh === null ? 0 : ws.saw;
-    if (sh === null) return;
-    // Orbit v2: every hitter is a spike (two rings of sh.perRing), so mark them all.
-    for (let k = 0; k < sh.perRing * 2 && k < ws.blades.length; k++) {
-      const id = ws.blades[k] ?? -1;
-      if (id >= 0 && id < cap) spikeMask[id] = k < sh.perRing ? 1 : 2;
-    }
+    // Orbit v2: every hitter is a spike (two rings of sh.perRing), so mark them all (R7: pure, tested).
+    markSpikeMask(spikeMask, ws.blades, sh === null ? 0 : sh.perRing);
   }
 
   /** GW3: while the saw level is above 0, a faint bright chain line through each ring's teeth, by phase. */
@@ -5155,9 +5152,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         // Look v33: orbit spikes (marked from the weapon state in draw) take the triangle frame.
         // GW4: both rings (mask 1 inner, 2 outer) are teeth; the outer ring used to fall through to
         // the crescent sprite, so the long outer bar never read as saw teeth.
-        const spike = st === 3 && !h && i < spikeMask.length && (spikeMask[i] ?? 0) > 0;
-        const code = spike ? SPIKE_CODE : styleCode(st, h);
-        const vis = spike ? spikeVisual() : bulletStyleVisual(st, h);
+        // R7: the choice is pure (spikeSaw.ts bulletDrawCode) and tested for every start weapon.
+        const code = bulletDrawCode(st, h, i < spikeMask.length ? (spikeMask[i] ?? 0) : 0);
+        const spike = code === SPIKE_CODE;
+        const vis = visualForCode(code);
         if (bulletCodeShown[i] !== code) {
           bulletCodeShown[i] = code;
           styleSlot(i, vis);
