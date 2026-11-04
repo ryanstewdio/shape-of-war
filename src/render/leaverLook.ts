@@ -134,3 +134,125 @@ export function shardFlicker(t: number, h: number): number {
 
 /** Pure: shard spin while it holds, radians per second (it turns to its heading once chasing). */
 export const SHARD_HOLD_SPIN = 9;
+
+// R6 shard shimmer. Each shard keeps its solid colour and gains three moving lights: a bright band
+// that sweeps across the square, one or two crystal glints (gemGlint.ts) popping on its corners, and
+// a brightness pulse. All pure functions of the render clock and the shard's phase h in [0, 1), so a
+// group of shards sparkles out of step. The renderer maps the output through the palette.
+
+/** Seconds for the highlight band to cross a shard. */
+export const SHARD_SWEEP_SEC = 0.6;
+/** Brightness pulse rate (Hz) and depth (share of full brightness). */
+export const SHARD_PULSE_HZ = 6;
+export const SHARD_PULSE_DEPTH = 0.15;
+/** Band half width along its sweep axis, arena units, and the axis angle in the shard frame. */
+export const SHARD_BAND_HALF = 1.3;
+export const SHARD_BAND_ANGLE = 0.6;
+/** Glint arm length on a shard corner, arena units. */
+export const SHARD_GLINT_SIZE = 5;
+/** Most vertices a clipped band polygon can have (a square cut by two lines). */
+export const SHARD_BAND_MAX_PTS = 8;
+
+function hashPhase(h: number): number {
+  const v = Number.isFinite(h) ? h : 0;
+  return v - Math.floor(v);
+}
+
+/** Pure: sweep phase 0 to 1 of the band at time t, shard phase h (restarts every SHARD_SWEEP_SEC). */
+export function shardSweepPhase(t: number, h: number): number {
+  const x = (Number.isFinite(t) ? t : 0) / SHARD_SWEEP_SEC + hashPhase(h);
+  return x - Math.floor(x);
+}
+
+/** Pure: reach of the band axis over the square: the largest |u| a corner has on the sweep axis. */
+export function shardSweepReach(): number {
+  return SHARD_HALF * (Math.abs(Math.cos(SHARD_BAND_ANGLE)) + Math.abs(Math.sin(SHARD_BAND_ANGLE)));
+}
+
+/** Pure: band centre on the sweep axis at sweep phase p: from one side clear of the square to the other. */
+export function shardBandCentre(p: number): number {
+  const reach = shardSweepReach() + SHARD_BAND_HALF + 0.5;
+  const c = Math.max(0, Math.min(1, Number.isFinite(p) ? p : 0));
+  return -reach + 2 * reach * c;
+}
+
+/** Pure: brightness pulse at time t, shard phase h: 1 - SHARD_PULSE_DEPTH to 1 + SHARD_PULSE_DEPTH at 6 Hz. */
+export function shardPulse(t: number, h: number): number {
+  return 1 + SHARD_PULSE_DEPTH * Math.sin(((Number.isFinite(t) ? t : 0) * SHARD_PULSE_HZ + hashPhase(h)) * Math.PI * 2);
+}
+
+/** Pure: the pulse as an alpha factor that never exceeds 1 (the rise shows in the glow instead). */
+export function shardPulseAlpha(t: number, h: number): number {
+  return shardPulse(t, h) / (1 + SHARD_PULSE_DEPTH);
+}
+
+/** Pure: how many glints a shard carries, 1 or 2, fixed by its phase. */
+export function shardGlintCount(h: number): 1 | 2 {
+  return hashPhase(h) < 0.5 ? 1 : 2;
+}
+
+/** Pure: corner index 0 to 3 a glint share a in [0, 1) lands on. */
+export function shardCornerIndex(a: number): number {
+  return Math.min(3, Math.floor(hashPhase(a) * 4));
+}
+
+/** Pure: local corner k (0 to 3) of a shard turned by rot, written into out as x, y. */
+export function shardCorner(k: number, rot: number, out: { x: number; y: number }): { x: number; y: number } {
+  const t = rot + Math.PI / 4 + (k & 3) * (Math.PI / 2);
+  const r = SHARD_HALF * Math.SQRT2;
+  out.x = Math.cos(t) * r;
+  out.y = Math.sin(t) * r;
+  return out;
+}
+
+/**
+ * Pure: the band polygon. The square (half side SHARD_HALF, unturned) clipped to the strip
+ * |u - c| <= SHARD_BAND_HALF, where u is the position along the axis at SHARD_BAND_ANGLE. Writes
+ * x, y pairs into out (SHARD_BAND_MAX_PTS pairs) and returns the vertex count (0 when the strip
+ * misses the square). The caller turns and offsets the points. Allocates nothing.
+ */
+export function shardBandPoly(c: number, out: Float32Array): number {
+  const ca = Math.cos(SHARD_BAND_ANGLE);
+  const sa = Math.sin(SHARD_BAND_ANGLE);
+  const h = SHARD_BAND_HALF;
+  let n = 4;
+  // Square corners into out (pairs), then clip against u >= c - h and u <= c + h.
+  const k = SHARD_HALF;
+  out[0] = -k; out[1] = -k;
+  out[2] = k; out[3] = -k;
+  out[4] = k; out[5] = k;
+  out[6] = -k; out[7] = k;
+  for (let side = 0; side < 2; side++) {
+    // keep d >= 0 where d = (u - (c - h)) on side 0 and ((c + h) - u) on side 1.
+    const sign = side === 0 ? 1 : -1;
+    const lim = side === 0 ? c - h : c + h;
+    let m = 0;
+    const src = scratchPoly;
+    for (let i = 0; i < n * 2; i++) src[i] = out[i] ?? 0;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const ax = src[i * 2] ?? 0;
+      const ay = src[i * 2 + 1] ?? 0;
+      const bx = src[j * 2] ?? 0;
+      const by = src[j * 2 + 1] ?? 0;
+      const da = sign * (ax * ca + ay * sa - lim);
+      const db = sign * (bx * ca + by * sa - lim);
+      if (da >= 0 && m < SHARD_BAND_MAX_PTS) {
+        out[m * 2] = ax;
+        out[m * 2 + 1] = ay;
+        m++;
+      }
+      if (da >= 0 !== db >= 0 && m < SHARD_BAND_MAX_PTS) {
+        const f = da / (da - db);
+        out[m * 2] = ax + (bx - ax) * f;
+        out[m * 2 + 1] = ay + (by - ay) * f;
+        m++;
+      }
+    }
+    n = m;
+    if (n === 0) return 0;
+  }
+  return n;
+}
+
+const scratchPoly = new Float32Array(SHARD_BAND_MAX_PTS * 2 + 4);
