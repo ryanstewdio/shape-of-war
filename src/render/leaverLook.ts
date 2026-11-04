@@ -137,14 +137,19 @@ export const SHARD_HOLD_SPIN = 9;
 
 // R6 shard shimmer. Each shard keeps its solid colour and gains three moving lights: a bright band
 // that sweeps across the square, one or two crystal glints (gemGlint.ts) popping on its corners, and
-// a brightness pulse. All pure functions of the render clock and the shard's phase h in [0, 1), so a
+// a blink. All pure functions of the render clock and the shard's phase h in [0, 1), so a
 // group of shards sparkles out of step. The renderer maps the output through the palette.
 
 /** Seconds for the highlight band to cross a shard. */
 export const SHARD_SWEEP_SEC = 0.6;
-/** Brightness pulse rate (Hz) and depth (share of full brightness). */
-export const SHARD_PULSE_HZ = 6;
-export const SHARD_PULSE_DEPTH = 0.15;
+/** R7 blink: sine period, alpha floor, glow width range (multipliers on the palette glow). */
+export const SHARD_PULSE_SEC = 0.5;
+export const SHARD_ALPHA_LO = 0.45;
+export const SHARD_GLOW_LO = 0.6;
+export const SHARD_GLOW_HI = 1.4;
+/** Hold after the split (matches SHARD_HOLD_SEC in leaver.ts) and the white flash that ends it. */
+export const SHARD_HOLD_TOTAL = 0.5;
+export const SHARD_FLASH_SEC = 0.15;
 /** Band half width along its sweep axis, arena units, and the axis angle in the shard frame. */
 export const SHARD_BAND_HALF = 1.3;
 export const SHARD_BAND_ANGLE = 0.6;
@@ -176,14 +181,26 @@ export function shardBandCentre(p: number): number {
   return -reach + 2 * reach * c;
 }
 
-/** Pure: brightness pulse at time t, shard phase h: 1 - SHARD_PULSE_DEPTH to 1 + SHARD_PULSE_DEPTH at 6 Hz. */
-export function shardPulse(t: number, h: number): number {
-  return 1 + SHARD_PULSE_DEPTH * Math.sin(((Number.isFinite(t) ? t : 0) * SHARD_PULSE_HZ + hashPhase(h)) * Math.PI * 2);
+/** Pure: sine position 0 to 1 of the blink at time t, shard phase h (period SHARD_PULSE_SEC). */
+function pulseWave(t: number, h: number): number {
+  const x = (Number.isFinite(t) ? t : 0) / SHARD_PULSE_SEC + hashPhase(h);
+  return 0.5 * (1 + Math.sin(x * Math.PI * 2));
 }
 
-/** Pure: the pulse as an alpha factor that never exceeds 1 (the rise shows in the glow instead). */
+/** Pure: glow width factor at time t, shard phase h: SHARD_GLOW_LO to SHARD_GLOW_HI on a 0.5 s sine. */
+export function shardPulse(t: number, h: number): number {
+  return SHARD_GLOW_LO + (SHARD_GLOW_HI - SHARD_GLOW_LO) * pulseWave(t, h);
+}
+
+/** Pure: alpha at time t, shard phase h: SHARD_ALPHA_LO to 1 on the same 0.5 s sine, same offset. */
 export function shardPulseAlpha(t: number, h: number): number {
-  return shardPulse(t, h) / (1 + SHARD_PULSE_DEPTH);
+  return SHARD_ALPHA_LO + (1 - SHARD_ALPHA_LO) * pulseWave(t, h);
+}
+
+/** Pure: white flash 0 to 1 for a shard of age ageSec: 1 during the last SHARD_FLASH_SEC of the hold, else 0. */
+export function shardFlash(ageSec: number): number {
+  const a = Number.isFinite(ageSec) ? ageSec : 0;
+  return a >= SHARD_HOLD_TOTAL - SHARD_FLASH_SEC && a < SHARD_HOLD_TOTAL ? 1 : 0;
 }
 
 /** Pure: how many glints a shard carries, 1 or 2, fixed by its phase. */

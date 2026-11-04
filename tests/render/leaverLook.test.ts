@@ -134,20 +134,39 @@ describe('R6 shard shimmer timing', () => {
     for (let i = 0; i < mid * 2; i++) expect(Math.abs(out[i] ?? 99)).toBeLessThanOrEqual(m.SHARD_HALF + 1e-4);
   });
 
-  it('pulses brightness 15 percent at 6 Hz, offset per shard', async () => {
+  it('blinks alpha 0.45 to 1 and glow 0.6x to 1.4x on a 0.5 s sine, offset per shard', async () => {
     const m = await import('../../src/render/leaverLook');
-    let lo = 9;
-    let hi = 0;
+    let aLo = 9;
+    let aHi = 0;
+    let gLo = 9;
+    let gHi = 0;
     for (let i = 0; i < 600; i++) {
-      const v = m.shardPulse(i / 600, 0.3);
-      lo = Math.min(lo, v);
-      hi = Math.max(hi, v);
+      const al = m.shardPulseAlpha(i / 600, 0.3);
+      const gl = m.shardPulse(i / 600, 0.3);
+      aLo = Math.min(aLo, al);
+      aHi = Math.max(aHi, al);
+      gLo = Math.min(gLo, gl);
+      gHi = Math.max(gHi, gl);
     }
-    expect(lo).toBeCloseTo(0.85, 2);
-    expect(hi).toBeCloseTo(1.15, 2);
-    expect(m.shardPulse(1 / 6, 0.2)).toBeCloseTo(m.shardPulse(0, 0.2), 6);
+    expect(aLo).toBeCloseTo(0.45, 2);
+    expect(aHi).toBeCloseTo(1, 2);
+    expect(gLo).toBeCloseTo(0.6, 2);
+    expect(gHi).toBeCloseTo(1.4, 2);
+    expect(m.shardPulse(0.5, 0.2)).toBeCloseTo(m.shardPulse(0, 0.2), 6);
+    expect(m.shardPulseAlpha(0.5, 0.2)).toBeCloseTo(m.shardPulseAlpha(0, 0.2), 6);
+    expect(m.shardPulseAlpha(0, 0.0)).not.toBeCloseTo(m.shardPulseAlpha(0, 0.2), 3);
     expect(m.shardPulse(0, 0.0)).not.toBeCloseTo(m.shardPulse(0, 0.2), 3);
-    expect(m.shardPulseAlpha(0.01, 0.9)).toBeLessThanOrEqual(1);
+    expect(m.shardPulseAlpha(Number.NaN, Number.NaN)).toBeLessThanOrEqual(1);
+  });
+
+  it('flashes white for the last 0.15 s of the 0.5 s hold only', async () => {
+    const m = await import('../../src/render/leaverLook');
+    expect(m.shardFlash(0)).toBe(0);
+    expect(m.shardFlash(0.34)).toBe(0);
+    expect(m.shardFlash(0.36)).toBe(1);
+    expect(m.shardFlash(0.499)).toBe(1);
+    expect(m.shardFlash(0.5)).toBe(0);
+    expect(m.shardFlash(2)).toBe(0);
   });
 
   it('gives each shard 1 or 2 glints on its corners', async () => {
