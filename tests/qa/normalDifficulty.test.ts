@@ -73,9 +73,10 @@ const OPEN_DRUM = { seed: 7, level: 33, levelHash: '0BDFEF03', pre: 1506431169, 
 describe('Normal difficulty is the pre release sim', () => {
   it('the Normal table multiplies by exactly 1 and adds exactly 0, on every field', () => {
     const n = DIFFICULTY.normal;
-    expect(Object.keys(n).sort()).toEqual(['addScale', 'bossScale', 'driftScale', 'enemyHp', 'enemySpeed', 'extraLives', 'liveCapScale', 'spawnRate']);
+    expect(Object.keys(n).sort()).toEqual(['addScale', 'bossScale', 'driftScale', 'enemyHp', 'enemySpeed', 'extraLives', 'liveCapScale', 'parScale', 'spawnRate']);
     expect(n.addScale).toBe(1);
     expect(n.liveCapScale).toBe(1);
+    expect(n.parScale).toBe(1);
     expect(n.driftScale).toBe(1);
     expect(n.enemySpeed).toBe(1);
     expect(n.enemyHp).toBe(1);
