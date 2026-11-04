@@ -3,12 +3,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_FREE_PLAY } from '../../src/core/freeplayConfig';
 import type { FreePlayConfig } from '../../src/core/freeplayConfig';
-import { bossForSegment } from '../../src/levelgen/boss';
+import { freePlayBossFor } from '../../src/levelgen/boss';
 import { freePlayLevel, freePlaySegment, levelOptionsOf } from '../../src/levelgen/freeplay';
 import { levelHash } from '../../src/levelgen/generator';
 import { BANDS, V1_GEN_CONFIG, bandOf, effectiveIndexOf } from '../../src/levelgen/leveldef';
 import type { EndlessDef, EndlessSegmentDef, FreePlayArena } from '../../src/levelgen/leveldef';
-import { FREE_PLAY_ENTITY_CAP, FREE_PLAY_MANY_WELLS, freePlayArenaSize, validateFreePlay, validateFreePlaySegment } from '../../src/levelgen/validate';
+import { FREE_PLAY_DENSITY_SCALE, FREE_PLAY_ENTITY_CAP, FREE_PLAY_MANY_WELLS, FREE_PLAY_NORMAL_WELLS, FREE_PLAY_SNAKES_PER_SEGMENT, freePlayArenaSize, validateFreePlay, validateFreePlaySegment } from '../../src/levelgen/validate';
 
 const SPREAD = 2654435761;
 const seedAt = (i: number): number => (17 + i * SPREAD) >>> 0;
@@ -55,11 +55,12 @@ describe('absent config is today', () => {
     for (const arena of ['rect', 'circle'] as const) {
       for (let i = 0; i < 6; i++) {
         const plain = freePlayLevel({ arena, barriers: true, seed: seedAt(i) });
-        const withCfg = freePlayLevel({ arena, barriers: true, seed: seedAt(i), config: cfg({ bosses: 'every3' }) });
+        // R5: wells off keeps today's hazards; the boss cadence and the snake floor start at segments 3 and 1.
+        const withCfg = freePlayLevel({ arena, barriers: true, seed: seedAt(i), config: cfg({ bosses: 'every3', wells: 'off' }) });
         expect(withCfg.arena).toEqual(plain.arena);
         expect(withCfg.hazards).toEqual(plain.hazards);
         expect({ ...withCfg.freePlay, options: undefined }).toEqual({ ...plain.freePlay, options: undefined });
-        for (const s of SEGMENTS) expect(freePlaySegment(withCfg, s)).toEqual(freePlaySegment(plain, s));
+        expect(freePlaySegment(withCfg, 0)).toEqual(freePlaySegment(plain, 0));
       }
     }
   });
@@ -108,7 +109,8 @@ describe('enemies', () => {
     const d = freePlayLevel({ arena: 'rect', barriers: false, seed: 8, config: cfg({ enemies: ['snake'] }) });
     for (const s of SEGMENTS) {
       const seg = freePlaySegment(d, s);
-      const cap = BANDS[seg.band].maxLiveSnakes;
+      // R5: the Free Play snake floor lifts the band cap to at least FREE_PLAY_SNAKES_PER_SEGMENT.
+      const cap = Math.max(BANDS[seg.band].maxLiveSnakes, s >= 1 ? FREE_PLAY_SNAKES_PER_SEGMENT : 0);
       for (const w of seg.waves.waves) expect(w.entries.length).toBeLessThanOrEqual(cap);
     }
   });
@@ -116,7 +118,9 @@ describe('enemies', () => {
   it('empty means the normal roster; kinds outside the catalogue are dropped', () => {
     const plain = freePlayLevel({ arena: 'circle', barriers: false, seed: 4 });
     const none = freePlayLevel({ arena: 'circle', barriers: false, seed: 4, config: cfg({ bosses: 'every3' }) });
-    for (const s of SEGMENTS) expect(freePlaySegment(none, s).roster).toEqual(freePlaySegment(plain, s).roster);
+    // R5: the snake joins the roster whenever it is allowed (the snake floor); the rest is the drawn roster.
+    const noSnake = (seg: EndlessSegmentDef): string[] => seg.roster.filter((e) => e.kind !== 'snake').map((e) => e.kind);
+    for (const s of SEGMENTS) expect(noSnake(freePlaySegment(none, s))).toEqual(noSnake(freePlaySegment(plain, s)));
     const v1 = freePlayLevel({ arena: 'rect', barriers: false, seed: 4, config: cfg({ enemies: ['splime'] }) }, V1_GEN_CONFIG);
     expect(v1.freePlay?.options?.enemies).toEqual([]);
     expect(levelOptionsOf(cfg({ enemies: ['dart', 'charger'] }), v1.roster).enemies).toEqual(['dart']);
@@ -130,7 +134,7 @@ describe('density', () => {
     return SEGMENTS.reduce((n, s) => n + entries(freePlaySegment(d, s)), 0);
   };
 
-  it('Low about 0.6x, Normal 1x, Swarm about 1.8x the spawn counts', () => {
+  it('Low about 0.6x, Normal 1x, Swarm about 1.95x the spawn counts (R5)', () => {
     let low = 0;
     let normal = 0;
     let swarm = 0;
@@ -142,16 +146,16 @@ describe('density', () => {
     expect(low / normal).toBeGreaterThan(0.5);
     expect(low / normal).toBeLessThan(0.75);
     expect(swarm / normal).toBeGreaterThan(1.6);
-    expect(swarm / normal).toBeLessThan(2.0);
+    expect(swarm / normal).toBeLessThan(2.1);
   });
 
-  it('Swarm raises maxLiveEnemies 1.8x up to the entity cap; Low and Normal keep the band value', () => {
+  it('Swarm raises maxLiveEnemies by its scale up to the entity cap; Low and Normal keep the band value', () => {
     for (const density of ['low', 'normal', 'swarm'] as const) {
       const d = freePlayLevel({ arena: 'drum', barriers: true, seed: 2, config: cfg({ density }) });
       for (const s of SEGMENTS) {
         const seg = freePlaySegment(d, s);
         const band = BANDS[bandOf(effectiveIndexOf(s))].maxLiveEnemies;
-        const want = density === 'swarm' ? Math.min(FREE_PLAY_ENTITY_CAP, Math.round(band * 1.8)) : band;
+        const want = density === 'swarm' ? Math.min(FREE_PLAY_ENTITY_CAP, Math.round(band * FREE_PLAY_DENSITY_SCALE.swarm)) : band;
         expect(seg.waves.maxLiveEnemies).toBe(want);
         expect(seg.waves.maxLiveEnemies).toBeLessThanOrEqual(FREE_PLAY_ENTITY_CAP);
       }
@@ -166,30 +170,26 @@ describe('bosses', () => {
     for (const s of SEGMENTS) expect(freePlaySegment(d, s).boss).toBeUndefined();
   });
 
-  it('every3: the tier ladder every 180 s on a flat arena, no boss on a drum', () => {
+  it('every3 (R5): the tier ladder on segments 3, 13, 23 (100 s, then every 300 s); Warden and Brood on a drum', () => {
     for (const arena of ARENAS) {
       const d = freePlayLevel({ arena, barriers: false, seed: 6, config: cfg({ bosses: 'every3' }) });
-      expectValid(d);
-      for (const s of SEGMENTS) {
-        const want = arena === 'drum' ? undefined : (bossForSegment(s) ?? undefined);
-        expect(freePlaySegment(d, s).boss).toEqual(want);
-      }
+      expectValid(d, [...SEGMENTS, 3, 13, 23]);
+      for (const s of [...SEGMENTS, 3, 13, 23]) expect(freePlaySegment(d, s).boss).toEqual(freePlayBossFor('every3', s, arena === 'drum') ?? undefined);
     }
-    // 180 s = 6 segments of 30 s: segments 6, 12, 18 carry a boss.
     const flat = freePlayLevel({ arena: 'rect', barriers: false, seed: 6, config: cfg({ bosses: 'every3' }) });
-    expect([6, 12, 18].map((s) => freePlaySegment(flat, s).boss?.id)).toEqual(['warden', 'brood', 'spindle']);
+    expect([3, 13, 23].map((s) => freePlaySegment(flat, s).boss?.id)).toEqual(['warden', 'brood', 'spindle']);
   });
 
-  it('a chosen boss every 180 s on a flat arena', () => {
+  it('a chosen boss on the R5 cadence on a flat arena; a drum fights it as Warden', () => {
     const d = freePlayLevel({ arena: 'circle', barriers: true, seed: 6, config: cfg({ bosses: 'prism' }) });
-    expectValid(d);
-    for (const s of SEGMENTS) {
+    expectValid(d, [...SEGMENTS, 3, 13]);
+    for (const s of [...SEGMENTS, 3, 13]) {
       const b = freePlaySegment(d, s).boss;
-      if (s > 0 && s % 6 === 0) expect(b).toMatchObject({ id: 'prism', tier: 4, atSec: 10 });
+      if (s >= 3 && (s - 3) % 10 === 0) expect(b).toMatchObject({ id: 'prism', tier: 4, atSec: 10 });
       else expect(b).toBeUndefined();
     }
     const drum = freePlayLevel({ arena: 'drum', barriers: false, seed: 6, config: cfg({ bosses: 'prism' }) });
-    expect(freePlaySegment(drum, 6).boss).toBeUndefined();
+    expect(freePlaySegment(drum, 3).boss).toMatchObject({ id: 'warden', tier: 1 });
   });
 
   it('B1 catches a boss the options did not ask for', () => {
@@ -202,13 +202,15 @@ describe('bosses', () => {
 });
 
 describe('wells', () => {
-  it('off and normal: no wells (as today); many: 2 to 4 wells, every arena and size', () => {
+  it('off: no wells; normal (R5): 1 to 2; many: 2 to 4 wells, every arena and size', () => {
     for (const arena of ARENAS) {
       for (const size of ['small', 'medium', 'large'] as const) {
         for (let i = 0; i < 15; i++) {
-          for (const wells of ['off', 'normal'] as const) {
-            expect(freePlayLevel({ arena, barriers: true, seed: seedAt(i), config: cfg({ wells, size }) }).hazards.wells).toEqual([]);
-          }
+          expect(freePlayLevel({ arena, barriers: true, seed: seedAt(i), config: cfg({ wells: 'off', size }) }).hazards.wells).toEqual([]);
+          const n = freePlayLevel({ arena, barriers: true, seed: seedAt(i), config: cfg({ wells: 'normal', size }) });
+          expect(validateFreePlay(n).errors).toEqual([]);
+          expect(n.hazards.wells.length).toBeGreaterThanOrEqual(FREE_PLAY_NORMAL_WELLS.min);
+          expect(n.hazards.wells.length).toBeLessThanOrEqual(FREE_PLAY_NORMAL_WELLS.max);
           const d = freePlayLevel({ arena, barriers: i % 2 === 0, seed: seedAt(i), config: cfg({ wells: 'many', size }) });
           expect(validateFreePlay(d).errors).toEqual([]);
           expect(d.hazards.wells.length).toBeGreaterThanOrEqual(FREE_PLAY_MANY_WELLS.min);
@@ -225,9 +227,13 @@ describe('wells', () => {
     expect([...seen].sort()).toEqual([2, 3, 4]);
   });
 
-  it('FP4 catches wells without wells many', () => {
-    const d = structuredClone(freePlayLevel({ arena: 'rect', barriers: false, seed: 1, config: cfg({ wells: 'normal' }) }));
+  it('FP4 catches wells with wells off, and too many for normal', () => {
+    const d = structuredClone(freePlayLevel({ arena: 'rect', barriers: false, seed: 1, config: cfg({ wells: 'off' }) }));
     d.hazards.wells = [{ x: 500, y: 300 }];
+    expect(ids(validateFreePlay(d).errors)).toContain('FP4');
+    const n = structuredClone(freePlayLevel({ arena: 'rect', barriers: false, seed: 1, config: cfg({ wells: 'normal' }) }));
+    n.hazards.wells = [{ x: 500, y: 300 }, { x: -500, y: 300 }, { x: 500, y: -300 }];
+    expect(ids(validateFreePlay(n).errors)).toContain('FP4');
     expect(ids(validateFreePlay(d).errors)).toContain('FP4');
   });
 });

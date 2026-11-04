@@ -106,6 +106,8 @@ import {
   obstacleGap,
   obstaclePointDistance,
   validateLevel,
+  FREE_PLAY_SNAKES_PER_SEGMENT,
+  FREE_PLAY_SNAKE_FROM_SEGMENT,
 } from './validate';
 import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards } from './boss';
 import { R3_COLLECT_RATE, bossLevelPar, destroyCountFor, inBreather, pulseAt, wholeLevelPar } from './pacing';
@@ -617,7 +619,24 @@ interface WaveRun {
    * change to any draw).
    */
   budgetScale?: number;
+  /**
+   * R5 late lift: waves at or after fromSec, outside a breather, have their budget times budget,
+ * rounded, at least 1.
+   * Applied before the R1 plan, so no draw before fromSec moves. Absent means no lift.
+   */
+  late?: { readonly fromSec: number; readonly budget: number };
 }
+
+/**
+ * R5 (Ryan, build 405facc: "near the end of the 3 minute Free Play match the load increased; I like
+ * it"). Free Play's final third spawns about 1.37x its middle third (the Endless ramp). Adventure
+ * version 8 non boss levels in bands 2 to 4 already reach 1.27x to 2.3x, but band 1 (levels 1 to 4)
+ * finishes its ramp at 120 s and stayed flat (0.95x to 1.0x). These levels lift their wave budget
+ * by R5_LATE_BUDGET from R5_LATE_FROM of the clear time, breathers excepted.
+ */
+export const R5_LATE_FROM = 2 / 3;
+export const R5_LATE_BUDGET = 1.4;
+export const R5_LATE_BANDS: readonly Band[] = Object.freeze<Band[]>([1]);
 
 /**
  * Kind a snake group falls back to when the snake cap is full: grunt when the roster has it (every
@@ -741,6 +760,8 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
     if (run.budgetScale !== undefined) budget = Math.max(1, Math.round(budget * run.budgetScale));
     // R1: the first wave of each breather is a lull; every other wave draws a flavour.
     const breather = run.pulse !== undefined && inBreather(run.pulse, t);
+    // R5 late lift: breathers keep their dip, so the final third still breathes after each peak.
+    if (run.late !== undefined && t >= run.late.fromSec && !breather) budget = Math.max(1, Math.round(budget * run.late.budget));
     const volatileOn = run.volatile !== undefined && (run.volatileUntilSec === undefined || t < run.volatileUntilSec);
     const plan = run.volatile === undefined || !volatileOn ? null : r1Wave(run.volatile, budget, oldInterval, breather && !wasBreather);
     wasBreather = breather;
@@ -1019,6 +1040,7 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     budgetBonus: 0,
     cylinder: cyl,
     ...(long ? { pulse: longPulse(LONG_BANDS[band]) } : {}),
+    ...(r3 && !bossLevel && longObjective !== null && R5_LATE_BANDS.includes(band) ? { late: { fromSec: round1(longObjective.clearSec * R5_LATE_FROM), budget: R5_LATE_BUDGET } } : {}),
     // R2 boss level: the R1 plan stops at the entrance, so the fight keeps the version 5 waves.
     ...(r1Waves ? { volatile: stream(s, R1_SALT), ...(bossLevel ? { volatileUntilSec: bossLevelAtSec(cfg) } : {}) } : {}),
   });
@@ -1155,6 +1177,40 @@ export interface SegmentTweaks {
   readonly maxLiveEnemies?: number;
   /** The segment's boss, or null for none; replaces bossForSegment. */
   readonly boss?: BossSpec | null;
+  /** R5 Free Play snakes: the snake is allowed, with this roster weight (withFreePlaySnakes). */
+  readonly snakeWeight?: number;
+}
+
+/** Salt of the Free Play snake stream. ASCII "FPSN". */
+export const FREE_PLAY_SNAKE_SALT = 0x4650534e;
+
+/**
+ * R5 (Ryan, build 405facc: "Snakes are now not appearing and will not appear if wells is not turned
+ * on"). Bands 1 and 2 (the first 4 minutes of a run) have maxLiveSnakes 0 and snake roster weight
+ * 0, so only the nova snakes of wells showed. With the snake allowed, a Free Play segment from
+ * FREE_PLAY_SNAKE_FROM_SEGMENT holds at least FREE_PLAY_SNAKES_PER_SEGMENT snakes: each missing one
+ * is a single 'corners' entry at offset 0 in wave floor((k + 1) n / (need + 1)), placed by
+ * emitGroup on its own stream, and the snake joins the roster. Draws: emitGroup per added snake.
+ */
+export function withFreePlaySnakes(
+  r: Rng,
+  roster: readonly RosterEntry[],
+  waves: readonly WaveDef[],
+  arena: ArenaDef,
+  cyl: boolean,
+  weight: number,
+): { roster: RosterEntry[]; waves: WaveDef[] } {
+  const have = waves.reduce((n, w) => n + w.entries.filter((e) => e.kind === 'snake').length, 0);
+  const need = waves.length === 0 ? 0 : Math.max(0, FREE_PLAY_SNAKES_PER_SEGMENT - have);
+  const out = waves.map((w) => ({ ...w, entries: [...w.entries] }));
+  for (let k = 0; k < need; k++) {
+    const target = out[Math.floor(((k + 1) * out.length) / (need + 1))];
+    if (target !== undefined) target.entries.push(...emitGroup(r, arena, 'snake', 1, patternFor(r, 'snake'), 0, cyl));
+  }
+  const snakes = have + need > 0;
+  const kinds = new Set(roster.map((e) => e.kind));
+  const next = snakes && !kinds.has('snake') ? ALL_ENEMY_KINDS.filter((k) => kinds.has(k) || k === 'snake').map((kind) => roster.find((e) => e.kind === kind) ?? { kind, weight }) : roster.map((e) => ({ ...e }));
+  return { roster: next, waves: out };
 }
 
 /** Endless segment s: roster and waves only, atSec relative to segment start, all below 30 s. */
@@ -1189,7 +1245,9 @@ export function endlessSegmentOn(endlessSeed: number, segment: number, cfg: GenC
   });
   // An explicit roster is final: the v2 stage never swaps its kinds.
   const v2 = tweaks?.roster === undefined && runsV2(cfg, band);
-  const { roster, waves: list } = v2 ? applyV2Enemies(stream(seed, V2_ENEMY_SALT), band, arena, v1Roster, v1List, cyl) : { roster: v1Roster, waves: v1List.waves };
+  const staged = v2 ? applyV2Enemies(stream(seed, V2_ENEMY_SALT), band, arena, v1Roster, v1List, cyl) : { roster: v1Roster, waves: v1List.waves };
+  const snakeOn = tweaks?.snakeWeight !== undefined && segment >= FREE_PLAY_SNAKE_FROM_SEGMENT;
+  const { roster, waves: list } = snakeOn ? withFreePlaySnakes(stream(seed, FREE_PLAY_SNAKE_SALT), staged.roster, staged.waves, arena, cyl, tweaks.snakeWeight ?? 1) : staged;
   const schedule = scheduleOf(b, list, -1, 0, bonus);
   const def: EndlessSegmentDef = {
     version: LEVELDEF_VERSION,
