@@ -324,7 +324,24 @@ import {
 } from './mapFx';
 import { burstBoss, burstSmall, emitBlinkStreak, emitDeflectSparks, emitEnemyTrail, emitGeomSparkle, trailsActive } from './particles';
 import { bossSlot, DRONE_KIND_NUM, isFloorSlot, KIND_NUM, LEAVER_KIND_NUM, leaverSlot, partSlot, partVisualSlot, specFor } from './shapeSpecs';
-import { leaverFrameStep, leaverSpin, SHARD_HOLD_SPIN, shardFlicker, shardHueMix, shardKey, shardShimmerKey } from './leaverLook';
+import {
+  leaverFrameStep,
+  leaverSpin,
+  SHARD_BAND_MAX_PTS,
+  SHARD_GLINT_SIZE,
+  SHARD_HOLD_SPIN,
+  shardBandCentre,
+  shardBandPoly,
+  shardCorner,
+  shardCornerIndex,
+  shardGlintCount,
+  shardHueMix,
+  shardKey,
+  shardPulse,
+  shardPulseAlpha,
+  shardShimmerKey,
+  shardSweepPhase,
+} from './leaverLook';
 import { SHARD_HOLD_SEC } from '../game/enemies/leaver';
 // v31: Brood's split into Broodlings (sim:bossSplit): the green shard burst (bossSplit.ts).
 import {
@@ -1377,6 +1394,20 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const stormA = new Float64Array(STORM_MAX);
   let stormCount = 0;
   let stormShown = false;
+  // R6 shard shimmer overlay: drawn shard positions, turns, phases and alphas this frame, one Graphics.
+  const SHARD_MAX = 48;
+  const shardX = new Float64Array(SHARD_MAX);
+  const shardY = new Float64Array(SHARD_MAX);
+  const shardRot = new Float64Array(SHARD_MAX);
+  const shardScale = new Float64Array(SHARD_MAX);
+  const shardH = new Float64Array(SHARD_MAX);
+  const shardA = new Float64Array(SHARD_MAX);
+  const shardTint = new Int32Array(SHARD_MAX);
+  const shardId = new Int32Array(SHARD_MAX);
+  let shardCount = 0;
+  let shardShown = false;
+  const shardBand = new Float32Array(SHARD_BAND_MAX_PTS * 2);
+  const shardPt = { x: 0, y: 0 };
   // GW3 nova snakes: tracked heads and one body polyline scratch (head plus segments).
   const novaSnakes = createNovaSnakeState();
   const snakePts = new Float32Array((SNAKE_SEGMENTS + 1) * 2);
@@ -1406,6 +1437,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const fxTrace: PenTrace = createPenTrace(64);
   let snakeShown = false;
   const stormG = new Graphics({ label: 'tempestling' });
+  const shardG = new Graphics({ label: 'shardShimmer' });
+  const shardPen = createDrumPen();
   // Look GW2: well arrival and snake emergence state, the chainsaw layer and the boss shell.
   const arrive = createArriveState();
   const emerge = createEmergeState();
@@ -1512,10 +1545,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       { layer: cueLayer.container, scale: true },
       { layer: enemyBulletLayer.layer.container, scale: true },
     ],
-    freeform: [rings, ringGlow, enemyFx, enemyFxGlow, wallFlash, sawG, novaG, snakeG, stormG, droneFx, bossUnder, bossOver],
+    freeform: [rings, ringGlow, enemyFx, enemyFxGlow, wallFlash, sawG, novaG, snakeG, stormG, shardG, droneFx, bossUnder, bossOver],
     // G9 and G10: every free form layer draws through the drum itself (drumPen.ts), owner by owner
     // or sample by sample, so the drum pass never linearises one. The tilt pass still projects them.
-    drumDrawn: [sawG, novaG, snakeG, rings, ringGlow, enemyFx, enemyFxGlow, wallFlash, stormG, droneFx, bossUnder, bossOver],
+    drumDrawn: [sawG, novaG, snakeG, rings, ringGlow, enemyFx, enemyFxGlow, wallFlash, stormG, shardG, droneFx, bossUnder, bossOver],
   });
   // Look v33: the damaged boss body. A copy of the body context with the removed arcs cut out of
   // the geometry (bossDamage.ts damagedSpec), and its glow texture, rebuilt only when the slot, the
@@ -4071,6 +4104,55 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   }
 
   /**
+   * R6 shard shimmer: a bright band sweeps across each shard every SHARD_SWEEP_SEC, and 1 or 2 crystal
+   * glints (gemGlint.ts) pop on its corners. The band takes a palette mix of the shard colour toward
+   * white; the glints take the shard colour with the white hot centre of drawGlint. The pulse itself
+   * is applied to the shard view (alpha and glow) in the entity loop.
+   */
+  function drawShardShimmer(timeSec: number): void {
+    if (shardShown) {
+      shardG.clear();
+      shardShown = false;
+    }
+    if (shardCount === 0) return;
+    shardShown = true;
+    const last = entities.children[entities.children.length - 1];
+    if (shardG.parent !== entities || (last !== shardG && last !== bossOver)) entities.addChild(shardG);
+    const sp = penBegin(shardPen, shardG, drum);
+    for (let k = 0; k < shardCount; k++) {
+      const x = shardX[k] ?? 0;
+      const y = shardY[k] ?? 0;
+      const rot = shardRot[k] ?? 0;
+      const sc = shardScale[k] ?? 1;
+      const h = shardH[k] ?? 0;
+      const a = shardA[k] ?? 1;
+      const base = shardTint[k] ?? 0xffffff;
+      penOwner(sp, x, y);
+      const n = shardBandPoly(shardBandCentre(shardSweepPhase(timeSec, h)), shardBand);
+      if (n >= 3) {
+        const cr = Math.cos(rot);
+        const sr = Math.sin(rot);
+        for (let q = 0; q < n; q++) {
+          const lx = (shardBand[q * 2] ?? 0) * sc;
+          const ly = (shardBand[q * 2 + 1] ?? 0) * sc;
+          const px = x + lx * cr - ly * sr;
+          const py = y + lx * sr + ly * cr;
+          if (q === 0) penMoveTo(sp, px, py);
+          else penLineTo(sp, px, py);
+        }
+        penClose(sp);
+        penFill(sp, mixRgb(base, palette.white, 0.85), 0.9 * a);
+      }
+      const gl = shardGlintCount(h);
+      for (let g = 0; g < gl; g++) {
+        glintAt((shardId[k] ?? 0) * 17 + 3, g, timeSec + h * 5, glint);
+        shardCorner(shardCornerIndex(glint.a), rot, shardPt);
+        drawGlint(sp, x + shardPt.x * sc, y + shardPt.y * sc, glintSize(SHARD_GLINT_SIZE * sc, glint.flare), glint.rot, base, glint.flare * a);
+      }
+    }
+  }
+
+  /**
    * GW3 Tempestlings: a fast swirl of storm arcs round each one and a bright leading edge (the
    * kite's front edges, white hot) facing its move direction. One Graphics, cleared only while it
    * holds content, kept just under the boss identity layer.
@@ -4562,6 +4644,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
     fluid.hideAll();
     stormCount = 0;
+    shardCount = 0;
     // G6 item j: nova snakes come from the sim's ownership table every frame, not an event match.
     novaSnakeSync(novaSnakes, w, gs(w), SNAKE_SLOTS, KIND_SNAKE_HEAD);
     if (enemyFxDirty) {
@@ -4742,9 +4825,20 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       else if (kind === KIND_DART || kind === KIND_GEOM) applyV1Sparkle(w, i, kind, teleNow, timeSec, dt);
       else if (isShard) {
         // Leaver shard brightness flicker: alpha and glow, so it shows on the bloom and fallback paths.
-        const f = shardFlicker(timeSec, hash01(i));
-        ev.alpha *= f;
-        ev.glowMul *= 0.7 + 0.6 * f;
+        const hs = hash01(i);
+        ev.alpha *= shardPulseAlpha(timeSec, hs);
+        ev.glowMul *= shardPulse(timeSec, hs);
+        if (shardCount < SHARD_MAX) {
+          shardX[shardCount] = ev.x;
+          shardY[shardCount] = ev.y;
+          shardRot[shardCount] = ev.rot;
+          shardScale[shardCount] = scale;
+          shardH[shardCount] = hs;
+          shardA[shardCount] = ev.alpha;
+          shardTint[shardCount] = tint;
+          shardId[shardCount] = i;
+          shardCount++;
+        }
       }
       else if (isBoss) {
         bossDrawX = ev.x;
@@ -4905,6 +4999,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
     if (!prismDrawn && prismLayer) prismLayer.hide();
     drawTempestlings(timeSec);
+    drawShardShimmer(timeSec);
     drawNovaSnakes(w, alpha, timeSec);
     drawBossIdentity(timeSec);
     drawDroneMode(arm.mode);

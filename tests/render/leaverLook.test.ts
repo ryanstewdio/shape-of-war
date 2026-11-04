@@ -111,3 +111,55 @@ describe('Leaver shards', () => {
     expect(seen.size).toBeGreaterThan(10);
   });
 });
+
+describe('R6 shard shimmer timing', () => {
+  it('sweeps the band across a shard every 0.6 s', async () => {
+    const m = await import('../../src/render/leaverLook');
+    expect(m.SHARD_SWEEP_SEC).toBe(0.6);
+    expect(m.shardSweepPhase(0, 0)).toBeCloseTo(0, 6);
+    expect(m.shardSweepPhase(0.3, 0)).toBeCloseTo(0.5, 6);
+    expect(m.shardSweepPhase(0.6, 0.25)).toBeCloseTo(0.25, 6);
+    expect(m.shardSweepPhase(1.2, 0.4)).toBeCloseTo(m.shardSweepPhase(0, 0.4), 6);
+    expect(m.shardSweepPhase(Number.NaN, 0)).toBe(0);
+  });
+
+  it('moves the band centre from clear of one side to clear of the other', async () => {
+    const m = await import('../../src/render/leaverLook');
+    const out = new Float32Array(m.SHARD_BAND_MAX_PTS * 2);
+    expect(m.shardBandPoly(m.shardBandCentre(0), out)).toBe(0);
+    expect(m.shardBandPoly(m.shardBandCentre(1), out)).toBe(0);
+    const mid = m.shardBandPoly(m.shardBandCentre(0.5), out);
+    expect(mid).toBeGreaterThanOrEqual(3);
+    expect(mid).toBeLessThanOrEqual(m.SHARD_BAND_MAX_PTS);
+    for (let i = 0; i < mid * 2; i++) expect(Math.abs(out[i] ?? 99)).toBeLessThanOrEqual(m.SHARD_HALF + 1e-4);
+  });
+
+  it('pulses brightness 15 percent at 6 Hz, offset per shard', async () => {
+    const m = await import('../../src/render/leaverLook');
+    let lo = 9;
+    let hi = 0;
+    for (let i = 0; i < 600; i++) {
+      const v = m.shardPulse(i / 600, 0.3);
+      lo = Math.min(lo, v);
+      hi = Math.max(hi, v);
+    }
+    expect(lo).toBeCloseTo(0.85, 2);
+    expect(hi).toBeCloseTo(1.15, 2);
+    expect(m.shardPulse(1 / 6, 0.2)).toBeCloseTo(m.shardPulse(0, 0.2), 6);
+    expect(m.shardPulse(0, 0.0)).not.toBeCloseTo(m.shardPulse(0, 0.2), 3);
+    expect(m.shardPulseAlpha(0.01, 0.9)).toBeLessThanOrEqual(1);
+  });
+
+  it('gives each shard 1 or 2 glints on its corners', async () => {
+    const m = await import('../../src/render/leaverLook');
+    const counts = new Set<number>();
+    for (let i = 0; i < 20; i++) counts.add(m.shardGlintCount(i / 20));
+    expect([...counts].sort()).toEqual([1, 2]);
+    for (let i = 0; i < 20; i++) expect(m.shardCornerIndex(i / 20)).toBeGreaterThanOrEqual(0);
+    const p = { x: 0, y: 0 };
+    m.shardCorner(0, 0, p);
+    expect(Math.hypot(p.x, p.y)).toBeCloseTo(m.SHARD_HALF * Math.SQRT2, 6);
+    expect(Math.abs(p.x)).toBeCloseTo(m.SHARD_HALF, 6);
+    expect(Math.abs(p.y)).toBeCloseTo(m.SHARD_HALF, 6);
+  });
+});
