@@ -31,7 +31,8 @@ const CASES: readonly { level: number; kind: EnemyKind; hash: string }[] = [
   // D13 C0: seed 42 level 17 is now a cylinder level too (was 43CADCE4 flat at 374a7b9). Drum-maps:
   // a pillars drum (was BCC2F1B8 open drum at 8d5c989).
   { level: 17, kind: 'blink', hash: '78B75D48' },
-  { level: 31, kind: 'sower', hash: '524D746B' },
+  // forge-leaver: seed 42 level 31 gains a Leaver group (was 524D746B); its Sower is unchanged.
+  { level: 31, kind: 'sower', hash: 'DDB938BA' },
 ];
 
 interface EarlySpawn {

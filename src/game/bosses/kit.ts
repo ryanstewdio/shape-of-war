@@ -8,6 +8,7 @@
 //   2 sweep:  vy arms (1 to 3) of length vx from (x, y), first arm at rot, half width radius.
 //   3 tether: segment from (x, y) to (vx, vy), half width radius.
 //   4 pull:   circle of radius radius around (x, y). Never lethal.
+import type { Surface } from '../../core/surface';
 import { HAZARD } from './table';
 import { HazardType } from './types';
 
@@ -183,6 +184,40 @@ export function hazardHits(
     default:
       return false;
   }
+}
+
+/** Scratch for surface deltas in hazardHitsOn. */
+const sd = { x: 0, y: 0 };
+
+/**
+ * hazardHits on a surface: seam aware on a drum (forge-leaver, Foundry's R5 request). The ship
+ * centre is taken to its nearest image around the hazard anchor (x, y) through surface.delta, and
+ * a tether's far end (vx, vy) likewise, so a hazard reaching across the u seam hits the ship on the
+ * other side. A surface that does not wrap calls hazardHits with the raw numbers, so flat play is
+ * bit identical. Known limit: a lane or sweep arm longer than half the drum tests the nearest image.
+ */
+export function hazardHitsOn(
+  surface: Pick<Surface, 'topology' | 'delta'>,
+  type: number,
+  px: number,
+  py: number,
+  shipR: number,
+  x: number,
+  y: number,
+  rot: number,
+  radius: number,
+  vx: number,
+  vy: number,
+): boolean {
+  if (!surface.topology.wrapU && !surface.topology.wrapV) return hazardHits(type, px, py, shipR, x, y, rot, radius, vx, vy);
+  surface.delta(x, y, px, py, sd);
+  const sx = x + sd.x;
+  const sy = y + sd.y;
+  if (type === HazardType.Tether) {
+    surface.delta(x, y, vx, vy, sd);
+    return hazardHits(type, sx, sy, shipR, x, y, rot, radius, x + sd.x, y + sd.y);
+  }
+  return hazardHits(type, sx, sy, shipR, x, y, rot, radius, vx, vy);
 }
 
 /**

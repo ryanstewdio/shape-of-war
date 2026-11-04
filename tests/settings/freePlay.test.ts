@@ -132,7 +132,7 @@ describe('sow.settings.freePlay', () => {
     expect(parseEnemyKinds(['snake', 'mine', 'grunt', 'snake', 7, null])).toEqual(['grunt', 'snake']);
     expect(parseEnemyKinds('grunt')).toEqual([]);
     expect(parseEnemyKinds(undefined)).toEqual([]);
-    expect(FREE_PLAY_ENEMY_KINDS.length).toBe(12);
+    expect(FREE_PLAY_ENEMY_KINDS.length).toBe(13); // forge-leaver: the Leaver toggle
   });
 
   it('a missing config object reads as DEFAULT_FREE_PLAY', () => {

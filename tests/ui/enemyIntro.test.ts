@@ -70,3 +70,13 @@ describe('names, types and icons', () => {
     expect(iconPaths(foeSpec('grunt'), 36)[0]?.colour).toBe(paletteCss('blue'));
   });
 });
+
+describe('Leaver intro (forge-leaver)', () => {
+  it('lists the Leaver as "Leaver, splitter" with its three colour icon', () => {
+    const [line] = foeLines(['leaver']);
+    expect(line).toEqual({ kind: 'leaver', name: 'Leaver', type: 'splitter' });
+    expect(`${line?.name}, ${line?.type}`).toBe('Leaver, splitter');
+    const colours = new Set(iconPaths(foeSpec('leaver'), 36).map((p) => p.colour));
+    expect(colours).toEqual(new Set([paletteCss('yellow'), paletteCss('green'), paletteCss('red')]));
+  });
+});

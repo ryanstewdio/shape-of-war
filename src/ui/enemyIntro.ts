@@ -33,6 +33,7 @@ export const FOE_INFO: Readonly<Record<FoeKind, FoeInfo>> = {
   swirl: { name: 'Swirl', type: 'chaser' },
   sower: { name: 'Sower', type: 'hazard' },
   splime: { name: 'Splime', type: 'splitter' },
+  leaver: { name: 'Leaver', type: 'splitter' },
   well: { name: 'Gravity well', type: 'hazard' },
   spawner: { name: 'Spawner', type: 'swarm' },
 };
@@ -50,6 +51,7 @@ const FOE_KIND: Readonly<Record<FoeKind, Exclude<Kind, Kind.None>>> = {
   swirl: Kind.Swirl,
   sower: Kind.Sower,
   splime: Kind.Splime,
+  leaver: Kind.Leaver,
   well: Kind.GravityWell,
   spawner: Kind.Spawner,
 };

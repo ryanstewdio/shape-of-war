@@ -20,6 +20,7 @@ import * as weaver from './enemies/weaver';
 // Splime and Slime are imported last on purpose: cut 6 removes these lines cleanly.
 import * as slime from './enemies/slime';
 import * as splime from './enemies/splime';
+import * as leaver from './enemies/leaver';
 import * as geoms from './geoms';
 import * as pickup from './pickup';
 import { gs } from './state';
@@ -71,6 +72,10 @@ export function defOf(k: Kind): EnemyDef | null {
     case Kind.DronePickup:
     case Kind.DroneTwin:
       return null;
+    case Kind.Leaver:
+      return leaver.def;
+    case Kind.LeaverShard:
+      return leaver.shardDef;
     default:
       return null;
   }
@@ -103,6 +108,8 @@ export function kindOf(k: EnemyKind): Kind {
       return Kind.Sower;
     case 'splime':
       return Kind.Splime;
+    case 'leaver':
+      return Kind.Leaver;
   }
 }
 
@@ -137,6 +144,8 @@ export function registerSwarmBehaviours(): void {
   registerBehaviour(Kind.Mine, withTelegraph(mine.step));
   registerBehaviour(Kind.Splime, withTelegraph(splime.step));
   registerBehaviour(Kind.Slime, withTelegraph(slime.step));
+  registerBehaviour(Kind.Leaver, withTelegraph(leaver.step));
+  registerBehaviour(Kind.LeaverShard, withTelegraph(leaver.stepShard));
   registerBehaviour(Kind.Geom, geoms.step);
   registerBehaviour(Kind.WeaponPickup, pickup.step);
   // The drone is moved by stepDrone after stepWorld; a no op keeps the default drift off it.

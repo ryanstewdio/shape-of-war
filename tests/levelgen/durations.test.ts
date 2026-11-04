@@ -302,15 +302,17 @@ describe('flags, versions and Endless', () => {
   it('only the default turns the long levels on; V1, V2, V3 and V4 leave them off', () => {
     expect(DEFAULT_GEN_CONFIG.enableLongLevels).toBe(true);
     for (const c of [V1_GEN_CONFIG, V2_GEN_CONFIG, V3_GEN_CONFIG, V4_GEN_CONFIG]) expect(c.enableLongLevels).toBe(false);
-    expect({ ...V4_GEN_CONFIG, enableLongLevels: true, enableR1Pacing: true, enableR3Length: true }).toEqual(DEFAULT_GEN_CONFIG);
-    expect({ ...V5_GEN_CONFIG, enableR1Pacing: true, enableR3Length: true }).toEqual(DEFAULT_GEN_CONFIG);
-    expect({ ...V6_GEN_CONFIG, enableR3Length: true }).toEqual(DEFAULT_GEN_CONFIG);
+    // forge-leaver: the legacy configs also turn the Leaver off.
+    expect({ ...V4_GEN_CONFIG, enableLongLevels: true, enableR1Pacing: true, enableR3Length: true, enableLeaver: true }).toEqual(DEFAULT_GEN_CONFIG);
+    expect({ ...V5_GEN_CONFIG, enableR1Pacing: true, enableR3Length: true, enableLeaver: true }).toEqual(DEFAULT_GEN_CONFIG);
+    expect({ ...V6_GEN_CONFIG, enableR3Length: true, enableLeaver: true }).toEqual(DEFAULT_GEN_CONFIG);
     expect(V5_GEN_CONFIG.enableLongLevels).toBe(true);
   });
 
   it('a config without the field (an older literal) builds the flag off level', () => {
     const older: GenConfig = { ...DEFAULT_GEN_CONFIG };
     delete older.enableLongLevels;
+    delete older.enableLeaver; // forge-leaver: an older literal has neither field
     for (const n of [1, 5, 13, 22]) expect(levelHash(generateLevel(42, n, older))).toBe(levelHash(generateLevel(42, n, V4_GEN_CONFIG)));
   });
 
@@ -348,8 +350,10 @@ describe('flags, versions and Endless', () => {
 
   it('Endless is unchanged by the flag', () => {
     for (const s of [0, 42, 0xdeadbeef]) {
-      expect(generateEndless(s)).toEqual(generateEndless(s, V4_GEN_CONFIG));
-      for (const seg of [0, 6, 15, 30]) expect(generateEndlessSegment(s, seg)).toEqual(generateEndlessSegment(s, seg, V4_GEN_CONFIG));
+      // forge-leaver: V4 has the Leaver off; Endless reads it, so compare with it on.
+      const v4 = { ...V4_GEN_CONFIG, enableLeaver: true };
+      expect(generateEndless(s)).toEqual(generateEndless(s, v4));
+      for (const seg of [0, 6, 15, 30]) expect(generateEndlessSegment(s, seg)).toEqual(generateEndlessSegment(s, seg, v4));
     }
   });
 

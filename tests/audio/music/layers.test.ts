@@ -47,7 +47,7 @@ function phrase(reg: LayerRegistry, kind: EnemyKind, seed: number, firstBar: num
 describe('layer registry', () => {
   it('covers every EnemyKind with exactly one entry', () => {
     expect(noneMissing).toBe(true);
-    expect(new Set(ALL_KINDS).size).toBe(12);
+    expect(new Set(ALL_KINDS).size).toBe(13); // forge-leaver: the Leaver is the 13th
     expect([...LAYER_KINDS].sort()).toEqual([...ALL_KINDS].sort());
     for (const k of ALL_KINDS) {
       const e = LAYERS_FULL[k];

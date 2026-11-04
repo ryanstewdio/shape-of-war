@@ -39,7 +39,8 @@ describe('kill variation table', () => {
   });
 
   it('uses every length, loudness and echo, and about 1 kill in 4 plays a 3 or 4 note arpeggio', () => {
-    for (const s of SOURCES) {
+    // The Leaver always plays its full three note break (forge-leaver, leaver.test.ts).
+    for (const s of SOURCES.filter((x) => x !== 'leaver')) {
       const t = killVariationTable(s, N);
       for (const len of KILL_LEN_STEPS) expect(t.some((v) => v.lenSteps === len), `${s} len ${len}`).toBe(true);
       for (const loud of [0, 1, 2]) expect(t.some((v) => v.loud === loud), `${s} loud ${loud}`).toBe(true);

@@ -169,7 +169,8 @@ describe('generator surface choice', () => {
       }
     }
     expect(generateEndless(42).surface).toBe('flat');
-    expect(generateEndlessSegment(42, 20)).toEqual(generateEndlessSegment(42, 20, V3_GEN_CONFIG));
+    // forge-leaver: V3 has the Leaver off, so compare with it on (the stage is flat either way).
+    expect(generateEndlessSegment(42, 20)).toEqual(generateEndlessSegment(42, 20, { ...V3_GEN_CONFIG, enableLeaver: true }));
   }, 120000);
 
   it(`seed ${CYL_SEED} level ${CYL_LEVEL} is a cylinder level, deterministic and valid`, () => {

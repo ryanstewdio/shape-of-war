@@ -95,7 +95,10 @@ export type EnemyKind =
   | 'blink'
   | 'swirl'
   | 'sower'
-  | 'splime';
+  | 'splime'
+  // Leaver (Ryan's enemy, forge-leaver): a Weaver that splits into six shards on death. Joins
+  // Adventure from level 21 and Endless from 3 minutes through its own stage (leaver.ts).
+  | 'leaver';
 export type DroneKind = 'attack' | 'collect' | 'ram';
 export type SuperKind = 'homing' | 'detonate' | 'turbo';
 export type SpawnPattern = 'edges' | 'corners' | 'ring' | 'cluster';
@@ -297,6 +300,14 @@ export interface GenConfig {
    * and 7 byte for byte. Default on. Endless and Free Play never read it.
    */
   enableR3Length?: boolean;
+  /**
+   * Leaver (forge-leaver). On together with enableV2Enemies: Adventure levels from LEAVER_FROM_LEVEL
+   * and Endless segments from LEAVER_FROM_SEGMENT run the Leaver stage (leaver.ts) on its own
+   * stream, and the Endless catalogue lists the Leaver. Optional; only true turns it on, so absent
+   * or false is byte identical to the generator before it. A level the stage leaves alone is byte
+   * identical either way. Default on.
+   */
+  enableLeaver?: boolean;
 }
 
 export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
@@ -310,6 +321,7 @@ export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>(
   enableLongLevels: true,
   enableR1Pacing: true,
   enableR3Length: true,
+  enableLeaver: true,
 });
 
 /** DEFAULT_GEN_CONFIG with the v2 enemies, bosses and cylinder off: the v1 generator, byte for byte. */
@@ -321,6 +333,7 @@ export const V1_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
   enableLongLevels: false,
   enableR1Pacing: false,
   enableR3Length: false,
+  enableLeaver: false,
 });
 
 /** DEFAULT_GEN_CONFIG with the bosses and cylinder off: the v2.1 generator (v2 enemies on), byte for byte. */
@@ -331,6 +344,7 @@ export const V2_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
   enableLongLevels: false,
   enableR1Pacing: false,
   enableR3Length: false,
+  enableLeaver: false,
 });
 
 /** DEFAULT_GEN_CONFIG with the cylinder off: the v3 generator (v2 enemies and bosses on), byte for byte. */
@@ -340,16 +354,17 @@ export const V3_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
   enableLongLevels: false,
   enableR1Pacing: false,
   enableR3Length: false,
+  enableLeaver: false,
 });
 
 /** DEFAULT_GEN_CONFIG with the long levels off: the v4 generator (cylinder drums on), byte for byte. */
-export const V4_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableLongLevels: false, enableR1Pacing: false, enableR3Length: false });
+export const V4_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableLongLevels: false, enableR1Pacing: false, enableR3Length: false, enableLeaver: false });
 
 /** DEFAULT_GEN_CONFIG with the R1 pacing off: the v5 generator (long levels on), byte for byte. */
-export const V5_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableR1Pacing: false, enableR3Length: false });
+export const V5_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableR1Pacing: false, enableR3Length: false, enableLeaver: false });
 
 /** DEFAULT_GEN_CONFIG with the R3 length off: the R2 generator (versions 6 and 7), byte for byte. */
-export const V6_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableR3Length: false });
+export const V6_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableR3Length: false, enableLeaver: false });
 
 /** True when a config builds R1 paced levels (long levels and R1 pacing both on). */
 export const runsR1 = (cfg: Readonly<GenConfig>): boolean => cfg.enableLongLevels === true && cfg.enableR1Pacing === true;
@@ -363,8 +378,16 @@ export interface ValidationResult {
 }
 
 export const ENEMY_KINDS: readonly EnemyKind[] = ['grunt', 'wanderer', 'weaver', 'pinwheel', 'dart', 'snake'];
-/** V2 enemy names. Deliberately not part of ENEMY_KINDS, so v1 generator loops never see them. */
-export const V2_ENEMY_KINDS: readonly EnemyKind[] = ['charger', 'bulwark', 'blink', 'swirl', 'sower', 'splime'];
+/**
+ * The six kinds the v2 enemy stage draws from (v2enemies.ts). The Leaver is not one of them: it
+ * has its own stage, so adding it moved no v2 draw.
+ */
+export const V2_STAGE_KINDS: readonly EnemyKind[] = ['charger', 'bulwark', 'blink', 'swirl', 'sower', 'splime'];
+/**
+ * V2 enemy names: the v2 stage kinds, then the Leaver. Deliberately not part of ENEMY_KINDS, so v1
+ * generator loops never see them. The Free Play toggles and the catalogue order read this list.
+ */
+export const V2_ENEMY_KINDS: readonly EnemyKind[] = [...V2_STAGE_KINDS, 'leaver'];
 export const ARENA_SHAPES: readonly ArenaShape[] = ['rect', 'roundRect', 'circle', 'hexagon', 'rectObstacles'];
 export const DRONE_KINDS: readonly DroneKind[] = ['attack', 'collect', 'ram'];
 export const SUPER_KINDS: readonly SuperKind[] = ['homing', 'detonate', 'turbo'];
@@ -384,6 +407,8 @@ export const ENEMY_BASE: Record<EnemyKind, number> = {
   swirl: 80,
   sower: 180,
   splime: 140,
+  // Leaver: as the Weaver. Each of its shards scores a quarter of this in the sim (not a roster kind).
+  leaver: 100,
 };
 
 export const ENEMY_GEOMS: Record<EnemyKind, number> = {
@@ -400,6 +425,7 @@ export const ENEMY_GEOMS: Record<EnemyKind, number> = {
   swirl: 1,
   sower: 3,
   splime: 2,
+  leaver: 2,
 };
 
 /** Shared by par calculation and sim loop handling. Expands loops up to tEnd. Sorted by t. */
@@ -537,6 +563,19 @@ const V2_WEIGHTS = {
   4: { charger: 18, bulwark: 16, blink: 14, swirl: 12, sower: 10, splime: 10 },
 } as const;
 
+/**
+ * Leaver roster weight per band: the Weaver's (20 in band 3, 18 in band 4). Bands 1 and 2 are 0;
+ * the Leaver stage (leaver.ts) reads these, and Adventure gates it further to LEAVER_FROM_LEVEL.
+ * Endless segments from LEAVER_FROM_SEGMENT (band 2 by index) use LEAVER_ENDLESS_WEIGHT.
+ */
+export const LEAVER_WEIGHTS: Readonly<Record<Band, number>> = { 1: 0, 2: 0, 3: 20, 4: 18 };
+/** First Adventure level that may hold a Leaver (band 3 starts at 16). */
+export const LEAVER_FROM_LEVEL = 21;
+/** First Endless segment that may hold a Leaver: 30 s segments, so 3 minutes in. */
+export const LEAVER_FROM_SEGMENT = 6;
+/** Leaver roster weight in an Endless segment before band 3 (the Weaver's band 2 weight). */
+export const LEAVER_ENDLESS_WEIGHT = 20;
+
 export const BANDS: Readonly<Record<Band, BandParams>> = {
   1: {
     arenaHeight: { min: 700, max: 760 },
@@ -544,7 +583,7 @@ export const BANDS: Readonly<Record<Band, BandParams>> = {
     shapeWeights: { rect: 40, roundRect: 30, circle: 15, hexagon: 15, rectObstacles: 0 },
     obstacleCount: { min: 0, max: 0 },
     rosterSize: { min: 3, max: 3 },
-    rosterWeights: { grunt: 40, wanderer: 35, weaver: 0, pinwheel: 25, dart: 0, snake: 0, ...V2_WEIGHTS[1] },
+    rosterWeights: { grunt: 40, wanderer: 35, weaver: 0, pinwheel: 25, dart: 0, snake: 0, ...V2_WEIGHTS[1], leaver: LEAVER_WEIGHTS[1] },
     droneWeights: { attack: 100, collect: 0, ram: 0 },
     superWeights: { homing: 34, detonate: 0, turbo: 66 },
     objectiveWeights: { scoreInTime: 20, survive: 40, destroy: 40 },
@@ -570,7 +609,7 @@ export const BANDS: Readonly<Record<Band, BandParams>> = {
     shapeWeights: { rect: 25, roundRect: 25, circle: 15, hexagon: 15, rectObstacles: 20 },
     obstacleCount: { min: 1, max: 1 },
     rosterSize: { min: 3, max: 4 },
-    rosterWeights: { grunt: 30, wanderer: 20, weaver: 20, pinwheel: 15, dart: 15, snake: 0, ...V2_WEIGHTS[2] },
+    rosterWeights: { grunt: 30, wanderer: 20, weaver: 20, pinwheel: 15, dart: 15, snake: 0, ...V2_WEIGHTS[2], leaver: LEAVER_WEIGHTS[2] },
     droneWeights: { attack: 50, collect: 30, ram: 20 },
     superWeights: { homing: 34, detonate: 33, turbo: 33 },
     objectiveWeights: { scoreInTime: 34, survive: 33, destroy: 33 },
@@ -596,7 +635,7 @@ export const BANDS: Readonly<Record<Band, BandParams>> = {
     shapeWeights: { rect: 15, roundRect: 15, circle: 15, hexagon: 20, rectObstacles: 35 },
     obstacleCount: { min: 1, max: 2 },
     rosterSize: { min: 4, max: 5 },
-    rosterWeights: { grunt: 25, wanderer: 12, weaver: 20, pinwheel: 10, dart: 18, snake: 15, ...V2_WEIGHTS[3] },
+    rosterWeights: { grunt: 25, wanderer: 12, weaver: 20, pinwheel: 10, dart: 18, snake: 15, ...V2_WEIGHTS[3], leaver: LEAVER_WEIGHTS[3] },
     droneWeights: { attack: 34, collect: 33, ram: 33 },
     superWeights: { homing: 34, detonate: 33, turbo: 33 },
     objectiveWeights: { scoreInTime: 34, survive: 33, destroy: 33 },
@@ -625,7 +664,7 @@ export const BANDS: Readonly<Record<Band, BandParams>> = {
     shapeWeights: { rect: 10, roundRect: 10, circle: 15, hexagon: 20, rectObstacles: 45 },
     obstacleCount: { min: 1, max: 3 },
     rosterSize: { min: 5, max: 6 },
-    rosterWeights: { grunt: 20, wanderer: 8, weaver: 18, pinwheel: 8, dart: 20, snake: 16, ...V2_WEIGHTS[4] },
+    rosterWeights: { grunt: 20, wanderer: 8, weaver: 18, pinwheel: 8, dart: 20, snake: 16, ...V2_WEIGHTS[4], leaver: LEAVER_WEIGHTS[4] },
     droneWeights: { attack: 34, collect: 33, ram: 33 },
     superWeights: { homing: 34, detonate: 33, turbo: 33 },
     objectiveWeights: { scoreInTime: 34, survive: 33, destroy: 33 },

@@ -323,7 +323,9 @@ import {
   type WallFeature,
 } from './mapFx';
 import { burstBoss, burstSmall, emitBlinkStreak, emitDeflectSparks, emitEnemyTrail, emitGeomSparkle, trailsActive } from './particles';
-import { bossSlot, DRONE_KIND_NUM, isFloorSlot, KIND_NUM, partSlot, partVisualSlot, specFor } from './shapeSpecs';
+import { bossSlot, DRONE_KIND_NUM, isFloorSlot, KIND_NUM, LEAVER_KIND_NUM, leaverSlot, partSlot, partVisualSlot, specFor } from './shapeSpecs';
+import { leaverFrameStep, leaverSpin, SHARD_HOLD_SPIN, shardFlicker, shardHueMix, shardKey, shardShimmerKey } from './leaverLook';
+import { SHARD_HOLD_SEC } from '../game/enemies/leaver';
 // v31: Brood's split into Broodlings (sim:bossSplit): the green shard burst (bossSplit.ts).
 import {
   SPLIT_LIFE_MAX,
@@ -4617,7 +4619,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
           : bossSlot(bossIdx, opennessStep(bossOpen))
         : isPart
           ? partVisualSlot(w.a[i] ?? 0, bossTier, opennessStep(bossOpen), coreless)
-          : visualSlot(kind, w.a[i] ?? -1, kind === KIND_NUM.slime ? hash01(i) : 0);
+          : kind === LEAVER_KIND_NUM.leaver
+            ? leaverSlot(leaverFrameStep(timeSec, hash01(i)))
+            : visualSlot(kind, w.a[i] ?? -1, kind === KIND_NUM.slime ? hash01(i) : 0);
+      const isShard = kind === LEAVER_KIND_NUM.shard;
       let v = views[i];
       if (!v) {
         v = new Graphics(contextForSlot(slot));
@@ -4651,9 +4656,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
             : bossPartTint(bossIdx, palette[bossColourOf(bossIdx)], palette)
         : isBoss
           ? bossTint
-          : spec.tint === null
-            ? 0xffffff
-            : palette[spec.tint];
+          : isShard
+            ? // Leaver shard: its own colour, shimmering toward a neighbouring hue of the same family.
+              mixRgb(palette[shardKey(w.a[i] ?? 0)], palette[shardShimmerKey(w.a[i] ?? 0)], shardHueMix(timeSec, hash01(i)))
+            : spec.tint === null
+              ? 0xffffff
+              : palette[spec.tint];
       // Look v33: the detach decoy drone pulses red orange while it is out, so the chase reads.
       const decoy = kind === DRONE_KIND_NUM.drone && droneDecoyOut;
       // R2: an enemy that came through a membrane burns hot red (body and glow) with a subtle flicker.
@@ -4702,7 +4710,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         ? timeSec * PICKUP_SPIN + hash01(i) * Math.PI * 2
         : kind === DRONE_KIND_NUM.dronePickup
           ? dronePickupRot(timeSec, hash01(i))
-          : (w.rot[i] ?? 0);
+          : kind === LEAVER_KIND_NUM.leaver
+            ? leaverSpin(timeSec, hash01(i))
+            : isShard && (w.t[i] ?? 0) < SHARD_HOLD_SEC
+              ? hash01(i) * Math.PI * 2 + timeSec * SHARD_HOLD_SPIN
+              : (w.rot[i] ?? 0);
       // Telegraphing enemies flash at 50 percent alpha (Swarm W3 request).
       // The boss has its own 2 s entrance telegraph (the ring and the body fade in), not the 0.6 s one.
       const teleNow = !isPickup && !isBoss && isTelegraphing(w, i);
@@ -4728,6 +4740,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       else if (kind === KIND_GEOM) ev.alpha *= geomAlpha(w.t[i] ?? 0);
       if (isV2) applyEnemyContract(w, i, kind, teleNow, timeSec, dt);
       else if (kind === KIND_DART || kind === KIND_GEOM) applyV1Sparkle(w, i, kind, teleNow, timeSec, dt);
+      else if (isShard) {
+        // Leaver shard brightness flicker: alpha and glow, so it shows on the bloom and fallback paths.
+        const f = shardFlicker(timeSec, hash01(i));
+        ev.alpha *= f;
+        ev.glowMul *= 0.7 + 0.6 * f;
+      }
       else if (isBoss) {
         bossDrawX = ev.x;
         bossDrawY = ev.y;

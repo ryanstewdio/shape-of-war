@@ -125,6 +125,8 @@ const ENEMY_INPUTS: Readonly<Record<EnemyKind, SpecInput>> = {
   dart: { degree: 5, durSteps: 1, gain: 0.05 },
   blink: { degree: 6, durSteps: 1, gain: 0.05 },
   sower: { degree: 8, durSteps: 1, gain: 0.05 },
+  // Leaver: the brightest kill, always a three note break (killVariation).
+  leaver: { degree: -1, durSteps: 1, gain: 0.06 },
 };
 
 function enemySpec(kind: EnemyKind): KillSpec {
@@ -145,6 +147,7 @@ export const KILL_SPECS: Readonly<Record<KillSource, KillSpec>> = Object.freeze(
   swirl: enemySpec('swirl'),
   sower: enemySpec('sower'),
   splime: enemySpec('splime'),
+  leaver: enemySpec('leaver'),
   well: spec('well', TIMBRES.gong, { degree: -10, durSteps: 2, gain: 0.08 }),
   spawner: spec('spawner', TIMBRES.clank, { degree: 4, durSteps: 2, gain: 0.06 }),
   segment: spec('segment', TIMBRES.rattle, { degree: 3, durSteps: 1, gain: 0.045 }),
@@ -186,6 +189,13 @@ const KIND_SOURCES: readonly (KillSource | null)[] = [
   'mine',
   'splime',
   'slime',
+  null, // Boss (its own cues, bossCue.ts)
+  null, // BossPart
+  null, // BossHazard
+  null, // DronePickup
+  null, // DroneTwin
+  'leaver',
+  null, // LeaverShard: sfx only, so six shards never flood the kill line
 ];
 
 /** Pure: the source for a sim Kind value, or null for a kind with no sound (or out of range). */
@@ -332,6 +342,8 @@ export const KILL_LOUDNESS: readonly number[] = [0.55, 0.78, 1];
 export const KILL_ARP_SHARE = 0.25;
 /** Arpeggio note length, sixteenths (a thirty second), squeezed to fit the gate's room. */
 export const KILL_ARP_NOTE_STEPS = 0.5;
+/** Notes in the Leaver's kill break (always an arpeggio). */
+export const LEAVER_BREAK_NOTES = 3;
 /** Highest chord degree an arpeggio reaches above the root nearest A4 (two octaves up). */
 export const KILL_ARP_TOP_DEG = 6;
 
@@ -371,6 +383,8 @@ export function killVariation(index: number, source: KillSource): KillVariation 
   const len = pick3(hash01(k, (salt ^ SALT_LEN) >>> 0));
   const loud = pick3(hash01(k, (salt ^ SALT_LOUD) >>> 0));
   const echo = pick3(hash01(k, (salt ^ SALT_ECHO) >>> 0));
+  // The Leaver kill is always a bright three note break at full loudness (forge-leaver).
+  if (source === 'leaver') return { lenSteps: KILL_LEN_STEPS[len] ?? 1, loud: 2, gainScale: KILL_LOUDNESS[2] ?? 1, echo, arp: LEAVER_BREAK_NOTES };
   const arp = hash01(k, (salt ^ SALT_ARP) >>> 0) < KILL_ARP_SHARE ? (hash01(k, (salt ^ SALT_ARPN) >>> 0) < 0.5 ? 3 : 4) : 0;
   return { lenSteps: KILL_LEN_STEPS[len] ?? 1, loud, gainScale: KILL_LOUDNESS[loud] ?? 1, echo, arp };
 }

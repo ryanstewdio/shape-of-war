@@ -27,7 +27,7 @@ import {
   clampLaneHalfWidth,
   clampRingGapHalf,
   clampSweepArms,
-  hazardHits,
+  hazardHitsOn,
   pullSpeed,
   wrapPi,
 } from './kit';
@@ -426,7 +426,7 @@ export function stepHazard(w: World, id: number, dt: number): void {
 /** True when the hazard at id is past its telegraph and its geometry covers the point (px, py). */
 export function hazardLethalAt(w: World, bs: BossState, id: number, px: number, py: number): boolean {
   if (bs.hzMarker[id] === 1 || (w.t[id] ?? 0) < (bs.hzTele[id] ?? 0)) return false;
-  return hazardHits(w.a[id] ?? -1, px, py, SHIP_RADIUS, w.x[id] ?? 0, w.y[id] ?? 0, w.rot[id] ?? 0, w.radius[id] ?? 0, w.vx[id] ?? 0, w.vy[id] ?? 0);
+  return hazardHitsOn(w.surface, w.a[id] ?? -1, px, py, SHIP_RADIUS, w.x[id] ?? 0, w.y[id] ?? 0, w.rot[id] ?? 0, w.radius[id] ?? 0, w.vx[id] ?? 0, w.vy[id] ?? 0);
 }
 
 /**
@@ -841,7 +841,7 @@ export function spawnHazard(
   life: number,
   follow: boolean,
 ): number {
-  if (type !== HazardType.Pull && w.ship.active && hazardHits(type, w.x[0] ?? 0, w.y[0] ?? 0, SHIP_RADIUS, x, y, rot, radius, vx, vy)) {
+  if (type !== HazardType.Pull && w.ship.active && hazardHitsOn(w.surface, type, w.x[0] ?? 0, w.y[0] ?? 0, SHIP_RADIUS, x, y, rot, radius, vx, vy)) {
     return HAZARD_OVERLAP;
   }
   if (countHazards(w) >= MAX_HAZARDS) return -1;

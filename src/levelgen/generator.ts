@@ -129,6 +129,7 @@ import type { SurfaceKind } from '../core/surface';
 import { applyDrumPattern, pickDrumPattern } from './drum';
 import type { DrumPattern } from './drum';
 import { ALL_ENEMY_KINDS, V2_ENEMY_SALT, V2_SPAWN_UNIT, isV2Kind, planV2Roster, swapGroupKind, v2GroupCount } from './v2enemies';
+import { LEAVER_SALT, LEAVER_SPAWN_COST, leaverGroupCount, leaverJoins, leaverLevelWeight, leaverOn, leaverSegmentWeight, leaverSwapChance, rosterWithLeaver } from './leaver';
 
 /** Stage salts, docs/02 section 2. */
 export const SALT = {
@@ -163,6 +164,8 @@ const SPAWN_COST: Record<EnemyKind, number> = {
   swirl: V2_SPAWN_UNIT,
   sower: V2_SPAWN_UNIT,
   splime: V2_SPAWN_UNIT,
+  // Leaver: the Weaver's cost. Only the Leaver stage and Free Play rosters name it.
+  leaver: LEAVER_SPAWN_COST,
 };
 const SNAKE_WINDOW_SEC = 30;
 const GROUP_START_STEP_SEC = 0.5;
@@ -544,6 +547,9 @@ function patternFor(r: Rng, kind: EnemyKind): SpawnPattern {
       return rngPick(r, ['edges', 'corners'] as const);
     case 'splime':
       return rngPick(r, ['corners', 'edges'] as const);
+    // Leaver: the Weaver's patterns. Only the Leaver stage and Free Play rosters reach it.
+    case 'leaver':
+      return rngPick(r, ['ring', 'edges'] as const);
   }
 }
 
@@ -553,6 +559,7 @@ function patternFor(r: Rng, kind: EnemyKind): SpawnPattern {
  * Runs on its own stream after every v1 draw. Swaps the roster, then walks the v1 groups in
  * order: a swapped group is re-emitted (pattern, positions) from the v2 stream at 1 unit per
  * enemy, at the same wave and group start time; a kept group keeps its v1 entries untouched.
+ * groups is a side output (no draw): the output groups, for the Leaver stage.
  */
 export function applyV2Enemies(
   r: Rng,
@@ -561,25 +568,65 @@ export function applyV2Enemies(
   roster: readonly RosterEntry[],
   list: { waves: readonly WaveDef[]; groups: readonly GroupRec[] },
   cyl = false,
-): { roster: RosterEntry[]; waves: WaveDef[] } {
+): { roster: RosterEntry[]; waves: WaveDef[]; groups: GroupRec[] } {
   const plan = planV2Roster(r, band, roster, list.groups);
   const entries: SpawnEntry[][] = list.waves.map(() => []);
   const firstPattern: (SpawnPattern | null)[] = list.waves.map(() => null);
+  const groups: GroupRec[] = [];
   for (const g of list.groups) {
     const src = list.waves[g.wave];
     const out = entries[g.wave];
     if (src === undefined || out === undefined) continue;
     const kind = swapGroupKind(r, plan, g.kind);
+    const first = out.length;
     if (kind === null) {
       out.push(...src.entries.slice(g.first, g.first + g.count));
+      groups.push({ ...g, first, count: out.length - first });
       continue;
     }
     const pattern = patternFor(r, kind);
     if (g.first === 0) firstPattern[g.wave] = pattern;
     out.push(...emitGroup(r, arena, kind, v2GroupCount(g.units), pattern, g.startSec, cyl));
+    groups.push({ ...g, kind, first, count: out.length - first });
   }
   const waves = list.waves.map((w, i) => ({ ...w, pattern: firstPattern[i] ?? w.pattern, entries: entries[i] ?? [] }));
-  return { roster: plan.roster, waves };
+  return { roster: plan.roster, waves, groups };
+}
+
+/**
+ * Leaver stage (leaver.ts), on its own stream after the v2 stage. Draws: the join uniform; when
+ * the Leaver joins, per group one uniform, and for a swapped group its pattern and emitGroup.
+ * Returns null when the Leaver does not join or no group swapped: the caller keeps its def as is.
+ */
+export function applyLeaver(
+  r: Rng,
+  weight: number,
+  arena: ArenaDef,
+  roster: readonly RosterEntry[],
+  list: { waves: readonly WaveDef[]; groups: readonly GroupRec[] },
+  cyl = false,
+): { roster: RosterEntry[]; waves: WaveDef[] } | null {
+  if (!(weight > 0) || roster.some((e) => e.kind === 'leaver') || !leaverJoins(r)) return null;
+  const swap = leaverSwapChance(roster, weight);
+  const entries: SpawnEntry[][] = list.waves.map((w) => [...w.entries]);
+  const firstPattern: (SpawnPattern | null)[] = list.waves.map(() => null);
+  // Walk back to front per wave, so a replaced range never shifts a later group's indices.
+  const swapped: { g: GroupRec; pattern: SpawnPattern; out: SpawnEntry[] }[] = [];
+  for (const g of list.groups) {
+    if (list.waves[g.wave] === undefined || !(r() < swap)) continue;
+    const pattern = patternFor(r, 'leaver');
+    swapped.push({ g, pattern, out: emitGroup(r, arena, 'leaver', leaverGroupCount(g.count), pattern, g.startSec, cyl) });
+  }
+  if (swapped.length === 0) return null;
+  for (let i = swapped.length - 1; i >= 0; i--) {
+    const s = swapped[i];
+    const dst = s === undefined ? undefined : entries[s.g.wave];
+    if (s === undefined || dst === undefined) continue;
+    dst.splice(s.g.first, s.g.count, ...s.out);
+    if (s.g.first === 0) firstPattern[s.g.wave] = s.pattern;
+  }
+  const waves = list.waves.map((w, i) => ({ ...w, pattern: firstPattern[i] ?? w.pattern, entries: entries[i] ?? [] }));
+  return { roster: rosterWithLeaver(roster, weight), waves };
 }
 
 const runsV2 = (cfg: GenConfig, band: Band): boolean => cfg.enableV2Enemies && band >= 2;
@@ -1046,7 +1093,11 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   });
   const v2 = runsV2(cfg, band);
   // The v2 stage only rewrites kinds and entries; atSec is untouched, so the loop fields match v1.
-  const { roster, waves: list } = v2 ? applyV2Enemies(stream(s, V2_ENEMY_SALT), band, arena, v1Roster, v1List, cyl) : { roster: v1Roster, waves: v1List.waves };
+  const staged = v2 ? applyV2Enemies(stream(s, V2_ENEMY_SALT), band, arena, v1Roster, v1List, cyl) : { roster: v1Roster, waves: v1List.waves, groups: v1List.groups };
+  // Leaver stage: levels from LEAVER_FROM_LEVEL, own stream; null keeps the staged def byte for byte.
+  const lw = leaverLevelWeight(levelIndex, band, cfg);
+  const leaver = lw > 0 ? applyLeaver(stream(s, LEAVER_SALT), lw, arena, staged.roster, staged, cyl) : null;
+  const { roster, waves: list } = leaver ?? staged;
   const loop = loopFields(list, scheduleSec, b.intervalEndSec, long ? LONG_MIN_REPEAT_SEC : 0);
   const waves = scheduleOf(b, list, loop.from, loop.period);
   if (longObjective !== null && objective.kind === 'destroy') objective = { kind: 'destroy', count: destroyCountFor(waves, longObjective.clearSec) };
@@ -1245,7 +1296,10 @@ export function endlessSegmentOn(endlessSeed: number, segment: number, cfg: GenC
   });
   // An explicit roster is final: the v2 stage never swaps its kinds.
   const v2 = tweaks?.roster === undefined && runsV2(cfg, band);
-  const staged = v2 ? applyV2Enemies(stream(seed, V2_ENEMY_SALT), band, arena, v1Roster, v1List, cyl) : { roster: v1Roster, waves: v1List.waves };
+  const v2Staged = v2 ? applyV2Enemies(stream(seed, V2_ENEMY_SALT), band, arena, v1Roster, v1List, cyl) : { roster: v1Roster, waves: v1List.waves, groups: v1List.groups };
+  // Leaver stage from LEAVER_FROM_SEGMENT (3 minutes); an explicit (Free Play) roster is final.
+  const lw = tweaks?.roster === undefined ? leaverSegmentWeight(segment, band, cfg) : 0;
+  const staged = (lw > 0 ? applyLeaver(stream(seed, LEAVER_SALT), lw, arena, v2Staged.roster, v2Staged, cyl) : null) ?? v2Staged;
   const snakeOn = tweaks?.snakeWeight !== undefined && segment >= FREE_PLAY_SNAKE_FROM_SEGMENT;
   const { roster, waves: list } = snakeOn ? withFreePlaySnakes(stream(seed, FREE_PLAY_SNAKE_SALT), staged.roster, staged.waves, arena, cyl, tweaks.snakeWeight ?? 1) : staged;
   const schedule = scheduleOf(b, list, -1, 0, bonus);
@@ -1276,7 +1330,8 @@ export function endlessSegmentOn(endlessSeed: number, segment: number, cfg: GenC
 export function generateEndless(endlessSeed: number, cfg: GenConfig = DEFAULT_GEN_CONFIG): EndlessDef {
   const w = BANDS[4].rosterWeights;
   // Flag on: the catalogue the segments ramp through includes every band 4 v2 kind.
-  const kinds = cfg.enableV2Enemies ? ALL_ENEMY_KINDS.filter((k) => w[k] > 0) : ENEMY_KINDS;
+  // The Leaver is listed only with its stage on (enableLeaver).
+  const kinds = cfg.enableV2Enemies ? ALL_ENEMY_KINDS.filter((k) => w[k] > 0 && (k !== 'leaver' || leaverOn(cfg))) : ENEMY_KINDS;
   return deepFreeze({
     version: LEVELDEF_VERSION,
     generatorVersion: cfg.enableV2Enemies ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,

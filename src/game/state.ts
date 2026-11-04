@@ -138,6 +138,12 @@ export interface GameState {
   wellArriveAt: number;
   /** Well entity whose arrival telegraph is running, -1 for none. */
   wellArriving: number;
+  /**
+   * Free Play well arrivals (forge-leaver, Foundry's R5 request): 0 outside Free Play (Endless has no
+   * arrivals), else the factor on every arrival gap (FREE_PLAY_ARRIVAL_GAP_SCALE for wells 'many', 1
+   * otherwise). Set by applyFreePlay.
+   */
+  arrivalGapScale: number;
   /** Reused 'sim:wellArrive' payload. */
   wellArriveFx: { id: number; x: number; y: number; inSec: number };
   /** Per entity, length w.cap: seconds a well entity has been in nova (drives the nova snakes, GW1). */
@@ -321,6 +327,7 @@ function createState(w: World): GameState {
     wellArrivals: 0,
     wellArriveAt: -1,
     wellArriving: -1,
+    arrivalGapScale: 0,
     wellArriveFx: { id: 0, x: 0, y: 0, inSec: 0 },
     wellSnakeT: new Float64Array(cap),
     snakeWell: new Int32Array(SNAKE_SLOTS).fill(-1),
@@ -383,12 +390,17 @@ export function gs(w: World): GameState {
  * Charger to Splime includes the Mine. Slime is a hazard but not hostile: nothing collides with it.
  */
 export function isHostile(k: number): boolean {
-  return (k >= Kind.Grunt && k <= Kind.Spawner) || (k >= Kind.Charger && k <= Kind.Splime);
+  return (k >= Kind.Grunt && k <= Kind.Spawner) || (k >= Kind.Charger && k <= Kind.Splime) || isLeaverKind(k);
 }
 
-/** The six V2 enemies (docs/11 SPEC 3.4), excluding the Mine and Slime hazards. */
+/** The Leaver and its shards (forge-leaver). */
+export function isLeaverKind(k: number): boolean {
+  return k === Kind.Leaver || k === Kind.LeaverShard;
+}
+
+/** The six V2 enemies (docs/11 SPEC 3.4) and the Leaver, excluding the Mine and Slime hazards and the shards. */
 export function isV2Enemy(k: number): boolean {
-  return (k >= Kind.Charger && k <= Kind.Sower) || k === Kind.Splime;
+  return (k >= Kind.Charger && k <= Kind.Sower) || k === Kind.Splime || k === Kind.Leaver;
 }
 
 /** Dropped hazards: never in a roster, no score, no geoms, not a kill. */
@@ -431,5 +443,5 @@ export function turnScale(w: World, id = 0): number {
 
 /** Kinds counted against maxLiveEnemies (wave enemies, telegraphs included). */
 export function isWaveEnemy(k: number): boolean {
-  return (k >= Kind.Grunt && k <= Kind.SnakeHead) || isV2Enemy(k);
+  return (k >= Kind.Grunt && k <= Kind.SnakeHead) || isV2Enemy(k) || k === Kind.LeaverShard;
 }

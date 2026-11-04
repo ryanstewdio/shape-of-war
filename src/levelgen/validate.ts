@@ -52,6 +52,7 @@ import type {
   WaveSchedule,
 } from './leveldef';
 import { ALL_ENEMY_KINDS, isV2Kind } from './v2enemies';
+import { LEAVER_FROM_LEVEL, LEAVER_FROM_SEGMENT } from './leveldef';
 import type { FreePlayDensity, FreePlaySize } from '../core/freeplayConfig';
 import {
   CYLINDER_MAX_OBSTACLES,
@@ -559,9 +560,14 @@ function namedKinds(roster: readonly RosterEntry[], ws: WaveSchedule): string[] 
   return out;
 }
 
-function checkRoster(c: Collector, roster: readonly RosterEntry[], band: Band): void {
+/**
+ * R1. leaverOk: the Leaver may join (Adventure from LEAVER_FROM_LEVEL, Endless from
+ * LEAVER_FROM_SEGMENT). The Leaver joins on top of the drawn roster, so it may make it 7 long.
+ */
+function checkRoster(c: Collector, roster: readonly RosterEntry[], band: Band, leaverOk: boolean): void {
   c.check('R1', (report) => {
-    if (roster.length < 3 || roster.length > 6) report(`roster size ${roster.length} outside 3 to 6`);
+    const max = 6 + (roster.some((e) => e.kind === 'leaver') ? 1 : 0);
+    if (roster.length < 3 || roster.length > max) report(`roster size ${roster.length} outside 3 to ${max}`);
     const seen = new Set<string>();
     for (const e of roster) {
       if (!isKind(e.kind)) {
@@ -570,7 +576,9 @@ function checkRoster(c: Collector, roster: readonly RosterEntry[], band: Band): 
       }
       if (seen.has(e.kind)) report(`duplicate roster kind ${e.kind}`);
       seen.add(e.kind);
-      if (BANDS[band].rosterWeights[e.kind] <= 0) report(`${e.kind} not eligible in band ${band}`);
+      if (e.kind === 'leaver') {
+        if (!leaverOk) report(`leaver not eligible here (band ${band})`);
+      } else if (BANDS[band].rosterWeights[e.kind] <= 0) report(`${e.kind} not eligible in band ${band}`);
       if (!(e.weight > 0)) report(`${e.kind} weight ${e.weight} not positive`);
     }
     if (!seen.has('grunt')) report('roster lacks grunt');
@@ -945,7 +953,7 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
     if (def.band !== band) report(`band ${def.band} !== bandOf(${def.levelIndex}) ${band}`);
   });
   checkArena(c, def.arena, def.surface === 'cylinder');
-  checkRoster(c, def.roster, band);
+  checkRoster(c, def.roster, band, def.levelIndex >= LEAVER_FROM_LEVEL);
   checkSpeed(c, def.speedScale, def.levelIndex);
   checkObjective(c, def, band);
   checkWaves(c, def.waves, def.arena, def.roster, {
@@ -1166,7 +1174,7 @@ function segmentChecks(
       if (!seg.roster.some((e) => e.kind === 'snake')) report('roster lacks the allowed snake');
     });
   }
-  if (chosen === null) checkRoster(c, snakeFloor ? seg.roster.filter((e) => e.kind !== 'snake') : seg.roster, band);
+  if (chosen === null) checkRoster(c, snakeFloor ? seg.roster.filter((e) => e.kind !== 'snake') : seg.roster, band, seg.segment >= LEAVER_FROM_SEGMENT);
   else {
     c.check('FP5', (report) => {
       const kinds = seg.roster.map((e) => e.kind);

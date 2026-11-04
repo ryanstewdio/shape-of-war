@@ -14,7 +14,9 @@
 // Caps: live wells (telegraphs included) at most the spec well count plus 2 and at most MAX_WELLS;
 // wells plus boss hazards plus hazard spawners at most HAZARD_CAP (docs/13). An arrival that falls
 // due at a cap, or with no valid spot, is skipped and the next one scheduled. No arrival while a boss
-// is alive, during the respawn delay, after the level ends, or in Endless; a due arrival waits.
+// is alive, during the respawn delay, after the level ends, or in plain Endless; a due arrival waits.
+// Free Play (forge-leaver): wells arrive as in Adventure, every gap times gs(w).arrivalGapScale
+// (FREE_PLAY_ARRIVAL_GAP_SCALE for wells 'many').
 import { bus } from '../core/events';
 import { hash01 } from '../core/rng';
 import { isInsideOn } from './arena';
@@ -124,10 +126,22 @@ function liveSpawners(w: World): number {
   return n;
 }
 
-/** True while arrivals must wait: Endless, a boss alive, the respawn delay, or the level over. */
+/** True for a run whose wells arrive over time: every Adventure level, and Free Play (not plain Endless). */
+export function arrivalsAllowed(w: World): boolean {
+  const g = gs(w);
+  return g.mode !== 'endless' || g.arrivalGapScale > 0;
+}
+
+/** Gap factor of the run: 1 in Adventure, the Free Play scale in Free Play. */
+function gapScale(w: World): number {
+  const s = gs(w).arrivalGapScale;
+  return s > 0 ? s : 1;
+}
+
+/** True while arrivals must wait: plain Endless, a boss alive, the respawn delay, or the level over. */
 function arrivalsHeld(w: World): boolean {
   const g = gs(w);
-  return g.mode === 'endless' || g.outcome !== 'running' || g.deathTimer > 0 || !w.ship.active || bossAlive(w);
+  return !arrivalsAllowed(w) || g.outcome !== 'running' || g.deathTimer > 0 || !w.ship.active || bossAlive(w);
 }
 
 /** True when one more well fits under the well cap and the hazard cap. */
@@ -163,7 +177,7 @@ function startArrival(w: World, specWells: number): void {
   const g = gs(w);
   const index = g.wellArrivals;
   g.wellArrivals = index + 1;
-  g.wellArriveAt += arrivalGapSec(w.level.seed, index + 1);
+  g.wellArriveAt += arrivalGapSec(w.level.seed, index + 1) * gapScale(w);
   if (!roomForWell(w, specWells) || !pickSpot(w, index, 0, -1)) return;
   const id = addWell(w, spot.x, spot.y, ARRIVE_TELE_SEC, specWells + index);
   if (id < 0) return;
@@ -209,7 +223,7 @@ export function stepWellArrivals(w: World): void {
   const pending = g.wellArriving;
   if (pending > 0 && (g.tele[pending] ?? 0) <= 0) settleArrival(w);
   const specWells = w.level.hazards.wells.length;
-  if (specWells === 0 || g.mode === 'endless') return;
+  if (specWells === 0 || !arrivalsAllowed(w)) return;
   if (g.wellArriveAt < 0) g.wellArriveAt = firstArrivalSec(w.level.seed);
   if (g.waveClock < g.wellArriveAt || arrivalsHeld(w)) return;
   startArrival(w, specWells);
