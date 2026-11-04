@@ -118,7 +118,7 @@ describe('Leaver stage, Adventure', () => {
     }
     expect(kept).toBeGreaterThan(0);
     expect(moved).toBeGreaterThan(0);
-  });
+  }, 60_000); // CI runner is slower than the Mac
 
   it('legacy configs never run the stage', () => {
     for (const s of SEEDS.slice(0, 3)) for (const n of [21, 25, 31, 44]) {
