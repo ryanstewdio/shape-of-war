@@ -8,7 +8,7 @@ import { freePlayLevel, freePlaySegment, levelOptionsOf } from '../../src/levelg
 import { levelHash } from '../../src/levelgen/generator';
 import { BANDS, DEFAULT_GEN_CONFIG, V1_GEN_CONFIG, bandOf, effectiveIndexOf } from '../../src/levelgen/leveldef';
 import type { EndlessDef, EndlessSegmentDef, FreePlayArena } from '../../src/levelgen/leveldef';
-import { FREE_PLAY_DENSITY_SCALE, FREE_PLAY_ENTITY_CAP, FREE_PLAY_MANY_WELLS, FREE_PLAY_NORMAL_WELLS, FREE_PLAY_SNAKES_PER_SEGMENT, freePlayArenaSize, validateFreePlay, validateFreePlaySegment } from '../../src/levelgen/validate';
+import { FREE_PLAY_DENSITY_SCALE, FREE_PLAY_ENTITY_CAP, FREE_PLAY_MANY_WELLS, FREE_PLAY_NORMAL_WELLS, FREE_PLAY_SNAKES_PER_SEGMENT, FREE_PLAY_SNAKE_FROM_SEGMENT, freePlayArenaSize, validateFreePlay, validateFreePlaySegment } from '../../src/levelgen/validate';
 
 const SPREAD = 2654435761;
 const seedAt = (i: number): number => (17 + i * SPREAD) >>> 0;
@@ -64,12 +64,17 @@ describe('absent config is today', () => {
     for (const arena of ['rect', 'circle'] as const) {
       for (let i = 0; i < 6; i++) {
         const plain = freePlayLevel({ arena, barriers: true, seed: seedAt(i) });
-        // R5: wells off keeps today's hazards; the boss cadence and the snake floor start at segments 3 and 1.
+        // R5: wells off keeps today's hazards; the boss cadence starts at segment 3. R6: the snake
+        // floor starts at segment 0, so segment 0 matches once the floor's snakes are set aside.
         const withCfg = freePlayLevel({ arena, barriers: true, seed: seedAt(i), config: cfg({ bosses: 'every3', wells: 'off' }) });
         expect(withCfg.arena).toEqual(plain.arena);
         expect(withCfg.hazards).toEqual(plain.hazards);
         expect({ ...withCfg.freePlay, options: undefined }).toEqual({ ...plain.freePlay, options: undefined });
-        expect(freePlaySegment(withCfg, 0)).toEqual(freePlaySegment(plain, 0));
+        const a = freePlaySegment(withCfg, 0);
+        const b = freePlaySegment(plain, 0);
+        const noSnake = (seg: EndlessSegmentDef): unknown => seg.waves.waves.map((w) => ({ ...w, entries: w.entries.filter((e) => e.kind !== 'snake') }));
+        expect(noSnake(a)).toEqual(noSnake(b));
+        expect({ ...a, waves: null, roster: null }).toEqual({ ...b, waves: null, roster: null });
       }
     }
   });
@@ -119,7 +124,7 @@ describe('enemies', () => {
     for (const s of SEGMENTS) {
       const seg = freePlaySegment(d, s);
       // R5: the Free Play snake floor lifts the band cap to at least FREE_PLAY_SNAKES_PER_SEGMENT.
-      const cap = Math.max(BANDS[seg.band].maxLiveSnakes, s >= 1 ? FREE_PLAY_SNAKES_PER_SEGMENT : 0);
+      const cap = Math.max(BANDS[seg.band].maxLiveSnakes, s >= FREE_PLAY_SNAKE_FROM_SEGMENT ? FREE_PLAY_SNAKES_PER_SEGMENT : 0);
       for (const w of seg.waves.waves) expect(w.entries.length).toBeLessThanOrEqual(cap);
     }
   });

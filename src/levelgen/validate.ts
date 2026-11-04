@@ -1243,10 +1243,14 @@ export function freePlayArenaSize(kind: FreePlayArena, size: FreePlaySize): { wi
   return { width: ten(FREE_PLAY_RECT.width), height: ten(FREE_PLAY_RECT.height) };
 }
 
-/** R5: snake spawns every Free Play segment from FREE_PLAY_SNAKE_FROM_SEGMENT holds at least. */
-export const FREE_PLAY_SNAKES_PER_SEGMENT = 1;
-/** R5: the first segment with the snake floor (0:30, after the calm opening segment). */
-export const FREE_PLAY_SNAKE_FROM_SEGMENT = 1;
+/**
+ * Snake spawns every Free Play segment from FREE_PLAY_SNAKE_FROM_SEGMENT holds at least. R6: one
+ * per 30 s (R5) put a lone snake in a corner that the attack drone killed within about 5 s, so on
+ * device none was seen; 3 per segment keep one on screen most of the time.
+ */
+export const FREE_PLAY_SNAKES_PER_SEGMENT = 3;
+/** R6: the first segment with the snake floor: the first, so a snake shows within the opening waves. */
+export const FREE_PLAY_SNAKE_FROM_SEGMENT = 0;
 
 /** Well count range of a wells option, or null for 'off'. */
 export function freePlayWellRange(wells: FreePlayLevelOptions['wells']): Readonly<{ min: number; max: number }> | null {

@@ -101,7 +101,7 @@ describe('R5 bosses', () => {
 });
 
 describe('R5 snakes', () => {
-  it('allowed by the toggles: at least one snake per segment from 0:30, with wells off', () => {
+  it('allowed by the toggles: the snake floor every segment from the first (R6), with wells off', () => {
     for (const arena of ARENAS) {
       for (const enemies of [[], ['grunt', 'snake', 'dart'], [...ALL_ENEMY_KINDS]] as const) {
         const d = freePlayLevel({ arena, barriers: true, seed: 12, config: cfg({ enemies: [...enemies], wells: 'off' }) });
@@ -109,7 +109,6 @@ describe('R5 snakes', () => {
         expect(d.hazards.wells).toEqual([]);
         for (const s of RUN) {
           const seg = freePlaySegment(d, s);
-          if (s === 0) continue;
           expect(snakes(seg)).toBeGreaterThanOrEqual(FREE_PLAY_SNAKES_PER_SEGMENT);
           expect(seg.roster.some((e) => e.kind === 'snake')).toBe(true);
         }
