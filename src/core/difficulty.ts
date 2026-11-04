@@ -27,9 +27,11 @@ export interface DifficultyTable {
 }
 
 export const DIFFICULTY: Readonly<Record<Difficulty, DifficultyTable>> = Object.freeze({
-  easy: { enemySpeed: 0.8, enemyHp: 0.75, spawnRate: 0.87, bossScale: 0.65, extraLives: 2, addScale: 0.75, driftScale: 0.7, liveCapScale: 0.9, parScale: 1 },
+  easy: { enemySpeed: 0.8, enemyHp: 0.75, spawnRate: 0.87, bossScale: 0.65, extraLives: 2, addScale: 0.75, driftScale: 0.7, liveCapScale: 0.9, parScale: 0.8 },
   normal: { enemySpeed: 1, enemyHp: 1, spawnRate: 1, bossScale: 1, extraLives: 0, addScale: 1, driftScale: 1, liveCapScale: 1, parScale: 1 },
-  hard: { enemySpeed: 1.15, enemyHp: 1.3, spawnRate: 1.15, bossScale: 1.35, extraLives: -1, addScale: 1.25, driftScale: 1.3, liveCapScale: 1.15, parScale: 1 },
+  hard: { enemySpeed: 1.15, enemyHp: 1.3, spawnRate: 1.15, bossScale: 1.35, extraLives: -1, addScale: 1.25, driftScale: 1.3, liveCapScale: 1.15, parScale: 1.15 },
   // R1 (Ryan): Insane is 20 percent harder than Hard. R5 (Ryan): spawn density steps of about 15 percent.
-  insane: { enemySpeed: 1.38, enemyHp: 1.56, spawnRate: 1.32, bossScale: 1.62, extraLives: -1, addScale: 1.6, driftScale: 1.6, liveCapScale: 1.6, parScale: 1 },
+  // R6 (Foundry): parScale is the scripted strong run's mean score over Normal's on levels 1 to 40
+  // of seeds 1 and 1000 (tests/game/parCalibration.test.ts): easy 0.808, hard 1.165, insane 1.317.
+  insane: { enemySpeed: 1.38, enemyHp: 1.56, spawnRate: 1.32, bossScale: 1.62, extraLives: -1, addScale: 1.6, driftScale: 1.6, liveCapScale: 1.6, parScale: 1.3 },
 });
