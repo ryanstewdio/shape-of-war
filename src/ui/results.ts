@@ -12,6 +12,9 @@
 //   then a collapsed Details row (ui/details.ts): Time, Kills, Geoms, Best multiplier, Boss bonus,
 //   Space physics, Seed, Level code, Build, each labelled ("Seed 42", "Kills 412", "Time 3:31").
 // Endless: score, high score badge and Best, no stars. Free Play: score only.
+// R6 (Ryan, gate R5, results 3.75): the difficulty is a chip with the setting alone ("Easy"), no
+// "Difficulty" label; the Details toggle looks like Next and Menu (ui/details.ts). Par and the star
+// targets arrive already scaled by the run's difficulty (main.ts, core/stars.ts targetsFor).
 import type { StartBonus } from '../core/bonus';
 import type { SpaceLevelSetting } from '../core/settings';
 import { createDetails, inline, shownItems } from './details';
@@ -36,7 +39,6 @@ export const PAR_LABEL = 'Par';
 export const STARS_EARNED_LABEL = 'Stars earned';
 export const BEST_LABEL = 'Best';
 export const NEW_BEST_TEXT = 'New best';
-export const DIFFICULTY_LABEL = 'Difficulty';
 export const TIME_LABEL = 'Time';
 export const KILLS_LABEL = 'Kills';
 export const GEOMS_LABEL = 'Geoms';
@@ -140,7 +142,7 @@ export interface ResultText {
   title: string;
   /** "Level 2  Circle arena", "Endless  Drum arena", "Free Play  Rectangle arena". */
   sub: string;
-  /** "Difficulty Normal", '' when the result names none. */
+  /** The difficulty chip text alone ("Normal"), '' when the result names none. */
   difficulty: string;
   /** Endless rank badge, ''. */
   badge: string;
@@ -199,7 +201,7 @@ export function detailItems(r: LevelResult): LabelledValue[] {
 
 /** Pure: the text shown for a result. */
 export function resultLines(r: LevelResult): ResultText {
-  const difficulty = r.difficulty === undefined ? '' : `${DIFFICULTY_LABEL} ${difficultyLabel(r.difficulty)}`;
+  const difficulty = r.difficulty === undefined ? '' : difficultyLabel(r.difficulty);
   const none = {
     difficulty,
     badge: '',
@@ -264,7 +266,7 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
   title.setAttribute('data-results', 'title');
   const sub = el('div', 'sow-card-line');
   sub.setAttribute('data-results', 'sub');
-  const diff = el('div', 'sow-card-line sow-dim');
+  const diff = el('div', 'sow-diff-chip');
   diff.setAttribute('data-results', 'difficulty');
   const badge = el('div', 'sow-badge');
   badge.setAttribute('data-results', 'badge');
@@ -324,6 +326,7 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
       card.classList.toggle('sow-lose', r.mode === 'adventure' && !r.success);
       showText(sub, t.sub);
       showText(diff, t.difficulty);
+      diff.classList.toggle('sow-diff-insane', r.difficulty === 'insane');
       showText(badge, t.badge);
       score.textContent = t.score;
       par.replaceChildren();

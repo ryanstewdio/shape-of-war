@@ -3,6 +3,8 @@
 // (seed, level code, build, kills, time, multiplier, geoms, loadout) move into a collapsed Details
 // row at the bottom of a card: a touch toggle over a list of labelled rows, closed by default and
 // closed again whenever the card is filled. Every row is "Label value", never a bare value.
+// R6 (Ryan, gate R5): the toggle is a big button like Next and Menu (sow-big: size, border, glow);
+// open or closed shows only in its "+" or "-" suffix and aria-expanded, never as a selected look.
 import { button, el } from './dom';
 import type { LabelledValue } from './intro';
 
@@ -41,13 +43,12 @@ export function createDetails(attr: string): DetailsRow {
   body.setAttribute(attr, 'detailsBody');
   let open = false;
   const toggle = button(DETAILS_LABEL, () => setOpen(!open));
-  toggle.classList.add('sow-details-toggle');
+  toggle.classList.add('sow-big', 'sow-details-toggle');
   toggle.setAttribute(attr, 'detailsToggle');
   function setOpen(v: boolean): void {
     open = v;
     body.style.display = open ? '' : 'none';
     toggle.setAttribute('aria-expanded', String(open));
-    toggle.classList.toggle('sow-on', open);
   }
   root.append(toggle, body);
   setOpen(false);

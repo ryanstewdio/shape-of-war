@@ -132,11 +132,9 @@ export const UI_CSS = `
 .sow-sbar-cap { font-size: 13px; }
 .sow-sbar-val { font-size: 12px; font-weight: 600; }
 .sow-details { width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
-.sow-btn.sow-details-toggle { min-width: 0; width: 100%; min-height: ${MIN_HIT_PX}px; font-size: 15px; padding: 6px 12px;
-  background: transparent; border-width: 1px; border-color: hsla(185, 90%, 55%, 0.45); box-shadow: none; }
+.sow-btn.sow-big.sow-details-toggle { flex: 0 0 auto; width: 100%; }
 .sow-btn.sow-details-toggle::after { content: " +"; }
-.sow-btn.sow-details-toggle.sow-on { background: transparent; font-weight: 600; color: inherit; box-shadow: none; }
-.sow-btn.sow-details-toggle.sow-on::after { content: " -"; }
+.sow-btn.sow-details-toggle[aria-expanded="true"]::after { content: " -"; }
 .sow-details-body { display: flex; flex-direction: column; gap: 6px; padding: 4px 8px 0; text-align: left; }
 .sow-details-body .sow-kv { font-size: 14px; }
 .sow-card.sow-fp-card { overflow: hidden; gap: 10px; }
@@ -165,6 +163,13 @@ export const UI_CSS = `
 .sow-k { opacity: 0.7; }
 .sow-v { font-weight: 600; }
 .sow-goal { font-weight: 700; }
+.sow-goal-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 14px; row-gap: 8px;
+  align-items: baseline; text-align: left; }
+.sow-goal-k { font-size: 12px; letter-spacing: 0.1em; opacity: 0.65; text-align: right; }
+.sow-goal-v { font-size: clamp(15px, 3.4vmin, 20px); }
+.sow-diff-chip { align-self: center; padding: 4px 16px; border-radius: 999px; font-size: 15px; font-weight: 700;
+  color: #fff; background: hsl(185, 90%, 28%); border: 2px solid hsl(185, 100%, 78%); box-shadow: 0 0 12px hsl(185, 90%, 60%); }
+.sow-diff-chip.sow-diff-insane { border-color: hsl(300, 95%, 72%); background: hsl(300, 70%, 28%); box-shadow: 0 0 12px hsl(300, 90%, 60%); }
 .sow-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
 .sow-col { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px;
   border: 1px solid hsla(55, 95%, 62%, 0.4); border-radius: 8px; }
