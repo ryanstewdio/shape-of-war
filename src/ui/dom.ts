@@ -105,7 +105,40 @@ export const UI_CSS = `
 .sow-btn.sow-big { min-width: 0; flex: 1 1 0; min-height: 56px; font-size: 20px; font-weight: 700; letter-spacing: 0.06em; }
 .sow-card .sow-row { width: 100%; flex-wrap: nowrap; }
 .sow-card .sow-choice { width: 100%; }
-.sow-card.sow-intro, .sow-card.sow-results { padding: 20px; gap: 16px; }
+.sow-card.sow-intro { padding: 24px; gap: 20px; }
+.sow-card.sow-results { padding: 24px; gap: 24px; }
+.sow-card > * { flex-shrink: 0; max-width: 100%; box-sizing: border-box; }
+.sow-card { overflow-wrap: anywhere; }
+.sow-card-screen { justify-content: safe center; }
+.sow-dim { opacity: 0.75; }
+.sow-kv .sow-k { margin-right: 0.45em; }
+.sow-kv .sow-v + .sow-v, .sow-kv .sow-v + .sow-tag { margin-left: 0.45em; }
+.sow-tag { font-size: 13px; font-weight: 700; padding: 1px 8px; border-radius: 999px; color: hsl(55, 95%, 70%);
+  border: 1px solid hsl(55, 95%, 60%); vertical-align: middle; }
+.sow-best-stars { font-size: clamp(16px, 4vmin, 22px) !important; letter-spacing: 2px !important; }
+.sow-results-head { gap: 4px; }
+.sow-sbar { width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 10px 0 0; }
+.sow-sbar-track { position: relative; height: 12px; border-radius: 6px; border: 1px solid hsla(190, 60%, 90%, 0.6); }
+.sow-sbar-track .sow-par-fill { border-radius: 6px; }
+.sow-sbar-track.sow-par-full .sow-par-fill { background: hsl(55, 95%, 62%); box-shadow: 0 0 10px hsl(55, 95%, 55%); }
+.sow-sbar-tick { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: hsla(55, 95%, 70%, 0.55); }
+.sow-sbar-tick.sow-hit { background: hsl(55, 95%, 75%); box-shadow: 0 0 6px hsl(55, 95%, 55%); }
+.sow-sbar-marker { position: absolute; top: -9px; width: 0; height: 0; margin-left: -7px; border-left: 7px solid transparent;
+  border-right: 7px solid transparent; border-top: 9px solid #fff; filter: drop-shadow(0 0 4px hsl(185, 90%, 60%)); }
+.sow-sbar-labels { position: relative; height: 34px; }
+.sow-sbar-label { position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column;
+  align-items: center; line-height: 1.1; opacity: 0.6; white-space: nowrap; }
+.sow-sbar-label.sow-hit { opacity: 1; color: hsl(55, 95%, 72%); }
+.sow-sbar-cap { font-size: 13px; }
+.sow-sbar-val { font-size: 12px; font-weight: 600; }
+.sow-details { width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.sow-btn.sow-details-toggle { min-width: 0; width: 100%; min-height: ${MIN_HIT_PX}px; font-size: 15px; padding: 6px 12px;
+  background: transparent; border-width: 1px; border-color: hsla(185, 90%, 55%, 0.45); box-shadow: none; }
+.sow-btn.sow-details-toggle::after { content: " +"; }
+.sow-btn.sow-details-toggle.sow-on { background: transparent; font-weight: 600; color: inherit; box-shadow: none; }
+.sow-btn.sow-details-toggle.sow-on::after { content: " -"; }
+.sow-details-body { display: flex; flex-direction: column; gap: 6px; padding: 4px 8px 0; text-align: left; }
+.sow-details-body .sow-kv { font-size: 14px; }
 .sow-card.sow-fp-card { overflow: hidden; gap: 10px; }
 .sow-fp-body { width: 100%; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   touch-action: pan-y; display: flex; flex-direction: column; gap: 14px; padding: 2px 4px; box-sizing: border-box; }

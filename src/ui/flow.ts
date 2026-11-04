@@ -43,6 +43,18 @@ export interface LevelResult {
   scoreAttackSec?: number;
   /** R3: the boss's name on a boss level win, for the labelled boss bonus line. */
   bossName?: string;
+  /** R5 Details: kills scored this run (the destroy count). */
+  kills?: number;
+  /** R5 Details: geoms collected this run. */
+  geoms?: number;
+  /** R5 Details: the highest multiplier reached this run. */
+  peakMultiplier?: number;
+  /** R5 Details: the short build sha. */
+  build?: string;
+  /** R5: Adventure, the stars stored with the level's best (shown with Best). */
+  bestStars?: StarCount;
+  /** R5: Adventure, the run seed was typed (Details reads "Seed 42 (typed)"). */
+  typedSeed?: boolean;
 }
 
 export interface FlowState {

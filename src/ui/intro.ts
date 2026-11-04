@@ -9,12 +9,17 @@
 // apart by at least 16 px in a card padded 20 px: title (level and arena); Goal and Victory; the
 // difficulty chips and Start; Star targets as three labelled columns with the difficulty cap; New
 // enemies; Loadout (drone, super with its real numbers, reward); the run seed, small and labelled.
+// R5 (Ryan, build 64a20eb, intro 3.8): "minor clustering and developer information". Top to
+// bottom, blocks at least 20 px apart in a card padded 24 px: title; Goal and Victory; Star targets
+// with the cap; New enemies; Difficulty chips and Start; then a collapsed Details row (ui/details.ts)
+// with the loadout and the seed, closed whenever the card is shown.
 // The gate is pure and ticks on sim time, so a pause during Ready freezes it.
 import { DIFFICULTIES, type Difficulty } from '../core/difficulty';
 import { INSANE_STARS, STAR_CAP } from '../core/stars';
 import { DETONATE_RADIUS, HOMING_RADIUS, SUPER_DURATION, TURBO_DURATION, TURBO_PIERCE, TURBO_SCALE, TURBO_SPEED_SCALE } from '../game/supers';
 import type { BossSpec, DroneKind, LevelDef, ObjectiveDef, SuperKind } from '../levelgen/leveldef';
 import { bossName } from './boss';
+import { createDetails } from './details';
 import { button, createScreen, el, type Screen } from './dom';
 import { foeLines, iconCanvas, type FoeKind, type FoeLine } from './enemyIntro';
 import { formatClock, formatCompact } from './format';
@@ -107,6 +112,7 @@ export const STARS_LABEL = 'Star targets';
 export const ENEMIES_LABEL = 'New enemies';
 export const LOADOUT_LABEL = 'Loadout';
 export const SEED_LABEL = 'Seed';
+export const DIFFICULTY_BLOCK_LABEL = 'Difficulty';
 
 export interface IntroCard {
   /** "Level 6  Circle arena" or "Endless  Rectangle arena". */
@@ -117,7 +123,7 @@ export interface IntroCard {
   victory: string;
   /** Three labelled star targets ("1 star" over "2.1M"), [] in Endless. */
   stars: LabelledValue[];
-  /** The difficulty cap on stars ("Normal: max 2 stars"), '' in Endless. */
+  /** The difficulty cap on stars ("Normal: up to 2 stars"), '' in Endless. */
   starCap: string;
   /** Kinds this run meets here for the first time. */
   enemies: FoeLine[];
@@ -187,10 +193,10 @@ export function starTargets(stars: readonly [number, number, number]): LabelledV
   return stars.map((v, i) => ({ label: i === 0 ? '1 star' : `${i + 1} stars`, value: formatCompact(v) }));
 }
 
-/** Pure: the difficulty cap on stars ("Normal: max 2 stars"; Insane adds the 4th star for a win). */
+/** Pure: the difficulty cap on stars ("Normal: up to 2 stars"; Insane adds the 4th star for a win). */
 export function starCapLine(d: Difficulty): string {
   const cap = STAR_CAP[d];
-  const head = `${DIFFICULTY_NAMES[d]}: max ${cap} ${cap === 1 ? 'star' : 'stars'}`;
+  const head = `${DIFFICULTY_NAMES[d]}: up to ${cap} ${cap === 1 ? 'star' : 'stars'}`;
   return d === 'insane' ? `${head}, plus a ${INSANE_STARS}th for a win` : head;
 }
 
@@ -307,6 +313,11 @@ export function endlessIntroCard(
   };
 }
 
+/** Pure: the Details row of a card: the loadout rows, then "Seed 12345". */
+export function introDetails(c: Pick<IntroCard, 'loadout' | 'seed'>): LabelledValue[] {
+  return c.seed === '' ? [...c.loadout] : [...c.loadout, { label: SEED_LABEL, value: c.seed }];
+}
+
 export interface IntroScreen extends Screen {
   showCard(card: IntroCard): void;
   showReady(): void;
@@ -319,12 +330,6 @@ function block(name: string, label: string): { root: HTMLDivElement; body: HTMLD
   const body = el('div', 'sow-block-body');
   root.append(el('div', 'sow-block-label', label), body);
   return { root, body };
-}
-
-function kv(v: LabelledValue, cls = 'sow-kv'): HTMLDivElement {
-  const row = el('div', cls);
-  row.append(el('span', 'sow-k', `${v.label}: `), el('span', 'sow-v', v.value));
-  return row;
 }
 
 /**
@@ -344,6 +349,7 @@ export function createIntroScreen(parent: HTMLElement, onStart: () => void, onDi
   victory.setAttribute('data-intro', 'victory');
   goal.body.append(goalText, victory);
   const play = el('div', 'sow-block sow-play');
+  play.setAttribute('data-intro', 'play');
   const diff = el('div', 'sow-chips');
   diff.setAttribute('data-intro', 'difficulty');
   diff.setAttribute('role', 'group');
@@ -371,19 +377,17 @@ export function createIntroScreen(parent: HTMLElement, onStart: () => void, onDi
   const start = button(START_LABEL, onStart);
   start.classList.add('sow-big');
   start.setAttribute('data-intro', 'start');
-  play.append(diff, start);
+  play.append(el('div', 'sow-block-label', DIFFICULTY_BLOCK_LABEL), diff, start);
   const stars = block('stars', STARS_LABEL);
   const starCols = el('div', 'sow-cols');
   const starCap = el('div', 'sow-small');
   starCap.setAttribute('data-intro', 'starCap');
   stars.body.append(starCols, starCap);
   const foes = block('enemies', ENEMIES_LABEL);
-  const loadout = block('loadout', LOADOUT_LABEL);
-  const seed = el('div', 'sow-small sow-seed');
-  seed.setAttribute('data-intro', 'seed');
-  card.append(head, goal.root, play, stars.root, foes.root, loadout.root, seed);
+  const details = createDetails('data-intro');
+  card.append(head, goal.root, stars.root, foes.root, play, details.root);
   s.root.append(card);
-  let shown = { stars: false, foes: false, loadout: false, seed: false };
+  let shown = { stars: false, foes: false, details: false };
   const show = (ready: boolean): void => {
     goal.root.style.display = ready ? 'none' : '';
     play.style.display = ready ? 'none' : '';
@@ -391,8 +395,7 @@ export function createIntroScreen(parent: HTMLElement, onStart: () => void, onDi
     start.style.display = ready ? 'none' : '';
     stars.root.style.display = ready || !shown.stars ? 'none' : '';
     foes.root.style.display = ready || !shown.foes ? 'none' : '';
-    loadout.root.style.display = ready || !shown.loadout ? 'none' : '';
-    seed.style.display = ready || !shown.seed ? 'none' : '';
+    details.root.style.display = ready || !shown.details ? 'none' : '';
     card.classList.toggle('sow-card-bare', ready);
     s.root.style.pointerEvents = ready ? 'none' : 'auto';
     s.root.style.background = ready ? 'transparent' : 'rgba(2, 4, 12, 0.55)';
@@ -403,7 +406,7 @@ export function createIntroScreen(parent: HTMLElement, onStart: () => void, onDi
     showCard(c) {
       head.textContent = c.title;
       goalText.textContent = c.goal;
-      victory.replaceChildren(el('span', 'sow-k', `${VICTORY_LABEL}: `), el('span', 'sow-v', c.victory));
+      victory.replaceChildren(el('span', 'sow-k', VICTORY_LABEL), el('span', 'sow-v', c.victory));
       starCols.replaceChildren(
         ...c.stars.map((v) => {
           const col = el('div', 'sow-col');
@@ -420,9 +423,9 @@ export function createIntroScreen(parent: HTMLElement, onStart: () => void, onDi
           return row;
         }),
       );
-      loadout.body.replaceChildren(...c.loadout.map((v) => kv(v)));
-      seed.textContent = c.seed === '' ? '' : `${SEED_LABEL}: ${c.seed}`;
-      shown = { stars: c.stars.length > 0, foes: c.enemies.length > 0, loadout: c.loadout.length > 0, seed: c.seed !== '' };
+      const items = introDetails(c);
+      details.fill(items);
+      shown = { stars: c.stars.length > 0, foes: c.enemies.length > 0, details: items.length > 0 };
       choice = c.choice;
       mark();
       show(false);
