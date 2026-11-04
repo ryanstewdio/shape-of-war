@@ -152,13 +152,16 @@ export function stepShip(w: World, dt: number, input: InputState): void {
   if (aiming) {
     // Fire first, then age the cooldown, so a fresh press shoots on this step and the rate is exact.
     let volleys = 0;
+    // R7: count shots (spawned or dropped on a full pool). Orbit fires nothing forward (docs/01
+    // Orbit v2), so its volleys must not play 'shot': a shot sound with no bullet on screen.
+    const shotsBefore = w.bullets.liveCount + w.bullets.dropped;
     while (s.fireCooldown <= 1e-9 && volleys < 4) {
       fireWeapon(w, res.x, res.y, s.aimAngle);
       s.fireCooldown += period;
       volleys++;
     }
     s.fireCooldown -= dt;
-    if (volleys > 0) bus.emit('sfx', 'shot');
+    if (volleys > 0 && w.bullets.liveCount + w.bullets.dropped > shotsBefore) bus.emit('sfx', 'shot');
   } else if (s.fireCooldown > 0) {
     s.fireCooldown = Math.max(0, s.fireCooldown - dt);
   }

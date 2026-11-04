@@ -2,7 +2,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { SAW_SPIKE_MAX, SPIKE_LEN } from '../../src/game/weapons';
+import { SPIKE_CODE, styleCode } from '../../src/render/bulletStyles';
 import {
+  bulletDrawCode,
+  markSpikeMask,
   nearTooth,
   SAW_CHAIN_MAX,
   SAW_SPARKS_MAX,
@@ -178,5 +181,30 @@ describe('saw chain line (GW3)', () => {
     expect(sawChainAlpha(0.1)).toBeGreaterThan(0);
     expect(sawChainAlpha(1)).toBeGreaterThan(sawChainAlpha(0.2));
     expect(sawChainAlpha(1)).toBeLessThanOrEqual(0.6);
+  });
+});
+
+describe('R7 markSpikeMask and bulletDrawCode (renderer bullet bookkeeping)', () => {
+  it('marks inner ring 1 and outer ring 2, clearing old marks and skipping bad ids', () => {
+    const mask = new Uint8Array(8).fill(9);
+    markSpikeMask(mask, [0, 1, 5, -1, 40, 7, 6, 2], 2);
+    expect(Array.from(mask)).toEqual([1, 1, 0, 0, 0, 2, 0, 0]);
+  });
+
+  it('perRing 0 (no shield) clears the mask and marks nothing', () => {
+    const mask = new Uint8Array(4).fill(1);
+    markSpikeMask(mask, [0, 1, 2, 3], 0);
+    expect(Array.from(mask)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('a marked, non homing style 3 bullet is a tooth; everything else draws its style head', () => {
+    expect(bulletDrawCode(3, false, 1)).toBe(SPIKE_CODE);
+    expect(bulletDrawCode(3, false, 2)).toBe(SPIKE_CODE);
+    expect(bulletDrawCode(3, false, 0)).toBe(styleCode(3, false));
+    expect(bulletDrawCode(3, true, 1)).toBe(styleCode(3, true));
+    for (const st of [0, 1, 2]) {
+      expect(bulletDrawCode(st, false, 1)).toBe(styleCode(st, false));
+      expect(bulletDrawCode(st, true, 0)).toBe(styleCode(st, true));
+    }
   });
 });

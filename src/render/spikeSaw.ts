@@ -12,6 +12,7 @@
 // the weapon hue with a white tip (toothTip), SPIKE_GHOSTS motion blur copies slide back along the
 // track (sawTrackGhost), and saw hits throw 2 to 4 sparks at the tooth (sawSparkCount, nearTooth).
 import { SAW_SPIKE_MAX, SPIKE_LEN } from '../game/weapons';
+import { SPIKE_CODE, styleCode } from './bulletStyles';
 
 function fin(v: number, d: number): number {
   return Number.isFinite(v) ? v : d;
@@ -196,4 +197,28 @@ export function sawChain(ph: Float32Array, n: number, order: Int32Array): number
 export function sawChainAlpha(level: number): number {
   const l = Math.max(0, Math.min(1, fin(level, 0)));
   return l > 0 ? 0.2 + 0.35 * l : 0;
+}
+
+/**
+ * R7: the renderer's orbit spike mask, pure. Zeroes mask, then marks each live hitter id in blades
+ * (WeaponState.blades, perRing per ring, two rings): 1 inner ring, 2 outer ring. perRing 0 (no
+ * shield) marks nothing. Ids outside the mask are skipped. A marked style 3 bullet draws as a saw
+ * tooth; every other live bullet draws its BulletPool.style head.
+ */
+export function markSpikeMask(mask: Uint8Array, blades: ArrayLike<number>, perRing: number): void {
+  mask.fill(0);
+  const n = Math.min(Math.max(0, perRing) * 2, blades.length);
+  for (let k = 0; k < n; k++) {
+    const id = blades[k] ?? -1;
+    if (id >= 0 && id < mask.length) mask[id] = k < perRing ? 1 : 2;
+  }
+}
+
+/**
+ * R7: the draw code of one live player bullet (drawBullets), pure. A style 3 bullet that is not
+ * homing and is marked in the spike mask (markSpikeMask) is a saw tooth (SPIKE_CODE); any other
+ * bullet draws its style head (styleCode). visualForCode turns the code into the look.
+ */
+export function bulletDrawCode(style: number, homing: boolean, mark: number): number {
+  return style === 3 && !homing && mark > 0 ? SPIKE_CODE : styleCode(style, homing);
 }
