@@ -1,21 +1,25 @@
-// Results screen (docs/01 section 10), redesigned in R2 and again in R3.
-// R3 (Ryan, build a4d6be6): "Par needs to be organised and clarified better. The details after par
-// are unlabelled and confusing. More padding and margin is needed." Top to bottom, every value with
-// a label, blocks apart by at least 16 px in a card padded 20 px:
-//   headline (Victory or Defeated; Game over in Endless and Free Play) and the title line;
-//   Score block: the score, Par, a bar against the three star targets with a mark at each, the
-//   targets as labelled columns, Stars earned (with the iridescent 4th for an Insane win) and the
-//   difficulty cap ("Normal: max 2 stars");
-//   Best; the boss bonus; small labelled details (Time, Seed, Level code, Space physics);
-//   the par reward chooser when earned (ui/parReward.ts); two big buttons: Next or Retry, and Menu.
-// Endless: score, high score badge, best, time and seed, no stars. Free Play: score and time only.
+// Results screen (docs/01 section 10), redesigned in R2, R3 and again in R5.
+// R5 (Ryan, build 64a20eb, results 2 of 5): "still not every value labelled, not enough padding".
+// One column, blocks 24 px apart in a card padded 24 px, every value labelled, top to bottom:
+//   (1) the outcome headline (Victory or Defeated; Game over in Endless and Free Play), the level
+//       and arena line and the difficulty under it;
+//   (2) Score: the big score, a labelled "Par 3.3M" row, a bar with three labelled star ticks and
+//       the score marker, Stars earned (with the iridescent 4th for an Insane win) and the cap
+//       ("Normal: up to 2 stars");
+//   (3) Best with its stars;
+//   (4) the par reward chooser when earned (ui/parReward.ts);
+//   (5) two big buttons: Next or Retry, and Menu;
+//   then a collapsed Details row (ui/details.ts): Time, Kills, Geoms, Best multiplier, Boss bonus,
+//   Space physics, Seed, Level code, Build, each labelled ("Seed 42", "Kills 412", "Time 3:31").
+// Endless: score, high score badge and Best, no stars. Free Play: score only.
 import type { StartBonus } from '../core/bonus';
 import type { SpaceLevelSetting } from '../core/settings';
+import { createDetails, inline, shownItems } from './details';
 import { button, createScreen, el, type Screen } from './dom';
 import type { LevelResult } from './flow';
-import { formatClock, formatInt, starGlyphs } from './format';
+import { formatClock, formatCompact, formatInt, starGlyphs } from './format';
 import { fourthStarEl, hasFourthStar } from './fourthStar';
-import { labelled, starCapLine, starTargets, type LabelledValue } from './intro';
+import { starCapLine, type LabelledValue } from './intro';
 import { createRewardChooser, earnsParReward } from './parReward';
 import { difficultyLabel, SPACE_ROW_LABEL, spaceLabel } from './settings';
 
@@ -27,6 +31,25 @@ export interface ResultsActions {
   reward?(bonus: StartBonus, nextLevel: number): void;
 }
 
+export const SCORE_LABEL = 'Score';
+export const PAR_LABEL = 'Par';
+export const STARS_EARNED_LABEL = 'Stars earned';
+export const BEST_LABEL = 'Best';
+export const NEW_BEST_TEXT = 'New best';
+export const DIFFICULTY_LABEL = 'Difficulty';
+export const TIME_LABEL = 'Time';
+export const KILLS_LABEL = 'Kills';
+export const GEOMS_LABEL = 'Geoms';
+export const MULTIPLIER_LABEL = 'Best multiplier';
+export const BOSS_LABEL = 'Boss bonus';
+export const SEED_LABEL = 'Seed';
+export const LEVEL_CODE_LABEL = 'Level code';
+export const BUILD_LABEL = 'Build';
+export const SCORE_MARKER_LABEL = 'Your score';
+
+/** Where the third star target sits on the score bar, so a score past it still shows. */
+export const BAR_THIRD_AT = 0.85;
+
 /** Pure: Endless badge text for a top 10 rank (1 based, 0 when outside the table). */
 export function badgeText(r: LevelResult): string {
   if (r.mode !== 'endless') return '';
@@ -36,89 +59,111 @@ export function badgeText(r: LevelResult): string {
   return '';
 }
 
-/** Pure: "Space physics: Medium", or '' when the level is off or unknown. */
+/** Pure: the Space physics detail, or null when the level is off or unknown. */
+export function physicsItem(level: SpaceLevelSetting | undefined): LabelledValue | null {
+  if (level === undefined || level === 'off') return null;
+  return { label: SPACE_ROW_LABEL, value: spaceLabel(level) };
+}
+
+/** Pure: "Space physics Medium", or '' when the level is off or unknown. */
 export function physicsLine(level: SpaceLevelSetting | undefined): string {
-  if (level === undefined || level === 'off') return '';
-  return `${SPACE_ROW_LABEL}: ${spaceLabel(level)}`;
+  const v = physicsItem(level);
+  return v === null ? '' : inline(v);
 }
 
-/** Pure: "Boss bonus: 1,000 (Warden defeated)" on a win where the boss died, '' otherwise (a loss, Endless, no boss). */
-export function bossLine(r: LevelResult): string {
-  if (r.mode !== 'adventure' || !r.success || r.bossBonus === undefined) return '';
+/** Pure: the boss bonus detail on a win where the boss died, null otherwise (a loss, Endless, no boss). */
+export function bossItem(r: LevelResult): LabelledValue | null {
+  if (r.mode !== 'adventure' || !r.success || r.bossBonus === undefined) return null;
   const who = r.bossName === undefined || r.bossName === '' ? 'boss' : r.bossName;
-  return `Boss bonus: ${formatInt(r.bossBonus)} (${who} defeated)`;
+  return { label: BOSS_LABEL, value: `${formatInt(r.bossBonus)} (${who} defeated)` };
 }
 
-/** Pure: score against par as a bar fill, 0 to 1 (full at par). 0 with no par. */
+/** Pure: "Boss bonus 1,000 (Warden defeated)", or ''. */
+export function bossLine(r: LevelResult): string {
+  const v = bossItem(r);
+  return v === null ? '' : inline(v);
+}
+
+/** Pure: score against par as a fraction, 0 to 1 (full at par). 0 with no par. */
 export function parFraction(r: Pick<LevelResult, 'score' | 'par'>): number {
   return r.par > 0 ? Math.max(0, Math.min(1, r.score / r.par)) : 0;
 }
 
-export interface ScoreBar {
-  /** Fill, 0 to 1: score against the third star target (or par when the targets are unknown). */
-  fill: number;
-  /** Where each star target sits on the bar, 0 to 1. Empty without targets. */
-  marks: number[];
+/** One star target on the bar. */
+export interface BarTick {
+  /** Position on the bar, 0 to 1. */
+  readonly at: number;
+  /** "1 star", "2 stars", "3 stars". */
+  readonly label: string;
+  /** The target, short ("2.1M"). */
+  readonly value: string;
+  /** The score reached it. */
+  readonly hit: boolean;
 }
 
-/** Pure: the score bar against the three star targets; falls back to score against par. */
+export interface ScoreBar {
+  /** Fill and score marker position, 0 to 1. */
+  fill: number;
+  /** The three star targets, [] without targets. */
+  ticks: BarTick[];
+}
+
+/** Pure: "1 star", "2 stars", "3 stars". */
+export function starWord(n: number): string {
+  return n === 1 ? '1 star' : `${n} stars`;
+}
+
+/** Pure: the short tick caption over a target ("2★"). Its full label is starWord. */
+export function tickCaption(n: number): string {
+  return `${n}★`;
+}
+
+/**
+ * Pure: the score bar. With targets the third sits at BAR_THIRD_AT and the others in proportion;
+ * without them the bar is score against par.
+ */
 export function scoreBar(r: Pick<LevelResult, 'score' | 'par' | 'starTargets'>): ScoreBar {
   const t = r.starTargets;
-  if (t === undefined || !(t[2] > 0)) return { fill: parFraction(r), marks: [] };
-  const top = t[2];
+  if (t === undefined || !(t[2] > 0)) return { fill: parFraction(r), ticks: [] };
+  const top = t[2] / BAR_THIRD_AT;
   const f = (v: number): number => Math.max(0, Math.min(1, v / top));
-  return { fill: f(r.score), marks: t.map(f) };
-}
-
-/** One star target column on the results: label, value and whether the score reached it. */
-export interface TargetColumn extends LabelledValue {
-  readonly hit: boolean;
+  return {
+    fill: f(r.score),
+    ticks: t.map((v, i) => ({ at: f(v), label: starWord(i + 1), value: formatCompact(v), hit: r.score >= v })),
+  };
 }
 
 export type PrimaryButton = 'next' | 'retry';
 
-export const SCORE_LABEL = 'Score';
-export const PAR_LABEL = 'Par';
-export const STARS_EARNED_LABEL = 'Stars earned';
-export const BEST_LABEL = 'Best';
-export const TIME_LABEL = 'Time';
-export const SEED_LABEL = 'Seed';
-export const LEVEL_CODE_LABEL = 'Level code';
-
 export interface ResultText {
-  /** Headline: "Victory", "Defeated", or "Game over" in Endless and Free Play. */
+  /** Headline: "Victory", "Defeated", or "Game over" in Endless and Free Play ("Time up" for a finished score attack). */
   title: string;
-  /** Title line: "Level 2  Circle arena", "Endless  Drum arena", "Free Play  Rectangle arena". */
+  /** "Level 2  Circle arena", "Endless  Drum arena", "Free Play  Rectangle arena". */
   sub: string;
+  /** "Difficulty Normal", '' when the result names none. */
+  difficulty: string;
+  /** Endless rank badge, ''. */
+  badge: string;
   /** The score value; its label is SCORE_LABEL. */
   score: string;
-  /** "Par: 1,000", '' without par. */
+  /** "Par 3.3M", '' without par. */
   par: string;
-  /** Bar fill for the score bar, 0 to 1. */
-  parFill: number;
-  /** Star target marks on the bar, 0 to 1. */
-  parMarks: number[];
+  bar: ScoreBar;
   /** True when the score bar shows. */
-  showPar: boolean;
-  /** The three star targets with a hit flag, [] without targets. */
-  targets: TargetColumn[];
+  showBar: boolean;
   /** Glyphs of the stars earned, '' when the mode has none. Label: STARS_EARNED_LABEL. */
   stars: string;
-  /** R1: true when the iridescent 4th star shows after the three glyphs (an Insane win). */
+  /** R1: the iridescent 4th star shows after the three glyphs (an Insane win). */
   fourthStar: boolean;
-  /** The difficulty cap on stars ("Normal: max 2 stars"), '' outside Adventure or without a difficulty. */
+  /** "Normal: up to 2 stars", '' outside Adventure or without a difficulty. */
   starCap: string;
-  /** "Difficulty: Hard" when the result names one, '' otherwise. */
-  difficulty: string;
-  /** "Best: 4,500  New best", '' in Free Play. */
+  /** Best score, '' in Free Play. Label: BEST_LABEL. */
   best: string;
-  /** Labelled small print, one per line: Time, Seed, Level code. */
-  detail: string;
-  badge: string;
-  /** Space physics line, '' when off. */
-  physics: string;
-  /** Boss line, '' when the level had no boss or it was not beaten. */
-  boss: string;
+  /** Glyphs of the stars stored with the best, '' when none are known. */
+  bestStars: string;
+  newBest: boolean;
+  /** Everything else, labelled, for the collapsed Details row. */
+  details: LabelledValue[];
   /** R2: the par reward shows. */
   parReached: boolean;
   /** R2: the big left button. */
@@ -134,28 +179,41 @@ function subLine(head: string, r: LevelResult): string {
   return r.arena === undefined || r.arena === '' ? head : `${head}  ${r.arena} arena`;
 }
 
-function details(items: readonly (LabelledValue | null)[]): string {
-  return items
-    .filter((v): v is LabelledValue => v !== null && v.value !== '')
-    .map(labelled)
-    .join('\n');
+const num = (label: string, v: number | undefined): LabelledValue | null => (v === undefined ? null : { label, value: formatInt(v) });
+
+/** Pure: the Details items for a result, in screen order; missing values are left out. */
+export function detailItems(r: LevelResult): LabelledValue[] {
+  const seed = r.seed === undefined ? null : { label: SEED_LABEL, value: `${r.seed >>> 0}${r.typedSeed === true ? ' (typed)' : ''}` };
+  return shownItems([
+    r.timeSec === undefined ? null : { label: TIME_LABEL, value: formatClock(r.timeSec) },
+    num(KILLS_LABEL, r.kills),
+    num(GEOMS_LABEL, r.geoms),
+    r.peakMultiplier === undefined ? null : { label: MULTIPLIER_LABEL, value: `x${formatInt(r.peakMultiplier)}` },
+    bossItem(r),
+    physicsItem(r.space),
+    seed,
+    { label: LEVEL_CODE_LABEL, value: r.hash },
+    { label: BUILD_LABEL, value: r.build ?? '' },
+  ]);
 }
 
-/** Pure: the text lines shown for a result. */
+/** Pure: the text shown for a result. */
 export function resultLines(r: LevelResult): ResultText {
-  const physics = physicsLine(r.space);
-  const difficulty = r.difficulty === undefined ? '' : `Difficulty: ${difficultyLabel(r.difficulty)}`;
-  const time = r.timeSec === undefined ? null : { label: TIME_LABEL, value: formatClock(r.timeSec) };
+  const difficulty = r.difficulty === undefined ? '' : `${DIFFICULTY_LABEL} ${difficultyLabel(r.difficulty)}`;
   const none = {
+    difficulty,
+    badge: '',
+    score: formatInt(r.score),
     par: '',
-    parFill: 0,
-    parMarks: [],
-    showPar: false,
-    targets: [],
+    bar: { fill: 0, ticks: [] },
+    showBar: false,
     stars: '',
     fourthStar: false,
     starCap: '',
-    boss: '',
+    best: '',
+    bestStars: '',
+    newBest: false,
+    details: detailItems(r),
     parReached: false,
     primary: 'retry' as const,
   };
@@ -163,42 +221,25 @@ export function resultLines(r: LevelResult): ResultText {
     // Free Play options: a timed run reads "Score attack 5:00"; running the clock out is "Time up".
     const timed = r.scoreAttackSec === undefined ? null : scoreAttackLabel(r.scoreAttackSec);
     const head = timed === null ? 'Free Play' : `Free Play  ${timed}`;
-    const title = timed !== null && r.success ? 'Time up' : 'Game over';
-    return { ...none, title, sub: subLine(head, r), score: formatInt(r.score), difficulty, best: '', detail: details([time]), badge: '', physics };
+    return { ...none, title: timed !== null && r.success ? 'Time up' : 'Game over', sub: subLine(head, r) };
   }
   if (r.mode === 'endless') {
-    return {
-      ...none,
-      title: 'Game over',
-      sub: subLine('Endless', r),
-      score: formatInt(r.score),
-      difficulty,
-      best: `${BEST_LABEL}: ${formatInt(r.best)}`,
-      detail: details([time, { label: SEED_LABEL, value: String(r.seed ?? 0) }]),
-      badge: badgeText(r),
-      physics,
-    };
+    return { ...none, title: 'Game over', sub: subLine('Endless', r), badge: badgeText(r), best: formatInt(r.best), newBest: r.rank === 1 };
   }
   const bar = scoreBar(r);
-  const targets: TargetColumn[] = r.starTargets === undefined ? [] : starTargets(r.starTargets).map((v, i) => ({ ...v, hit: r.score >= (r.starTargets?.[i] ?? Infinity) }));
   return {
+    ...none,
     title: r.success ? 'Victory' : 'Defeated',
     sub: subLine(`Level ${r.levelIndex}`, r),
-    score: formatInt(r.score),
-    par: r.par > 0 ? `${PAR_LABEL}: ${formatInt(r.par)}` : '',
-    parFill: bar.fill,
-    parMarks: bar.marks,
-    showPar: r.par > 0 || targets.length > 0,
-    targets,
+    par: r.par > 0 ? `${PAR_LABEL} ${formatCompact(r.par)}` : '',
+    bar,
+    showBar: r.par > 0 || bar.ticks.length > 0,
     stars: starGlyphs(r.stars),
     fourthStar: hasFourthStar(r.stars),
     starCap: r.difficulty === undefined ? '' : starCapLine(r.difficulty),
-    difficulty,
-    best: `${BEST_LABEL}: ${formatInt(r.best)}${r.newBest ? '  New best' : ''}`,
-    detail: details([{ label: LEVEL_CODE_LABEL, value: r.hash }]),
-    badge: '',
-    physics,
-    boss: bossLine(r),
+    best: formatInt(r.best),
+    bestStars: r.bestStars === undefined ? '' : starGlyphs(r.bestStars),
+    newBest: r.newBest,
     parReached: earnsParReward(r),
     primary: r.success ? 'next' : 'retry',
   };
@@ -210,54 +251,56 @@ export interface ResultsScreen extends Screen {
   showResult(r: LevelResult): void;
 }
 
+const pct = (f: number): string => `${Math.round(f * 1000) / 10}%`;
+
 export function createResultsScreen(parent: HTMLElement, actions: ResultsActions): ResultsScreen {
   const s = createScreen(parent);
   s.root.classList.add('sow-card-screen');
   const card = el('div', 'sow-card sow-results');
-  const headBox = el('div', 'sow-block');
+  // (1) Headline.
+  const headBox = el('div', 'sow-block sow-results-head');
+  headBox.setAttribute('data-results', 'head');
   const title = el('div', 'sow-title');
   title.setAttribute('data-results', 'title');
   const sub = el('div', 'sow-card-line');
   sub.setAttribute('data-results', 'sub');
+  const diff = el('div', 'sow-card-line sow-dim');
+  diff.setAttribute('data-results', 'difficulty');
   const badge = el('div', 'sow-badge');
-  headBox.append(title, sub, badge);
-  // Score block.
+  badge.setAttribute('data-results', 'badge');
+  headBox.append(title, sub, diff, badge);
+  // (2) Score block.
   const scoreBox = el('div', 'sow-block');
   scoreBox.setAttribute('data-results', 'scoreBlock');
   const scoreLabel = el('div', 'sow-block-label', SCORE_LABEL);
   const score = el('div', 'sow-title sow-results-score');
   score.setAttribute('data-results', 'score');
-  const parBox = el('div', 'sow-par');
-  parBox.setAttribute('data-results', 'par');
-  const parText = el('div', 'sow-kv');
-  const parBar = el('div', 'sow-par-bar');
-  const parFill = el('div', 'sow-par-fill');
-  parBar.append(parFill);
-  const cols = el('div', 'sow-cols');
-  cols.setAttribute('data-results', 'targets');
-  parBox.append(parText, parBar, cols);
+  const par = el('div', 'sow-kv');
+  par.setAttribute('data-results', 'par');
+  const barBox = el('div', 'sow-sbar');
+  barBox.setAttribute('data-results', 'bar');
+  const track = el('div', 'sow-sbar-track');
+  const fill = el('div', 'sow-par-fill');
+  const marker = el('div', 'sow-sbar-marker');
+  marker.setAttribute('data-results', 'marker');
+  marker.setAttribute('aria-label', SCORE_MARKER_LABEL);
+  const tickLabels = el('div', 'sow-sbar-labels');
+  barBox.append(track, tickLabels);
   const starsEl = el('div', 'sow-kv sow-stars-earned');
   starsEl.setAttribute('data-results', 'stars');
   const glyphs = el('span', 'sow-v sow-stars');
   const star4 = fourthStarEl();
-  starsEl.append(el('span', 'sow-k', `${STARS_EARNED_LABEL}: `), glyphs, star4);
+  starsEl.append(el('span', 'sow-k', STARS_EARNED_LABEL), glyphs, star4);
   const cap = el('div', 'sow-small');
   cap.setAttribute('data-results', 'starCap');
-  const diff = el('div', 'sow-small');
-  diff.setAttribute('data-results', 'difficulty');
-  scoreBox.append(scoreLabel, score, parBox, starsEl, cap, diff);
-  // Best, boss and details.
-  const best = el('div', 'sow-kv');
+  scoreBox.append(scoreLabel, score, par, barBox, starsEl, cap);
+  // (3) Best.
+  const best = el('div', 'sow-kv sow-results-best');
   best.setAttribute('data-results', 'best');
-  const boss = el('div', 'sow-kv');
-  boss.setAttribute('data-results', 'boss');
-  const detail = el('div', 'sow-small');
-  detail.setAttribute('data-results', 'detail');
-  detail.style.whiteSpace = 'pre-line';
-  const physics = el('div', 'sow-small');
-  physics.setAttribute('data-results', 'physics');
+  // (4) Par reward, (5) buttons.
   const reward = createRewardChooser((b, nextLevel) => actions.reward?.(b, nextLevel));
   const row = el('div', 'sow-row sow-results-buttons');
+  row.setAttribute('data-results', 'buttons');
   let primaryKind: PrimaryButton = 'retry';
   const primary = button(PRIMARY_LABEL.retry, () => (primaryKind === 'next' ? actions.next() : actions.retry()));
   primary.classList.add('sow-big');
@@ -265,7 +308,8 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
   const menu = button('Menu', actions.menu);
   menu.classList.add('sow-big');
   row.append(primary, menu);
-  card.append(headBox, scoreBox, best, boss, detail, physics, reward.root, row);
+  const details = createDetails('data-results');
+  card.append(headBox, scoreBox, best, reward.root, row, details.root);
   s.root.append(card);
   const showText = (e: HTMLElement, text: string): void => {
     e.textContent = text;
@@ -279,41 +323,50 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
       card.classList.toggle('sow-win', r.mode === 'adventure' && r.success);
       card.classList.toggle('sow-lose', r.mode === 'adventure' && !r.success);
       showText(sub, t.sub);
+      showText(diff, t.difficulty);
       showText(badge, t.badge);
       score.textContent = t.score;
-      showText(parText, t.par);
-      parFill.style.width = `${Math.round(t.parFill * 1000) / 10}%`;
-      parBar.classList.toggle('sow-par-full', t.parFill >= 1);
-      // A mark at the first and second star targets; the third is the bar's right end.
-      parBar.replaceChildren(
-        parFill,
-        ...t.parMarks.slice(0, -1).map((at) => {
-          const m = el('div', 'sow-par-mark');
-          m.setAttribute('data-results', 'mark');
-          m.style.left = `calc(${Math.round(at * 1000) / 10}% - 1px)`;
+      par.replaceChildren();
+      if (t.par !== '') par.append(el('span', 'sow-k', PAR_LABEL), el('span', 'sow-v', t.par.slice(PAR_LABEL.length + 1)));
+      par.style.display = t.par === '' ? 'none' : '';
+      fill.style.width = pct(t.bar.fill);
+      track.classList.toggle('sow-par-full', t.bar.ticks.length > 0 ? t.bar.ticks.every((k) => k.hit) : t.bar.fill >= 1);
+      marker.style.left = pct(t.bar.fill);
+      track.replaceChildren(
+        fill,
+        ...t.bar.ticks.map((k) => {
+          const m = el('div', k.hit ? 'sow-sbar-tick sow-hit' : 'sow-sbar-tick');
+          m.setAttribute('data-results', 'tick');
+          m.style.left = pct(k.at);
           return m;
         }),
+        marker,
       );
-      cols.replaceChildren(
-        ...t.targets.map((v) => {
-          const col = el('div', v.hit ? 'sow-col sow-col-hit' : 'sow-col');
-          col.append(el('div', 'sow-col-label', v.label), el('div', 'sow-col-value', v.value));
-          return col;
+      tickLabels.replaceChildren(
+        ...t.bar.ticks.map((k, i) => {
+          const lab = el('div', k.hit ? 'sow-sbar-label sow-hit' : 'sow-sbar-label');
+          lab.setAttribute('data-results', 'tickLabel');
+          lab.setAttribute('aria-label', `${k.label} ${k.value}`);
+          lab.style.left = pct(Math.max(0.08, Math.min(0.92, k.at)));
+          lab.append(el('div', 'sow-sbar-cap', tickCaption(i + 1)), el('div', 'sow-sbar-val', k.value));
+          return lab;
         }),
       );
-      cols.style.display = t.targets.length > 0 ? '' : 'none';
-      parBox.style.display = t.showPar ? '' : 'none';
+      tickLabels.style.display = t.bar.ticks.length > 0 ? '' : 'none';
+      barBox.style.display = t.showBar ? '' : 'none';
       glyphs.textContent = t.stars;
       star4.style.display = t.fourthStar ? '' : 'none';
       starsEl.style.display = t.stars === '' ? 'none' : '';
-      starsEl.setAttribute('aria-label', `${STARS_EARNED_LABEL}: ${t.fourthStar ? '4 stars' : t.stars}`);
+      starsEl.setAttribute('aria-label', `${STARS_EARNED_LABEL} ${t.fourthStar ? '4 stars' : t.stars}`);
       showText(cap, t.starCap);
-      // The cap line names the difficulty; the separate line shows only where there is no cap.
-      showText(diff, t.starCap === '' ? t.difficulty : '');
-      showText(best, t.best);
-      showText(boss, t.boss);
-      showText(detail, t.detail);
-      showText(physics, t.physics);
+      best.replaceChildren();
+      if (t.best !== '') {
+        best.append(el('span', 'sow-k', BEST_LABEL), el('span', 'sow-v', t.best));
+        if (t.bestStars !== '') best.append(el('span', 'sow-v sow-stars sow-best-stars', t.bestStars));
+        if (t.newBest) best.append(el('span', 'sow-tag', NEW_BEST_TEXT));
+      }
+      best.style.display = t.best === '' ? 'none' : '';
+      details.fill(t.details);
       reward.open(r);
       primaryKind = t.primary;
       primary.textContent = PRIMARY_LABEL[t.primary];
@@ -321,3 +374,4 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
     },
   };
 }
+

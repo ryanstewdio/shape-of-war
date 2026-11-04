@@ -97,11 +97,11 @@ describe('4 stars on screen', () => {
     const t = resultLines({ ...base, difficulty: 'insane' });
     expect(t.stars).toBe('★★★');
     expect(t.fourthStar).toBe(true);
-    expect(t.difficulty).toBe('Difficulty: Insane');
+    expect(t.difficulty).toBe('Difficulty Insane');
     const n = resultLines({ ...base, stars: 2, difficulty: 'normal' });
     expect(n.stars).toBe('★★☆');
     expect(n.fourthStar).toBe(false);
-    expect(n.difficulty).toBe('Difficulty: Normal');
+    expect(n.difficulty).toBe('Difficulty Normal');
     expect(resultLines({ ...base, stars: 1 }).difficulty).toBe('');
   });
 

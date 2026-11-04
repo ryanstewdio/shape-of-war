@@ -12,12 +12,14 @@ import {
   armIntro,
   bossIntroLine,
   createIntroScreen,
+  DIFFICULTY_BLOCK_LABEL,
   endlessIntroCard,
   ENDLESS_GOAL,
   ENDLESS_VICTORY,
   ENEMIES_LABEL,
   GOAL_LABEL,
   INTRO_SEC,
+  introDetails,
   introActive,
   introCard,
   labelled,
@@ -122,7 +124,7 @@ describe('R3 intro card text', () => {
     expect(card.goal).toBe('Destroy 530 enemies before your lives run out');
     expect(card.victory).toBe('530 kills with a life left');
     expect(card.stars.map(labelled)).toEqual(['1 star: 2.1M', '2 stars: 2.6M', '3 stars: 3.2M']);
-    expect(card.starCap).toBe('Normal: max 2 stars');
+    expect(card.starCap).toBe('Normal: up to 2 stars');
     expect(card.loadout.map(labelled)).toEqual(['Drone: Collect', 'Super: Detonate (your drone explodes and destroys the enemies around it)']);
     expect(card.seed).toBe('12345');
     expect(card.enemies).toEqual([]);
@@ -143,10 +145,10 @@ describe('R3 intro card text', () => {
   });
 
   it('star cap per difficulty', () => {
-    expect(starCapLine('easy')).toBe('Easy: max 1 star');
-    expect(starCapLine('normal')).toBe('Normal: max 2 stars');
-    expect(starCapLine('hard')).toBe('Hard: max 3 stars');
-    expect(starCapLine('insane')).toBe('Insane: max 3 stars, plus a 4th for a win');
+    expect(starCapLine('easy')).toBe('Easy: up to 1 star');
+    expect(starCapLine('normal')).toBe('Normal: up to 2 stars');
+    expect(starCapLine('hard')).toBe('Hard: up to 3 stars');
+    expect(starCapLine('insane')).toBe('Insane: up to 3 stars, plus a 4th for a win');
     expect(starTargets([1000, 1250, 1500]).map(labelled)).toEqual(['1 star: 1,000', '2 stars: 1,250', '3 stars: 1,500']);
   });
 
@@ -201,37 +203,65 @@ describe('R3 intro card text', () => {
       expect(starts).toBe(1);
     });
 
-    it('blocks top to bottom: title, goal, chips and Start, star targets, new enemies, loadout, seed last', () => {
+    it('R5 blocks top to bottom: title, goal, star targets, new enemies, difficulty and Start, Details last', () => {
       const root = installFakeDocument();
       const screen = createIntroScreen(asParent(root), () => undefined);
       screen.showCard(introCard(1, def, 'normal', { newFoes: ['grunt', 'dart'], seed: '77' }));
       const card = root.children[0]?.children[0];
-      const order = (card?.children ?? []).map((e) => e.getAttribute('data-intro') ?? (e.all().some((x) => x.getAttribute('data-intro') === 'start') ? 'play' : ''));
-      expect(order).toEqual(['title', 'goal', 'play', 'stars', 'enemies', 'loadout', 'seed']);
+      const order = (card?.children ?? []).map((e) => e.getAttribute('data-intro'));
+      expect(order).toEqual(['title', 'goal', 'stars', 'enemies', 'play', 'details']);
       const text = (k: string): string => (byIntro(root, k)?.all() ?? [])
         .filter((e) => e.children.length === 0 && e.textContent !== '')
         .map((e) => e.textContent)
         .join('|');
-      expect(text('goal')).toContain(GOAL_LABEL);
-      expect(text('goal')).toContain('Destroy 5 enemies before your lives run out');
-      expect(text('goal')).toContain(`${VICTORY_LABEL}: `);
-      expect(text('stars')).toContain(STARS_LABEL);
-      expect(text('stars')).toContain('1 star|10|2 stars|20|3 stars|40');
-      expect(text('stars')).toContain('Normal: max 2 stars');
+      expect(text('goal')).toBe(`${GOAL_LABEL}|Destroy 5 enemies before your lives run out|${VICTORY_LABEL}|5 kills with a life left`);
+      expect(text('stars')).toBe(`${STARS_LABEL}|1 star|10|2 stars|20|3 stars|40|Normal: up to 2 stars`);
       expect(text('enemies')).toContain(ENEMIES_LABEL);
       expect(text('enemies')).toContain('Grunt|chaser');
       expect(text('enemies')).toContain('Dart|swarm');
       expect(byIntro(root, 'enemies')?.all().filter((e) => e.tag === 'canvas').map((e) => e.getAttribute('data-foe'))).toEqual(['grunt', 'dart']);
-      expect(text('loadout')).toContain(`${LOADOUT_LABEL}|Drone: |Attack|Super: |Turbo (${turboText()})`);
-      expect(byIntro(root, 'seed')?.textContent).toBe(`${SEED_LABEL}: 77`);
-      for (const k of ['goal', 'stars', 'enemies', 'loadout', 'seed']) expect(byIntro(root, k)?.style.display, k).toBe('');
+      expect(text('play')).toBe(`${DIFFICULTY_BLOCK_LABEL}|Easy|Normal|Hard|Insane|${START_LABEL}`);
+      for (const k of ['goal', 'stars', 'enemies', 'play', 'details']) expect(byIntro(root, k)?.style.display, k).toBe('');
     });
 
-    it('hides empty blocks: no new enemies, no stars in Endless, no seed', () => {
+    it('R5 Details: loadout and seed, labelled, collapsed by default and closed again on the next card', () => {
+      const root = installFakeDocument();
+      const screen = createIntroScreen(asParent(root), () => undefined);
+      const c = introCard(1, def, 'normal', { seed: '77', reward: 'Extra life' });
+      expect(introDetails(c).map((v) => v.label)).toEqual(['Drone', 'Super', 'Reward', SEED_LABEL]);
+      screen.showCard(c);
+      const toggle = byIntro(root, 'detailsToggle');
+      const body = (): FakeEl | undefined => byIntro(root, 'detailsBody');
+      expect(toggle?.textContent).toBe('Details');
+      expect(body()?.style.display).toBe('none');
+      toggle?.tap();
+      expect(body()?.style.display).toBe('');
+      const rows = (body()?.children ?? []).map((r) => r.children.map((x) => x.textContent));
+      expect(rows).toEqual([
+        ['Drone', 'Attack'],
+        ['Super', `Turbo (${turboText()})`],
+        ['Reward', 'Extra life'],
+        ['Seed', '77'],
+      ]);
+      expect(LOADOUT_LABEL).toBe('Loadout');
+      screen.showCard(c);
+      expect(body()?.style.display).toBe('none');
+    });
+
+    it('no seed outside Details', () => {
+      const root = installFakeDocument();
+      const screen = createIntroScreen(asParent(root), () => undefined);
+      screen.showCard(introCard(1, def, 'normal', { seed: '987654' }));
+      const card = root.children[0]?.children[0];
+      const outside = (card?.children ?? []).filter((e) => e.getAttribute('data-intro') !== 'details').flatMap((e) => e.all().map((x) => x.textContent));
+      expect(outside.some((t) => t.includes('987654'))).toBe(false);
+    });
+
+    it('hides empty blocks: no new enemies, no stars in Endless, no details', () => {
       const root = installFakeDocument();
       const screen = createIntroScreen(asParent(root), () => undefined);
       screen.showCard(endlessIntroCard({}, 'normal'));
-      for (const k of ['stars', 'enemies', 'loadout', 'seed']) expect(byIntro(root, k)?.style.display, k).toBe('none');
+      for (const k of ['stars', 'enemies', 'details']) expect(byIntro(root, k)?.style.display, k).toBe('none');
       expect(byIntro(root, 'goal')?.style.display).toBe('');
     });
 
@@ -240,11 +270,13 @@ describe('R3 intro card text', () => {
       const screen = createIntroScreen(asParent(root), () => undefined);
       screen.showCard(introCard(1, def, 'normal', { newFoes: ['grunt'], seed: '1' }));
       screen.showReady();
-      for (const k of ['difficulty', 'goal', 'stars', 'enemies', 'loadout', 'seed', 'start']) expect(byIntro(root, k)?.style.display, k).toBe('none');
+      for (const k of ['difficulty', 'goal', 'stars', 'enemies', 'play', 'details', 'start']) expect(byIntro(root, k)?.style.display, k).toBe('none');
     });
 
-    it('the card is padded 20 px with at least 16 px between blocks', () => {
-      expect(UI_CSS).toContain('.sow-card.sow-intro, .sow-card.sow-results { padding: 20px; gap: 16px; }');
+    it('R5: the card is padded 24 px with 20 px between blocks; blocks never shrink into each other or the edges', () => {
+      expect(UI_CSS).toContain('.sow-card.sow-intro { padding: 24px; gap: 20px; }');
+      expect(UI_CSS).toContain('.sow-card > * { flex-shrink: 0; max-width: 100%; box-sizing: border-box; }');
+      expect(UI_CSS).toContain('.sow-card-screen { justify-content: safe center; }');
     });
   });
 });

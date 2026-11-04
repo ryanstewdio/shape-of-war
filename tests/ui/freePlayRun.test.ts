@@ -62,10 +62,11 @@ describe('Free Play run on the real flow', () => {
       expect(flow.screen).toBe('results');
       const t = resultLines(result);
       expect(t.stars).toBe('');
-      expect(t.showPar).toBe(false);
+      expect(t.showBar).toBe(false);
       expect(t.best).toBe('');
       expect(t.score).toMatch(/\d/);
-      expect(t.detail).toMatch(/^Time: \d+:\d\d$/);
+      expect(t.details[0]?.label).toBe('Time');
+      expect(t.details[0]?.value).toMatch(/^\d+:\d\d$/);
     });
   }
 });

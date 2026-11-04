@@ -304,7 +304,7 @@ describe('boss kill bonus has one copy: scoring.bossBonus (docs/13 SPEC 3.6 rule
         space: 'low',
         bossBonus: bossBonus(par, 'adventure', 0), // what main.ts computes from level.par
       });
-      expect(line, `par ${par}`).toBe(`Boss bonus: ${formatInt(paid)} (boss defeated)`);
+      expect(line, `par ${par}`).toBe(`Boss bonus ${formatInt(paid)} (boss defeated)`);
       bus.clear();
     }
   });

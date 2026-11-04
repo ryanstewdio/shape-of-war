@@ -72,7 +72,7 @@ import { resolveAudio } from './ui/audioPort';
 import { bossName, needsBossStrip } from './ui/boss';
 import { endlessLabel, endlessLevel, endlessLine } from './ui/endless';
 import { createLevelSelect } from './ui/levelSelect';
-import { continueLabel, createMenuScreen, footerLine } from './ui/menu';
+import { continueLabel, createMenuScreen, footerLine, shortSha } from './ui/menu';
 import { gateSearch, isDev } from './ui/devGate';
 import { createSplashScreen } from './ui/splash';
 import { createPreviewWorld, previewRect, stepPreview } from './ui/preview';
@@ -306,6 +306,8 @@ async function boot(): Promise<void> {
   let freePlayChoice: FreePlayChoice = { ...DEFAULT_FREE_PLAY, ...loadFreePlaySetup() };
   let world: World = createGame(level, gameOptions(runDifficulty));
   let endlessSeed = 0;
+  /** R5 Details: the highest multiplier this run reached, sampled after every sim step. */
+  let peakMult = 1;
   // V2-A glue point, the one named port call for space physics. R2: the Settings row is gone; the
   // level follows the run's difficulty (spaceForDifficulty) and is applied whenever startLevel
   // builds a new world.
@@ -472,6 +474,7 @@ async function boot(): Promise<void> {
     hud.setSuper(level.superType);
     hud.setInfiniteLives(mode === 'freeplay' && freePlayChoice.config.lives === 'infinite');
     resetScore(world);
+    peakMult = 1;
     // Temporary debug hook (docs/12 shared rule 8): ?boss=<id> forces that boss on this level at 10 s.
     const forcedBoss = new URLSearchParams(gated.search).get('boss'); // dev gated: null without ?dev=1
     const forcedTier = forcedBoss === null ? null : bossTierOf(forcedBoss);
@@ -754,11 +757,20 @@ async function boot(): Promise<void> {
     const index = flow.levelIndex;
     const space = spaceForDifficulty(runDifficulty); // B13: the level in effect as the run ends
     const arena = arenaName(level);
+    // R5: the labelled Details row on the results (kills, geoms, best multiplier, build).
+    const sc = scoreOf(world);
+    const stats = {
+      kills: sc.kills,
+      geoms: sc.geoms,
+      peakMultiplier: Math.max(peakMult, sc.multiplier),
+      build: shortSha(typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : undefined),
+    };
     if (flow.mode === 'freeplay') {
       // R2: Free Play keeps no stars and no bests; the results show score and time.
       const length = freePlayChoice.config.length;
       const won = gameState(world).outcome === 'won'; // a score attack whose clock ran out
-      dispatch({ type: 'over', result: freePlayResult({ score: p.score, difficulty: runDifficulty, hash: pick.hash, space, timeSec: world.time, arena, length, won }) });
+      const fp = freePlayResult({ score: p.score, difficulty: runDifficulty, hash: pick.hash, space, timeSec: world.time, arena, length, won });
+      dispatch({ type: 'over', result: { ...fp, ...stats, seed: endlessSeed } });
       return;
     }
     if (flow.mode === 'endless') {
@@ -781,6 +793,7 @@ async function boot(): Promise<void> {
           space,
           timeSec: world.time,
           arena,
+          ...stats,
         },
       });
       return;
@@ -814,6 +827,11 @@ async function boot(): Promise<void> {
       space,
       arena,
       starTargets: level.stars,
+      ...stats,
+      timeSec: world.time,
+      seed: runSeed,
+      typedSeed: customSeed,
+      bestStars: customSeed ? end.stars : (loadAdventureScores()[String(index)]?.stars ?? 0),
     };
     if (level.boss !== undefined) result.bossName = bossName(level.boss.id);
     // The results "Boss defeated" line reports the number the sim paid: scoring.bossBonus, the only copy.
@@ -847,6 +865,7 @@ async function boot(): Promise<void> {
         return;
       }
       stepGame(world, dt, input);
+      peakMult = Math.max(peakMult, scoreOf(world).multiplier);
       cues.sim(readSim()); // respawn, superReady, superActivate
       // Fallback end check. On a boss level the sim alone decides a win: it holds for the boss.
       if (endCheck && fallbackStatus(level.objective, snapshotOf(world), level.boss !== undefined) !== 'running') {
