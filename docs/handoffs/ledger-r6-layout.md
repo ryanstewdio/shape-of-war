@@ -22,4 +22,4 @@ Branch: feat/ledger-r6-layout. Gate R5 feedback on results 3.75 and intro 3.75, 
 ## Known gaps
 - The results level line still reads "Level 2  Circle arena". The brief only moved the arena on the intro.
 - The intro's `difficulty` field ("Difficulty: Normal") is still the chips' accessible label, never shown.
-- Push needs repo access. No add_repo tool exists in this session.
+- Branch pushed after repo access was granted.
