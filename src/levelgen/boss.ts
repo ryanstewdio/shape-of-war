@@ -118,11 +118,22 @@ export function sameBoss(a: BossSpec, b: BossSpec): boolean {
 export const FREE_PLAY_BOSS_FIRST_SEGMENT = 3;
 export const FREE_PLAY_BOSS_EVERY_SEGMENTS = 10;
 /**
- * Bosses a drum keeps. Every boss steers through steer.ts, which wraps across the u seam since
- * V3-H C0, but these two also centre every attack on their own body (Warden's rings, Brood's
- * charge lane and pods), so nothing they make is laid out on the flat arena centre or its walls.
+ * Bosses a drum keeps. R6 (swarm-r6-drumboss): every boss's hit tests and steering go the short
+ * way across the u seam, so all ten fight on a drum. Mirrors DRUM_SAFE_BOSSES in
+ * src/game/bosses/index.ts (levelgen stays standalone; a test pins the two equal).
  */
-export const FREE_PLAY_DRUM_BOSSES: readonly BossId[] = Object.freeze<BossId[]>(['warden', 'brood']);
+export const FREE_PLAY_DRUM_BOSSES: readonly BossId[] = Object.freeze<BossId[]>([
+  'warden',
+  'brood',
+  'spindle',
+  'ember',
+  'mirage',
+  'gravitas',
+  'bastion',
+  'tempest',
+  'twins',
+  'prism',
+]);
 
 /** Boss number (1 based) of Free Play segment s, or null when s carries no boss. */
 export function freePlayBossNumber(segment: number): number | null {
@@ -134,8 +145,9 @@ export function freePlayBossNumber(segment: number): number | null {
 /**
  * Free Play options (docs/14): the boss of segment s. 'off': none. 'every3': the tier ladder
  * (bossOfNumber) on the Free Play cadence. A BossId: that boss each time, its hit point multiplier
- * from the ladder's pass at the same boss number. A drum keeps only FREE_PLAY_DRUM_BOSSES: the
- * ladder alternates them, and a chosen boss outside them fights as Warden. Pure, no draw.
+ * from the ladder's pass at the same boss number. On a drum a boss outside FREE_PLAY_DRUM_BOSSES
+ * fights as Warden (R6: none is outside it, so the chosen boss and the full ladder both play as on
+ * a flat arena). Pure, no draw.
  */
 export function freePlayBossFor(bosses: 'off' | 'every3' | BossId, segment: number, cylinder: boolean): BossSpec | null {
   if (bosses === 'off') return null;
@@ -143,8 +155,8 @@ export function freePlayBossFor(bosses: 'off' | 'every3' | BossId, segment: numb
   const ladder = j === null ? null : bossOfNumber(j, BOSS_SEGMENT_AT_SEC);
   if (j === null || ladder === null) return null;
   let id: BossId;
-  if (bosses === 'every3') id = cylinder ? (FREE_PLAY_DRUM_BOSSES[(j - 1) % FREE_PLAY_DRUM_BOSSES.length] ?? 'warden') : ladder.id;
-  else id = cylinder && !FREE_PLAY_DRUM_BOSSES.includes(bosses) ? 'warden' : bosses;
+  const want = bosses === 'every3' ? ladder.id : bosses;
+  id = cylinder && !FREE_PLAY_DRUM_BOSSES.includes(want) ? 'warden' : want;
   const tier = bossTierOf(id);
   return tier === null ? null : { id, tier, atSec: ladder.atSec, hpMul: ladder.hpMul };
 }

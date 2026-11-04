@@ -16,6 +16,7 @@ import { bus } from '../../core/events';
 import { angleBetween, distBetween, moveHeading, moveTo, targetOf } from '../steer';
 import { Kind, type World } from '../world';
 import { bossAdt, clearHazards, countParts, crackBody, HAZARD_OVERLAP, livePart, setPullStrength, spawnPart, spawnPull, spawnRing } from './core';
+import { angleToOn } from './kit';
 import { bossOf, type BossState } from './state';
 import { GRAVITANT, GRAVITAS, HAZARD_RECHECK_SEC, MAX_PARTS } from './table';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
@@ -224,9 +225,12 @@ function syncSplitPull(w: World, bs: BossState, k: number): void {
   else bs.n1 = made;
 }
 
+/** Scratch for surface deltas (read both fields before the next call). */
+const dv = { x: 0, y: 0 };
+
 /** The pair's ring: collapses onto the pair centre with its gap facing the ship. */
 function fireSplitRing(w: World, bs: BossState, every: number): void {
-  const toShip = Math.atan2((w.y[0] ?? 0) - bs.t2, (w.x[0] ?? 0) - bs.t1);
+  const toShip = angleToOn(w.surface, bs.t1, bs.t2, w.x[0] ?? 0, w.y[0] ?? 0);
   const h = spawnRing(w, bs, bs.t1, bs.t2, GRAVITAS.ringStart, toShip, (GRAVITAS.gapDeg * DEG) / 2, 1, -GRAVITAS.ringCollapse);
   if (h === HAZARD_OVERLAP) {
     bs.retry = HAZARD_RECHECK_SEC;
@@ -255,12 +259,25 @@ export function stepGravitant(w: World, id: number, dt: number): void {
   if (lead !== id) return;
   const adt = bossAdt(w, bs, dt);
   const t = targetOf(w, id);
-  const tx = w.x[t] ?? 0;
-  const ty = w.y[t] ?? 0;
+  let tx = w.x[t] ?? 0;
+  let ty = w.y[t] ?? 0;
+  const drum = w.surface.topology.wrapU;
+  if (drum) {
+    // R6 drum: seek the target's image nearest the pair centre (the short way across the seam).
+    w.surface.delta(bs.t1, bs.t2, tx, ty, dv);
+    tx = bs.t1 + dv.x;
+    ty = bs.t2 + dv.y;
+  }
   if (Math.hypot(tx - bs.t1, ty - bs.t2) > 1) {
     const a = Math.atan2(ty - bs.t2, tx - bs.t1);
     bs.t1 += Math.cos(a) * GRAVITANT.seekSpeed * dt;
     bs.t2 += Math.sin(a) * GRAVITANT.seekSpeed * dt;
+  }
+  if (drum) {
+    dv.x = bs.t1;
+    dv.y = bs.t2;
+    w.surface.wrap(dv);
+    bs.t1 = dv.x;
   }
   // Two wells orbit each other; the survivor of a pair closes onto the centre.
   bs.t3 = orbitToward(bs.t3, live >= 2 ? GRAVITANT.orbit : 0, dt);

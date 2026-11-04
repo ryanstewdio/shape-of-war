@@ -44,15 +44,16 @@
 // length, aim point x and y, near wall seconds, move window clock, window anchor x and y, unstuck
 // clock, pincer pair flag.
 import { bus } from '../../core/events';
-import { confine, createConfineResult, isInside } from '../arena';
+import { confineOn, createConfineResult, isInsideOn } from '../arena';
 import { ENEMY_BULLET_RADIUS, spawnEnemyBullet } from '../enemyBullets';
 import * as slime from '../enemies/slime';
 import { removeEntity } from '../remove';
 import { spawnFromDef } from '../state';
 import { angleBetween, moveToHit, stepToward, targetOf } from '../steer';
 import { Kind, type World } from '../world';
+import { flatSurface, type Surface } from '../../core/surface';
 import { bossEnraged, clearHazards, crackBody, livePart, markerLife, spawnLaneMarker, spawnPart, wallDistance } from './core';
-import { pointDist, wrapPi } from './kit';
+import { pointDistOn, wrapPi } from './kit';
 import { bossTele } from './scale';
 import { fanHeading, inShotRange } from './shots';
 import { bossOf, type BossState } from './state';
@@ -88,13 +89,16 @@ export const RAY_STEP = 8;
  */
 export function rayToWall(w: World, x: number, y: number, a: number, r: number): number {
   const arena = w.level.arena;
+  const surf = w.surface;
   const c = Math.cos(a);
   const s = Math.sin(a);
-  const far = Math.hypot(arena.width, arena.height);
+  // R6 drum: the u walls are not walls (isInsideOn sees the rims and obstacles only), so a line
+  // along u is capped at half the drum and never laps round onto the body that made it.
+  const far = surf.topology.wrapU ? surf.width / 2 : Math.hypot(arena.width, arena.height);
   let lo = 0;
   let hi = far;
   for (let d = RAY_STEP; d < far; d += RAY_STEP) {
-    if (!isInside(arena, x + c * d, y + s * d, r)) {
+    if (!isInsideOn(surf, arena, x + c * d, y + s * d, r)) {
       hi = d;
       break;
     }
@@ -102,7 +106,7 @@ export function rayToWall(w: World, x: number, y: number, a: number, r: number):
   }
   for (let i = 0; i < 12; i++) {
     const mid = (lo + hi) / 2;
-    if (isInside(arena, x + c * mid, y + s * mid, r)) lo = mid;
+    if (isInsideOn(surf, arena, x + c * mid, y + s * mid, r)) lo = mid;
     else hi = mid;
   }
   return lo;
@@ -145,6 +149,16 @@ function lapStep(w: World, id: number, a0: number, dir: number, dt: number): num
   stepToward(w, id, Math.cos(a) * rr, Math.sin(a) * rr, TEMPEST.lapSpeed * TEMPEST.catchUp * dt);
   w.rot[id] = wrapPi(a + (dir * Math.PI) / 2);
   return a;
+}
+
+/**
+ * Seconds the body dash may run: dashSecMax. On a drum a dash along u meets no wall, so it stops at
+ * the end of its marked line (rayToWall, capped at half the drum) instead. Flat: dashSecMax.
+ */
+function bodyDashSec(w: World, id: number, heading: number): number {
+  if (!w.surface.topology.wrapU) return TEMPEST.dashSecMax;
+  const t = rayToWall(w, w.x[id] ?? 0, w.y[id] ?? 0, heading, w.radius[id] ?? 0) / TEMPEST.dashSpeed;
+  return t < TEMPEST.dashSecMax ? t : TEMPEST.dashSecMax;
 }
 
 function setMove(bs: BossState, state: TempestMove, t: number): void {
@@ -198,7 +212,7 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
   if (state === TempestMove.Windup) {
     if (bs.t3 > 0) return;
     dropMarker(w, bs);
-    setMove(bs, TempestMove.Dash, TEMPEST.dashSecMax);
+    setMove(bs, TempestMove.Dash, bodyDashSec(w, id, bs.t2));
     return;
   }
   if (state === TempestMove.Dash) {
@@ -367,15 +381,30 @@ export function leadPoint(px: number, py: number, sx: number, sy: number, vx: nu
 const LEAD_PASSES = 12;
 
 /** leadPoint clamped to the arena: the point kept margin from every wall and obstacle. */
-export function leadAim(arena: World['level']['arena'], px: number, py: number, sx: number, sy: number, vx: number, vy: number, speed: number, extra: number, margin: number, out: AimPoint): AimPoint {
+export function leadAim(
+  arena: World['level']['arena'],
+  px: number,
+  py: number,
+  sx: number,
+  sy: number,
+  vx: number,
+  vy: number,
+  speed: number,
+  extra: number,
+  margin: number,
+  out: AimPoint,
+  surface: Surface = FLAT,
+): AimPoint {
   leadPoint(px, py, sx, sy, vx, vy, speed, extra, out);
-  const c = confine(arena, out.x, out.y, margin, aimClamp);
+  const c = confineOn(surface, arena, out.x, out.y, margin, aimClamp);
   out.x = c.x;
   out.y = c.y;
   return out;
 }
 
 const aimClamp = createConfineResult();
+/** leadAim's default surface: flat (confineOn on it is confine), so old callers are unchanged. */
+const FLAT = flatSurface(1, 1);
 
 /**
  * Pure: GW6 cut off side, +1 or -1: which side of slot 0's line (heading h0) slot 1 aims at. The
@@ -482,10 +511,20 @@ function slotOf(bs: BossState, id: number): number {
 
 const flank = createConfineResult();
 
+/** Distance between two points: Math.hypot flat (as GW6 had it, bit identical), the short way on a drum. */
+function partDist(w: World, ax: number, ay: number, bx: number, by: number): number {
+  if (!w.surface.topology.wrapU) return Math.hypot(bx - ax, by - ay);
+  w.surface.delta(ax, ay, bx, by, dv);
+  return Math.hypot(dv.x, dv.y);
+}
+/** Scratch for surface deltas (read both fields before the next call). */
+const dv = { x: 0, y: 0 };
+
 /** Bearing from the ship (target t) to part p, or 0 when they coincide. */
 function bearingFrom(w: World, t: number, p: number): number {
-  const dx = (w.x[p] ?? 0) - (w.x[t] ?? 0);
-  const dy = (w.y[p] ?? 0) - (w.y[t] ?? 0);
+  w.surface.delta(w.x[t] ?? 0, w.y[t] ?? 0, w.x[p] ?? 0, w.y[p] ?? 0, dv);
+  const dx = dv.x;
+  const dy = dv.y;
   return dx === 0 && dy === 0 ? 0 : Math.atan2(dy, dx);
 }
 
@@ -508,10 +547,10 @@ function flankAxis(w: World, t: number, b0: number, side: number): number {
   const keep = TEMPESTLING.wallKeep;
   for (let i = 0; i < AXIS_TRIES; i++) {
     const b = b0 + axisStep(i) * AXIS_STEP;
-    if (!isInside(arena, sx + Math.cos(b) * f, sy + Math.sin(b) * f, keep)) continue;
+    if (!isInsideOn(w.surface, arena, sx + Math.cos(b) * f, sy + Math.sin(b) * f, keep)) continue;
     if (side === 0) return b;
     const b1 = flankBearing(b, 1, side);
-    if (isInside(arena, sx + Math.cos(b1) * f, sy + Math.sin(b1) * f, keep)) return b;
+    if (isInsideOn(w.surface, arena, sx + Math.cos(b1) * f, sy + Math.sin(b1) * f, keep)) return b;
   }
   return b0;
 }
@@ -536,19 +575,20 @@ function chase(w: World, bs: BossState, id: number, k: number, t: number, dt: nu
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
   const step = tempestlingSpeed(hpShareOf(w.hp[id] ?? 0, bs.abl[k * SLOT + HP0] ?? 0)) * dt;
-  const out = confine(arena, x, y, keep, flank);
+  const out = confineOn(w.surface, arena, x, y, keep, flank);
   // GW6: a part on the band edge (exit under BAND_EPS away) is out of the band. Positions are
   // float32: an exit step of a hair rounded back to the same spot, so the part froze there for good.
-  const inBand = out.hit && Math.hypot(out.x - x, out.y - y) > BAND_EPS;
+  const inBand = out.hit && partDist(w, x, y, out.x, out.y) > BAND_EPS;
   if ((bs.abl[k * SLOT + UNSTUCK] ?? 0) > 0 || inBand) {
     // Unsticking, or inside the wall band (GW6: the nearest band exit before, which crawled along a
     // wall in the gap between a wall and an obstacle): toward the centre, at a point UNSTUCK_LOOK on
     // the way there pushed wallKeep clear of the walls and obstacles, so the path does not hug one.
-    const cx = -x;
+    // R6 drum: the centre line of a drum is every u (no u walls), so only v heads home.
+    const cx = w.surface.topology.wrapU ? 0 : -x;
     const cy = -y;
     const d = Math.hypot(cx, cy);
     const look = d > UNSTUCK_LOOK ? UNSTUCK_LOOK / d : 1;
-    const c = confine(arena, x + cx * look, y + cy * look, keep, flank);
+    const c = confineOn(w.surface, arena, x + cx * look, y + cy * look, keep, flank);
     stepToward(w, id, c.x, c.y, step);
     return;
   }
@@ -564,7 +604,7 @@ function chase(w: World, bs: BossState, id: number, k: number, t: number, dt: nu
   }
   const fx = (w.x[t] ?? 0) + Math.cos(b) * TEMPESTLING.flankDist;
   const fy = (w.y[t] ?? 0) + Math.sin(b) * TEMPESTLING.flankDist;
-  const f = confine(arena, fx, fy, keep, flank);
+  const f = confineOn(w.surface, arena, fx, fy, keep, flank);
   stepToward(w, id, f.x, f.y, step);
 }
 
@@ -576,7 +616,7 @@ function trackStuck(w: World, bs: BossState, id: number, o: number, state: Tempe
   const ab = bs.abl;
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
-  ab[o + NEAR] = isInside(w.level.arena, x, y, TEMPESTLING.nearWall) ? 0 : (ab[o + NEAR] ?? 0) + dt;
+  ab[o + NEAR] = isInsideOn(w.surface, w.level.arena, x, y, TEMPESTLING.nearWall) ? 0 : (ab[o + NEAR] ?? 0) + dt;
   if (state !== TempestMove.Lap) {
     ab[o + WIN] = 0;
     ab[o + ANCX] = x;
@@ -589,7 +629,7 @@ function trackStuck(w: World, bs: BossState, id: number, o: number, state: Tempe
   const win = (ab[o + WIN] ?? 0) + dt;
   let moved = -1;
   if (win >= TEMPESTLING.stuckWindow) {
-    moved = Math.hypot(x - (ab[o + ANCX] ?? 0), y - (ab[o + ANCY] ?? 0));
+    moved = partDist(w, ab[o + ANCX] ?? 0, ab[o + ANCY] ?? 0, x, y);
     ab[o + ANCX] = x;
     ab[o + ANCY] = y;
     ab[o + WIN] = 0;
@@ -620,15 +660,25 @@ function aimDash(w: World, bs: BossState, id: number, k: number, t: number, extr
     const ax = ab[AIMX] ?? 0;
     const ay = ab[AIMY] ?? 0;
     const h0 = ab[HEADING] ?? 0;
-    cutOffPoint(ax, ay, h0, cutOffSide(h0, w.vx[t] ?? 0, w.vy[t] ?? 0, x - ax, y - ay), aim);
-    const c = confine(w.level.arena, aim.x, aim.y, clipRadius(r), aimClamp);
+    w.surface.delta(ax, ay, x, y, dv);
+    cutOffPoint(ax, ay, h0, cutOffSide(h0, w.vx[t] ?? 0, w.vy[t] ?? 0, dv.x, dv.y), aim);
+    const c = confineOn(w.surface, w.level.arena, aim.x, aim.y, clipRadius(r), aimClamp);
     aim.x = c.x;
     aim.y = c.y;
   } else {
-    leadAim(w.level.arena, x, y, w.x[t] ?? 0, w.y[t] ?? 0, w.vx[t] ?? 0, w.vy[t] ?? 0, TEMPESTLING.dashSpeed, extra, clipRadius(r), aim);
+    // R6 drum: lead from the target's image nearest the part, so the aim takes the short way round.
+    let tx = w.x[t] ?? 0;
+    let ty = w.y[t] ?? 0;
+    if (w.surface.topology.wrapU) {
+      w.surface.delta(x, y, tx, ty, dv);
+      tx = x + dv.x;
+      ty = y + dv.y;
+    }
+    leadAim(w.level.arena, x, y, tx, ty, w.vx[t] ?? 0, w.vy[t] ?? 0, TEMPESTLING.dashSpeed, extra, clipRadius(r), aim, w.surface);
   }
-  const dx = aim.x - x;
-  const dy = aim.y - y;
+  w.surface.delta(x, y, aim.x, aim.y, dv);
+  const dx = dv.x;
+  const dy = dv.y;
   const heading = dx * dx + dy * dy > 1e-6 ? Math.atan2(dy, dx) : (ab[o + HEADING] ?? 0);
   ab[o + HEADING] = heading;
   ab[o + LEN] = rayToWall(w, x, y, heading, clipRadius(r));
@@ -696,11 +746,11 @@ export function fireDashFan(w: World, bs: BossState, id: number, dashHeading: nu
   const by = w.y[id] ?? 0;
   let mx = bx + Math.cos(c) * r;
   let my = by + Math.sin(c) * r;
-  if (!isInside(w.level.arena, mx, my, ENEMY_BULLET_RADIUS)) {
+  if (!isInsideOn(w.surface, w.level.arena, mx, my, ENEMY_BULLET_RADIUS)) {
     mx = bx;
     my = by;
   }
-  if (w.ship.active && !inShotRange(pointDist(mx, my, w.x[0] ?? 0, w.y[0] ?? 0))) return false;
+  if (w.ship.active && !inShotRange(pointDistOn(w.surface, mx, my, w.x[0] ?? 0, w.y[0] ?? 0))) return false;
   const tier = bs.row.tier;
   const tele = bossTele(bs);
   const n = TEMPESTLING.fanCount;

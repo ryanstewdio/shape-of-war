@@ -21,7 +21,7 @@ import { dropSlime } from '../enemies/slime';
 import { angleBetween, distBetween, moveHeading, moveTo, moveToHit, stepToward, targetOf, turnToward } from '../steer';
 import { Kind, type World } from '../world';
 import { bossAdt, clearHazards, countParts, crackBody, livePart, spawnAdd, spawnLaneMarker, spawnPart } from './core';
-import { wrapPi } from './kit';
+import { angleToOn, wrapPi } from './kit';
 import { bossTele, minionCount } from './scale';
 import { bossOf, type BossState } from './state';
 import { BROOD, BROODLING, MAX_ADDS, MAX_PARTS } from './table';
@@ -306,7 +306,7 @@ function splitBody(w: World, id: number, bs: BossState): void {
     if (p < 0) continue;
     w.rot[p] = a;
     made++;
-    if (k === BroodlingRole.Orbit) bs.angle = Math.atan2((w.y[p] ?? 0) - (w.y[0] ?? 0), (w.x[p] ?? 0) - (w.x[0] ?? 0));
+    if (k === BroodlingRole.Orbit) bs.angle = angleToOn(w.surface, w.x[0] ?? 0, w.y[0] ?? 0, w.x[p] ?? 0, w.y[p] ?? 0);
   }
   bs.splitEv.parts = made;
   bus.emit('sim:bossSplit', bs.splitEv);
@@ -351,7 +351,7 @@ export function stepBroodling(w: World, id: number, dt: number): void {
       bs.angle = wrapPi(bs.angle + BROODLING.orbitRate * dt);
       const tx = (w.x[ship] ?? 0) + Math.cos(bs.angle) * BROODLING.orbitRadius;
       const ty = (w.y[ship] ?? 0) + Math.sin(bs.angle) * BROODLING.orbitRadius;
-      w.rot[id] = Math.atan2(ty - (w.y[id] ?? 0), tx - (w.x[id] ?? 0));
+      w.rot[id] = angleToOn(w.surface, w.x[id] ?? 0, w.y[id] ?? 0, tx, ty);
       stepToward(w, id, tx, ty, BROODLING.orbitSpeed * dt);
       bs.t0 -= adt;
       if (bs.t0 <= 0) {
@@ -363,7 +363,9 @@ export function stepBroodling(w: World, id: number, dt: number): void {
     case BroodlingRole.Flee: {
       const x = w.x[id] ?? 0;
       const y = w.y[id] ?? 0;
-      const want = fleeHeading(angleBetween(w, ship, id), Math.atan2(-y, -x), Math.sqrt(x * x + y * y));
+      // R6 drum: no u walls, so the centre it bends toward is the drum's middle line (v = 0).
+      const cx = w.surface.topology.wrapU ? 0 : x;
+      const want = fleeHeading(angleBetween(w, ship, id), Math.atan2(-y, -cx), Math.sqrt(cx * cx + y * y));
       const rot = turnToward(w.rot[id] ?? 0, want, BROODLING.fleeTurnRate * dt);
       w.rot[id] = rot;
       moveHeading(w, id, rot, BROODLING.fleeSpeed, dt);

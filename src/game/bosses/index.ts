@@ -26,6 +26,25 @@ export {
 } from './core';
 export { createBossView, readBoss, type BossView } from './view';
 
+/**
+ * R6 (swarm-r6-drumboss): the bosses that fight on a drum. Every damage path a boss uses (body,
+ * parts, Hornets, bullets, rings, lanes, sweeps, tethers, pulls) goes through w.surface, and every
+ * boss steers the short way across the u seam, so all ten do. Ledger reads this for the Free Play
+ * setup note; levelgen keeps the same list as FREE_PLAY_DRUM_BOSSES (a test pins them equal).
+ */
+export const DRUM_SAFE_BOSSES: readonly BossId[] = Object.freeze<BossId[]>([
+  'warden',
+  'brood',
+  'spindle',
+  'ember',
+  'mirage',
+  'gravitas',
+  'bastion',
+  'tempest',
+  'twins',
+  'prism',
+]);
+
 /** The behaviour for a boss id, or null when it is not built yet. */
 export function bossDefOf(id: BossId): BossDef | null {
   switch (id) {
