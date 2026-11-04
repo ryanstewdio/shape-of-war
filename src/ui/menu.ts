@@ -20,8 +20,11 @@ export const MENU_STAGGER_MS = 200;
 export const MENU_ROWS = 5; // R2: Adventure, Level select, Endless, Free Play, Settings
 /** Clear space kept between the panel and the safe area edge: room for the outer border and glow. */
 export const MENU_MARGIN = 12;
-/** The title is about this many ems wide ("Shapes of War", bold, 0.06 em tracking), used to size it to the panel. */
-export const TITLE_EMS = 8.4;
+/**
+ * The pixel title is 74 cells wide ("Shapes of War" plus its shadow) at a font size over 10 cells,
+ * rounded to whole px: 8.9 em covers the worst rounding (25 px draws 3 px cells) from 18 to 52 px.
+ */
+export const TITLE_EMS = 8.9;
 
 export interface MenuActions {
   adventure(): void;

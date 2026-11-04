@@ -211,11 +211,13 @@ export const UI_CSS = `
   50% { opacity: 1; filter: brightness(1.7); text-shadow: 0 0 14px hsl(185, 95%, 60%), 0 0 40px hsl(185, 95%, 50%), 0 0 70px hsl(300, 90%, 60%); }
   100% { opacity: 0.9; filter: brightness(1); text-shadow: 0 0 8px hsl(185, 90%, 55%), 0 0 22px hsl(185, 90%, 45%); } }
 @media (prefers-reduced-motion: reduce) { .sow-splash-title { animation: none; opacity: 1; } }
-.sow-vec { display: inline-block; vertical-align: middle; overflow: visible; fill: none; stroke: currentColor;
-  stroke-linecap: square; stroke-linejoin: miter; stroke-miterlimit: 3; }
+.sow-vec { display: inline-block; vertical-align: middle; overflow: visible;
+  width: calc(var(--sow-cw) * 0.1em); height: calc(var(--sow-ch) * 0.1em); }
+/* Whole px cells: the cell is the host font size over 10, rounded (cellPx in vectorFont.ts). */
+@supports (width: round(1.5px, 1px)) {
+  .sow-vec { --sow-cell: max(1px, round(calc(1em / 10), 1px));
+    width: calc(var(--sow-cw) * var(--sow-cell)); height: calc(var(--sow-ch) * var(--sow-cell)); } }
 .sow-vec-host { line-height: 1; }
-/* The HUD score box clips text; the vector score is sized to fit (vectorScoreFits), so let its glow spill. */
-.sow-hud-item.sow-vec-host { overflow: visible !important; }
 .sow-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden;
   clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 `;
