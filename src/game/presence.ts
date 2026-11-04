@@ -41,6 +41,8 @@ export function enemyKindOf(k: Kind): EnemyKind | null {
       return 'sower';
     case Kind.Splime:
       return 'splime';
+    case Kind.Leaver:
+      return 'leaver';
     default:
       return null;
   }
@@ -73,6 +75,10 @@ export function threatWeight(k: Kind): number {
       return 3;
     case Kind.Splime:
       return 2;
+    case Kind.Leaver:
+      return 1.5;
+    case Kind.LeaverShard:
+      return 0.4;
     case Kind.Mine:
       return 0.2;
     case Kind.GravityWell:

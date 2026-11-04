@@ -27,11 +27,11 @@ export function hasMembrane(arena: ArenaDef): boolean {
 }
 
 /**
- * Pure: kinds that squeeze through membranes: the wave enemies, the hazard spawner and the V2
- * enemies and hazards. Not the ship, drones, geoms, pickups, wells or any boss entity.
+ * Pure: kinds that squeeze through membranes: the wave enemies, the hazard spawner, the V2
+ * enemies and hazards, and the Leaver and its shards. Not the ship, drones, geoms, pickups, wells or any boss entity.
  */
 export function passesMembrane(k: number): boolean {
-  return (k >= Kind.Grunt && k <= Kind.SnakeBody) || k === Kind.Spawner || (k >= Kind.Charger && k <= Kind.Slime);
+  return (k >= Kind.Grunt && k <= Kind.SnakeBody) || k === Kind.Spawner || (k >= Kind.Charger && k <= Kind.Slime) || k === Kind.Leaver || k === Kind.LeaverShard;
 }
 
 /**

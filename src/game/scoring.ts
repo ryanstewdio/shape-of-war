@@ -57,18 +57,23 @@ export function baseValue(kind: Kind): number {
       return 180;
     case Kind.Splime:
       return 140;
+    // Leaver (forge-leaver): as the Weaver; each shard a quarter of that.
+    case Kind.Leaver:
+      return 100;
+    case Kind.LeaverShard:
+      return 25;
     default:
       return 0;
   }
 }
 
 /**
- * Pure: true if the kill counts toward a destroy objective. Wells, segments, Mines and Slime do
- * not (the hazards score 0, so the value test covers them).
+ * Pure: true if the kill counts toward a destroy objective. Wells, segments, Mines, Slime and
+ * Leaver shards do not (the hazards score 0, so the value test covers them).
  */
 export function countsAsKill(kind: Kind): boolean {
   if (kind === Kind.Boss) return true; // v3 SPEC 3.6 rule 4: the boss counts 1, parts and hazards 0
-  return kind !== Kind.GravityWell && kind !== Kind.Mine && kind !== Kind.Slime && baseValue(kind) > 0;
+  return kind !== Kind.GravityWell && kind !== Kind.Mine && kind !== Kind.Slime && kind !== Kind.LeaverShard && baseValue(kind) > 0;
 }
 
 /** Share of par paid as the boss kill bonus (v3 SPEC 3.6 rule 1). */

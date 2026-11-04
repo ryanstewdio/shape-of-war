@@ -58,6 +58,7 @@ export const LAYER_KINDS = [
   'swirl',
   'sower',
   'splime',
+  'leaver',
 ] as const satisfies readonly EnemyKind[];
 
 /** Cut 1 keeps motifs for these kinds only (the first three v1 kinds). */
@@ -76,6 +77,8 @@ export type TimbreId =
   | 'spiral'
   | 'tick'
   | 'wobble'
+  // The Leaver (forge-leaver): a bright glassy shatter for its motif and its three note break.
+  | 'shatter'
   // Kill accents only (kills.ts): gravity well, spawner, and the kill chord.
   | 'gong'
   | 'clank'
@@ -190,6 +193,8 @@ export const TIMBRES: Readonly<Record<TimbreId, Timbre>> = {
   spiral: timbre('spiral', 'triangle', { wave: 'triangle', detune: 12 }, 'lowpass', 3500, 1, 0.003, 0.09),
   tick: timbre('tick', 'sine', null, 'highpass', 1200, 0.7, 0.001, 0.02),
   wobble: timbre('wobble', 'sine', { wave: 'sawtooth', detune: 14 }, 'lowpass', 600, 3, 0.08, 0.25, 0.45),
+  // A triangle and a square a twelfth and a bit apart through a highpass: bright and brittle.
+  shatter: timbre('shatter', 'triangle', { wave: 'square', detune: 1907 }, 'highpass', 1500, 1.2, 0.001, 0.08),
   gong: timbre('gong', 'sine', { wave: 'triangle', detune: 700 }, 'lowpass', 1800, 0.8, 0.003, 0.4),
   clank: timbre('clank', 'square', { wave: 'square', detune: 1902 }, 'bandpass', 2200, 2.5, 0.001, 0.12),
   chime: timbre('chime', 'triangle', { wave: 'sine', detune: 1200 }, 'lowpass', 4200, 0.7, 0.004, 0.5),
@@ -257,6 +262,8 @@ const PATTERNS: Readonly<Record<EnemyKind, readonly PatternNote[]>> = {
   sower: [p(0, 0, 1), p(12, 0, 1, 0.7), p(22, -1, 1, 0.85), p(28, 0, 1, 0.6)],
   // Slow wobbling glide between two low notes.
   splime: [p(0, 0, 8, 1, true), p(8, 2, 8, 0.9, true), p(16, 0, 8, 1, true), p(24, 2, 8, 0.9, true)],
+  // Weaver like off beat steps, then a quick three note break falling apart.
+  leaver: [p(2, 0, 1), p(6, 2, 1, 0.8), p(10, 0, 1, 0.9), p(24, 4, 1), p(25, 3, 1, 0.85), p(26, 2, 1, 0.9)],
 };
 
 // ---------------------------------------------------------------------------------------
@@ -409,6 +416,8 @@ const PHRASES: Readonly<Record<EnemyKind, readonly PhraseNote[]>> = {
   sower: [ph(0, 3, 1), ph(3, 2, 1, 0.85), ph(6, 0, 2)],
   // A wobble between root and fifth that settles on the third.
   splime: [ph(0, 0, 3), ph(3, 2, 3, 0.9), ph(6, 1, 4)],
+  // Three squares: a high three note break, then the root.
+  leaver: [ph(0, 4, 1), ph(1, 3, 1, 0.9), ph(2, 2, 1, 0.9), ph(4, 0, 2)],
 };
 
 // ---------------------------------------------------------------------------------------
@@ -435,6 +444,7 @@ const INPUTS: Readonly<Record<EnemyKind, SpecInput>> = {
   swirl: { register: 1, timbre: 'spiral', gain: 0.05, variation: 'rotate', character: 'looping spiral arpeggio, C5' },
   sower: { register: 8, timbre: 'tick', gain: 0.05, variation: 'offset', character: 'sparse high ticks, E6' },
   splime: { register: -9, timbre: 'wobble', gain: 0.07, variation: 'none', character: 'slow wobbling glide between two low notes, C3' },
+  leaver: { register: 4, timbre: 'shatter', gain: 0.05, variation: 'none', character: 'off beat steps, then a falling three note break, G5' },
 };
 
 function makeSpec(kind: EnemyKind, keepMotif: boolean): LayerSpec {
@@ -470,6 +480,7 @@ function buildRegistry(keep: (kind: EnemyKind) => boolean): LayerRegistry {
     swirl: e('swirl'),
     sower: e('sower'),
     splime: e('splime'),
+    leaver: e('leaver'),
   });
 }
 

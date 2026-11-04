@@ -1,4 +1,5 @@
 // Registry test: keeps pixi.js out of node by testing the pure spec map, not GraphicsContext.
+import { LEAVER_FRAME_STEPS } from '../../src/render/leaverLook';
 import { describe, expect, it } from 'vitest';
 import { Kind } from '../../src/game/world';
 import { SLIME_VARIANTS } from '../../src/render/enemyFx';
@@ -22,7 +23,7 @@ import {
 } from '../../src/render/shapeSpecs';
 
 // Every Kind value after None, by numeric range so a gap in ALL_KINDS is caught.
-const LAST_KIND = Kind.DroneTwin;
+const LAST_KIND = Kind.LeaverShard;
 
 describe('shape registry', () => {
   it('has an entry for every Kind except None', () => {
@@ -83,7 +84,8 @@ describe('shape registry', () => {
     // Three pickup variants, then the Slime outline variants (enemyShapes.test.ts), then the V3 boss
     // slots (10 ids x 5 openness steps), the part slots (8 types x 4 tiers) and the exposed boss
     // slots (10 ids x 5 steps, coreless and tint coloured), bossShapes.test.ts.
-    expect(MAX_SLOT).toBe(MAX_KIND + 3 + SLIME_VARIANTS + 10 * 5 + 8 * 4 + 10 * 5);
+    // forge-leaver: then the Leaver frame slots (leaverLook.ts LEAVER_FRAME_STEPS).
+    expect(MAX_SLOT).toBe(MAX_KIND + 3 + SLIME_VARIANTS + 10 * 5 + 8 * 4 + 10 * 5 + LEAVER_FRAME_STEPS);
     expect(visualSlot(Kind.WeaponPickup, 1)).toBe(MAX_KIND + 1);
     expect(visualSlot(Kind.WeaponPickup, 3)).toBe(MAX_KIND + 3);
     expect(visualSlot(Kind.WeaponPickup, -1)).toBe(Kind.WeaponPickup);

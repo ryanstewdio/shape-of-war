@@ -6,7 +6,7 @@ import type { FreePlayConfig } from '../../src/core/freeplayConfig';
 import { freePlayBossFor } from '../../src/levelgen/boss';
 import { freePlayLevel, freePlaySegment, levelOptionsOf } from '../../src/levelgen/freeplay';
 import { levelHash } from '../../src/levelgen/generator';
-import { BANDS, V1_GEN_CONFIG, bandOf, effectiveIndexOf } from '../../src/levelgen/leveldef';
+import { BANDS, DEFAULT_GEN_CONFIG, V1_GEN_CONFIG, bandOf, effectiveIndexOf } from '../../src/levelgen/leveldef';
 import type { EndlessDef, EndlessSegmentDef, FreePlayArena } from '../../src/levelgen/leveldef';
 import { FREE_PLAY_DENSITY_SCALE, FREE_PLAY_ENTITY_CAP, FREE_PLAY_MANY_WELLS, FREE_PLAY_NORMAL_WELLS, FREE_PLAY_SNAKES_PER_SEGMENT, freePlayArenaSize, validateFreePlay, validateFreePlaySegment } from '../../src/levelgen/validate';
 
@@ -44,11 +44,20 @@ describe('absent config is today', () => {
     ['drum', true, 1, 'CDE6C706', 'BD6B2C3D,A0529061,CBF3D9AD'],
     ['drum', true, 3735928559, '7C638F7A', '13D45026,711B686F,10BCBE4B'],
   ];
+  // forge-leaver: with the Leaver off these are main's hashes byte for byte. With it on (the
+  // default) the catalogue lists the Leaver and segments from 6 may hold Leaver groups; the arena,
+  // wells and segment 0 are unchanged.
+  const NO_LEAVER = { ...DEFAULT_GEN_CONFIG, enableLeaver: false };
   it.each(GOLDEN)('%s barriers %s seed %i hashes as on main', (arena, barriers, seed, defHash, segHashes) => {
-    const d = freePlayLevel({ arena, barriers, seed });
+    const d = freePlayLevel({ arena, barriers, seed }, NO_LEAVER);
     expect(levelHash(d)).toBe(defHash);
-    expect([0, 6, 13].map((s) => levelHash(freePlaySegment(d, s) as unknown as EndlessDef)).join(',')).toBe(segHashes);
+    expect([0, 6, 13].map((s) => levelHash(freePlaySegment(d, s, NO_LEAVER) as unknown as EndlessDef)).join(',')).toBe(segHashes);
     expect(d.freePlay?.options).toBeUndefined();
+    const on = freePlayLevel({ arena, barriers, seed });
+    expect(on.arena).toEqual(d.arena);
+    expect(on.hazards).toEqual(d.hazards);
+    expect(on.roster.map((e) => e.kind)).toEqual([...d.roster.map((e) => e.kind), 'leaver']);
+    expect(levelHash(freePlaySegment(on, 0) as unknown as EndlessDef)).toBe(segHashes.split(',')[0]);
   });
 
   it('a config with today\'s level side (bosses every3, flat) gives the same arena and segments', () => {

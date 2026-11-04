@@ -45,6 +45,10 @@ export const enum Kind {
   BossHazard,
   DronePickup,
   DroneTwin,
+  // Leaver (forge-leaver): Ryan's splitting Weaver and its six shards. Appended after DroneTwin so
+  // every value above keeps its number.
+  Leaver,
+  LeaverShard,
 }
 
 export const ENTITY_CAP = 512;

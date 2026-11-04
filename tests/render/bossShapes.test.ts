@@ -1,4 +1,5 @@
 // Boss and part shape specs (src/render/bossShapes.ts) and their visual slots (shapeSpecs.ts).
+import { LEAVER_FRAME_STEPS } from '../../src/render/leaverLook';
 import { describe, expect, it } from 'vitest';
 import { Kind } from '../../src/game/world';
 import { BOSS_OPEN_STEPS, BOSS_RIM_ALPHA, bossColourOf, tierWeight } from '../../src/render/bossLook';
@@ -83,7 +84,7 @@ describe('boss slots', () => {
     expect(bossSlot(9, BOSS_OPEN_STEPS - 1)).toBe(PART_SLOT_BASE - 1);
     expect(partSlot(PART_BROODLING, 4)).toBe(EXPOSED_SLOT_BASE - 17);
     expect(partSlot(PART_TURRET, 4)).toBe(EXPOSED_SLOT_BASE - 21);
-    expect(exposedBossSlot(9, BOSS_OPEN_STEPS - 1)).toBe(MAX_SLOT);
+    expect(exposedBossSlot(9, BOSS_OPEN_STEPS - 1)).toBe(MAX_SLOT - LEAVER_FRAME_STEPS); // forge-leaver frame slots follow
     for (let id = 0; id < 10; id++) {
       for (let s = 0; s < BOSS_OPEN_STEPS; s++) {
         const slot = bossSlot(id, s);

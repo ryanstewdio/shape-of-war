@@ -21,7 +21,7 @@ import { gs, isWaveEnemy, spawnFromDef } from '../../src/game/state';
 import { Kind, liveEnemies } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
 import type { EnemyKind, LevelDef, SpawnEntry, WaveDef } from '../../src/levelgen/leveldef';
-import { V2_ENEMY_KINDS } from '../../src/levelgen/leveldef';
+import { V2_ENEMY_KINDS, V2_STAGE_KINDS } from '../../src/levelgen/leveldef';
 import { DT, idle, makeGame, quietLevel } from './helpers';
 
 afterEach(() => bus.clear());
@@ -104,7 +104,8 @@ describe('spawner and objective accept the new names', () => {
   it('a LevelDef naming every new kind spawns each of them', () => {
     const { spawns } = run(v2Level(42));
     const kinds = new Set(spawns.map((s) => Number(s.split(' ')[1])));
-    for (const k of V2_ENEMY_KINDS) expect(kinds.has(kindOf(k))).toBe(true);
+    // The golden level names the six v2 stage kinds (the Leaver has its own tests, leaver.test.ts).
+    for (const k of V2_STAGE_KINDS) expect(kinds.has(kindOf(k))).toBe(true);
   });
 
   it('a destroy objective completes on new kind kills', () => {

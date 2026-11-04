@@ -6,6 +6,7 @@ import type { FreePlayConfig } from '../core/freeplayConfig';
 import { bus } from '../core/events';
 import type { InputState } from '../input/types';
 import type { EndlessDef, LevelDef } from '../levelgen/leveldef';
+import { FREE_PLAY_ARRIVAL_GAP_SCALE } from '../levelgen/freeplay';
 import { bossContacts, stepBossSchedule } from './bosses/core';
 import { initLevelBoss } from './bosses/index';
 import { bulletHits, orbitHits, separate, shipHits, shipPickups } from './combat';
@@ -75,6 +76,8 @@ export function applyFreePlay(w: World, fp: FreePlayConfig): void {
     else setPermanentWeapon(w, fp.weapon);
   }
   applyDriftOption(w.drift, fp.drift);
+  // Free Play wells arrive over time (forge-leaver); 'many' arrives FREE_PLAY_ARRIVAL_GAP_SCALE as far apart.
+  g.arrivalGapScale = fp.wells === 'many' ? FREE_PLAY_ARRIVAL_GAP_SCALE : 1;
 }
 
 /** Free Play score attack: seconds left (never below 0), or null for a run with no time limit. */

@@ -6,6 +6,7 @@ import { BOSS_COUNT, BOSS_OPEN_STEPS, BOSS_TWINS, tierOf } from './bossLook';
 import { BOSS_SPECS, buildBossSpec, EXPOSED_BOSS_SPECS, buildPartSpec, HAZARD_GLYPH, isTwinPart, PART_SPECS, PART_TYPES, partSpecIndex } from './bossShapes';
 import { hash01 } from './color';
 import { SLIME_RADIUS, SLIME_VARIANTS, slimeVariant } from './enemyFx';
+import { LEAVER_FRAME_STEPS, LEAVER_SPEC, LEAVER_SPECS, SHARD_SPEC } from './leaverLook';
 import { weaponPaletteKey, type PaletteKey } from './neon';
 
 export type ShapePrim =
@@ -74,6 +75,9 @@ export const ALL_KINDS: readonly DrawnKind[] = [
   Kind.BossHazard,
   Kind.DronePickup,
   Kind.DroneTwin,
+  // Leaver (forge-leaver), enum order.
+  Kind.Leaver,
+  Kind.LeaverShard,
 ];
 
 interface LayerExtra {
@@ -527,6 +531,10 @@ export const SHAPE_SPECS: Readonly<Record<DrawnKind, ShapeSpec>> = {
   // Look v33 (GW1): the drone pickup ring glyph and the double mode's second drone.
   [Kind.DronePickup]: DRONE_PICKUP_SPEC,
   [Kind.DroneTwin]: DRONE_TWIN_SPEC,
+  // Leaver (forge-leaver): the registry entry is frame step 0; live Leavers draw per frame step
+  // through leaverSlot (leaverLook.ts). Shards are white squares tinted per shard colour.
+  [Kind.Leaver]: LEAVER_SPEC,
+  [Kind.LeaverShard]: SHARD_SPEC,
 };
 
 /** Kind values the renderer checks per entity, as plain numbers (the enum is const). */
@@ -542,6 +550,12 @@ export const KIND_NUM = {
   boss: Kind.Boss as number,
   bossPart: Kind.BossPart as number,
   bossHazard: Kind.BossHazard as number,
+} as const;
+
+/** Leaver kind values the renderer checks per entity (forge-leaver). */
+export const LEAVER_KIND_NUM = {
+  leaver: Kind.Leaver as number,
+  shard: Kind.LeaverShard as number,
 } as const;
 
 /** Look v33: drone kind values the renderer checks per entity (outside the contiguous KIND_NUM range). */
@@ -585,8 +599,22 @@ export const PART_SLOT_BASE: number = BOSS_SLOT_BASE + BOSS_COUNT * BOSS_OPEN_ST
 /** First exposed boss slot (ED1): the coreless white shell per boss and step, coloured by tint. */
 export const EXPOSED_SLOT_BASE: number = PART_SLOT_BASE + PART_TYPES * 4;
 
+/** First Leaver frame slot: one per baked frame step (leaverLook.ts LEAVER_SPECS). */
+export const LEAVER_SLOT_BASE: number = EXPOSED_SLOT_BASE + BOSS_COUNT * BOSS_OPEN_STEPS;
+
 /** Highest visual slot, for the context and texture cache sizes. */
-export const MAX_SLOT: number = EXPOSED_SLOT_BASE + BOSS_COUNT * BOSS_OPEN_STEPS - 1;
+export const MAX_SLOT: number = LEAVER_SLOT_BASE + LEAVER_FRAME_STEPS - 1;
+
+/** Pure: visual slot of a Leaver whose frame is at step s (wrapped into range). */
+export function leaverSlot(step: number): number {
+  const s = Number.isFinite(step) ? ((Math.round(step) % LEAVER_FRAME_STEPS) + LEAVER_FRAME_STEPS) % LEAVER_FRAME_STEPS : 0;
+  return LEAVER_SLOT_BASE + s;
+}
+
+/** Pure: true for a Leaver frame slot. */
+export function isLeaverSlot(slot: number): boolean {
+  return slot >= LEAVER_SLOT_BASE && slot <= MAX_SLOT;
+}
 
 /** Pure: visual slot for a boss index and openness step. Out of range values are clamped. */
 export function bossSlot(id: number, step: number): number {
@@ -627,7 +655,7 @@ export function isPartSlot(slot: number): boolean {
 
 /** Pure: true for an exposed boss slot. */
 export function isExposedBossSlot(slot: number): boolean {
-  return slot >= EXPOSED_SLOT_BASE && slot <= MAX_SLOT;
+  return slot >= EXPOSED_SLOT_BASE && slot < LEAVER_SLOT_BASE;
 }
 
 /** Pure: visual slot for a pickup weapon index. Unknown indices give the plain pickup slot. */
@@ -652,6 +680,7 @@ export function visualSlot(kind: number, a: number, h = 0): number {
 
 /** Pure: spec for a visual slot, with the magenta fallback. */
 export function specForSlot(slot: number): ShapeSpec {
+  if (isLeaverSlot(slot)) return LEAVER_SPECS[slot - LEAVER_SLOT_BASE] ?? UNKNOWN_SPEC;
   if (isExposedBossSlot(slot)) return EXPOSED_BOSS_SPECS[slot - EXPOSED_SLOT_BASE] ?? UNKNOWN_SPEC;
   if (isPartSlot(slot)) return PART_SPECS[slot - PART_SLOT_BASE] ?? UNKNOWN_SPEC;
   if (isBossSlot(slot)) return BOSS_SPECS[slot - BOSS_SLOT_BASE] ?? UNKNOWN_SPEC;

@@ -118,7 +118,8 @@ describe('generateLevel x validateLevel sweep', { timeout: 120_000 }, () => {
   it('is not vacuous: it hits 0 to 3 gravity wells, 0 to 2 spawners and rosters of 3 to 6', () => {
     expect([...sweep.wellCounts].sort()).toEqual([0, 1, 2, 3]);
     expect([...sweep.spawnerCounts].sort()).toEqual([0, 1, 2]);
-    expect([...sweep.rosterSizes].sort()).toEqual([3, 4, 5, 6]);
+    // forge-leaver: a Leaver joins on top of a drawn roster of 6 (level 21 and up), so 7 shows too.
+    expect([...sweep.rosterSizes].sort()).toEqual([3, 4, 5, 6, 7]);
   });
 
   it('regenerating every 50th level gives the same hash and a JSON round trip changes nothing', () => {

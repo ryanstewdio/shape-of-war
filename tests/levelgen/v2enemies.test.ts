@@ -293,8 +293,9 @@ describe('v2 enemy stage', { timeout: 60_000 }, () => {
 
   describe('tables', () => {
     it('ENEMY_BASE and ENEMY_GEOMS carry the docs/11 6.2 values', () => {
-      expect(V2_ENEMY_KINDS.map((k) => ENEMY_BASE[k])).toEqual([120, 150, 130, 80, 180, 140]);
-      expect(V2_ENEMY_KINDS.map((k) => ENEMY_GEOMS[k])).toEqual([2, 3, 2, 1, 3, 2]);
+      // The Leaver (forge-leaver) is last: as the Weaver.
+      expect(V2_ENEMY_KINDS.map((k) => ENEMY_BASE[k])).toEqual([120, 150, 130, 80, 180, 140, 100]);
+      expect(V2_ENEMY_KINDS.map((k) => ENEMY_GEOMS[k])).toEqual([2, 3, 2, 1, 3, 2, 2]);
       expect(ENEMY_KINDS.map((k) => ENEMY_BASE[k])).toEqual([50, 10, 100, 25, 30, 200]);
     });
 

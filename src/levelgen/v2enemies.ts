@@ -15,7 +15,7 @@
 // 3. A substituted group spends its whole spawn budget at 1 unit per enemy (docs/11 6.2).
 import type { Rng } from '../core/rng';
 import { rngInt, rngPick } from '../core/rng';
-import { BANDS, ENEMY_KINDS, V2_ENEMY_KINDS } from './leveldef';
+import { BANDS, ENEMY_KINDS, V2_ENEMY_KINDS, V2_STAGE_KINDS } from './leveldef';
 import type { Band, EnemyKind, RosterEntry } from './leveldef';
 
 /** Stream salt for the v2 enemy stage. ASCII "V2EN". */
@@ -27,24 +27,27 @@ export const V2_SPAWN_UNIT = 1;
 /** New kinds per roster, by band. Band 1 never gets one. */
 export const V2_ROSTER_SLOTS: Readonly<Record<Band, number>> = { 1: 0, 2: 1, 3: 2, 4: 3 };
 
-/** Every EnemyKind in output order: the v1 kinds, then the v2 kinds. */
+/** Every EnemyKind in output order: the v1 kinds, then the v2 kinds (the Leaver last). */
 export const ALL_ENEMY_KINDS: readonly EnemyKind[] = [...ENEMY_KINDS, ...V2_ENEMY_KINDS];
 
 export const isV2Kind = (k: string): boolean => (V2_ENEMY_KINDS as readonly string[]).includes(k);
 
-/** Target share of one new kind in a band, 0 to 1 (the band's roster weight over 100). */
+/** True for the six kinds the v2 stage draws from (not the Leaver, which has its own stage). */
+export const isV2StageKind = (k: string): boolean => (V2_STAGE_KINDS as readonly string[]).includes(k);
+
+/** Target share of one new kind in a band, 0 to 1 (the band's roster weight over 100). 0 for the Leaver. */
 export function v2Share(band: Band, kind: EnemyKind): number {
-  return isV2Kind(kind) ? BANDS[band].rosterWeights[kind] / 100 : 0;
+  return isV2StageKind(kind) ? BANDS[band].rosterWeights[kind] / 100 : 0;
 }
 
 /** Total target share of all new kinds in a band: 0, 0.30, 0.60, 0.80. */
 export function v2TotalShare(band: Band): number {
-  return V2_ENEMY_KINDS.reduce((a, k) => a + v2Share(band, k), 0);
+  return V2_STAGE_KINDS.reduce((a, k) => a + v2Share(band, k), 0);
 }
 
-/** New kinds with a positive share in the band, in V2_ENEMY_KINDS order. */
+/** New kinds with a positive share in the band, in V2_STAGE_KINDS order. */
 export function v2Eligible(band: Band): EnemyKind[] {
-  return V2_ENEMY_KINDS.filter((k) => v2Share(band, k) > 0);
+  return V2_STAGE_KINDS.filter((k) => v2Share(band, k) > 0);
 }
 
 /** Inclusion probability of each eligible kind when j kinds join: j x share / total. Each is at most 1 for the shipped tables. */

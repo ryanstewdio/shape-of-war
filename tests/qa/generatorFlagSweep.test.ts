@@ -21,6 +21,7 @@ import {
   MAX_RETRIES,
   V1_GEN_CONFIG,
   V2_ENEMY_KINDS,
+  V2_STAGE_KINDS,
   V2_GEN_CONFIG,
   bandOf,
   effectiveIndexOf,
@@ -80,9 +81,12 @@ const hashOf = (v: unknown): string => fnv1a(canonicalJson(v)).toString(16).toUp
 
 const isV2Kind = (k: string): boolean => (V2_ENEMY_KINDS as readonly string[]).includes(k);
 
-/** The new kinds with a positive roster weight in a band (docs/11 6.3), from the tables the generator uses. */
+/**
+ * The new kinds with a positive roster weight in a band (docs/11 6.3), from the tables the generator
+ * uses. The v2 stage kinds only: the Leaver has its own stage and flag (forge-leaver), off here.
+ */
 function eligible(band: Band): EnemyKind[] {
-  return V2_ENEMY_KINDS.filter((k) => BANDS[band].rosterWeights[k] > 0);
+  return V2_STAGE_KINDS.filter((k) => BANDS[band].rosterWeights[k] > 0);
 }
 
 /** Fields the v2 stage must not move: it only swaps roster, waves and what par derives from them. */
@@ -260,7 +264,7 @@ describe('generator sweep with enableV2Enemies false and true', { timeout: 300_0
     expect(eligible(1)).toEqual([]);
     expect([...eligible(2)].sort()).toEqual(['charger', 'splime', 'swirl']);
     expect([...eligible(3)].sort()).toEqual(['blink', 'bulwark', 'charger', 'splime', 'swirl']);
-    expect([...eligible(4)].sort()).toEqual([...V2_ENEMY_KINDS].sort());
+    expect([...eligible(4)].sort()).toEqual([...V2_STAGE_KINDS].sort());
   });
 
   it('rosters keep their v1 shape: grunt forced, 3 to 6 distinct kinds, same size as flag off, table weights', () => {

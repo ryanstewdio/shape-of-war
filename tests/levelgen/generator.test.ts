@@ -172,7 +172,10 @@ describe('generator', { timeout: 30_000 }, () => {
           const d = gen.generateLevel(s, n);
           const size = BANDS[bandOf(n)].rosterSize;
           expect(d.roster.length).toBeGreaterThanOrEqual(Math.max(3, size.min));
-          expect(d.roster.length).toBeLessThanOrEqual(Math.min(6, size.max));
+          // forge-leaver: the Leaver joins on top of the drawn roster (level 21 and up).
+          const leaver = d.roster.some((e) => e.kind === 'leaver') ? 1 : 0;
+          if (leaver === 1) expect(n).toBeGreaterThanOrEqual(21);
+          expect(d.roster.length).toBeLessThanOrEqual(Math.min(6, size.max) + leaver);
           expect(d.roster.map((e) => e.kind)).toContain('grunt');
           if (bandOf(n) === 1) expect(d.roster.map((e) => e.kind).sort()).toEqual(['grunt', 'pinwheel', 'wanderer']);
         }
@@ -335,6 +338,7 @@ describe('generator', { timeout: 30_000 }, () => {
         expect(d.roster.map((e) => e.kind)).toEqual([
           ...['grunt', 'wanderer', 'weaver', 'pinwheel', 'dart', 'snake'],
           ...['charger', 'bulwark', 'blink', 'swirl', 'sower', 'splime'],
+          'leaver', // forge-leaver: in the catalogue with the Leaver on (the default)
         ]);
         expect(gen.generateEndless(s, V1_GEN_CONFIG).roster.map((e) => e.kind)).toEqual(['grunt', 'wanderer', 'weaver', 'pinwheel', 'dart', 'snake']);
         expect(Object.isFrozen(d.arena)).toBe(true);

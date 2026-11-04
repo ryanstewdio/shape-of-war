@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { BOSS_EVERY, BOSS_LONG_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC } from '../../src/levelgen/boss';
 import { bossLevelAtSec, canonicalJson, generateEndlessSegment, generateLevel, levelHash, longPulse } from '../../src/levelgen/generator';
 import {
+  DEFAULT_GEN_CONFIG,
   GENERATOR_VERSION_V3,
   GENERATOR_VERSION_V5,
   GENERATOR_VERSION_V7,
@@ -21,7 +22,7 @@ import {
   bandOf,
   fmix32,
 } from '../../src/levelgen/leveldef';
-import type { LevelDef } from '../../src/levelgen/leveldef';
+import type { GenConfig, LevelDef } from '../../src/levelgen/leveldef';
 import { DEAD_AIR_BREATHER_SEC, DEAD_AIR_FROM_SEC, DEAD_AIR_MAX_SEC, deadAirGaps, inBreather, spawnsBefore } from '../../src/levelgen/pacing';
 import { validateLevel } from '../../src/levelgen/validate';
 
@@ -171,9 +172,15 @@ describe('flat invariants: the V1 to V5 configs and Endless are byte for byte as
   });
 
   it('Endless segments 0 to 20 of two seeds hash as pinned', () => {
-    let e = 0x811c9dc5;
-    for (const seed of [1, 42]) for (let s = 0; s <= 20; s++) e = fold(e, canonicalJson(generateEndlessSegment(seed, s)));
-    expect(fmix32(e).toString(16)).toBe('4833a515');
+    // forge-leaver: with the Leaver off, Endless is byte for byte as before (the old pin); the
+    // default config adds the Leaver from segment 6, so its pin moved.
+    const pin = (cfg: GenConfig): string => {
+      let e = 0x811c9dc5;
+      for (const seed of [1, 42]) for (let s = 0; s <= 20; s++) e = fold(e, canonicalJson(generateEndlessSegment(seed, s, cfg)));
+      return fmix32(e).toString(16);
+    };
+    expect(pin({ ...DEFAULT_GEN_CONFIG, enableLeaver: false })).toBe('4833a515');
+    expect(pin(DEFAULT_GEN_CONFIG)).toBe('35194387');
   });
 
   it('older configs keep their boss versions and entrances', () => {

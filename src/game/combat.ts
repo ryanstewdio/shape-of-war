@@ -9,6 +9,7 @@ import { BULLET_RADIUS, hasHit, killBullet, passThrough, recordHit, STYLE_ORBIT,
 import { queryCircleInto } from './collide';
 import { defOf } from './defs';
 import { isWarping } from './enemies/blink';
+import { shardColour, shardHolding, splitLeaver } from './enemies/leaver';
 import { shieldBlocks } from './enemies/bulwark';
 import { isArmed } from './enemies/mine';
 import { collectGeom, def as geomDef, PICKUP_RADIUS, spawnGeoms } from './geoms';
@@ -49,7 +50,7 @@ export function emitHit(g: GameState, x: number, y: number, kind: Kind, id: numb
   bus.emit('fx:hit', f);
 }
 
-/** Kills that count for the destroy objective (segments, wells, Mines and Slime do not). */
+/** Kills that count for the destroy objective (segments, wells, Mines, Slime and Leaver shards do not). */
 export function countsForDestroy(k: number): boolean {
   return (k >= Kind.Grunt && k <= Kind.SnakeHead) || k === Kind.Spawner || isV2Enemy(k);
 }
@@ -80,11 +81,14 @@ export function killEnemy(w: World, id: number, scored: boolean): void {
   if (countsForDestroy(k)) g.kills++;
   turboKill(g); // R3: each scored kill extends a running Turbo
   if (k === Kind.SnakeHead) segmentBurst(w, id);
+  const colour = k === Kind.LeaverShard ? shardColour(w.a[id] ?? 0) : d.colour;
   removeEntity(w, id);
-  emitKill(g, x, y, d.colour, k, id);
+  emitKill(g, x, y, colour, k, id);
   bus.emit('sfx', 'explode');
   spawnGeoms(w, x, y, d.geoms);
   onScoringKill(w, x, y);
+  // Leaver: the split comes after the removal, so the dead Leaver's cap slot is free for a shard.
+  if (k === Kind.Leaver) splitLeaver(w, x, y, id);
 }
 
 /** Snake death burst (docs/01 section 6.4): one 'fx:kill' per live segment, no score, no geoms. */
@@ -340,7 +344,8 @@ export function separate(w: World, dt: number): void {
   for (let id = 1; id < w.cap; id++) {
     if (w.alive[id] !== 1) continue;
     const k = w.kind[id] ?? 0;
-    if (!((k >= Kind.Grunt && k <= Kind.Dart) || isV2Enemy(k)) || (g.tele[id] ?? 0) > 0) continue;
+    // Leaver shards join once their hold ends, so the fling lands exactly 40 u out and holds.
+    if (!((k >= Kind.Grunt && k <= Kind.Dart) || isV2Enemy(k) || (k === Kind.LeaverShard && !shardHolding(w, id))) || (g.tele[id] ?? 0) > 0) continue;
     const x = w.x[id] ?? 0;
     const y = w.y[id] ?? 0;
     const r = w.radius[id] ?? 0;

@@ -83,11 +83,19 @@ describe('kill sounds per kind', () => {
       [Kind.Mine, 'mine'],
       [Kind.Splime, 'splime'],
       [Kind.Slime, 'slime'],
+      [Kind.Boss, null],
+      [Kind.BossPart, null],
+      [Kind.BossHazard, null],
+      [Kind.DronePickup, null],
+      [Kind.DroneTwin, null],
+      [Kind.Leaver, 'leaver'],
+      [Kind.LeaverShard, null], // shards are sfx only (forge-leaver)
     ];
     for (const [k, s] of expected) expect(kindSource(k), `kind ${k}`).toBe(s);
     // Every source but the kinds above is covered, and out of range values are silent.
     expect(new Set(expected.map(([, s]) => s).filter((s) => s !== null))).toEqual(new Set(SOURCES));
     expect(kindSource(Kind.Slime + 1)).toBeNull();
+    expect(kindSource(Kind.LeaverShard + 1)).toBeNull();
     expect(kindSource(-1)).toBeNull();
     expect(kindSource(2.5)).toBeNull();
   });
@@ -160,7 +168,8 @@ describe('kill sounds per kind', () => {
     expect(sourceForColour('slime')).toBeNull();
     // Each enemy kind's colour maps back to it.
     const colours = ['blue', 'purple', 'green', 'magenta', 'orange', 'cyan', 'charger', 'bulwark', 'blink', 'swirl', 'sower', 'splime'] as const;
-    expect(colours.map((c) => sourceForColour(c))).toEqual([...LAYER_KINDS]);
+    // The Leaver's kill always carries its kind; its colour (green) falls back to the Weaver.
+    expect(colours.map((c) => sourceForColour(c))).toEqual(LAYER_KINDS.filter((k) => k !== 'leaver'));
     expect(isBigSource('snake') && isBigSource('well') && isBigSource('spawner')).toBe(true);
     expect(isBigSource('grunt')).toBe(false);
   });
