@@ -40,6 +40,7 @@ import { bossTierOf } from './levelgen/boss';
 import type { BossId } from './levelgen/leveldef';
 import { createEndlessGame, createGame, gameState, setWeaponPickups, stepGame, type GameOptions } from './game/game';
 import type { Difficulty } from './core/difficulty';
+import { targetsFor, type ParTargets } from './core/stars';
 import type { StartBonus } from './core/bonus';
 import { setShipSpace } from './game/ship';
 import { installAudio, play as playCue } from './audio/synth';
@@ -300,6 +301,8 @@ async function boot(): Promise<void> {
     startBonus === undefined ? { scoring: scoringPort, difficulty } : { scoring: scoringPort, difficulty, startBonus };
   /** R1: the difficulty the current world was built with; the star cap reads this, not the setting. */
   let runDifficulty: Difficulty = 'normal';
+  /** R6: par and the star targets for this run, the level's own times DIFFICULTY[d].parScale. */
+  let targets: ParTargets = targetsFor(level, runDifficulty);
   /** R2: the par reward the current Adventure world started with, kept so a card rebuild keeps it. */
   let runBonus: StartBonus | null = null;
   /** The Free Play options of the last Free Play run; arena, barriers and config persist (sow.settings.freePlay). */
@@ -437,7 +440,7 @@ async function boot(): Promise<void> {
     } else {
       // Reads "Defeat the boss" while the level holds for a living boss (docs/13 boss rule 9).
       // R2: the bar fills toward the objective; the thin star line reads the level's thresholds.
-      hud.setObjective(objectiveProgress(level.objective, snapshotOf(world), bossAlive(), level.stars));
+      hud.setObjective(objectiveProgress(level.objective, snapshotOf(world), bossAlive(), targets.stars)); // R6: scaled by difficulty
     }
   };
 
@@ -451,6 +454,7 @@ async function boot(): Promise<void> {
   const startLevel = (mode: 'adventure' | 'endless' | 'freeplay', index: number, rebuild = false): void => {
     runDifficulty = mode === 'freeplay' ? freePlayChoice.difficulty : settingsModel.state.difficulty;
     if (!rebuild) runBonus = mode === 'adventure' && !customSeed ? takePendingBonus(index) : null;
+    targets = { par: 0, stars: [0, 0, 0] }; // Endless and Free Play keep no par; Adventure sets it below
     if (mode === 'freeplay') {
       endlessSeed = freshSeed();
       // R3: the sim runs the Free Play def; the UI reads the Endless style level built from the same
@@ -469,7 +473,8 @@ async function boot(): Promise<void> {
       pick = pickLevel(generator, runSeed, index, VALID_FIXTURES);
       level = pick.def;
       world = createGame(level, gameOptions(runDifficulty, runBonus ?? undefined));
-      hud.setLevel(index, level.par, pick.hash);
+      targets = targetsFor(level, runDifficulty);
+      hud.setLevel(index, targets.par, pick.hash);
     }
     hud.setSuper(level.superType);
     hud.setInfiniteLives(mode === 'freeplay' && freePlayChoice.config.lives === 'infinite');
@@ -807,7 +812,8 @@ async function boot(): Promise<void> {
       outcome: gameState(world).outcome,
       bossLevel: level.boss !== undefined,
       score: p.score,
-      scoreStars: p.stars,
+      // R6: score stars against the difficulty's targets; the sim's p.stars reads the level's own.
+      scoreStars: starsFor(p.score, targets.stars),
       difficulty: runDifficulty,
       sessionOnly: customSeed,
     });
@@ -820,13 +826,13 @@ async function boot(): Promise<void> {
       stars: end.stars,
       success,
       difficulty: runDifficulty,
-      par: level.par,
+      par: targets.par,
       best: end.best,
       newBest: end.newBest,
       hash: pick.hash,
       space,
       arena,
-      starTargets: level.stars,
+      starTargets: targets.stars,
       ...stats,
       timeSec: world.time,
       seed: runSeed,
@@ -870,7 +876,7 @@ async function boot(): Promise<void> {
       // Fallback end check. On a boss level the sim alone decides a win: it holds for the boss.
       if (endCheck && fallbackStatus(level.objective, snapshotOf(world), level.boss !== undefined) !== 'running') {
         const score = scoreOf(world).score;
-        const st = flow.mode === 'adventure' ? starsFor(score, level.stars) : 0; // R1: the level's own thresholds (v6 is 1, 1.25, 1.5 x par)
+        const st = flow.mode === 'adventure' ? starsFor(score, targets.stars) : 0; // R1: the level's own thresholds (v6 is 1, 1.25, 1.5 x par)
         bus.emit('game:over', { score, stars: st, levelIndex: flow.levelIndex, mode: flow.mode === 'adventure' ? 'adventure' : 'endless' });
       }
     },
@@ -972,7 +978,7 @@ async function boot(): Promise<void> {
   };
   if (query.stress > 0) window.sowDebug.stress(query.stress, query.particles);
 
-  hud.setLevel(menuLevel(), level.par, pick.hash);
+  hud.setLevel(menuLevel(), targets.par, pick.hash);
   hud.setSuper(level.superType);
   paintScreens();
   announceScreen(flow); // the first screen at boot is title

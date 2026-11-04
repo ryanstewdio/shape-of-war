@@ -57,7 +57,7 @@ describe('R5 results text', () => {
     const t = resultLines(full);
     expect(t.title).toBe('Victory');
     expect(t.sub).toBe('Level 2  Circle arena');
-    expect(t.difficulty).toBe('Difficulty Normal');
+    expect(t.difficulty).toBe('Normal');
     expect(t.score).toBe('3,500,000');
     expect(t.par).toBe('Par 3.3M');
     expect(t.stars).toBe('★★☆');
@@ -110,7 +110,8 @@ describe('R5 results text', () => {
         expect(v.label, inline(v)).toMatch(/^[A-Z][A-Za-z ]+$/);
         expect(v.value, inline(v)).not.toBe('');
       }
-      for (const line of [t.par, t.difficulty].filter((x) => x !== '')) expect(line).toMatch(/^(Par|Difficulty) \S/);
+      if (t.par !== '') expect(t.par).toMatch(/^Par \S/);
+      if (t.difficulty !== '') expect(t.difficulty).toMatch(/^(Easy|Normal|Hard|Insane)$/);
     }
   });
 
@@ -154,7 +155,7 @@ describe('R5 results screen', () => {
     screen.showResult(full);
     const card = root.children[0]?.children[0];
     expect((card?.children ?? []).map((e) => e.getAttribute('data-results'))).toEqual(['head', 'scoreBlock', 'best', 'reward', 'buttons', 'details']);
-    expect(leaves(by(root, 'head'))).toEqual(['Victory', 'Level 2  Circle arena', 'Difficulty Normal']);
+    expect(leaves(by(root, 'head'))).toEqual(['Victory', 'Level 2  Circle arena', 'Normal']);
   });
 
   it('score block: label, big score, "Par" then "3.3M", three labelled ticks, the marker, stars earned and the cap', () => {
@@ -211,7 +212,7 @@ describe('R5 results screen', () => {
     screen.showResult(base);
     const primary = (): FakeEl | undefined => by(root, 'primary');
     expect(primary()?.textContent).toBe('Next');
-    expect(root.all().filter((e) => e.tag === 'button' && e.classList.contains('sow-big')).map((e) => e.textContent)).toEqual(['Next', 'Menu']);
+    expect((by(root, 'buttons')?.all() ?? []).filter((e) => e.tag === 'button' && e.classList.contains('sow-big')).map((e) => e.textContent)).toEqual(['Next', 'Menu']);
     primary()?.tap();
     screen.showResult({ ...base, success: false, stars: 0 });
     expect(primary()?.textContent).toBe('Retry');

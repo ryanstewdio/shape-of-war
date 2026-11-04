@@ -12,7 +12,6 @@ import {
   armIntro,
   bossIntroLine,
   createIntroScreen,
-  DIFFICULTY_BLOCK_LABEL,
   endlessIntroCard,
   ENDLESS_GOAL,
   ENDLESS_VICTORY,
@@ -40,6 +39,8 @@ import {
   VICTORY_LABEL,
 } from '../../src/ui/intro';
 import { asParent, installFakeDocument, type FakeEl } from './fakeDom';
+
+const inlineV = (v: { label: string; value: string }): string => `${v.label} ${v.value}`;
 
 describe('B7 boot screen in the flow', () => {
   it('launches on the boot screen with the sim stopped', () => {
@@ -120,7 +121,8 @@ describe('R3 intro card text', () => {
       'normal',
       { seed: '12345' },
     );
-    expect(card.title).toBe('Level 7  Circle arena');
+    expect(card.title).toBe('Level 7');
+    expect(card.arena).toBe('Circle 900 x 900');
     expect(card.goal).toBe('Destroy 530 enemies before your lives run out');
     expect(card.victory).toBe('530 kills with a life left');
     expect(card.stars.map(labelled)).toEqual(['1 star: 2.1M', '2 stars: 2.6M', '3 stars: 3.2M']);
@@ -174,9 +176,11 @@ describe('R3 intro card text', () => {
     expect(arenaName({})).toBe('');
   });
 
-  it('the Endless card has the arena title, a goal, no victory target and no stars', () => {
+  it('the Endless card has an Endless title, the arena in Details, a goal, no victory target and no stars', () => {
     const c = endlessIntroCard({ arena: { ...arena, shape: 'rect', obstacles: [] }, drone: 'attack', superType: 'turbo' }, 'hard', { seed: '9' });
-    expect(c.title).toBe('Endless  Rectangle arena');
+    expect(c.title).toBe('Endless');
+    expect(c.arena).toBe('Rectangle 900 x 900');
+    expect(introDetails(c).map(inlineV)).toEqual(['Arena Rectangle 900 x 900', 'Drone Attack', `Super Turbo (${turboText()})`, 'Seed 9']);
     expect(c.goal).toBe(ENDLESS_GOAL);
     expect(c.victory).toBe(ENDLESS_VICTORY);
     expect(c.stars).toEqual([]);
@@ -220,7 +224,7 @@ describe('R3 intro card text', () => {
       expect(text('enemies')).toContain('Grunt|chaser');
       expect(text('enemies')).toContain('Dart|swarm');
       expect(byIntro(root, 'enemies')?.all().filter((e) => e.tag === 'canvas').map((e) => e.getAttribute('data-foe'))).toEqual(['grunt', 'dart']);
-      expect(text('play')).toBe(`${DIFFICULTY_BLOCK_LABEL}|Easy|Normal|Hard|Insane|${START_LABEL}`);
+      expect(text('play')).toBe(`Easy|Normal|Hard|Insane|${START_LABEL}`);
       for (const k of ['goal', 'stars', 'enemies', 'play', 'details']) expect(byIntro(root, k)?.style.display, k).toBe('');
     });
 
