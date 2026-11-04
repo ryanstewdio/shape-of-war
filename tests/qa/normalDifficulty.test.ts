@@ -10,11 +10,11 @@ import { bus } from '../../src/core/events';
 import { applyBossScaling } from '../../src/game/bosses/core';
 import { bossOf } from '../../src/game/bosses/state';
 import { maxHpFor } from '../../src/game/bosses/table';
-import { difficultyOf, scaledCount, scaledHp, startingLives } from '../../src/game/difficulty';
+import { difficultyOf, levelWithLiveCap, scaledCount, scaledHp, scaledLiveCap, startingLives } from '../../src/game/difficulty';
 import { isOpenDrum } from '../../src/game/drift';
 import { createGame, stepGame } from '../../src/game/game';
 import { enemySpeedScale, gs } from '../../src/game/state';
-import type { World } from '../../src/game/world';
+import { ENTITY_CAP, type World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
 import { generateLevel, levelHash } from '../../src/levelgen/generator';
 import { V4_GEN_CONFIG } from '../../src/levelgen/leveldef';
@@ -73,8 +73,9 @@ const OPEN_DRUM = { seed: 7, level: 33, levelHash: '0BDFEF03', pre: 1506431169, 
 describe('Normal difficulty is the pre release sim', () => {
   it('the Normal table multiplies by exactly 1 and adds exactly 0, on every field', () => {
     const n = DIFFICULTY.normal;
-    expect(Object.keys(n).sort()).toEqual(['addScale', 'bossScale', 'driftScale', 'enemyHp', 'enemySpeed', 'extraLives', 'spawnRate']);
+    expect(Object.keys(n).sort()).toEqual(['addScale', 'bossScale', 'driftScale', 'enemyHp', 'enemySpeed', 'extraLives', 'liveCapScale', 'spawnRate']);
     expect(n.addScale).toBe(1);
+    expect(n.liveCapScale).toBe(1);
     expect(n.driftScale).toBe(1);
     expect(n.enemySpeed).toBe(1);
     expect(n.enemyHp).toBe(1);
@@ -95,7 +96,11 @@ describe('Normal difficulty is the pre release sim', () => {
     for (let k = 0; k < 200; k++) {
       expect(scaledCount(k, n.spawnRate)).toBe(k);
       expect(startingLives(k + 1, n.extraLives)).toBe(k + 1);
+      expect(scaledLiveCap(k + 1, n.liveCapScale, ENTITY_CAP)).toBe(k + 1);
     }
+    const def = generateLevel(42, 9, V4_GEN_CONFIG);
+    expect(levelWithLiveCap(def, n.liveCapScale, ENTITY_CAP)).toBe(def);
+    expect(createGame(def, { vibrate: () => undefined }).level).toBe(def);
     for (const hp of [1, 2, 3, 5, 7, 12, 40, 255, 1000]) expect(scaledHp(hp, n.enemyHp)).toBe(hp);
   });
 

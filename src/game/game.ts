@@ -1,7 +1,7 @@
 // Swarm session entry points for wiring in main.ts: createGame replaces createWorld, stepGame
 // replaces stepWorld in the loop's step hook. stepGame allocates nothing.
 import type { StartBonus } from '../core/bonus';
-import type { Difficulty } from '../core/difficulty';
+import { DIFFICULTY, type Difficulty } from '../core/difficulty';
 import type { FreePlayConfig } from '../core/freeplayConfig';
 import { bus } from '../core/events';
 import type { InputState } from '../input/types';
@@ -25,7 +25,8 @@ import { endlessLevel, startEndless, stepEndlessAwards } from './endless';
 import { currentMultiplier, gs, syncMultiplier, type GameMode, type GameState, type ScoringPort, type SegmentSource } from './state';
 import { stepSupers, triggerSuper } from './supers';
 import { resetWellState, stepWellArrivals } from './wellArrival';
-import { createWorld, stepWorld, type World } from './world';
+import { levelWithLiveCap } from './difficulty';
+import { createWorld, ENTITY_CAP, stepWorld, type World } from './world';
 
 export interface GameOptions {
   mode?: GameMode;
@@ -110,8 +111,12 @@ export { isEnraged } from './membrane';
 
 export function createGame(level: LevelDef, opts: GameOptions = {}): World {
   registerSwarmBehaviours();
-  const lv = opts.freePlay === undefined ? level : freePlayLevelRules(level, opts.freePlay);
-  const w = createWorld(lv, opts.capacity, opts.difficulty ?? 'normal');
+  const difficulty = opts.difficulty ?? 'normal';
+  const base = opts.freePlay === undefined ? level : freePlayLevelRules(level, opts.freePlay);
+  // R5: liveCapScale scales maxLiveEnemies once here, so every cap reader (spawners, gravity
+  // wells, boss adds) sees the scaled value. Normal keeps the level object unchanged.
+  const lv = levelWithLiveCap(base, DIFFICULTY[difficulty].liveCapScale, ENTITY_CAP);
+  const w = createWorld(lv, opts.capacity, difficulty);
   const g = gs(w);
   if (opts.mode !== undefined) g.mode = opts.mode;
   if (opts.vibrate !== undefined) g.vibrate = opts.vibrate;

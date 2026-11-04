@@ -3,12 +3,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { DIFFICULTY } from '../../src/core/difficulty';
 import { bus } from '../../src/core/events';
-import { difficultyOf, scaledCount, scaledHp, startingLives } from '../../src/game/difficulty';
+import { difficultyOf, levelWithLiveCap, scaledCount, scaledHp, scaledLiveCap, startingLives } from '../../src/game/difficulty';
 import * as bulwark from '../../src/game/enemies/bulwark';
 import * as grunt from '../../src/game/enemies/grunt';
 import { createGame, stepGame } from '../../src/game/game';
+import { countWaveEnemies } from '../../src/game/spawner';
 import { enemySpeedScale, gs } from '../../src/game/state';
-import { inlineRectLevel } from '../../src/game/world';
+import { ENTITY_CAP, inlineRectLevel } from '../../src/game/world';
 import type { LevelDef, SpawnEntry } from '../../src/levelgen/leveldef';
 import { DT, idle, makeGame, put } from './helpers';
 
@@ -50,6 +51,25 @@ describe('pure helpers', () => {
     expect(scaledHp(3, 1.3)).toBe(4);
     expect(scaledHp(1, 0.75)).toBe(1);
     expect(scaledHp(1, 0.1)).toBe(1);
+  });
+
+  it('scaledLiveCap rounds, floors at 1, caps at the entity cap, identity at 1', () => {
+    for (const m of [1, 5, 60, 90, 160, 600]) expect(scaledLiveCap(m, 1, ENTITY_CAP)).toBe(m);
+    expect(scaledLiveCap(60, 0.9, ENTITY_CAP)).toBe(54);
+    expect(scaledLiveCap(120, 1.15, ENTITY_CAP)).toBe(138);
+    expect(scaledLiveCap(160, 1.6, ENTITY_CAP)).toBe(256);
+    expect(scaledLiveCap(1, 0.1, ENTITY_CAP)).toBe(1);
+    expect(scaledLiveCap(400, 1.6, ENTITY_CAP)).toBe(ENTITY_CAP);
+  });
+
+  it('levelWithLiveCap returns the same level when unchanged, else a copy with the scaled cap', () => {
+    const lv = inlineRectLevel(3);
+    expect(levelWithLiveCap(lv, 1, ENTITY_CAP)).toBe(lv);
+    const hi = levelWithLiveCap(lv, 1.6, ENTITY_CAP);
+    expect(hi).not.toBe(lv);
+    expect(hi.waves.maxLiveEnemies).toBe(Math.round(lv.waves.maxLiveEnemies * 1.6));
+    expect(hi.waves.waves).toBe(lv.waves.waves);
+    expect(hi.seed).toBe(lv.seed);
   });
 
   it('startingLives adds extraLives with a minimum of 1', () => {
@@ -106,7 +126,48 @@ describe('GameOptions.difficulty', () => {
     expect(spawnsAfter(waveLevel(4), 'easy', 1.5)).toBe(3);
     expect(spawnsAfter(waveLevel(4), 'hard', 1.5)).toBe(5);
     expect(spawnsAfter(waveLevel(1), 'easy', 1.5)).toBe(1);
-    expect(spawnsAfter(waveLevel(8), 'hard', 1.5)).toBe(10);
+    expect(spawnsAfter(waveLevel(8), 'hard', 1.5)).toBe(9);
+    expect(spawnsAfter(waveLevel(8), 'easy', 1.5)).toBe(7);
+    expect(spawnsAfter(waveLevel(10), 'hard', 1.5)).toBe(12);
+  });
+
+  it('R5: spawnRate steps about 15 percent per difficulty, Normal exactly 1', () => {
+    expect(DIFFICULTY.easy.spawnRate).toBe(0.87);
+    expect(DIFFICULTY.normal.spawnRate).toBe(1);
+    expect(DIFFICULTY.hard.spawnRate).toBe(1.15);
+    expect(DIFFICULTY.insane.spawnRate).toBe(1.32);
+    expect(DIFFICULTY.normal.spawnRate / DIFFICULTY.easy.spawnRate).toBeCloseTo(1.15, 1);
+    expect(DIFFICULTY.insane.spawnRate / DIFFICULTY.hard.spawnRate).toBeCloseTo(1.15, 1);
+  });
+
+  it('R5: liveCapScale scales the level maxLiveEnemies, Normal keeps the level object', () => {
+    const lv = waveLevel(4);
+    const max = lv.waves.maxLiveEnemies;
+    const cap = (d: 'easy' | 'normal' | 'hard' | 'insane'): number => createGame(lv, { vibrate: () => undefined, difficulty: d }).level.waves.maxLiveEnemies;
+    expect(createGame(lv, { vibrate: () => undefined }).level).toBe(lv);
+    expect(cap('normal')).toBe(max);
+    expect(cap('easy')).toBe(Math.round(max * 0.9));
+    expect(cap('hard')).toBe(Math.round(max * 1.15));
+    expect(cap('insane')).toBe(Math.round(max * 1.6));
+    expect(lv.waves.maxLiveEnemies).toBe(max); // input never mutated
+  });
+
+  it('R5: a raised cap lets more wave enemies live at once', () => {
+    const lv = waveLevel(10);
+    const capped = { ...lv, waves: { ...lv.waves, maxLiveEnemies: 6 } };
+    const peak = (d: 'normal' | 'hard' | 'insane'): number => {
+      const w = createGame(capped, { vibrate: () => undefined, difficulty: d });
+      gs(w).invulnerable = true;
+      let m = 0;
+      for (let i = 0; i < Math.round(1.5 / DT); i++) {
+        stepGame(w, DT, idle());
+        m = Math.max(m, countWaveEnemies(w));
+      }
+      return m;
+    };
+    expect(peak('normal')).toBe(6);
+    expect(peak('hard')).toBe(7); // round(6 x 1.15)
+    expect(peak('insane')).toBe(10); // round(6 x 1.6) = 10, wave count round(10 x 1.32) = 13
   });
 
   it('starting lives add extraLives with a minimum of 1', () => {
