@@ -1,0 +1,15 @@
+HAND-OFF thumbs: buttons
+Branch: feat/thumbs-buttons  Head: c71d20c (code; this hand-off is the next commit)
+Files changed: src/input/stack.ts (new: sizes and spacing), src/input/buttons.ts, src/input/reach.ts, src/ui/hudFrame.ts; tests/input/{reach,buttons,reanchor,visuals}.test.ts, tests/ui/{hud,hudFrame}.test.ts
+Tests added: reach.test.ts rewritten (16: positions on cover and main, vertical stack 12 px apart, safe area with notch, status and gesture insets, no overlap with the HUD top band, any HUD box, the play rect or the aim ring from every zone anchor, stretch numbers); buttons.test.ts (4 positions, 12 px dead gap); fixtures updated in reanchor, visuals, hud, hudFrame
+npm test: 4670 pass, 1 fail (accepted generator perf timing, also fails on main)  npm run build: pass
+Layout: super on top, bomb under it, 64 px hit circles (visual rings 52 and 60), 12 px apart, centred 44 px in from the right safe edge (36 on main, clamped by the 68 px column). The bomb bottom edge sits 144 px (stick radius 120 plus 24) above the rest zone top. Cover: stack just under pause (super 64 to 128, bomb 140 to 204). Main: as low as that clearance allows (super 398, bomb 474 to 538).
+Reach model: the rest zone is 160 x 64 px, its bottom right corner 96 px in from the right safe edge and 4 px up from the bottom, which is where the thumb sat under the old buttons. On the cover the zone top is trimmed so the stack fits under pause: 59 px tall with no insets, 19 px at worst (24 top plus 16 bottom). Ring clearance is at least 24 px from every anchor. Stretch from the zone to the near edge of each hit circle: bomb 151.5 px (2.4 cm) on the cover, 153.9 px (2.8 cm) on main; super 225.3 px (3.6 cm) on the cover, 227.0 px (4.1 cm) on main. The allowed band is 144 to 240 px.
+How to verify on device:
+1. Folded cover, start any level: super and bomb sit one above the other at the top right, just under pause. The super label, lives and bombs text now sit under the bomb.
+2. Rest your right thumb low on the right and aim in full circles: the ring never covers either button.
+3. From that rest spot, reach up for bomb, then super, without moving your hand. Both should fire on the first tap.
+4. Unfold, start a level, repeat steps 2 and 3. On main the stack is mid height on the right edge, above the thumb.
+Dependencies requested: none
+Requests (changes outside my ownership): none. hudFrame now drops the main bottom band (arrangement topBottom) because the buttons no longer sit at the bottom; hud.ts needed no change.
+Known gaps: main level 20 (1500x1000) ship speed falls from 212 or more to 205 px/s (1 percent under B6) without the bottom band, while levels 1 and 6 get faster. With both 24 px top and 16 px bottom insets, a cover view under 408 px tall leaves the rest zone under 16 px, and at 392 px or less (the 840 x 360 test view) it collapses to 0 and clear.ts pushes the drawn ring instead. The stretch numbers use estimated px per cm; Ryan should confirm the super stretch feels comfortable.
