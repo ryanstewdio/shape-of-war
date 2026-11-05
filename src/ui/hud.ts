@@ -7,7 +7,11 @@
 // GW1: a drone indicator beside the weapon indicator ('fx:droneArm', 'hud:droneWeapon',
 // 'fx:droneExpire') and a combine flash with a "combined" caption on the weapon indicator
 // ('fx:weaponCombine'), both driven by the pure state machine in indicator.ts.
+// thumbs-button-look: the bomb and super buttons are arcade discs (fill, neon rim, a ring of pixel
+// cells, alphas from src/input/buttonLook.ts) in their palette colours at the saturation applyNeon
+// last set, read through onNeonChanged. One pixel font label sits above each.
 import type { Bus, Events, WeaponKind } from '../core/events';
+import { pixelRing, RIM_W, superPaint, buttonPaint, type ButtonPaint } from '../input/buttonLook';
 import type { Insets, Rect } from '../input/types';
 import type { BossId, SuperKind } from '../levelgen/leveldef';
 import {
@@ -37,8 +41,10 @@ import {
   type IndicatorState,
 } from './indicator';
 import { formatInt, iconRun } from './format';
-import { aspectClass, type AspectClass, type HudBox, type HudFrame } from './hudFrame';
+import { aspectClass, BOMB_TEXT, superText, type AspectClass, type HudBox, type HudFrame } from './hudFrame';
 import type { ObjectiveProgress } from './objective';
+import { getNeonState, onNeonChanged, type NeonParams, type PaletteKey } from '../render/neon';
+import { glowBlur, setVectorText, toneColour } from './vectorFont';
 import { weaponHue } from './weaponHue';
 
 export { aspectClass, type AspectClass };
@@ -205,14 +211,38 @@ export function weaponGate(
   return { gate: draw ? { lastMs: nowMs, kind: p.kind } : { ...g }, draw };
 }
 
-/** Pure: super ring label, for example "SUPER: HOMING". The drone has no upgrades in v1. */
-export function superLabel(kind: SuperKind): string {
-  return `SUPER: ${kind.toUpperCase()}`;
+/** Pure: the label over the super button, for example "HOMING" ("BOOM" for Detonate on main). */
+export function superLabel(kind: SuperKind, cls: AspectClass = 'cover'): string {
+  return superText(kind, cls);
 }
 
-/** Pure: small hint under the super label, from the charge (0 to 1). */
-export function superHint(charge: number): string {
-  return charge >= 1 ? 'ready: tap ring' : 'charges with geoms';
+/** Palette keys of the two buttons: the bomb colour and the yellow the super ring always had. */
+export const BOMB_KEY: PaletteKey = 'bomb';
+export const SUPER_KEY: PaletteKey = 'yellow';
+
+/** CSS for one button disc: fill (a conic sweep while a super charges), rim and glow. */
+export interface DiscStyle {
+  border: string;
+  background: string;
+  boxShadow: string;
+  cells: string;
+}
+
+/**
+ * Pure: the disc CSS for a paint, a palette key and the neon state. `sweep` is the charged part of
+ * a super in degrees; the rest of the disc uses the paint's rest alpha.
+ */
+export function discStyle(p: ButtonPaint, key: PaletteKey, neon: Pick<NeonParams, 'saturation' | 'glowAlpha'>, sweep = 360): DiscStyle {
+  const c = (a: number): string => toneColour(key, neon.saturation, a);
+  const deg = Math.round(Math.max(0, Math.min(360, sweep)));
+  const background = p.fill === p.rest || deg >= 360 ? c(p.fill) : `conic-gradient(${c(p.fill)} ${deg}deg, ${c(p.rest)} ${deg}deg)`;
+  const blur = glowBlur(neon.glowAlpha);
+  return {
+    border: `${RIM_W}px solid ${c(p.rim)}`,
+    background,
+    boxShadow: `0 0 ${blur}px ${c(0.8 * p.rim)}, inset 0 0 ${blur}px ${c(0.3 * p.rim)}`,
+    cells: c(p.cells),
+  };
 }
 
 /** Pure: "L3  Par 1,000  #abcd1234". */
@@ -230,8 +260,10 @@ export interface Hud {
   /** Free Play infinite lives: the lives slot shows the infinity sign until set off. */
   setInfiniteLives(on: boolean): void;
   setObjective(p: ObjectiveProgress): void;
-  /** Super kind for the ring label. */
+  /** Super kind for the label over the super button. */
   setSuper(kind: SuperKind): void;
+  /** Pressed look: true while a finger holds that button (TouchHandle.buttonVisuals().held). */
+  setHeld(bomb: boolean, superHeld: boolean): void;
   /** Draw the weapon indicator for a hud:weapon payload now, with no throttle. */
   setWeapon(p: HudWeapon): void;
   /** Hide the weapon indicator and forget the throttle: a new world starts on spread. */
@@ -262,6 +294,7 @@ export interface Hud {
    */
   layout(frame: HudFrame, buttons: boolean): void;
   /**
+   * Also follows neon changes (onNeonChanged) for the button colours.
    * Subscribe to 'hud:score', 'hud:weapon', 'hud:boss', 'sim:bossEnter', 'sim:bossDown',
    * 'fx:droneArm', 'hud:droneWeapon', 'fx:droneExpire' and 'fx:weaponCombine'. Returns one
    * unsubscribe function.
@@ -461,14 +494,65 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   const lives = el('div', 'sow-hud-item', '');
   const bombs = el('div', 'sow-hud-item', '');
   const pause = el('div', 'sow-hud-item');
-  const bombRing = el('div', 'sow-hud-ring', '');
-  const superRing = el('div', 'sow-hud-ring', '');
-  const superName = el('div', 'sow-hud-item', superLabel('homing'));
-  superName.style.color = 'hsl(55, 95%, 70%)';
-  superName.style.fontWeight = '600';
-  const superTip = el('div', 'sow-hud-item', superHint(0));
-  superTip.style.opacity = '0.7';
-  root.append(bar, objLabel, score, mult, weaponBar, weaponLabel, droneBar, droneLabel, par, bossBarEl, bossNameEl, bossPipsEl, bannerEl, lives, bombs, pause, bombRing, superRing, superName, superTip);
+  const bombRing = el('div', 'sow-hud-ring');
+  const superRing = el('div', 'sow-hud-ring');
+  bombRing.setAttribute('data-hud', 'bomb-button');
+  superRing.setAttribute('data-hud', 'super-button');
+  // Cells first, then the bomb count, so the count paints over the cell ring.
+  const bombCells = el('div');
+  const superCells = el('div');
+  const bombCount = el('span', '', '');
+  bombCount.style.position = 'relative';
+  bombRing.append(bombCells, bombCount);
+  superRing.append(superCells);
+  const bombLabel = el('div', 'sow-hud-item');
+  bombLabel.setAttribute('data-hud', 'bomb-label');
+  const superName = el('div', 'sow-hud-item');
+  superName.setAttribute('data-hud', 'super-label');
+  root.append(bar, objLabel, score, mult, weaponBar, weaponLabel, droneBar, droneLabel, par, bossBarEl, bossNameEl, bossPipsEl, bannerEl, lives, bombs, pause, bombRing, superRing, bombLabel, superName);
+  // Button look state: neon from applyNeon, bombs and charge from hud:score, held from setHeld.
+  let neon: NeonParams = getNeonState().params;
+  let bombsLeft = 1;
+  let charge = 0;
+  let heldBomb = false;
+  let heldSuper = false;
+  let superKind: SuperKind = 'homing';
+  let labelCls: AspectClass = 'cover';
+  let cellsD = 0;
+  const paintButtons = (): void => {
+    const b = discStyle(buttonPaint({ held: heldBomb, ready: bombsLeft > 0 }), BOMB_KEY, neon);
+    const sp = superPaint(charge, heldSuper);
+    const su = discStyle(sp, SUPER_KEY, neon, Math.max(0, Math.min(1, charge)) * 360);
+    for (const [ring, cells, d] of [[bombRing, bombCells, b], [superRing, superCells, su]] as const) {
+      ring.style.border = d.border;
+      ring.style.background = d.background;
+      ring.style.boxShadow = d.boxShadow;
+      cells.style.color = d.cells;
+    }
+    bombCount.style.color = toneColour(BOMB_KEY, neon.saturation, bombsLeft > 0 ? 1 : 0.5);
+  };
+  /** The pixel cell ring: one absolutely placed square per cell, drawn in currentColor. */
+  const buildCells = (host: HTMLElement, d: number): void => {
+    const s = host.style;
+    s.position = 'absolute';
+    s.left = `${-RIM_W}px`;
+    s.top = `${-RIM_W}px`;
+    s.width = `${d}px`;
+    s.height = `${d}px`;
+    s.pointerEvents = 'none';
+    const squares = pixelRing(d).map((c) => {
+      const q = el('div');
+      q.style.cssText = `position:absolute;left:${c.x}px;top:${c.y}px;width:${c.s}px;height:${c.s}px;background:currentColor`;
+      return q;
+    });
+    host.replaceChildren(...squares);
+  };
+  const paintLabels = (): void => {
+    setVectorText(bombLabel, BOMB_TEXT, { tone: 'cyan' });
+    setVectorText(superName, superLabel(superKind, labelCls), { tone: 'yellow' });
+  };
+  paintButtons();
+  paintLabels();
   parent.append(root);
   // On main the boss bar takes the level line's slot, so the line steps aside while a boss lives.
   const syncPar = (): void => {
@@ -493,17 +577,24 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
       mult.textContent = t.mult;
       lives.textContent = t.lives;
       bombs.textContent = t.bombs;
-      bombRing.textContent = t.bombCount;
-      const deg = Math.round(t.charge * 360);
-      superRing.style.background = `conic-gradient(hsla(55, 95%, 60%, 0.55) ${deg}deg, transparent ${deg}deg)`;
-      superTip.textContent = superHint(t.charge);
+      bombCount.textContent = t.bombCount;
+      bombsLeft = Math.max(0, Math.floor(p.bombs));
+      charge = t.charge;
+      paintButtons();
     },
     setInfiniteLives(on) {
       infiniteLives = on;
       if (on) lives.textContent = INFINITE_LIVES_TEXT;
     },
     setSuper(kind) {
-      superName.textContent = superLabel(kind);
+      superKind = kind;
+      paintLabels();
+    },
+    setHeld(bomb, superHeld) {
+      if (bomb === heldBomb && superHeld === heldSuper) return;
+      heldBomb = bomb;
+      heldSuper = superHeld;
+      paintButtons();
     },
     setWeapon(p) {
       const v = weaponView(p);
@@ -641,13 +732,27 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
       }
       frameCls = frame.cls;
       syncPar();
-      setBox(superName, B.superLabel, true);
-      setBox(superTip, B.superHint, true);
+      for (const [e, b] of [[superName, B.superLabel], [bombLabel, B.bombLabel]] as const) {
+        setBox(e, b, true);
+        // Pixel labels: centred in the box, top aligned, glow not clipped.
+        e.style.overflow = 'visible';
+        e.style.lineHeight = '1';
+        e.style.justifyContent = 'center';
+        e.style.alignItems = 'flex-start';
+      }
+      if (frame.cls !== labelCls) {
+        labelCls = frame.cls;
+        paintLabels();
+      }
       place(pause, frame.buttons.pause, frame.pauseIcon);
       place(bombRing, frame.buttons.bomb, frame.bombD);
       place(superRing, frame.buttons.super, frame.superD);
-      for (const e of [pause, bombRing, superRing]) e.style.display = buttons ? 'flex' : 'none';
-      for (const e of [superName, superTip]) e.style.display = buttons ? '' : 'none';
+      if (frame.bombD !== cellsD) {
+        cellsD = frame.bombD;
+        buildCells(bombCells, frame.bombD);
+        buildCells(superCells, frame.superD);
+      }
+      for (const e of [pause, bombRing, superRing, superName, bombLabel]) e.style.display = buttons ? 'flex' : 'none';
     },
     listen(bus) {
       const offScore = bus.on('hud:score', (p) => {
@@ -689,7 +794,12 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
         hud.clearBoss();
         bossDownSeen = true;
       });
+      const offNeon = onNeonChanged((p) => {
+        neon = p;
+        paintButtons();
+      });
       return () => {
+        offNeon();
         offScore();
         offWeapon();
         offBoss();

@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BOMB_HIT,
+  BOMB_VISUAL,
   hitButton,
   layoutButtons,
   PAUSE_HIT,
@@ -115,11 +116,12 @@ describe('aim rest zone', () => {
     }
   });
 
-  it('cover with no insets: 59 px tall, trimmed so the stack fits under pause; main: the full 64 px', () => {
-    expect(aimRestZone(960, 411, ZERO)).toEqual({ x: 704, y: 348, w: 160, h: 59 });
+  it('cover with no insets: 51 px tall, trimmed so the stack and its label fit under pause; main: the full 64 px', () => {
+    expect(aimRestZone(960, 411, ZERO)).toEqual({ x: 704, y: 356, w: 160, h: 51 });
     expect(aimRestZone(832, 750, ZERO)).toEqual({ x: 576, y: 682, w: 160, h: 64 });
-    // Worst case on the cover: status bar and gesture bar insets together still leave 19 px.
-    expect(aimRestZone(960, 411, { top: 24, right: 0, bottom: 16, left: 0 }).h).toBe(19);
+    // Worst case on the cover: status bar and gesture bar insets together still leave 11 px
+    // (19 before thumbs-button-look: the super label costs 8 px).
+    expect(aimRestZone(960, 411, { top: 24, right: 0, bottom: 16, left: 0 }).h).toBe(11);
   });
 
   it('distToRect is zero inside and euclidean outside', () => {
@@ -133,8 +135,9 @@ describe('aim rest zone', () => {
 describe('super and bomb stack positions', () => {
   it('exact positions on both aspect classes, HUD frame at zero insets', () => {
     const cover = hudFrame(960, 411, ZERO, 1600, 1000);
-    expect(cover.buttons.super).toEqual({ x: 884, y: 64, w: 64, h: 64 });
-    expect(cover.buttons.bomb).toEqual({ x: 884, y: 140, w: 64, h: 64 });
+    // thumbs-button-look: 50 in from the right edge and 12 lower, so the super label fits under pause.
+    expect(cover.buttons.super).toEqual({ x: 878, y: 72, w: 64, h: 64 });
+    expect(cover.buttons.bomb).toEqual({ x: 878, y: 148, w: 64, h: 64 });
     const main = hudFrame(832, 750, ZERO, 1600, 1000);
     // The 68 px main column clamps the centre to 832 - 36 = 796.
     expect(main.buttons.super).toEqual({ x: 764, y: 398, w: 64, h: 64 });
@@ -151,7 +154,7 @@ describe('super and bomb stack positions', () => {
         expect(r.h, c.label).toBe(r.w);
         const edge = c.w - c.insets.right - (r.x + r.w);
         expect(edge, `${c.label} gap to right safe edge`).toBeGreaterThanOrEqual(0);
-        expect(edge, `${c.label} gap to right safe edge`).toBeLessThanOrEqual(16);
+        expect(edge, `${c.label} gap to right safe edge`).toBeLessThanOrEqual(18);
       }
     }
   });
@@ -179,6 +182,11 @@ describe('super and bomb stack positions', () => {
         expect(overlaps(r, f.playRect), `${c.label} play rect`).toBe(false);
         for (const [id, b] of Object.entries(f.boxes)) {
           if (b.w <= 0 || b.h <= 0) continue;
+          // A button's own label sits over the top margin of its hit square, never on its disc.
+          if ((r === bomb && id === 'bombLabel') || (r === sup && id === 'superLabel')) {
+            expect(b.y + b.h, `${c.label} ${id} on its disc`).toBeLessThanOrEqual(r.y + (r.h - BOMB_VISUAL) / 2);
+            continue;
+          }
           expect(overlaps(r, b), `${c.label} vs ${id}`).toBe(false);
         }
       }
@@ -228,13 +236,13 @@ describe('ring and reach from the rest zone', () => {
     }
   });
 
-  it('the stated numbers: bomb about 152 px (2.4 cm cover, 2.8 cm main), super about 226 px (3.6 and 4.1 cm)', () => {
+  it('the stated numbers: bomb about 150 px (2.4 cm cover, 2.8 cm main), super about 225 px (3.6 and 4.1 cm)', () => {
     const cover = hudFrame(960, 411, ZERO, 1600, 1000);
     const main = hudFrame(832, 750, ZERO, 1600, 1000);
     const zc = aimRestZone(960, 411, ZERO);
     const zm = aimRestZone(832, 750, ZERO);
-    expect(reachGap(zc, cover.buttons.bomb)).toBeCloseTo(151.5, 1);
-    expect(reachGap(zc, cover.buttons.super)).toBeCloseTo(225.3, 1);
+    expect(reachGap(zc, cover.buttons.bomb)).toBeCloseTo(149.9, 1);
+    expect(reachGap(zc, cover.buttons.super)).toBeCloseTo(224.2, 1);
     expect(reachGap(zm, main.buttons.bomb)).toBeCloseTo(153.9, 1);
     expect(reachGap(zm, main.buttons.super)).toBeCloseTo(227.0, 1);
   });
@@ -253,15 +261,15 @@ describe('ring and reach from the rest zone', () => {
 });
 
 describe('stackCentreX', () => {
-  it('sits STACK_RIGHT (44) in from the right edge of a wide button area', () => {
-    expect(stackCentreX(832, ZERO)).toBe(788);
-    expect(stackCentreX(960, { top: 0, right: 40, bottom: 0, left: 0 })).toBe(876);
+  it('sits STACK_RIGHT (50) in from the right edge of a wide button area', () => {
+    expect(stackCentreX(832, ZERO)).toBe(782);
+    expect(stackCentreX(960, { top: 0, right: 40, bottom: 0, left: 0 })).toBe(870);
   });
 
   it('clamps inside a column narrower than the stack offset needs', () => {
     // Main right column: 68 px wide, the 64 px hit circle must stay inside it.
     expect(stackCentreX(832, { top: 0, right: 0, bottom: 0, left: 764 })).toBe(796);
     // Cover right column: 112 px wide, no clamp needed.
-    expect(stackCentreX(960, { top: 0, right: 0, bottom: 0, left: 848 })).toBe(916);
+    expect(stackCentreX(960, { top: 0, right: 0, bottom: 0, left: 848 })).toBe(910);
   });
 });

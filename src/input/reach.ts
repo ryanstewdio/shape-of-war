@@ -21,8 +21,11 @@ export const REST_BOTTOM = 4;
 /** Zone size, extending up and left of its bottom right corner (about 1 cm tall). */
 export const REST_W = 160;
 export const REST_H = 64;
-/** Smallest zone height the trimmed cover layout may give. */
-export const REST_MIN_H = 16;
+/**
+ * Smallest zone height the trimmed cover layout may give. thumbs-button-look: the super label
+ * pushes the cover stack 8 px lower, so the worst inset case (24 top, 16 bottom) leaves 11 px.
+ */
+export const REST_MIN_H = 8;
 
 /**
  * Comfortable thumb stretch from the rest zone to the near edge of a button hit circle. The minimum
