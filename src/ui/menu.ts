@@ -8,9 +8,8 @@
 // The geometry comes from the pure menuLayout: one stacked column on the main screen, and on the
 // short cover screen the title on the left with the rows and the info line under them on the
 // right, so four rows at the 44 px minimum still fit with room to spare.
-// How to (Ryan): a sixth row in a yellow frame opens the How to guide. It sits under the five rows
-// when stacked and under the info line in the title column on the cover screen, so the rows column
-// keeps its height and the short cover screen still fits.
+// How to (Ryan): a row in a yellow frame opens the How to guide. Polish r9: it sits directly above
+// Settings, and every row label is drawn in the pixel font.
 import type { Insets, Rect } from '../input/types';
 import { button, createScreen, el, MIN_HIT_PX, type Screen } from './dom';
 import { aspectClass } from './hudFrame';
@@ -20,7 +19,7 @@ export const GAME_TITLE = 'Shapes of War';
 export const SHOW_ENDLESS = true;
 /** Delay between one row's entrance and the next. */
 export const MENU_STAGGER_MS = 200;
-export const MENU_ROWS = 5; // R2: Adventure, Level select, Endless, Free Play, Settings
+export const MENU_ROWS = 6; // Adventure, Level select, Endless, Free Play, How to, Settings
 /** Clear space kept between the panel and the safe area edge: room for the outer border and glow. */
 export const MENU_MARGIN = 12;
 /**
@@ -42,6 +41,8 @@ export interface MenuActions {
 
 /** Label on the How to row. */
 export const HOW_TO_LABEL = 'How to';
+/** Index of the How to row: directly above Settings, the last row. */
+export const HOW_TO_ROW = MENU_ROWS - 2;
 
 export interface MenuScreen extends Screen {
   /** Subtitle under the buttons, for example "Level 3  Seed 42". */
@@ -124,6 +125,8 @@ const TIERS: readonly Tier[] = [
   { rowH: 56, rowGap: 12, pad: 22, sectionGap: 14, titleMax: 52, rowSize: 18, infoSize: 15, footSize: 11 },
   { rowH: 48, rowGap: 10, pad: 18, sectionGap: 10, titleMax: 40, rowSize: 16, infoSize: 14, footSize: 11 },
   { rowH: MIN_HIT_PX, rowGap: 6, pad: 12, sectionGap: 6, titleMax: 30, rowSize: 15, infoSize: 13, footSize: 10 },
+  // Six rows on the short cover screen: the last tier trims the gaps, never the 44 px hit height.
+  { rowH: MIN_HIT_PX, rowGap: 3, pad: 8, sectionGap: 4, titleMax: 30, rowSize: 15, infoSize: 12, footSize: 10 },
 ];
 
 const lineH = (size: number, k: number): number => Math.round(size * k);
@@ -148,11 +151,11 @@ function build(safe: Rect, arrangement: MenuArrangement, t: Tier): MenuLayout {
   let bodyH: number;
   // R2: five rows. On the cover screen the info line sits under the title in the left column, so the
   // rows column holds only the rows and the panel still fits the short screen.
-  const howH = t.rowH;
-  const leftH = titleH + t.sectionGap + infoH + t.sectionGap + howH;
+  // Cover screen: the footer joins the title column, so six 44 px rows still fit the short screen.
+  const leftH = titleH + t.sectionGap + infoH + t.sectionGap + fH;
   if (arrangement === 'side') bodyH = Math.max(leftH, rowsH);
-  else bodyH = titleH + t.sectionGap + rowsH + t.sectionGap + howH + t.sectionGap + infoH;
-  const panelH = 2 * t.pad + bodyH + t.sectionGap + fH;
+  else bodyH = titleH + t.sectionGap + rowsH + t.sectionGap + infoH;
+  const panelH = 2 * t.pad + bodyH + (arrangement === 'side' ? 0 : t.sectionGap + fH);
   const panel: Rect = { x: safe.x + (safe.w - panelW) / 2, y: safe.y + (safe.h - panelH) / 2, w: panelW, h: panelH };
   const ix = panel.x + t.pad;
   const iy = panel.y + t.pad;
@@ -160,23 +163,23 @@ function build(safe: Rect, arrangement: MenuArrangement, t: Tier): MenuLayout {
   let rowsY: number;
   let title: Rect;
   let info: Rect;
-  let howTo: Rect;
   if (arrangement === 'side') {
     rowsX = ix + leftW + colGap;
     rowsY = iy + (bodyH - rowsH) / 2;
     title = { x: ix, y: iy + (bodyH - leftH) / 2, w: leftW, h: titleH };
     info = { x: ix, y: title.y + titleH + t.sectionGap, w: leftW, h: infoH };
-    howTo = { x: ix, y: info.y + infoH + t.sectionGap, w: leftW, h: howH };
   } else {
     rowsX = ix;
     rowsY = iy + titleH + t.sectionGap;
     title = { x: ix, y: iy, w: innerW, h: titleH };
-    howTo = { x: ix, y: rowsY + rowsH + t.sectionGap, w: innerW, h: howH };
-    info = { x: ix, y: howTo.y + howH + t.sectionGap, w: innerW, h: infoH };
+    info = { x: ix, y: rowsY + rowsH + t.sectionGap, w: innerW, h: infoH };
   }
   const rows: Rect[] = [];
   for (let i = 0; i < MENU_ROWS; i++) rows.push({ x: rowsX, y: rowsY + i * (t.rowH + t.rowGap), w: rightW, h: t.rowH });
-  const foot: Rect = { x: ix, y: iy + bodyH + t.sectionGap, w: innerW, h: fH };
+  // How to is the fifth row, directly above Settings; the rect is kept for callers that name it.
+  const howTo = rows[HOW_TO_ROW] as Rect;
+  const foot: Rect =
+    arrangement === 'side' ? { x: ix, y: info.y + infoH + t.sectionGap, w: leftW, h: fH } : { x: ix, y: iy + bodyH + t.sectionGap, w: innerW, h: fH };
   const fits =
     panel.x >= safe.x + MENU_MARGIN - 1e-6 &&
     panel.y >= safe.y + MENU_MARGIN - 1e-6 &&
@@ -245,11 +248,12 @@ export function createMenuScreen(parent: HTMLElement, actions: MenuActions): Men
   };
   const row = (label: string, act: () => void): HTMLButtonElement => {
     const index = rows.length;
-    const b = button(label, () => {
+    const b = button('', () => {
       focus = index;
       paintFocus();
       act();
     });
+    setVectorText(b, label, { tone: 'white' });
     b.classList.add('sow-menu-row');
     b.style.animationDelay = rowDelay(index);
     rows.push(b);
@@ -259,18 +263,17 @@ export function createMenuScreen(parent: HTMLElement, actions: MenuActions): Men
   const levels = row('Level select', () => actions.levels());
   const endless = row('Endless', () => actions.endless());
   const freePlay = row('Free Play', () => actions.freePlay());
-  const settings = row('Settings', () => actions.settings());
-  endless.style.display = SHOW_ENDLESS ? '' : 'none';
-  rowsBox.append(adventure, levels, endless, freePlay, settings);
   const howTo = row(HOW_TO_LABEL, () => actions.howTo());
   howTo.classList.add('sow-menu-howto');
-  howTo.style.gridArea = 'howto';
+  const settings = row('Settings', () => actions.settings());
+  endless.style.display = SHOW_ENDLESS ? '' : 'none';
+  rowsBox.append(adventure, levels, endless, freePlay, howTo, settings);
   paintFocus();
   const info = el('div', 'sow-menu-info', '');
   info.style.gridArea = 'info';
   const foot = el('div', 'sow-menu-foot', '');
   foot.style.gridArea = 'foot';
-  panel.append(title, rowsBox, howTo, info, foot);
+  panel.append(title, rowsBox, info, foot);
   s.root.append(panel);
   return {
     ...s,
@@ -278,7 +281,7 @@ export function createMenuScreen(parent: HTMLElement, actions: MenuActions): Men
       info.textContent = text;
     },
     setContinue(text) {
-      adventure.textContent = text;
+      setVectorText(adventure, text, { tone: 'white' });
     },
     setFooter(text) {
       foot.textContent = text;
@@ -292,22 +295,21 @@ export function createMenuScreen(parent: HTMLElement, actions: MenuActions): Men
       p.rowGap = `${L.sectionGap}px`;
       if (L.arrangement === 'side') {
         p.gridTemplateColumns = `${L.leftW}px ${L.rightW}px`;
-        p.gridTemplateRows = 'auto auto auto auto';
-        p.gridTemplateAreas = '"title rows" "info rows" "howto rows" "foot foot"';
+        p.gridTemplateRows = 'auto auto auto';
+        p.gridTemplateAreas = '"title rows" "info rows" "foot rows"';
         p.columnGap = `${L.colGap}px`;
         title.style.alignSelf = 'end';
         info.style.alignSelf = 'start';
       } else {
         p.gridTemplateColumns = '1fr';
         p.gridTemplateRows = 'auto';
-        p.gridTemplateAreas = '"title" "rows" "howto" "info" "foot"';
+        p.gridTemplateAreas = '"title" "rows" "info" "foot"';
         p.columnGap = '0px';
         title.style.alignSelf = '';
         info.style.alignSelf = '';
       }
       title.style.fontSize = `${L.titleSize}px`;
       rowsBox.style.gap = `${L.rowGap}px`;
-      howTo.style.alignSelf = L.arrangement === 'side' ? 'start' : '';
       for (const r of rows) {
         r.style.height = `${L.rowH}px`;
         r.style.minHeight = `${L.rowH}px`;

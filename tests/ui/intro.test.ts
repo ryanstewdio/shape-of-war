@@ -261,6 +261,16 @@ describe('R3 intro card text', () => {
       expect(outside.some((t) => t.includes('987654'))).toBe(false);
     });
 
+    it('polish r9: the Endless card drops the New enemies block even when new foes are passed', () => {
+      const root = installFakeDocument();
+      const screen = createIntroScreen(asParent(root), () => undefined);
+      const card = endlessIntroCard({}, 'normal', { newFoes: ['grunt', 'dart'] });
+      expect(card.enemies).toEqual([]);
+      screen.showCard(card);
+      expect(byIntro(root, 'enemies')?.style.display).toBe('none');
+      expect(root.all().some((e) => e.getAttribute('data-foe-row') !== null)).toBe(false);
+    });
+
     it('hides empty blocks: no new enemies, no stars in Endless, no details', () => {
       const root = installFakeDocument();
       const screen = createIntroScreen(asParent(root), () => undefined);

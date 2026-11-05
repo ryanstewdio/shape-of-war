@@ -95,6 +95,15 @@ describe('Free Play setup screen controls', () => {
     expect(kids[2]?.children.map((b) => b.textContent)).toEqual(['Start', 'Back']);
   });
 
+  it('polish r9: Back is in the pixel font like Start', () => {
+    const { root } = open();
+    for (const label of ['Start', 'Back']) {
+      const b = root.all().find((e) => e.tag === 'button' && e.getAttribute('data-vec-label') === label || (e.tag === 'button' && e.textContent === label));
+      expect(b?.classList.contains('sow-vec-host'), label).toBe(true);
+      expect(b?.all().some((e) => e.tag === 'svg'), label).toBe(true);
+    }
+  });
+
   it('every single choice row writes its own field and nothing else', () => {
     expect(checkRow(SIZE_ROW_LABEL, 'size', FREE_PLAY_SIZES)).toBe(3);
     expect(checkRow(DENSITY_ROW_LABEL, 'density', FREE_PLAY_DENSITIES)).toBe(3);

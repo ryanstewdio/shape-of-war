@@ -209,6 +209,9 @@ export const VECTOR_TONES = {
   yellow: { fill: 'yellow', glow: 'yellow' },
   green: { fill: 'geom', glow: 'green' },
   red: { fill: 'red', glow: 'red' },
+  orange: { fill: 'orange', glow: 'orange' },
+  purple: { fill: 'purple', glow: 'purple' },
+  magenta: { fill: 'magenta', glow: 'magenta' },
 } as const satisfies Record<string, { fill: PaletteKey; glow: PaletteKey }>;
 
 export type VectorTone = keyof typeof VECTOR_TONES;

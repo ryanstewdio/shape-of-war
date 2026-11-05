@@ -21,7 +21,7 @@ import { button, createScreen, el, type Screen } from './dom';
 import { FOE_INFO, iconCanvas, paletteCss, specCanvas, type FoeKind, type FoeType } from './enemyIntro';
 import { iconStrokes, strokeCanvas, type Stroke } from './parReward';
 import { difficultyLabel } from './settings';
-import { setVectorText } from './vectorFont';
+import { setVectorText, type VectorTone } from './vectorFont';
 
 export const HOW_TO_TITLE = 'How to';
 /** Hard ceiling per page section (tests); the writing aims for about 30. */
@@ -46,6 +46,8 @@ export interface HowToItem {
   readonly icon: HowToIcon;
   readonly name: string;
   readonly text: string;
+  /** Neon colour of the name, so each named item in a list reads apart. */
+  readonly colour?: PaletteKey;
 }
 
 export interface HowToSection {
@@ -53,6 +55,15 @@ export interface HowToSection {
   readonly icon?: HowToIcon;
   readonly lines: readonly string[];
   readonly items: readonly HowToItem[];
+  /** Heading tone when the heading is itself a list title (Survive, Destroy, Score, Boss). */
+  readonly tone?: VectorTone;
+  /** Lead word of a line (the text before its first colon) to neon colour. */
+  readonly leads?: Readonly<Record<string, PaletteKey>>;
+}
+
+export interface SecOpts {
+  readonly tone?: VectorTone;
+  readonly leads?: Readonly<Record<string, PaletteKey>>;
 }
 
 export interface HowToPage {
@@ -61,8 +72,20 @@ export interface HowToPage {
   readonly sections: readonly HowToSection[];
 }
 
-const sec = (heading: string, lines: readonly string[], icon?: HowToIcon, items: readonly HowToItem[] = []): HowToSection =>
-  icon === undefined ? { heading, lines, items } : { heading, icon, lines, items };
+const sec = (heading: string, lines: readonly string[], icon?: HowToIcon, items: readonly HowToItem[] = [], opts: SecOpts = {}): HowToSection => ({
+  heading,
+  lines,
+  items,
+  ...(icon === undefined ? {} : { icon }),
+  ...(opts.tone === undefined ? {} : { tone: opts.tone }),
+  ...(opts.leads === undefined ? {} : { leads: opts.leads }),
+});
+
+/** Pure: the lead word of a line, the text before its first colon, or '' when it has none. */
+export function leadWord(line: string): string {
+  const i = line.indexOf(':');
+  return i > 0 ? line.slice(0, i) : '';
+}
 
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
@@ -151,11 +174,41 @@ export function starCapLines(): string[] {
   );
 }
 
+// ---- Colours for lists of titles ---------------------------------------------------------------
+// Each list gives every named item its own colour from the neon palette. Tests assert no two items
+// in one list share a colour.
+
+/** Goal page headings, one pixel font tone each. */
+export const GOAL_TONES: Readonly<Record<'Survive' | 'Destroy' | 'Score' | 'Boss', VectorTone>> = {
+  Survive: 'green',
+  Destroy: 'red',
+  Score: 'yellow',
+  Boss: 'magenta',
+};
+/** Hazard headings, one pixel font tone each. */
+export const HAZARD_TONES: Readonly<Record<'Gravity wells' | 'Mines and slime' | 'Membranes' | 'Drums', VectorTone>> = {
+  'Gravity wells': 'red',
+  'Mines and slime': 'orange',
+  Membranes: 'purple',
+  Drums: 'cyan',
+};
+export const WEAPON_COLOURS: Readonly<Record<BaseWeaponKind, PaletteKey>> = { spread: 'yellow', rapid: 'rapid', pierce: 'pierce', orbit: 'orbit' };
+export const DRONE_COLOURS: Readonly<Record<DroneKind, PaletteKey>> = { attack: 'red', collect: 'green', ram: 'orange' };
+export const DRONE_MODE_COLOURS: Readonly<Record<DroneMode, PaletteKey>> = { homing: 'homing', detach: 'purple', rapid: 'cyan', double: 'yellow' };
+export const SUPER_COLOURS: Readonly<Record<'Homing' | 'Turbo' | 'Detonate', PaletteKey>> = { Homing: 'homing', Turbo: 'orange', Detonate: 'yellow' };
+export const DIFFICULTY_COLOURS: Readonly<Record<Difficulty, PaletteKey>> = { easy: 'green', normal: 'cyan', hard: 'orange', insane: 'red' };
+export const REWARD_NAME_COLOURS: Readonly<Record<'Life' | 'Bomb' | 'Weapon', PaletteKey>> = { Life: 'green', Bomb: 'bomb', Weapon: 'yellow' };
+
+/** Pure: lead word to colour for the difficulty lines, which start with the difficulty label. */
+export function difficultyLeads(): Record<string, PaletteKey> {
+  return Object.fromEntries(DIFFICULTIES.map((d) => [difficultyLabel(d), DIFFICULTY_COLOURS[d]]));
+}
+
 // ---- The pages -------------------------------------------------------------------------------
 
 /** Pure: the nine pages in order. */
 export function howToPages(): HowToPage[] {
-  const weaponItems = WEAPON_KINDS.map((w): HowToItem => ({ icon: { t: 'reward', icon: w }, name: cap(w), text: WEAPON_WORDS[w] }));
+  const weaponItems = WEAPON_KINDS.map((w): HowToItem => ({ icon: { t: 'reward', icon: w }, name: cap(w), text: WEAPON_WORDS[w], colour: WEAPON_COLOURS[w] }));
   const combos = COMBO_TABLE.map((c) => `${cap(c.a)} + ${cap(c.b)} = ${c.name}`);
   const foeItems = (type: FoeType): HowToItem[] =>
     enemyKinds()
@@ -182,10 +235,10 @@ export function howToPages(): HowToPage[] {
           t: 'draw',
           id: 'goal',
         }),
-        sec('Survive', ['Stay alive until the timer ends.']),
-        sec('Destroy', ['Shoot the number of enemies shown.']),
-        sec('Score', ['Reach the target score before time runs out.']),
-        sec('Boss', ['On a boss level, beat the boss to win.']),
+        sec('Survive', ['Stay alive until the timer ends.'], undefined, [], { tone: GOAL_TONES.Survive }),
+        sec('Destroy', ['Shoot the number of enemies shown.'], undefined, [], { tone: GOAL_TONES.Destroy }),
+        sec('Score', ['Reach the target score before time runs out.'], undefined, [], { tone: GOAL_TONES.Score }),
+        sec('Boss', ['On a boss level, beat the boss to win.'], undefined, [], { tone: GOAL_TONES.Boss }),
       ],
     },
     {
@@ -200,11 +253,17 @@ export function howToPages(): HowToPage[] {
           t: 'draw',
           id: 'superRing',
         }),
-        sec('Kinds of Super', [
-          `Homing: your shots chase enemies for ${SUPER_DURATION} seconds.`,
-          `Turbo: shoot ${TURBO_SCALE} times as fast for ${TURBO_DURATION} seconds. Kills add time, up to ${TURBO_MAX_TOTAL}.`,
-          'Detonate: your drone blows up enemies near it.',
-        ]),
+        sec(
+          'Kinds of Super',
+          [
+            `Homing: your shots chase enemies for ${SUPER_DURATION} seconds.`,
+            `Turbo: shoot ${TURBO_SCALE} times as fast for ${TURBO_DURATION} seconds. Kills add time, up to ${TURBO_MAX_TOTAL}.`,
+            'Detonate: your drone blows up enemies near it.',
+          ],
+          undefined,
+          [],
+          { leads: SUPER_COLOURS },
+        ),
         sec('When to use them', ['Bomb when you are trapped.', 'Super when lots of enemies come.']),
       ],
     },
@@ -228,12 +287,15 @@ export function howToPages(): HowToPage[] {
           'Your drone',
           ['A drone helps you. Nothing can hurt it.'],
           { t: 'shape', kind: 'drone' },
-          DRONE_KINDS.map((d): HowToItem => ({ icon: { t: 'shape', kind: 'drone' }, name: cap(d), text: DRONE_WORDS[d] })),
+          DRONE_KINDS.map((d): HowToItem => ({ icon: { t: 'shape', kind: 'drone' }, name: cap(d), text: DRONE_WORDS[d], colour: DRONE_COLOURS[d] })),
         ),
-        sec('Drone pickups', [`Grab one to power up your drone for ${DRONE_ARM_SEC} seconds.`, ...DRONE_MODES.map((m) => `${cap(m)}: ${DRONE_MODE_WORDS[m]}.`)], {
-          t: 'shape',
-          kind: 'dronePickup',
-        }),
+        sec(
+          'Drone pickups',
+          [`Grab one to power up your drone for ${DRONE_ARM_SEC} seconds.`, ...DRONE_MODES.map((m) => `${cap(m)}: ${DRONE_MODE_WORDS[m]}.`)],
+          { t: 'shape', kind: 'dronePickup' },
+          [],
+          { leads: Object.fromEntries(DRONE_MODES.map((m) => [cap(m), DRONE_MODE_COLOURS[m]])) },
+        ),
       ],
     },
     {
@@ -248,16 +310,16 @@ export function howToPages(): HowToPage[] {
         sec('Gravity wells', ['A well pulls you in. Touching it costs a life.', 'Shoot it to pop it.', 'Wait too long and snakes crawl out.'], {
           t: 'foe',
           kind: 'well',
-        }),
+        }, [], { tone: HAZARD_TONES['Gravity wells'] }),
         sec('Mines and slime', ['Sowers drop mines. Do not touch them.', 'Splimes drop slime. It slows you down.', 'A bomb clears both.'], {
           t: 'shape',
           kind: 'mine',
-        }),
+        }, [], { tone: HAZARD_TONES['Mines and slime'] }),
         sec('Membranes', ['Glowing bars block you and your shots.', 'Enemies squeeze through slowly.', 'They come out angry and fast.'], {
           t: 'draw',
           id: 'membrane',
-        }),
-        sec('Drums', ['On a drum level the floor flows.', 'Watch for the warning, then push back.'], { t: 'draw', id: 'drift' }),
+        }, [], { tone: HAZARD_TONES.Membranes }),
+        sec('Drums', ['On a drum level the floor flows.', 'Watch for the warning, then push back.'], { t: 'draw', id: 'drift' }, [], { tone: HAZARD_TONES.Drums }),
       ],
     },
     {
@@ -265,15 +327,15 @@ export function howToPages(): HowToPage[] {
       title: 'Stars, par and rewards',
       sections: [
         sec('Par', ['Par is the score to beat.', 'Reach par for 1 star.', 'Double par for 2. Four times par for 3.'], { t: 'draw', id: 'star' }),
-        sec('Stars by difficulty', starCapLines(), { t: 'draw', id: 'star4' }),
+        sec('Stars by difficulty', starCapLines(), { t: 'draw', id: 'star4' }, [], { leads: difficultyLeads() }),
         sec(
           'Rewards',
           ['Win and reach par to pick a reward for the next level:'],
           undefined,
           [
-            { icon: { t: 'reward', icon: 'life' }, name: 'Life', text: 'One more life.' },
-            { icon: { t: 'reward', icon: 'bomb' }, name: 'Bomb', text: 'One more bomb.' },
-            { icon: { t: 'reward', icon: 'rapid' }, name: 'Weapon', text: 'Start with a weapon.' },
+            { icon: { t: 'reward', icon: 'life' }, name: 'Life', text: 'One more life.', colour: REWARD_NAME_COLOURS.Life },
+            { icon: { t: 'reward', icon: 'bomb' }, name: 'Bomb', text: 'One more bomb.', colour: REWARD_NAME_COLOURS.Bomb },
+            { icon: { t: 'reward', icon: 'rapid' }, name: 'Weapon', text: 'Start with a weapon.', colour: REWARD_NAME_COLOURS.Weapon },
           ],
         ),
       ],
@@ -282,7 +344,7 @@ export function howToPages(): HowToPage[] {
       id: 'modes',
       title: 'Difficulty and Free Play',
       sections: [
-        sec('Difficulty', [...difficultyLines(), 'Change it in Settings.']),
+        sec('Difficulty', [...difficultyLines(), 'Change it in Settings.'], undefined, [], { leads: difficultyLeads() }),
         sec('Free Play', ['Pick the arena, enemies, weapons and rules.', 'Play as long as you like.', 'No stars here, just fun.']),
         sec('Endless', ['Waves never stop.', 'Beat your high score.']),
       ],
@@ -484,11 +546,24 @@ export interface HowToScreen extends Screen {
 function sectionEl(s: HowToSection): HTMLDivElement {
   const box = el('div', 'sow-howto-section');
   const head = el('div', 'sow-howto-head');
-  setVectorText(head, s.heading, { tone: 'yellow' });
+  setVectorText(head, s.heading, { tone: s.tone ?? 'yellow' });
   const top = el('div', 'sow-howto-top');
   if (s.icon !== undefined) top.append(iconEl(s.icon, HOW_TO_ICON_PX));
   const lines = el('div', 'sow-howto-lines');
-  for (const line of s.lines) lines.append(el('div', 'sow-howto-line', line));
+  for (const line of s.lines) {
+    const lead = leadWord(line);
+    const colour = s.leads?.[lead];
+    if (colour === undefined) {
+      lines.append(el('div', 'sow-howto-line', line));
+      continue;
+    }
+    const row = el('div', 'sow-howto-line');
+    const word = el('span', 'sow-howto-lead', lead);
+    word.style.color = paletteCss(colour);
+    word.setAttribute('data-howto-lead', lead);
+    row.append(word, el('span', '', line.slice(lead.length)));
+    lines.append(row);
+  }
   top.append(lines);
   box.append(head, top);
   if (s.items.length > 0) {
@@ -496,7 +571,9 @@ function sectionEl(s: HowToSection): HTMLDivElement {
     for (const it of s.items) {
       const row = el('div', 'sow-howto-item');
       const words = el('div', 'sow-howto-words');
-      words.append(el('div', 'sow-howto-name', it.name), el('div', 'sow-howto-text', it.text));
+      const name = el('div', 'sow-howto-name', it.name);
+      if (it.colour !== undefined) name.style.color = paletteCss(it.colour);
+      words.append(name, el('div', 'sow-howto-text', it.text));
       row.append(iconEl(it.icon, HOW_TO_ITEM_PX), words);
       list.append(row);
     }
