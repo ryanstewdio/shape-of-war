@@ -911,8 +911,8 @@ describe('boss bar: layout against the buttons on cover and main', () => {
   const main = frames(MAIN_VIEWS);
   const everyFrame = [...cover, ...coverColumn, ...main];
 
-  it('both main arrangements are in the matrix, so the checks below cover the right column and the bottom band', () => {
-    expect(new Set(main.map((f) => f.arrangement))).toEqual(new Set(['topRight', 'topBottom']));
+  it('the main right column is in the matrix (the only main arrangement since thumbs-buttons)', () => {
+    expect(new Set(main.map((f) => f.arrangement))).toEqual(new Set(['topRight']));
     expect(new Set(cover.map((f) => f.arrangement))).toEqual(new Set(['sides']));
     expect(new Set(coverColumn.map((f) => f.arrangement))).toEqual(new Set(['sides']));
   });
@@ -1013,8 +1013,8 @@ describe('boss bar: layout against the buttons on cover and main', () => {
   });
 
   it('the boss boxes are always in the frame, so a boss arriving never moves the arena: play rects stay as before', () => {
-    expect(hudFrame(832, 750, ZERO, 1800, 1000).playRect).toEqual({ x: 0, y: 60, w: 832, h: 750 - 60 - 158 });
-    expect(hudFrame(832, 750, ZERO, 960, 720).playRect).toEqual({ x: 0, y: 60, w: 832 - 92, h: 690 });
+    expect(hudFrame(832, 750, ZERO, 1800, 1000).playRect).toEqual({ x: 0, y: 60, w: 832 - 68, h: 690 });
+    expect(hudFrame(832, 750, ZERO, 960, 720).playRect).toEqual({ x: 0, y: 60, w: 832 - 68, h: 690 });
     // Main ignores the strip option: the same play rect either way.
     expect(hudFrame(832, 750, ZERO, 1800, 1000, { bossStrip: false })).toEqual(hudFrame(832, 750, ZERO, 1800, 1000, { bossStrip: true }));
     // Cover with no boss run keeps the v2 play rect exactly; a boss run takes the strip off the top.
@@ -1149,8 +1149,8 @@ describe('boss text size floor (G3A): 13 px on both screens', () => {
     }
   }
 
-  it('the boss name box is at least 13 px in every layout, cover strip, cover column and both main arrangements', () => {
-    expect(new Set(frames.map((f) => f.arrangement))).toEqual(new Set(['sides', 'topRight', 'topBottom']));
+  it('the boss name box is at least 13 px in every layout, cover strip, cover column and the main column', () => {
+    expect(new Set(frames.map((f) => f.arrangement))).toEqual(new Set(['sides', 'topRight']));
     for (const f of frames) expect(f.boxes.bossName.size, `${f.cssW}x${f.cssH} ${f.arrangement}`).toBeGreaterThanOrEqual(BOSS_TEXT_MIN);
   });
 
@@ -1196,7 +1196,7 @@ describe('boss banner box (G3A): one line, both screens, no overlap', () => {
 
   it('both screens and every arrangement are covered', () => {
     expect(new Set(all.map((f) => f.cls))).toEqual(new Set(['cover', 'main']));
-    expect(new Set(all.map((f) => f.arrangement))).toEqual(new Set(['sides', 'topRight', 'topBottom']));
+    expect(new Set(all.map((f) => f.arrangement))).toEqual(new Set(['sides', 'topRight']));
   });
 
   it('overlaps no HUD box, no bomb, super or pause button, and no boss strip box', () => {

@@ -31,7 +31,7 @@ describe('reanchorModel', () => {
   it('cancels only the stick that left, not the other', () => {
     const m = createModel(COVER.w, COVER.h);
     pointerDown(m, 1, 200, 200);
-    pointerDown(m, 2, 900, 200); // right of the narrower main width
+    pointerDown(m, 2, 900, 300); // right of the narrower main width, under the stacked buttons
     const cancelled = reanchorModel(m, MAIN.w, MAIN.h);
     expect(cancelled).toEqual([2]);
     expect(m.move.active).toBe(true);
