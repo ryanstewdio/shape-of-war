@@ -18,6 +18,8 @@ export {
 } from './model';
 export type { TouchModel, DownResult } from './model';
 export { stickVisuals, buttonVisuals } from './visuals';
+export { buttonPaint, superPaint, pixelRing } from './buttonLook';
+export type { ButtonPaint, ButtonState, Cell } from './buttonLook';
 export { installHistoryGuard } from './history';
 export { startedOnCanvas, touchTargets, makeTouchMoveGuard } from './gesture';
 export type { TouchMoveLike } from './gesture';

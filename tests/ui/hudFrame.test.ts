@@ -8,7 +8,7 @@ import { generateLevel } from '../../src/levelgen/generator';
 import type { SuperKind } from '../../src/levelgen/leveldef';
 import { fitArena } from '../../src/render/layout';
 import { MULTIPLIER_CAP } from '../../src/game/scoring';
-import { hudText, playRect, superHint, superLabel } from '../../src/ui/hud';
+import { hudText, playRect, superLabel } from '../../src/ui/hud';
 import {
   COVER_DRONE_ROW,
   COVER_LEFT,
@@ -431,23 +431,18 @@ describe('GW1 drone indicator boxes', () => {
   });
 });
 
-describe('B6 super ring label', () => {
+describe('super button label (thumbs-button-look)', () => {
   const kinds: SuperKind[] = ['homing', 'detonate', 'turbo'];
 
-  it('names the super kind', () => {
-    expect(superLabel('homing')).toBe('SUPER: HOMING');
-    expect(superLabel('detonate')).toBe('SUPER: DETONATE');
-    expect(superLabel('turbo')).toBe('SUPER: TURBO');
+  it('is just the super name; main says BOOM for Detonate', () => {
+    expect(superLabel('homing')).toBe('HOMING');
+    expect(superLabel('detonate')).toBe('DETONATE');
+    expect(superLabel('turbo')).toBe('TURBO');
+    expect(superLabel('detonate', 'main')).toBe('BOOM');
+    expect(superLabel('homing', 'main')).toBe('HOMING');
   });
 
-  it('hints that it charges with geoms, and never mentions a sidekick or upgrade', () => {
-    expect(superHint(0)).toBe('charges with geoms');
-    expect(superHint(0.5)).toBe('charges with geoms');
-    for (const k of kinds) {
-      for (const c of [0, 0.5, 1]) {
-        const text = `${superLabel(k)} ${superHint(c)}`.toLowerCase();
-        expect(text).not.toMatch(/sidekick|upgrade|drone/);
-      }
-    }
+  it('never mentions a sidekick or upgrade', () => {
+    for (const k of kinds) for (const c of ['cover', 'main'] as const) expect(superLabel(k, c).toLowerCase()).not.toMatch(/sidekick|upgrade|drone/);
   });
 });

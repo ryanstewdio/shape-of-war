@@ -17,6 +17,10 @@ import type { ButtonId, ButtonRects, Insets, Rect } from './types';
 export {
   BOMB_HIT,
   BOMB_VISUAL,
+  BUTTON_HIT,
+  BUTTON_VISUAL,
+  LABEL_H,
+  LABEL_RISE,
   PAUSE_HIT,
   PAUSE_INSET,
   PAUSE_VISUAL,

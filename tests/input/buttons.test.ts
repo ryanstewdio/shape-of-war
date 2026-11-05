@@ -9,36 +9,38 @@ const MAIN = { w: 840, h: 756 }; // about 10:9
 const INSETS: Insets = { top: 10, right: 48, bottom: 20, left: 32 };
 
 describe('layoutButtons', () => {
-  // thumbs-buttons: super on top, bomb under it, 64 px hit circles 12 px apart, centre 44 px in from
-  // the safe right edge, the bomb bottom edge 144 px (stick radius plus 24) above the aim rest zone.
+  // thumbs-buttons: super on top, bomb under it, 64 px hit circles 12 px apart, the bomb bottom edge
+  // 144 px (stick radius plus 24) above the aim rest zone. thumbs-button-look: centre 50 px in from
+  // the safe right edge (room for the 96 px DETONATE label), and on the cover the super sits 12 px
+  // under pause so its label fits between them.
   it('21:9 without insets: the stack rises to just under pause', () => {
     const r = layoutButtons(COVER.w, COVER.h, ZERO_INSETS);
-    // Zone top 348 (trimmed: pause bottom 60 + 4 + 140 stack + 144 clearance), super top 64.
-    expect(r.super).toEqual({ x: 884, y: 64, w: 64, h: 64 });
-    expect(r.bomb).toEqual({ x: 884, y: 140, w: 64, h: 64 });
+    // Zone top 356 (trimmed: pause bottom 60 + 12 label rise + 140 stack + 144 clearance), super top 72.
+    expect(r.super).toEqual({ x: 878, y: 72, w: 64, h: 64 });
+    expect(r.bomb).toEqual({ x: 878, y: 148, w: 64, h: 64 });
     expect(r.pause).toEqual({ x: 900, y: 4, w: 56, h: 56 });
   });
 
   it('21:9 with insets', () => {
     const r = layoutButtons(COVER.w, COVER.h, INSETS);
-    // Centre x 44 in from the safe right edge: 960 - 48 - 44 = 868. Top inset 10 moves it all down 10.
-    expect(r.super).toEqual({ x: 836, y: 74, w: 64, h: 64 });
-    expect(r.bomb).toEqual({ x: 836, y: 150, w: 64, h: 64 });
+    // Centre x 50 in from the safe right edge: 960 - 48 - 50 = 862. Top inset 10 moves it all down 10.
+    expect(r.super).toEqual({ x: 830, y: 82, w: 64, h: 64 });
+    expect(r.bomb).toEqual({ x: 830, y: 158, w: 64, h: 64 });
     expect(r.pause).toEqual({ x: 852, y: 14, w: 56, h: 56 });
   });
 
   it('10:9 without insets: the stack sits as low as the ring clearance allows', () => {
     const r = layoutButtons(MAIN.w, MAIN.h, ZERO_INSETS);
     // Zone 688 to 752, bomb bottom 688 - 144 = 544.
-    expect(r.super).toEqual({ x: 764, y: 404, w: 64, h: 64 });
-    expect(r.bomb).toEqual({ x: 764, y: 480, w: 64, h: 64 });
+    expect(r.super).toEqual({ x: 758, y: 404, w: 64, h: 64 });
+    expect(r.bomb).toEqual({ x: 758, y: 480, w: 64, h: 64 });
     expect(r.pause).toEqual({ x: 780, y: 4, w: 56, h: 56 });
   });
 
   it('10:9 with insets', () => {
     const r = layoutButtons(MAIN.w, MAIN.h, INSETS);
-    expect(r.super).toEqual({ x: 716, y: 384, w: 64, h: 64 });
-    expect(r.bomb).toEqual({ x: 716, y: 460, w: 64, h: 64 });
+    expect(r.super).toEqual({ x: 710, y: 384, w: 64, h: 64 });
+    expect(r.bomb).toEqual({ x: 710, y: 460, w: 64, h: 64 });
     expect(r.pause).toEqual({ x: 732, y: 14, w: 56, h: 56 });
   });
 

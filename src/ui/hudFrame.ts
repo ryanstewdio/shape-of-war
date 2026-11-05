@@ -18,6 +18,10 @@
 // with no boss (bossStrip false) keeps the v2 play rect exactly and the old left column boxes.
 // Main puts the boxes in the level line's slot and the strip under it, so the top band stays 60 px.
 // None is a pointer target and none reaches the bomb, super or pause rects.
+// thumbs-button-look: one pixel font label (2 px cells) sits right above each button: "BOMB" over
+// the bomb and the super's name over the super. The bomb label fills the gap between the two
+// buttons; the super label sits between pause and the super. Main uses "BOOM" for Detonate
+// (Ryan's call) because "DETONATE" is wider than the 68 px column.
 // GW1 drone indicator: beside the weapon indicator. Cover stacks it in the row under the weapon
 // (same left edge and width), and the objective, level line and column boss rows step down by
 // COVER_DRONE_ROW. Main splits the free run right of the multiplier, up to the objective and boss
@@ -28,9 +32,11 @@
 // button hit rects that Thumbs lays out) instead of fixed generous bands, so the main screen
 // arena is as large as the HUD allows. The arena on main is usually width limited, so the right
 // column costs arena scale directly while the top band is often free.
-import { BOMB_HIT, BOMB_VISUAL, layoutButtons, PAUSE_HIT, SUPER_HIT, SUPER_VISUAL } from '../input/buttons';
+import { BOMB_HIT, BOMB_VISUAL, LABEL_H, LABEL_RISE, layoutButtons, PAUSE_HIT, SUPER_HIT, SUPER_VISUAL } from '../input/buttons';
 import type { ButtonRects, Insets, Rect } from '../input/types';
+import type { SuperKind } from '../levelgen/leveldef';
 import { fitArena, type Fit } from '../render/layout';
+import { pixelWidthPx } from './vectorFont';
 
 export type AspectClass = 'cover' | 'main';
 
@@ -67,7 +73,7 @@ export type BoxId =
   | 'bossPips'
   | 'bossBar'
   | 'superLabel'
-  | 'superHint';
+  | 'bombLabel';
 
 export type HudBoxes = Record<BoxId, HudBox>;
 
@@ -111,6 +117,24 @@ export interface FrameOptions {
    * boss, which keeps the arena exactly as it was before the strip existed. Main ignores it.
    */
   bossStrip?: boolean;
+}
+
+/** Host font size of the button labels: the pixel font draws 2 px cells at 20 px. */
+export const LABEL_FONT = 20;
+export const BOMB_TEXT = 'BOMB';
+/** Super names over the super button. Main swaps Detonate for BOOM (MAIN_SUPER_TEXT). */
+export const SUPER_TEXT: Readonly<Record<SuperKind, string>> = { homing: 'HOMING', detonate: 'DETONATE', turbo: 'TURBO' };
+export const MAIN_SUPER_TEXT: Readonly<Record<SuperKind, string>> = { ...SUPER_TEXT, detonate: 'BOOM' };
+
+/** Pure: the label over the super button on this screen. */
+export function superText(kind: SuperKind, cls: AspectClass): string {
+  return (cls === 'main' ? MAIN_SUPER_TEXT : SUPER_TEXT)[kind];
+}
+
+/** Pure: widest drawn label on a screen, shadow included, in CSS px. */
+export function labelWidth(cls: AspectClass): number {
+  const names = Object.values(cls === 'main' ? MAIN_SUPER_TEXT : SUPER_TEXT);
+  return Math.max(...[BOMB_TEXT, ...names].map((t) => pixelWidthPx(t, LABEL_FONT)));
 }
 
 /** Cover column widths in CSS px. */
@@ -194,31 +218,21 @@ interface Base {
   ins: Insets;
 }
 
-/** Height of a text box with `lines` lines: one line uses size + 4, wrapped lines size + 3 each (hud.ts setBox). */
-function textH(size: number, lines: number): number {
-  return lines <= 1 ? size + 4 : lines * (size + 3) + 2;
+/**
+ * Pure: the label box right above a button hit rect: LABEL_H tall, its bottom on the drawn disc
+ * top, `w` wide and centred on the button, nudged only as far as needed to stay inside the button
+ * area from `left` to `right` (the main column is exactly as wide as its widest label).
+ */
+export function labelBox(hit: Rect, w: number, left: number, right: number): HudBox {
+  const cx = hit.x + hit.w / 2;
+  const x = Math.max(left, Math.min(right - w, cx - w / 2));
+  return box(x, hit.y - LABEL_RISE, w, LABEL_H, LABEL_FONT, 'center');
 }
 
-/**
- * Super label and hint stacked just above the super hit circle. `lines` greater than 1 lets both
- * wrap (a narrow column: "SUPER:" over "DETONATE").
- */
-function superBoxes(
-  buttons: ButtonRects,
-  x: number,
-  w: number,
-  labelSize: number,
-  hintSize: number,
-  lines = 1,
-): Pick<HudBoxes, 'superLabel' | 'superHint'> {
-  const wrap = lines > 1;
-  const hintH = textH(hintSize, lines);
-  const labelH = textH(labelSize, lines);
-  const hintY = buttons.super.y - 2 - hintH;
-  return {
-    superLabel: box(x, hintY - labelH, w, labelH, labelSize, 'center', wrap),
-    superHint: box(x, hintY, w, hintH, hintSize, 'center', wrap),
-  };
+/** Both button labels for a frame's buttons. */
+function labelBoxes(buttons: ButtonRects, cls: AspectClass, left: number, right: number): Pick<HudBoxes, 'superLabel' | 'bombLabel'> {
+  const w = Math.min(right - left, labelWidth(cls));
+  return { superLabel: labelBox(buttons.super, w, left, right), bombLabel: labelBox(buttons.bomb, w, left, right) };
 }
 
 type BossBoxes = Pick<HudBoxes, 'bossName' | 'bossPips' | 'bossBar'>;
@@ -271,7 +285,7 @@ function sides(b: Base, strip: boolean): Partial0 {
   const rx = W - ins.right - COVER_RIGHT + 8;
   const rw = COVER_RIGHT - 20;
   const t = ins.top;
-  // Super label, hint, lives and bombs under the bomb, inside the ring clearance above the rest zone.
+  // Lives and bombs under the bomb, inside the ring clearance above the rest zone.
   const below = buttons.bomb.y + buttons.bomb.h;
   return {
     cls: 'cover',
@@ -302,8 +316,7 @@ function sides(b: Base, strip: boolean): Partial0 {
       // column under the level line otherwise. The right column, with the moved bomb and super
       // buttons, is untouched either way.
       ...(strip ? coverStripBoss(b) : coverColumnBoss(b, lx, lw)),
-      superLabel: box(rx - 4, below + 4, rw + 8, 15, 11, 'center'),
-      superHint: box(rx - 4, below + 19, rw + 8, 13, 9, 'center'),
+      ...labelBoxes(buttons, 'cover', buttonInsets.left, W - ins.right),
       lives: box(rx, below + 36, rw, 16, 12, 'right'),
       bombs: box(rx, below + 54, rw, 14, 10, 'right'),
     },
@@ -324,7 +337,7 @@ export function mainIndicators(x0: number, x1: number): { weaponW: number; drone
 }
 
 /** Main screen top band rows (docs/01 table 9.2), shared by both main arrangements. */
-function topRows(b: Base): Omit<HudBoxes, 'superLabel' | 'superHint'> {
+function topRows(b: Base): Omit<HudBoxes, 'superLabel' | 'bombLabel'> {
   const { W, ins } = b;
   const t = ins.top;
   const innerW = W - ins.left - ins.right;
@@ -376,19 +389,16 @@ function mainBase(b: Base, arrangement: Arrangement, buttonInsets: Insets, playO
     bombD: BOMB_VISUAL,
     superD: SUPER_VISUAL,
     pauseIcon: 24,
-    boxes: { ...topRows(b), superLabel: box(0, 0, 0, 0, 13), superHint: box(0, 0, 0, 0, 11) },
+    boxes: { ...topRows(b), ...labelBoxes(buttons, 'main', buttonInsets.left, b.W - b.ins.right) },
   };
 }
 
 function topRight(b: Base): Partial0 {
   const { W, H, ins } = b;
-  const f = mainBase(b, 'topRight', { ...ins, left: W - ins.right - MAIN_RIGHT }, (buttons) => {
+  return mainBase(b, 'topRight', { ...ins, left: W - ins.right - MAIN_RIGHT }, (buttons) => {
     const top = mainTop(buttons, ins);
     return { x: ins.left, y: ins.top + top, w: W - ins.left - ins.right - MAIN_RIGHT, h: H - ins.top - ins.bottom - top };
   });
-  // The column is only a little wider than the bomb, so the label and hint wrap onto two lines.
-  const x = W - ins.right - MAIN_RIGHT + MAIN_COLUMN_PAD;
-  return { ...f, boxes: { ...f.boxes, ...superBoxes(f.buttons, x, MAIN_RIGHT - 2 * MAIN_COLUMN_PAD, 12, 10, 2) } };
 }
 
 /** Pure: the banner line, centred at the top of the play rect. */
