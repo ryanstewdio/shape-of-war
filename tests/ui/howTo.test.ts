@@ -408,3 +408,16 @@ describe('polish r9: each named item in a list has its own colour', () => {
     expect(leadWord('No colon here')).toBe('');
   });
 });
+
+describe('how to pages 3 to 5 heading tones', () => {
+  it('every section title has its own tone, no two alike on a page', () => {
+    const pages = howToPages();
+    for (const id of ['bombs', 'weapons', 'drones']) {
+      const page = pages.find((p) => p.id === id);
+      expect(page).toBeDefined();
+      const tones = (page?.sections ?? []).map((s) => s.tone);
+      for (const t of tones) expect(t).toBeDefined();
+      expect(new Set(tones).size).toBe(tones.length);
+    }
+  });
+});

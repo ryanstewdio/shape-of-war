@@ -122,6 +122,8 @@ export interface FrameOptions {
 /** Host font size of the button labels: the pixel font draws 2 px cells at 20 px. */
 export const LABEL_FONT = 20;
 export const BOMB_TEXT = 'BOMB';
+/** Label over a fully charged super button, in place of its kind name. */
+export const SUPER_READY_TEXT = 'READY';
 /** Super names over the super button. Main swaps Detonate for BOOM (MAIN_SUPER_TEXT). */
 export const SUPER_TEXT: Readonly<Record<SuperKind, string>> = { homing: 'HOMING', detonate: 'DETONATE', turbo: 'TURBO' };
 export const MAIN_SUPER_TEXT: Readonly<Record<SuperKind, string>> = { ...SUPER_TEXT, detonate: 'BOOM' };
@@ -134,7 +136,7 @@ export function superText(kind: SuperKind, cls: AspectClass): string {
 /** Pure: widest drawn label on a screen, shadow included, in CSS px. */
 export function labelWidth(cls: AspectClass): number {
   const names = Object.values(cls === 'main' ? MAIN_SUPER_TEXT : SUPER_TEXT);
-  return Math.max(...[BOMB_TEXT, ...names].map((t) => pixelWidthPx(t, LABEL_FONT)));
+  return Math.max(...[BOMB_TEXT, ...names, SUPER_READY_TEXT].map((t) => pixelWidthPx(t, LABEL_FONT)));
 }
 
 /** Cover column widths in CSS px. */

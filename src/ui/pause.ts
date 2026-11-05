@@ -1,5 +1,9 @@
 // Pause screen (docs/01 section 10): Resume, Restart level, Settings, Quit to menu.
+import { setVectorText } from './vectorFont';
 import { button, createScreen, el, type Screen } from './dom';
+
+/** Title of the pause screen, drawn in the pixel font. */
+export const PAUSE_TITLE = 'Paused';
 
 export interface PauseActions {
   resume(): void;
@@ -17,6 +21,8 @@ export function createPauseScreen(parent: HTMLElement, actions: PauseActions): S
     button('Settings', actions.settings),
     button('Quit', actions.quit),
   );
-  s.root.append(el('div', 'sow-title', 'Paused'), row);
+  const title = el('div', 'sow-title');
+  setVectorText(title, PAUSE_TITLE, { tone: 'cyan' });
+  s.root.append(title, row);
   return s;
 }

@@ -41,7 +41,7 @@ import {
   type IndicatorState,
 } from './indicator';
 import { formatInt, iconRun } from './format';
-import { aspectClass, BOMB_TEXT, superText, type AspectClass, type HudBox, type HudFrame } from './hudFrame';
+import { aspectClass, BOMB_TEXT, SUPER_READY_TEXT, superText, type AspectClass, type HudBox, type HudFrame } from './hudFrame';
 import type { ObjectiveProgress } from './objective';
 import { getNeonState, onNeonChanged, type NeonParams, type PaletteKey } from '../render/neon';
 import { glowBlur, setVectorText, toneColour } from './vectorFont';
@@ -212,15 +212,19 @@ export function weaponGate(
 }
 
 /** Pure: the label over the super button, for example "HOMING" ("BOOM" for Detonate on main). */
-export function superLabel(kind: SuperKind, cls: AspectClass = 'cover'): string {
-  return superText(kind, cls);
+export function superLabel(kind: SuperKind, cls: AspectClass = 'cover', ready = false): string {
+  return ready ? SUPER_READY_TEXT : superText(kind, cls);
 }
 
 /** Palette keys of the two buttons: the bomb colour and the yellow the super ring always had. */
 export const BOMB_KEY: PaletteKey = 'bomb';
 export const SUPER_KEY: PaletteKey = 'yellow';
+/** Colour of the rising charge fill of the super, contrasting with the yellow rest fill. */
+export const SUPER_CHARGE_KEY: PaletteKey = 'cyan';
+/** Repaint period of a full super's pulse, in ms. */
+export const PULSE_REPAINT_MS = 50;
 
-/** CSS for one button disc: fill (a conic sweep while a super charges), rim and glow. */
+/** CSS for one button disc: fill (rising from the bottom while a super charges), rim and glow. */
 export interface DiscStyle {
   border: string;
   background: string;
@@ -230,13 +234,15 @@ export interface DiscStyle {
 
 /**
  * Pure: the disc CSS for a paint, a palette key and the neon state. `sweep` is the charged part of
- * a super in degrees; the rest of the disc uses the paint's rest alpha.
+ * a super as a fraction from 0 to 1, drawn from the bottom in `chargeKey`; the rest of the disc
+ * uses the paint's rest alpha in `key`.
  */
-export function discStyle(p: ButtonPaint, key: PaletteKey, neon: Pick<NeonParams, 'saturation' | 'glowAlpha'>, sweep = 360): DiscStyle {
+export function discStyle(p: ButtonPaint, key: PaletteKey, neon: Pick<NeonParams, 'saturation' | 'glowAlpha'>, level = 1, chargeKey: PaletteKey = key): DiscStyle {
   const c = (a: number): string => toneColour(key, neon.saturation, a);
-  const deg = Math.round(Math.max(0, Math.min(360, sweep)));
-  const background = p.fill === p.rest || deg >= 360 ? c(p.fill) : `conic-gradient(${c(p.fill)} ${deg}deg, ${c(p.rest)} ${deg}deg)`;
-  const blur = glowBlur(neon.glowAlpha);
+  const cc = (a: number): string => toneColour(chargeKey, neon.saturation, a);
+  const pct = Math.round(Math.max(0, Math.min(1, level)) * 1000) / 10;
+  const background = p.fill === p.rest || pct >= 100 ? c(p.fill) : `linear-gradient(to top, ${cc(p.fill)} ${pct}%, ${c(p.rest)} ${pct}%)`;
+  const blur = glowBlur(neon.glowAlpha) * p.glow;
   return {
     border: `${RIM_W}px solid ${c(p.rim)}`,
     background,
@@ -519,10 +525,12 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   let superKind: SuperKind = 'homing';
   let labelCls: AspectClass = 'cover';
   let cellsD = 0;
+  let pulseTimer: ReturnType<typeof setInterval> | undefined;
+  const clockMs = (): number => Date.now();
   const paintButtons = (): void => {
     const b = discStyle(buttonPaint({ held: heldBomb, ready: bombsLeft > 0 }), BOMB_KEY, neon);
-    const sp = superPaint(charge, heldSuper);
-    const su = discStyle(sp, SUPER_KEY, neon, Math.max(0, Math.min(1, charge)) * 360);
+    const sp = superPaint(charge, heldSuper, clockMs());
+    const su = discStyle(sp, SUPER_KEY, neon, charge, SUPER_CHARGE_KEY);
     for (const [ring, cells, d] of [[bombRing, bombCells, b], [superRing, superCells, su]] as const) {
       ring.style.border = d.border;
       ring.style.background = d.background;
@@ -549,7 +557,16 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   };
   const paintLabels = (): void => {
     setVectorText(bombLabel, BOMB_TEXT, { tone: 'cyan' });
-    setVectorText(superName, superLabel(superKind, labelCls), { tone: 'yellow' });
+    setVectorText(superName, superLabel(superKind, labelCls, charge >= 1), { tone: 'yellow' });
+  };
+  /** A full super pulses, so it repaints on a timer while full; the timer stops when it is not. */
+  const syncPulse = (): void => {
+    const full = charge >= 1;
+    if (full && pulseTimer === undefined) pulseTimer = setInterval(paintButtons, PULSE_REPAINT_MS);
+    else if (!full && pulseTimer !== undefined) {
+      clearInterval(pulseTimer);
+      pulseTimer = undefined;
+    }
   };
   paintButtons();
   paintLabels();
@@ -567,7 +584,13 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
 
   const hud: Hud = {
     show: () => root.classList.add('sow-open'),
-    hide: () => root.classList.remove('sow-open'),
+    hide: () => {
+      root.classList.remove('sow-open');
+      if (pulseTimer !== undefined) {
+        clearInterval(pulseTimer);
+        pulseTimer = undefined;
+      }
+    },
     update(p) {
       const t = hudText(p, infiniteLives);
       if (t.score !== shownScore) {
@@ -579,8 +602,11 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
       bombs.textContent = t.bombs;
       bombCount.textContent = t.bombCount;
       bombsLeft = Math.max(0, Math.floor(p.bombs));
+      const wasFull = charge >= 1;
       charge = t.charge;
       paintButtons();
+      if (wasFull !== charge >= 1) paintLabels();
+      syncPulse();
     },
     setInfiniteLives(on) {
       infiniteLives = on;
