@@ -204,6 +204,23 @@ export function difficultyLeads(): Record<string, PaletteKey> {
   return Object.fromEntries(DIFFICULTIES.map((d) => [difficultyLabel(d), DIFFICULTY_COLOURS[d]]));
 }
 
+/** Headings on pages 3 to 5, one pixel font tone each, no two alike on a page. */
+export const BOMBS_TONES: Readonly<Record<'Bomb' | 'Super' | 'Kinds of Super' | 'When to use them', VectorTone>> = {
+  Bomb: 'cyan',
+  Super: 'yellow',
+  'Kinds of Super': 'orange',
+  'When to use them': 'green',
+};
+export const WEAPONS_TONES: Readonly<Record<'Four weapons' | 'Pickups' | 'Super weapons', VectorTone>> = {
+  'Four weapons': 'yellow',
+  Pickups: 'green',
+  'Super weapons': 'magenta',
+};
+export const DRONES_TONES: Readonly<Record<'Your drone' | 'Drone pickups', VectorTone>> = {
+  'Your drone': 'cyan',
+  'Drone pickups': 'purple',
+};
+
 // ---- The pages -------------------------------------------------------------------------------
 
 /** Pure: the nine pages in order. */
@@ -248,11 +265,11 @@ export function howToPages(): HowToPage[] {
         sec('Bomb', ['Tap the round Bomb button on the right.', 'It wipes out every enemy on screen.', 'You only have a few. Save them.'], {
           t: 'reward',
           icon: 'bomb',
-        }),
+        }, [], { tone: BOMBS_TONES.Bomb }),
         sec('Super', ['Grab green geoms to fill the Super ring.', 'It sits just above the Bomb button.', 'When it is full, tap it.'], {
           t: 'draw',
           id: 'superRing',
-        }),
+        }, [], { tone: BOMBS_TONES.Super }),
         sec(
           'Kinds of Super',
           [
@@ -262,21 +279,21 @@ export function howToPages(): HowToPage[] {
           ],
           undefined,
           [],
-          { leads: SUPER_COLOURS },
+          { leads: SUPER_COLOURS, tone: BOMBS_TONES['Kinds of Super'] },
         ),
-        sec('When to use them', ['Bomb when you are trapped.', 'Super when lots of enemies come.']),
+        sec('When to use them', ['Bomb when you are trapped.', 'Super when lots of enemies come.'], undefined, [], { tone: BOMBS_TONES['When to use them'] }),
       ],
     },
     {
       id: 'weapons',
       title: 'Weapons',
       sections: [
-        sec('Four weapons', [], undefined, weaponItems),
+        sec('Four weapons', [], undefined, weaponItems, { tone: WEAPONS_TONES['Four weapons'] }),
         sec('Pickups', ['Shoot enemies and a weapon drops.', 'Fly over it to grab it.', `It lasts ${WEAPON_DURATION} seconds.`, 'Lose a life and you go back to Spread.'], {
           t: 'shape',
           kind: 'weaponPickup',
-        }),
-        sec('Super weapons', ['Grab a different weapon while you have one. They join!', ...combos]),
+        }, [], { tone: WEAPONS_TONES.Pickups }),
+        sec('Super weapons', ['Grab a different weapon while you have one. They join!', ...combos], undefined, [], { tone: WEAPONS_TONES['Super weapons'] }),
       ],
     },
     {
@@ -288,13 +305,14 @@ export function howToPages(): HowToPage[] {
           ['A drone helps you. Nothing can hurt it.'],
           { t: 'shape', kind: 'drone' },
           DRONE_KINDS.map((d): HowToItem => ({ icon: { t: 'shape', kind: 'drone' }, name: cap(d), text: DRONE_WORDS[d], colour: DRONE_COLOURS[d] })),
+          { tone: DRONES_TONES['Your drone'] },
         ),
         sec(
           'Drone pickups',
           [`Grab one to power up your drone for ${DRONE_ARM_SEC} seconds.`, ...DRONE_MODES.map((m) => `${cap(m)}: ${DRONE_MODE_WORDS[m]}.`)],
           { t: 'shape', kind: 'dronePickup' },
           [],
-          { leads: Object.fromEntries(DRONE_MODES.map((m) => [cap(m), DRONE_MODE_COLOURS[m]])) },
+          { leads: Object.fromEntries(DRONE_MODES.map((m) => [cap(m), DRONE_MODE_COLOURS[m]])), tone: DRONES_TONES['Drone pickups'] },
         ),
       ],
     },

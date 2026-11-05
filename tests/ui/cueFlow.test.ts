@@ -253,3 +253,13 @@ describe('main.ts wiring', () => {
     expect(src).toContain('setTapSound(');
   });
 });
+
+describe('pause screen title', () => {
+  it('is drawn in the pixel font', () => {
+    const root = installFakeDocument();
+    createPauseScreen(asParent(root), { resume: () => undefined, restart: () => undefined, settings: () => undefined, quit: () => undefined });
+    const text = JSON.stringify(root, (k, v) => (k === 'parent' || k === 'parentNode' ? undefined : v));
+    expect(text).toContain('"tag":"svg"');
+    expect(text).toContain('Paused');
+  });
+});

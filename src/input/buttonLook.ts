@@ -8,6 +8,12 @@
 export const FILL_REST = 0.25;
 export const FILL_PRESSED = 0.5;
 export const FILL_DIM = 0.08;
+/** Charging super: the rising bright fill alpha, drawn in a contrasting colour from the rest fill. */
+export const FILL_CHARGE = 0.6;
+/** Full super: the pulse peaks at this fill alpha and this rim glow multiplier, once per second. */
+export const FILL_READY = 0.7;
+export const GLOW_READY = 1.5;
+export const PULSE_HZ = 1;
 /** Rim width in CSS px (the brief allows 1.5 to 2). */
 export const RIM_W = 2;
 /** Pixel cell size and the gap kept between the rim's inner edge and the cell ring. */
@@ -30,6 +36,8 @@ export interface ButtonPaint {
   rim: number;
   /** Pixel cell alpha. */
   cells: number;
+  /** Rim glow multiplier (1 normally, up to GLOW_READY on a pulsing full super). */
+  glow: number;
 }
 
 /**
@@ -37,20 +45,32 @@ export interface ButtonPaint {
  * answers the finger). Not ready dims the whole button, as the charging super did before.
  */
 export function buttonPaint(s: ButtonState): ButtonPaint {
-  if (s.held) return { fill: FILL_PRESSED, rest: FILL_PRESSED, rim: 1, cells: 0.95 };
-  if (s.ready) return { fill: FILL_REST, rest: FILL_REST, rim: 1, cells: 0.7 };
-  return { fill: FILL_DIM, rest: FILL_DIM, rim: 0.45, cells: 0.3 };
+  if (s.held) return { fill: FILL_PRESSED, rest: FILL_PRESSED, rim: 1, cells: 0.95, glow: 1 };
+  if (s.ready) return { fill: FILL_REST, rest: FILL_REST, rim: 1, cells: 0.7, glow: 1 };
+  return { fill: FILL_DIM, rest: FILL_DIM, rim: 0.45, cells: 0.3, glow: 1 };
+}
+
+/** Pure: pulse level from 0 to 1 at PULSE_HZ for a clock in ms. Starts at 0, peaks at half a period. */
+export function pulse(tMs: number): number {
+  const t = Number.isFinite(tMs) ? tMs : 0;
+  return 0.5 - 0.5 * Math.cos(2 * Math.PI * PULSE_HZ * (t / 1000));
 }
 
 /**
- * Pure: super paint for a charge from 0 to 1. A charging super shows the charged sweep at the rest
- * fill over a dim disc, so the charge still reads as it did with the old conic ring.
+ * Pure: super paint for a charge from 0 to 1 and a clock in ms. Charging: a bright fill (FILL_CHARGE)
+ * over a rest fill of FILL_REST, which the HUD draws in two colours rising from the bottom. Full: the
+ * whole button pulses between FILL_REST and FILL_READY with the rim glow up to GLOW_READY.
  */
-export function superPaint(charge: number, held: boolean): ButtonPaint {
+export function superPaint(charge: number, held: boolean, tMs = 0): ButtonPaint {
   const c = Number.isFinite(charge) ? Math.max(0, Math.min(1, charge)) : 0;
   const p = buttonPaint({ held, ready: c >= 1 });
-  if (held || c >= 1) return p;
-  return { ...p, fill: FILL_REST };
+  if (held) return p;
+  if (c >= 1) {
+    const k = pulse(tMs);
+    const fill = FILL_REST + (FILL_READY - FILL_REST) * k;
+    return { ...p, fill, rest: fill, glow: 1 + (GLOW_READY - 1) * k };
+  }
+  return { ...p, fill: FILL_CHARGE, rest: FILL_REST };
 }
 
 /** One square pixel cell: top left corner and side, whole CSS px, local to the disc's box. */

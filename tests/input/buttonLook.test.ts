@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buttonPaint, CELL, CELL_INSET, FILL_DIM, FILL_PRESSED, FILL_REST, pixelRing, RIM_W, superPaint } from '../../src/input/buttonLook';
+import { buttonPaint, CELL, FILL_CHARGE, FILL_READY, GLOW_READY, pulse, CELL_INSET, FILL_DIM, FILL_PRESSED, FILL_REST, pixelRing, RIM_W, superPaint } from '../../src/input/buttonLook';
 import { BOMB_HIT, BOMB_VISUAL, LABEL_H, LABEL_RISE, SUPER_GAP, SUPER_HIT, SUPER_VISUAL } from '../../src/input/buttons';
 
 describe('button sizes (thumbs-button-look)', () => {
@@ -40,21 +40,39 @@ describe('buttonPaint', () => {
 });
 
 describe('superPaint', () => {
-  it('charging: the charged sweep at rest fill over a dim disc and a dim rim', () => {
+  it('charging: a bright fill over a rest fill of 25 percent, and a dim rim', () => {
     const p = superPaint(0.4, false);
-    expect(p.fill).toBe(FILL_REST);
-    expect(p.rest).toBe(FILL_DIM);
+    expect(p.fill).toBe(FILL_CHARGE);
+    expect(p.rest).toBe(FILL_REST);
+    expect(p.fill).toBeGreaterThan(p.rest);
     expect(p.rim).toBeLessThan(1);
+    expect(p.glow).toBe(1);
   });
 
-  it('charged: the full disc at rest fill; held: 50 percent', () => {
-    expect(superPaint(1, false)).toEqual(buttonPaint({ held: false, ready: true }));
+  it('full: pulses between 25 and 70 percent with the rim glow up to 1.5x; held: 50 percent', () => {
+    const lo = superPaint(1, false, 0);
+    const hi = superPaint(1, false, 500);
+    expect(lo.fill).toBeCloseTo(FILL_REST);
+    expect(hi.fill).toBeCloseTo(FILL_READY);
+    expect(FILL_READY).toBe(0.7);
+    expect(hi.glow).toBeCloseTo(GLOW_READY);
+    expect(GLOW_READY).toBe(1.5);
+    expect(hi.rest).toBe(hi.fill);
     expect(superPaint(0.2, true).fill).toBe(FILL_PRESSED);
     expect(superPaint(0.2, true).rest).toBe(FILL_PRESSED);
   });
 
+  it('the pulse is 1 Hz', () => {
+    expect(pulse(0)).toBeCloseTo(0);
+    expect(pulse(500)).toBeCloseTo(1);
+    expect(pulse(1000)).toBeCloseTo(0);
+    expect(pulse(1250)).toBeCloseTo(pulse(250));
+    expect(pulse(Number.NaN)).toBe(0);
+  });
+
   it('treats a bad charge as empty', () => {
-    expect(superPaint(Number.NaN, false).rest).toBe(FILL_DIM);
+    expect(superPaint(Number.NaN, false).rest).toBe(FILL_REST);
+    expect(superPaint(Number.NaN, false).fill).toBe(FILL_CHARGE);
   });
 });
 

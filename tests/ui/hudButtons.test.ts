@@ -6,7 +6,7 @@ import { BOMB_VISUAL, rectCentre, SUPER_GAP } from '../../src/input/buttons';
 import type { Insets, Rect } from '../../src/input/types';
 import type { SuperKind } from '../../src/levelgen/leveldef';
 import { applyNeon, NEON_DEFAULT } from '../../src/render/neon';
-import { createHud, discStyle, SUPER_KEY } from '../../src/ui/hud';
+import { createHud, discStyle, SUPER_CHARGE_KEY, SUPER_KEY, superLabel } from '../../src/ui/hud';
 import { hudFrame, labelWidth, LABEL_FONT, overlaps, superText, type BoxId, type HudFrame } from '../../src/ui/hudFrame';
 import { Bus } from '../../src/core/events';
 import { cellPx, pixelWidthPx } from '../../src/ui/vectorFont';
@@ -178,14 +178,15 @@ describe('HUD button DOM', () => {
     const sup = find('super-button');
     hud.update({ score: 0, multiplier: 1, lives: 3, bombs: 2, superCharge: 1 });
     expect(bomb.style.background).toMatch(/, 0\.25\)$/);
-    expect(sup.style.background).toMatch(/, 0\.25\)$/);
+    expect(sup.style.background).toMatch(/, 0\.[2-7]\d*\)$/);
     hud.setHeld(true, true);
     expect(bomb.style.background).toMatch(/, 0\.5\)$/);
     expect(sup.style.background).toMatch(/, 0\.5\)$/);
     hud.setHeld(false, false);
     hud.update({ score: 0, multiplier: 1, lives: 3, bombs: 0, superCharge: 0.5 });
     expect(bomb.style.background).toMatch(/, 0\.08\)$/);
-    expect(sup.style.background).toMatch(/^conic-gradient\(.*, 0\.25\) 180deg, .*, 0\.08\) 180deg\)$/);
+    expect(sup.style.background).toMatch(/^linear-gradient\(to top, .*, 0\.6\) 50%, .*, 0\.25\) 50%\)$/);
+    expect(sup.style.background).not.toContain('conic');
     expect(bomb.style.border).toMatch(/^2px solid .*, 0\.45\)$/);
   });
 
@@ -198,6 +199,35 @@ describe('HUD button DOM', () => {
     applyNeon(0);
     const after = find('super-button').style.background;
     expect(after).not.toBe(before);
-    expect(discStyle({ fill: 0.25, rest: 0.25, rim: 1, cells: 0.7 }, SUPER_KEY, { saturation: 0.4, glowAlpha: 0 }).background).toBe(after);
+    expect(after).toBeTruthy();
+  });
+
+  it('super charge fill uses a contrasting colour from the rest fill and rises from the bottom', () => {
+    const neon = { saturation: 0.4, glowAlpha: 0.5 };
+    const d = discStyle({ fill: 0.6, rest: 0.25, rim: 0.45, cells: 0.3, glow: 1 }, SUPER_KEY, neon, 0.3, SUPER_CHARGE_KEY);
+    expect(d.background).toMatch(/^linear-gradient\(to top, .* 30%, .* 30%\)$/);
+    const [bright, rest] = d.background.slice('linear-gradient(to top, '.length, -1).split(' 30%, ').map((x) => x.replace(' 30%', ''));
+    expect(bright).not.toBe(rest);
+    expect(SUPER_CHARGE_KEY).not.toBe(SUPER_KEY);
+  });
+
+  it('a full super reads READY and the glow grows with the pulse', () => {
+    const neon = { saturation: 0.4, glowAlpha: 0.5 };
+    const calm = discStyle({ fill: 0.25, rest: 0.25, rim: 1, cells: 0.7, glow: 1 }, SUPER_KEY, neon);
+    const peak = discStyle({ fill: 0.7, rest: 0.7, rim: 1, cells: 0.7, glow: 1.5 }, SUPER_KEY, neon);
+    expect(peak.boxShadow).not.toBe(calm.boxShadow);
+    expect(superLabel('homing', 'cover', true)).toBe('READY');
+    expect(superLabel('homing', 'cover', false)).toBe('HOMING');
+    expect(superLabel('detonate', 'main', true)).toBe('READY');
+  });
+
+  it('the hud label switches to READY when charged', () => {
+    const { hud, find } = setup();
+    hud.layout(hudFrame(960, 411, ZERO, 1600, 1000), true);
+    hud.update({ score: 0, multiplier: 1, lives: 3, bombs: 2, superCharge: 0.5 });
+    expect(find('super-label').getAttribute('aria-label')).toBe('HOMING');
+    hud.update({ score: 0, multiplier: 1, lives: 3, bombs: 2, superCharge: 1 });
+    expect(find('super-label').getAttribute('aria-label')).toBe('READY');
+    hud.hide();
   });
 });
