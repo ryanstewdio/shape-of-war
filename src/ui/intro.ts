@@ -322,7 +322,8 @@ export function endlessIntroCard(
     victory: ENDLESS_VICTORY,
     stars: [],
     starCap: '',
-    enemies: foeLines(extra.newFoes ?? []),
+    // Ryan (polish r9): no New enemies block on the Endless card, the How to guide covers them.
+    enemies: [],
     loadout: def.drone === undefined || def.superType === undefined ? [] : loadoutItems(def.drone, def.superType),
     seed: extra.seed ?? '',
     difficulty: difficultyIntroLine(difficulty),

@@ -11,6 +11,7 @@ import { SUPER_DURATION, TURBO_DURATION, TURBO_MAX_TOTAL, TURBO_SCALE } from '..
 import { COMBO_TABLE, WEAPON_DURATION, WEAPON_KINDS } from '../../src/game/weapons';
 import { ENEMY_KINDS, V2_ENEMY_KINDS } from '../../src/levelgen/leveldef';
 import { FOE_INFO, type FoeKind } from '../../src/ui/enemyIntro';
+import { BASE_PALETTE } from '../../src/render/neon';
 import {
   countWords,
   createHowToScreen,
@@ -21,6 +22,7 @@ import {
   FOE_WORDS,
   HOW_TO_TITLE,
   howToPages,
+  leadWord,
   livesWords,
   MAX_SECTION_WORDS,
   pageText,
@@ -212,7 +214,7 @@ describe('How to screen', () => {
         expect(h.classList.contains('sow-vec-host')).toBe(true);
         expect(h.all().find((e) => e.classList.contains('sow-sr'))?.textContent).toBe(h.getAttribute('aria-label'));
       }
-      const lines = hosts(root, 'sow-howto-line').map((e) => e.textContent);
+      const lines = hosts(root, 'sow-howto-line').map((e) => (e.children.length > 0 ? e.children.map((c) => c.textContent).join('') : e.textContent));
       expect(lines).toEqual(p.sections.flatMap((s) => [...s.lines]));
       const names = hosts(root, 'sow-howto-name').map((e) => e.textContent);
       expect(names).toEqual(p.sections.flatMap((s) => s.items.map((it) => it.name)));
@@ -348,5 +350,61 @@ describe('level select pixel font', () => {
   it('level button labels', () => {
     expect(levelAriaLabel({ index: 7, stars: 1, best: 0 })).toBe('Level 7, 1 star');
     expect(levelAriaLabel({ index: 9, stars: 4, best: 10 })).toBe('Level 9, 4 stars');
+  });
+});
+
+describe('polish r9: each named item in a list has its own colour', () => {
+  const hue = (k: keyof typeof BASE_PALETTE): number => BASE_PALETTE[k][0];
+  const distinct = (xs: readonly number[]): boolean => new Set(xs).size === xs.length;
+
+  it('goal words and hazard titles each get a different heading tone', async () => {
+    const { GOAL_TONES, HAZARD_TONES } = await import('../../src/ui/howTo');
+    expect(distinct(Object.values(GOAL_TONES).map((t) => ['cyan', 'white', 'yellow', 'green', 'red', 'orange', 'purple', 'magenta'].indexOf(t)))).toBe(true);
+    expect(new Set(Object.values(HAZARD_TONES)).size).toBe(4);
+    const goal = howToPages().find((p) => p.id === 'goal');
+    for (const w of ['Survive', 'Destroy', 'Score', 'Boss'] as const) expect(goal?.sections.find((s) => s.heading === w)?.tone).toBe(GOAL_TONES[w]);
+    const haz = howToPages().find((p) => p.id === 'hazards');
+    expect(haz?.sections.map((s) => s.tone)).toEqual(Object.values(HAZARD_TONES));
+  });
+
+  it('weapons, drones, supers, drone modes, difficulties and rewards use distinct palette hues', async () => {
+    const m = await import('../../src/ui/howTo');
+    for (const table of [m.WEAPON_COLOURS, m.DRONE_COLOURS, m.DRONE_MODE_COLOURS, m.SUPER_COLOURS, m.DIFFICULTY_COLOURS, m.REWARD_NAME_COLOURS]) {
+      const hues = Object.values(table).map(hue);
+      expect(distinct(hues)).toBe(true);
+      for (let i = 0; i < hues.length; i++) for (let j = i + 1; j < hues.length; j++) expect(Math.abs((hues[i] ?? 0) - (hues[j] ?? 0))).toBeGreaterThanOrEqual(15);
+    }
+  });
+
+  it('page data carries the colours', () => {
+    const pages = howToPages();
+    const items = (id: string, head: string) => pages.find((p) => p.id === id)?.sections.find((s) => s.heading === head)?.items ?? [];
+    expect(items('weapons', 'Four weapons').every((i) => i.colour !== undefined)).toBe(true);
+    expect(items('drones', 'Your drone').every((i) => i.colour !== undefined)).toBe(true);
+    const sup = pages.find((p) => p.id === 'bombs')?.sections.find((s) => s.heading === 'Kinds of Super');
+    expect(sup?.lines.map((l) => sup.leads?.[leadWord(l)] !== undefined)).toEqual([true, true, true]);
+    const diff = pages.find((p) => p.id === 'modes')?.sections.find((s) => s.heading === 'Difficulty');
+    expect(diff?.lines.slice(0, 4).every((l) => diff.leads?.[leadWord(l)] !== undefined)).toBe(true);
+  });
+
+  it('the screen paints coloured names and lead words', () => {
+    const root = installFakeDocument();
+    const screen = createHowToScreen(asParent(root), { close: vi.fn() });
+    screen.open(3);
+    const names = root.all().filter((e) => e.classList.contains('sow-howto-name'));
+    expect(names.length).toBe(4);
+    expect(new Set(names.map((n) => n.style.color)).size).toBe(4);
+    screen.open(1);
+    const tones = root.all().filter((e) => e.classList.contains('sow-howto-head')).map((h) => h.all().find((e) => e.tag === 'svg')?.getAttribute('class'));
+    expect(tones.slice(1)).toEqual(['sow-vec sow-vec-green', 'sow-vec sow-vec-red', 'sow-vec sow-vec-yellow', 'sow-vec sow-vec-magenta']);
+    screen.open(4);
+    const leads = root.all().filter((e) => e.classList.contains('sow-howto-lead'));
+    expect(leads.map((l) => l.textContent)).toEqual(['Homing', 'Detach', 'Rapid', 'Double']);
+    expect(new Set(leads.map((l) => l.style.color)).size).toBe(4);
+  });
+
+  it('leadWord takes the text before the first colon', () => {
+    expect(leadWord('Easy: Slower enemies, 2 extra lives.')).toBe('Easy');
+    expect(leadWord('No colon here')).toBe('');
   });
 });

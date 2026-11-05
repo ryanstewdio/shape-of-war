@@ -251,6 +251,7 @@ export function createFreePlayScreen(parent: HTMLElement, actions: FreePlayActio
   setVectorText(start, 'Start', { tone: 'white' });
   const back = button('Back', actions.back);
   back.classList.add('sow-big');
+  setVectorText(back, 'Back', { tone: 'white' });
   function paint(): void {
     const c = choice.config;
     diff.mark(choice.difficulty);

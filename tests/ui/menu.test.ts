@@ -71,7 +71,7 @@ describe('menu layout', () => {
     expect(MIN_HIT_PX).toBe(44);
     for (const { L, name } of all) {
       expect(L.rows, name).toHaveLength(MENU_ROWS);
-      expect(MENU_ROWS).toBe(5);
+      expect(MENU_ROWS).toBe(6);
       for (const r of L.rows) {
         expect(r.h, name).toBeGreaterThanOrEqual(MIN_HIT_PX);
         expect(r.w, name).toBeGreaterThanOrEqual(160);
@@ -93,7 +93,7 @@ describe('menu layout', () => {
 
   it('title, rows, info and footer are separate blocks inside the panel; info sits under the rows (stack) or the title (side, R2) and the footer at the bottom', () => {
     for (const { L, name } of all) {
-      const blocks: Array<[string, Rect]> = [['title', L.title], ['info', L.info], ['howTo', L.howTo], ['foot', L.foot], ...L.rows.map((r, i): [string, Rect] => [`row${i}`, r])];
+      const blocks: Array<[string, Rect]> = [['title', L.title], ['info', L.info], ['foot', L.foot], ...L.rows.map((r, i): [string, Rect] => [`row${i}`, r])];
       for (const [id, b] of blocks) expect(inside(b, L.panel), `${name} ${id}`).toBe(true);
       for (let i = 0; i < blocks.length; i++) {
         for (let j = i + 1; j < blocks.length; j++) {
@@ -105,7 +105,7 @@ describe('menu layout', () => {
       const lastRow = L.rows[L.rows.length - 1] as Rect;
       if (L.arrangement === 'side') expect(L.info.y, name).toBeGreaterThanOrEqual(L.title.y + L.title.h);
       else expect(L.info.y, name).toBeGreaterThanOrEqual(lastRow.y + lastRow.h);
-      expect(L.foot.y, name).toBeGreaterThanOrEqual(lastRow.y + lastRow.h);
+      if (L.arrangement === 'stack') expect(L.foot.y, name).toBeGreaterThanOrEqual(lastRow.y + lastRow.h);
       expect(L.foot.y, name).toBeGreaterThanOrEqual(L.info.y + L.info.h);
     }
   });
@@ -121,7 +121,7 @@ describe('menu layout', () => {
 
   it('degrades without throwing on a tiny or odd viewport', () => {
     const L = menuLayout(0, 0, ZERO);
-    expect(L.rows).toHaveLength(5);
+    expect(L.rows).toHaveLength(MENU_ROWS);
     for (const r of L.rows) expect(r.h).toBeGreaterThanOrEqual(MIN_HIT_PX);
     expect(menuLayout(300, 200, ZERO).fits).toBe(false);
   });
@@ -188,22 +188,35 @@ describe('menu screen', () => {
 
   const focused = (rows: FakeEl[]): number[] => rows.flatMap((r, i) => (r.classList.contains('sow-focus') ? [i] : []));
 
-  it('builds the title, five rows in order (R2: Free Play), the info line and the footer inside one panel', () => {
+  it('builds the title, six rows in order (R2: Free Play), the info line and the footer inside one panel', () => {
     const { root, rows } = build();
     const panel = root.all().find((e) => e.classList.contains('sow-menu-panel'));
     expect(panel).toBeDefined();
     expect(panel?.all().find((e) => e.classList.contains('sow-title'))?.textContent).toBe(GAME_TITLE);
-    expect(rows.map((r) => r.textContent)).toEqual(['Adventure', 'Level select', 'Endless', 'Free Play', 'Settings', 'How to']);
+    expect(rows.map((r) => r.textContent)).toEqual(['Adventure', 'Level select', 'Endless', 'Free Play', 'How to', 'Settings']);
     expect(rows.every((r) => r.tag === 'button')).toBe(true);
     expect(panel?.all().some((e) => e.classList.contains('sow-menu-info'))).toBe(true);
     expect(panel?.all().some((e) => e.classList.contains('sow-menu-foot'))).toBe(true);
     expect(root.all().find((e) => e.classList.contains('sow-screen'))?.classList.contains('sow-menu')).toBe(true);
   });
 
+  it('polish r9: every button label is drawn in the pixel font and How to sits directly above Settings', () => {
+    const { rows, menu } = build();
+    for (const r of rows) {
+      expect(r.classList.contains('sow-vec-host'), r.textContent).toBe(true);
+      expect(r.all().some((e) => e.tag === 'svg')).toBe(true);
+    }
+    const labels = rows.map((r) => r.textContent);
+    expect(labels.indexOf('How to')).toBe(labels.indexOf('Settings') - 1);
+    menu.setContinue('Continue  L3');
+    expect(rows[0]?.textContent).toBe('Continue  L3');
+    expect(rows[0]?.all().some((e) => e.tag === 'svg')).toBe(true);
+  });
+
   it('every row keeps its callback', () => {
     const { root, calls } = build();
-    for (const label of ['Adventure', 'Level select', 'Endless', 'Free Play', 'Settings', 'How to']) buttonsLabelled(root, label)[0]?.tap();
-    expect(calls).toEqual(['adventure', 'levels', 'endless', 'freePlay', 'settings', 'howTo']);
+    for (const label of ['Adventure', 'Level select', 'Endless', 'Free Play', 'How to', 'Settings']) buttonsLabelled(root, label)[0]?.tap();
+    expect(calls).toEqual(['adventure', 'levels', 'endless', 'freePlay', 'howTo', 'settings']);
   });
 
   it('Play or Continue is in the warm frame at first; a tap moves the frame to the last row used', () => {
@@ -247,7 +260,7 @@ describe('menu screen', () => {
       const L = menuLayout(W, H, ZERO);
       const panel = root.all().find((e) => e.classList.contains('sow-menu-panel'));
       expect(panel?.style.width).toBe(`${L.panel.w}px`);
-      expect(panel?.style.gridTemplateAreas).toBe(L.arrangement === 'side' ? '"title rows" "info rows" "howto rows" "foot foot"' : '"title" "rows" "howto" "info" "foot"');
+      expect(panel?.style.gridTemplateAreas).toBe(L.arrangement === 'side' ? '"title rows" "info rows" "foot rows"' : '"title" "rows" "info" "foot"');
       for (const r of rows) {
         expect(Number.parseFloat(r.style.minHeight ?? '0')).toBeGreaterThanOrEqual(MIN_HIT_PX);
         expect(r.style.height).toBe(`${L.rowH}px`);
