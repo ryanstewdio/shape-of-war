@@ -102,24 +102,31 @@ const ICON_COLOR = 'hsl(185, 95%, 70%)';
 
 /** Edge: draw an icon on a small canvas. Silently blank where the 2D context is missing (tests). */
 function iconCanvas(icon: RewardIcon): HTMLCanvasElement {
-  const c = el('canvas', 'sow-reward-icon');
-  const dpr = Math.min(3, typeof window !== 'undefined' && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1);
-  c.width = Math.round(ICON_PX * dpr);
-  c.height = Math.round(ICON_PX * dpr);
-  c.style.width = `${ICON_PX}px`;
-  c.style.height = `${ICON_PX}px`;
+  const c = strokeCanvas(iconStrokes(icon), ICON_PX, ICON_COLOR, 'sow-reward-icon');
   c.setAttribute('data-icon', icon);
+  return c;
+}
+
+/** Edge: unit box strokes on a small square canvas in one neon colour (also used by the How to guide). */
+export function strokeCanvas(strokes: readonly Stroke[], px: number, colour: string, cls: string): HTMLCanvasElement {
+  const c = el('canvas', cls);
+  const dpr = Math.min(3, typeof window !== 'undefined' && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1);
+  c.width = Math.round(px * dpr);
+  c.height = Math.round(px * dpr);
+  c.style.width = `${px}px`;
+  c.style.height = `${px}px`;
+  c.setAttribute('aria-hidden', 'true');
   const ctx = typeof c.getContext === 'function' ? c.getContext('2d') : null;
   if (ctx === null) return c;
-  const s = ICON_PX * dpr;
-  ctx.strokeStyle = ICON_COLOR;
-  ctx.fillStyle = ICON_COLOR;
+  const s = px * dpr;
+  ctx.strokeStyle = colour;
+  ctx.fillStyle = colour;
   ctx.lineWidth = 2.5 * dpr;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.shadowColor = ICON_COLOR;
+  ctx.shadowColor = colour;
   ctx.shadowBlur = 6 * dpr;
-  for (const k of iconStrokes(icon)) {
+  for (const k of strokes) {
     ctx.beginPath();
     if (k.t === 'line') {
       ctx.moveTo(k.x1 * s, k.y1 * s);

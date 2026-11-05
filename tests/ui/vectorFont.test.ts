@@ -230,7 +230,7 @@ describe('headlines expose their text', () => {
     const root = installFakeDocument();
     createSplashScreen(asParent(root), () => undefined, { after: () => undefined });
     createBootScreen(asParent(root), () => undefined);
-    createMenuScreen(asParent(root), { adventure: vi.fn(), levels: vi.fn(), endless: vi.fn(), freePlay: vi.fn(), settings: vi.fn() });
+    createMenuScreen(asParent(root), { adventure: vi.fn(), levels: vi.fn(), endless: vi.fn(), freePlay: vi.fn(), settings: vi.fn(), howTo: vi.fn() });
     const titles = vectorHosts(root).filter((e) => e.classList.contains('sow-title'));
     expect(titles.map(spoken)).toEqual([GAME_TITLE, GAME_TITLE, GAME_TITLE]);
     expect(titles.every((t) => t.textContent === GAME_TITLE)).toBe(true);

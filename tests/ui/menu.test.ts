@@ -93,7 +93,7 @@ describe('menu layout', () => {
 
   it('title, rows, info and footer are separate blocks inside the panel; info sits under the rows (stack) or the title (side, R2) and the footer at the bottom', () => {
     for (const { L, name } of all) {
-      const blocks: Array<[string, Rect]> = [['title', L.title], ['info', L.info], ['foot', L.foot], ...L.rows.map((r, i): [string, Rect] => [`row${i}`, r])];
+      const blocks: Array<[string, Rect]> = [['title', L.title], ['info', L.info], ['howTo', L.howTo], ['foot', L.foot], ...L.rows.map((r, i): [string, Rect] => [`row${i}`, r])];
       for (const [id, b] of blocks) expect(inside(b, L.panel), `${name} ${id}`).toBe(true);
       for (let i = 0; i < blocks.length; i++) {
         for (let j = i + 1; j < blocks.length; j++) {
@@ -180,6 +180,7 @@ describe('menu screen', () => {
       endless: () => calls.push('endless'),
       freePlay: () => calls.push('freePlay'),
       settings: () => calls.push('settings'),
+      howTo: () => calls.push('howTo'),
     });
     const rows = root.all().filter((e) => e.classList.contains('sow-menu-row'));
     return { root, menu, calls, rows };
@@ -192,7 +193,7 @@ describe('menu screen', () => {
     const panel = root.all().find((e) => e.classList.contains('sow-menu-panel'));
     expect(panel).toBeDefined();
     expect(panel?.all().find((e) => e.classList.contains('sow-title'))?.textContent).toBe(GAME_TITLE);
-    expect(rows.map((r) => r.textContent)).toEqual(['Adventure', 'Level select', 'Endless', 'Free Play', 'Settings']);
+    expect(rows.map((r) => r.textContent)).toEqual(['Adventure', 'Level select', 'Endless', 'Free Play', 'Settings', 'How to']);
     expect(rows.every((r) => r.tag === 'button')).toBe(true);
     expect(panel?.all().some((e) => e.classList.contains('sow-menu-info'))).toBe(true);
     expect(panel?.all().some((e) => e.classList.contains('sow-menu-foot'))).toBe(true);
@@ -201,8 +202,8 @@ describe('menu screen', () => {
 
   it('every row keeps its callback', () => {
     const { root, calls } = build();
-    for (const label of ['Adventure', 'Level select', 'Endless', 'Free Play', 'Settings']) buttonsLabelled(root, label)[0]?.tap();
-    expect(calls).toEqual(['adventure', 'levels', 'endless', 'freePlay', 'settings']);
+    for (const label of ['Adventure', 'Level select', 'Endless', 'Free Play', 'Settings', 'How to']) buttonsLabelled(root, label)[0]?.tap();
+    expect(calls).toEqual(['adventure', 'levels', 'endless', 'freePlay', 'settings', 'howTo']);
   });
 
   it('Play or Continue is in the warm frame at first; a tap moves the frame to the last row used', () => {
@@ -226,7 +227,7 @@ describe('menu screen', () => {
 
   it('rows carry the 200 ms entrance stagger', () => {
     const { rows } = build();
-    expect(rows.map((r) => r.style.animationDelay)).toEqual(['0ms', '200ms', '400ms', '600ms', '800ms']);
+    expect(rows.map((r) => r.style.animationDelay)).toEqual(['0ms', '200ms', '400ms', '600ms', '800ms', '1000ms']);
   });
 
   it('setContinue, setInfo and setFooter fill their lines', () => {
@@ -246,7 +247,7 @@ describe('menu screen', () => {
       const L = menuLayout(W, H, ZERO);
       const panel = root.all().find((e) => e.classList.contains('sow-menu-panel'));
       expect(panel?.style.width).toBe(`${L.panel.w}px`);
-      expect(panel?.style.gridTemplateAreas).toBe(L.arrangement === 'side' ? '"title rows" "info rows" "foot foot"' : '"title" "rows" "info" "foot"');
+      expect(panel?.style.gridTemplateAreas).toBe(L.arrangement === 'side' ? '"title rows" "info rows" "howto rows" "foot foot"' : '"title" "rows" "howto" "info" "foot"');
       for (const r of rows) {
         expect(Number.parseFloat(r.style.minHeight ?? '0')).toBeGreaterThanOrEqual(MIN_HIT_PX);
         expect(r.style.height).toBe(`${L.rowH}px`);

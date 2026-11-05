@@ -181,6 +181,10 @@ export const PIXEL_SITES = {
   resultsScore: { min: 26, max: 56 },
   parReached: { min: 20, max: 34 },
   bigButton: { min: 20, max: 20 },
+  levelSelectTitle: { min: 22, max: 40 },
+  levelButton: { min: 18, max: 18 },
+  howToTitle: { min: 18, max: 30 },
+  howToHead: { min: 18, max: 18 },
 } as const satisfies Record<string, { min: number; max: number }>;
 
 /** Pure: the SVG geometry for a line: path, view box and size in cells (shadow included). */

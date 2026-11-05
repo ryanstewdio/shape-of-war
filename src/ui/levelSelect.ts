@@ -6,6 +6,7 @@ import type { StarCount } from '../core/stars';
 import { button, createScreen, el, type Screen } from './dom';
 import { formatInt, starGlyphs } from './format';
 import { fourthStarEl, hasFourthStar } from './fourthStar';
+import { setVectorText } from './vectorFont';
 
 export const LEVELS_PER_PAGE = 12;
 
@@ -45,6 +46,13 @@ export function levelButtonLabel(e: LevelEntry): string {
   return `${e.index}\n${starGlyphs(e.stars)}`;
 }
 
+export const LEVEL_SELECT_TITLE = 'Level select';
+
+/** Pure: what a screen reader says for a level button, for example "Level 7, 2 stars". */
+export function levelAriaLabel(e: LevelEntry): string {
+  return `Level ${e.index}, ${e.stars} ${e.stars === 1 ? 'star' : 'stars'}`;
+}
+
 export interface LevelSelectActions {
   play(index: number): void;
   back(): void;
@@ -56,7 +64,8 @@ export interface LevelSelectScreen extends Screen {
 
 export function createLevelSelect(parent: HTMLElement, a: LevelSelectActions): LevelSelectScreen {
   const s = createScreen(parent);
-  const title = el('div', 'sow-title', 'Level select');
+  const title = el('div', 'sow-title');
+  setVectorText(title, LEVEL_SELECT_TITLE);
   title.style.fontSize = 'clamp(22px, 5vmin, 40px)';
   const grid = el('div', 'sow-grid');
   const info = el('div', 'sow-sub', '');
@@ -64,9 +73,14 @@ export function createLevelSelect(parent: HTMLElement, a: LevelSelectActions): L
   let unlocked = 1;
   let scores: Readonly<AdventureScores> = {};
   let page = 0;
-  const prev = button('Prev', () => paint(page - 1));
-  const next = button('Next', () => paint(page + 1));
-  row.append(prev, next, button('Back', a.back));
+  const pixelButton = (label: string, onTap: () => void): HTMLButtonElement => {
+    const b = button('', onTap);
+    setVectorText(b, label);
+    return b;
+  };
+  const prev = pixelButton('Prev', () => paint(page - 1));
+  const next = pixelButton('Next', () => paint(page + 1));
+  row.append(prev, next, pixelButton('Back', a.back));
   s.root.append(title, grid, info, row);
 
   function paint(p: number): void {
@@ -74,12 +88,14 @@ export function createLevelSelect(parent: HTMLElement, a: LevelSelectActions): L
     page = lp.page;
     grid.replaceChildren(
       ...lp.entries.map((e) => {
-        const b = button(levelButtonLabel(e), () => a.play(e.index));
+        // Ryan (font check): the level number is in the pixel font; the star glyphs stay plain.
+        const b = button('', () => a.play(e.index));
+        const num = el('span', 'sow-level-num');
+        setVectorText(num, String(e.index));
+        b.append(num, el('span', 'sow-level-stars', starGlyphs(e.stars)));
+        b.setAttribute('aria-label', levelAriaLabel(e));
         if (e.best > 0) b.title = `Best ${formatInt(e.best)}`;
-        if (hasFourthStar(e.stars)) {
-          b.append(fourthStarEl());
-          b.setAttribute('aria-label', `Level ${e.index}, 4 stars`);
-        }
+        if (hasFourthStar(e.stars)) b.append(fourthStarEl());
         return b;
       }),
     );

@@ -73,6 +73,7 @@ import { pickLevel, parseLevelQuery, type GeneratorModule, type LevelPick } from
 import { resolveAudio } from './ui/audioPort';
 import { bossName, needsBossStrip } from './ui/boss';
 import { endlessLabel, endlessLevel, endlessLine } from './ui/endless';
+import { createHowToScreen } from './ui/howTo';
 import { createLevelSelect } from './ui/levelSelect';
 import { continueLabel, createMenuScreen, footerLine, shortSha } from './ui/menu';
 import { gateSearch, isDev } from './ui/devGate';
@@ -553,7 +554,10 @@ async function boot(): Promise<void> {
     endless: () => bus.emit('game:start', { mode: 'endless', levelIndex: 1 }),
     freePlay: () => dispatch({ type: 'openFreePlay' }),
     settings: () => dispatch({ type: 'openSettings' }),
+    howTo: () => howToScreen.open(0),
   });
+  // How to guide: an overlay over the menu (no flow state). Close hides it and the menu shows again.
+  const howToScreen = createHowToScreen(uiRoot, { close: () => howToScreen.hide() });
   // R2 Free Play options screen. Start keeps the choice for the session and starts the run; the
   // difficulty picked here also becomes the card's last choice.
   const freePlayScreen = createFreePlayScreen(uiRoot, {
@@ -702,7 +706,7 @@ async function boot(): Promise<void> {
   }
 
   const paintScreens = (): void => {
-    for (const s of [bootScreen, menu, levelSelect, freePlayScreen, pauseScreen, results, settingsScreen]) s.hide();
+    for (const s of [bootScreen, menu, howToScreen, levelSelect, freePlayScreen, pauseScreen, results, settingsScreen]) s.hide();
     hud.hide();
     paintIntro();
     switch (flow.screen) {
