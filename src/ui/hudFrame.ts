@@ -3,11 +3,12 @@
 // what is left, and the arena is fitted inside that play rect exactly as the renderer does it.
 // When a letterbox band is thinner than the HUD needs, the play rect shrinks instead.
 // Cover (21:9): left column for score, multiplier, the weapon indicator (V2-B, right of the
-// multiplier), objective and par; right column for pause, lives, bombs, super ring with its label,
-// and the bomb button.
+// multiplier), objective and par; right column for pause, then the super and bomb stack high on
+// the right edge (thumbs-buttons), then the super label, lives and bombs under the bomb.
 // Main (10:9): top band for the text rows (the weapon indicator sits right of the multiplier in
-// the same rows, so the band height is unchanged), then either a right column or a bottom band
-// for the bomb and super buttons, whichever leaves the larger arena.
+// the same rows, so the band height is unchanged), then a right column for the super and bomb
+// stack. The old bottom band arrangement is gone: the stack now sits high above the aim rest zone
+// (src/input/reach.ts), so a band along the bottom would hold nothing.
 // V3-A boss bar: three more boxes (name, phase pips, hit point bar) shown only while a boss lives.
 // G3A fix, cover: Ryan found the left column version unreadable on the folded screen (11 px name,
 // a 136 px bar low in the left column). On a boss run the cover now reserves a COVER_BOSS_STRIP px strip across
@@ -27,7 +28,7 @@
 // button hit rects that Thumbs lays out) instead of fixed generous bands, so the main screen
 // arena is as large as the HUD allows. The arena on main is usually width limited, so the right
 // column costs arena scale directly while the top band is often free.
-import { BOMB_HIT, layoutButtons, PAUSE_HIT, SUPER_HIT } from '../input/buttons';
+import { BOMB_HIT, BOMB_VISUAL, layoutButtons, PAUSE_HIT, SUPER_HIT, SUPER_VISUAL } from '../input/buttons';
 import type { ButtonRects, Insets, Rect } from '../input/types';
 import { fitArena, type Fit } from '../render/layout';
 
@@ -38,7 +39,7 @@ export function aspectClass(cssW: number, cssH: number): AspectClass {
   return cssW / Math.max(1, cssH) >= 1.8 ? 'cover' : 'main';
 }
 
-export type Arrangement = 'sides' | 'topRight' | 'topBottom';
+export type Arrangement = 'sides' | 'topRight';
 
 export type TextAlign = 'left' | 'center' | 'right';
 
@@ -167,11 +168,6 @@ export function mainTop(buttons: ButtonRects, ins: Insets): number {
   return Math.max(MAIN_ROWS, buttons.pause.y + buttons.pause.h - ins.top);
 }
 
-/** Pure: main bottom band height above the bottom inset: up to the top of the bomb and super hit rects. */
-export function mainBottom(buttons: ButtonRects, H: number, ins: Insets): number {
-  return Math.max(0, H - ins.bottom - Math.min(buttons.bomb.y, buttons.super.y));
-}
-
 function box(x: number, y: number, w: number, h: number, size: number, align: TextAlign = 'left', wrap = false): HudBox {
   return { x, y, w: Math.max(0, w), h, size, align, wrap };
 }
@@ -275,7 +271,8 @@ function sides(b: Base, strip: boolean): Partial0 {
   const rx = W - ins.right - COVER_RIGHT + 8;
   const rw = COVER_RIGHT - 20;
   const t = ins.top;
-  const below = buttons.pause.y + buttons.pause.h;
+  // Super label, hint, lives and bombs under the bomb, inside the ring clearance above the rest zone.
+  const below = buttons.bomb.y + buttons.bomb.h;
   return {
     cls: 'cover',
     arrangement: 'sides',
@@ -285,8 +282,8 @@ function sides(b: Base, strip: boolean): Partial0 {
     playRect,
     buttonInsets,
     buttons,
-    bombD: 64,
-    superD: 56,
+    bombD: BOMB_VISUAL,
+    superD: SUPER_VISUAL,
     pauseIcon: 20,
     boxes: {
       score: box(lx, t + 8, lw, 24, 20),
@@ -305,9 +302,10 @@ function sides(b: Base, strip: boolean): Partial0 {
       // column under the level line otherwise. The right column, with the moved bomb and super
       // buttons, is untouched either way.
       ...(strip ? coverStripBoss(b) : coverColumnBoss(b, lx, lw)),
-      lives: box(rx, below + 4, rw, 16, 12, 'right'),
-      bombs: box(rx, below + 22, rw, 14, 10, 'right'),
-      ...superBoxes(buttons, rx - 4, rw + 8, 11, 9),
+      superLabel: box(rx - 4, below + 4, rw + 8, 15, 11, 'center'),
+      superHint: box(rx - 4, below + 19, rw + 8, 13, 9, 'center'),
+      lives: box(rx, below + 36, rw, 16, 12, 'right'),
+      bombs: box(rx, below + 54, rw, 14, 10, 'right'),
     },
   };
 }
@@ -375,8 +373,8 @@ function mainBase(b: Base, arrangement: Arrangement, buttonInsets: Insets, playO
     playRect: clampRect(playOf(buttons)),
     buttonInsets,
     buttons,
-    bombD: 72,
-    superD: 64,
+    bombD: BOMB_VISUAL,
+    superD: SUPER_VISUAL,
     pauseIcon: 24,
     boxes: { ...topRows(b), superLabel: box(0, 0, 0, 0, 13), superHint: box(0, 0, 0, 0, 11) },
   };
@@ -393,24 +391,6 @@ function topRight(b: Base): Partial0 {
   return { ...f, boxes: { ...f.boxes, ...superBoxes(f.buttons, x, MAIN_RIGHT - 2 * MAIN_COLUMN_PAD, 12, 10, 2) } };
 }
 
-function topBottom(b: Base): Partial0 {
-  const { W, H, ins } = b;
-  const f = mainBase(b, 'topBottom', ins, (buttons) => {
-    const top = mainTop(buttons, ins);
-    const bottom = mainBottom(buttons, H, ins);
-    return { x: ins.left, y: ins.top + top, w: W - ins.left - ins.right, h: H - ins.top - ins.bottom - top - bottom };
-  });
-  // Label to the left of the super ring, right aligned, vertically centred on it.
-  const s = f.buttons.super;
-  const w = 180;
-  const x = s.x - 8 - w;
-  const cy = s.y + s.h / 2;
-  return {
-    ...f,
-    boxes: { ...f.boxes, superLabel: box(x, cy - 17, w, 17, 13, 'right'), superHint: box(x, cy + 1, w, 15, 11, 'right') },
-  };
-}
-
 /** Pure: the banner line, centred at the top of the play rect. */
 function bannerBox(play: Rect): HudBox {
   const w = Math.min(BANNER_W, Math.max(0, play.w - 16));
@@ -424,8 +404,8 @@ function finish(f: Partial0, arenaW: number, arenaH: number): HudFrame {
 
 /**
  * Pure: the HUD frame for a viewport, its safe area insets and the current arena size.
- * Cover always uses side columns. Main picks the arrangement with the larger arena scale; a tie
- * keeps the right column. `opts.bossStrip` is cover only (see FrameOptions).
+ * Cover always uses side columns, main always the top band and right column. `opts.bossStrip` is
+ * cover only (see FrameOptions).
  */
 export function hudFrame(
   cssW: number,
@@ -437,9 +417,7 @@ export function hudFrame(
 ): HudFrame {
   const b: Base = { W: Math.max(1, cssW), H: Math.max(1, cssH), ins: insets };
   if (aspectClass(cssW, cssH) === 'cover') return finish(sides(b, opts.bossStrip ?? true), arenaW, arenaH);
-  const a = finish(topRight(b), arenaW, arenaH);
-  const c = finish(topBottom(b), arenaW, arenaH);
-  return c.fit.scale > a.fit.scale + 1e-9 ? c : a;
+  return finish(topRight(b), arenaW, arenaH);
 }
 
 /** Pure: every rect the HUD draws or listens on, for overlap checks. */

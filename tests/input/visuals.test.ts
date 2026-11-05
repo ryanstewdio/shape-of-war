@@ -39,14 +39,14 @@ describe('stickVisuals', () => {
 });
 
 describe('buttonVisuals', () => {
-  it('centres visuals on the hit rects with doc 04 sizes and tracks held', () => {
+  it('centres visuals on the hit rects with the thumbs-buttons sizes and tracks held', () => {
     const m = createModel(900, 400);
     const b = rectCentre(m.buttons.bomb);
     pointerDown(m, 1, b.x, b.y);
     const v = buttonVisuals(m);
     expect(v.map((x) => [x.id, x.shape, x.size, x.held])).toEqual([
-      ['bomb', 'circle', 64, true],
-      ['super', 'circle', 56, false],
+      ['bomb', 'circle', 60, true],
+      ['super', 'circle', 52, false],
       ['pause', 'square', 40, false],
     ]);
     expect([v[0]?.x, v[0]?.y]).toEqual([b.x, b.y]);

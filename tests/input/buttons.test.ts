@@ -9,36 +9,36 @@ const MAIN = { w: 840, h: 756 }; // about 10:9
 const INSETS: Insets = { top: 10, right: 48, bottom: 20, left: 32 };
 
 describe('layoutButtons', () => {
-  it('21:9 without insets', () => {
+  // thumbs-buttons: super on top, bomb under it, 64 px hit circles 12 px apart, centre 44 px in from
+  // the safe right edge, the bomb bottom edge 144 px (stick radius plus 24) above the aim rest zone.
+  it('21:9 without insets: the stack rises to just under pause', () => {
     const r = layoutButtons(COVER.w, COVER.h, ZERO_INSETS);
-    // Bomb: centre x 960 - 56 = 904 (bottom right, v2.1 reach), visual bottom 16 px above
-    // bottom, centre y 412 - 16 - 32 = 364.
-    expect(r.bomb).toEqual({ x: 860, y: 320, w: 88, h: 88 });
-    // Super: 12 px gap above bomb visual, centre y 364 - 32 - 12 - 28 = 292.
-    expect(r.super).toEqual({ x: 866, y: 254, w: 76, h: 76 });
-    // Pause: visual 40 square 12 px inside top right, centre (960 - 32, 32).
+    // Zone top 348 (trimmed: pause bottom 60 + 4 + 140 stack + 144 clearance), super top 64.
+    expect(r.super).toEqual({ x: 884, y: 64, w: 64, h: 64 });
+    expect(r.bomb).toEqual({ x: 884, y: 140, w: 64, h: 64 });
     expect(r.pause).toEqual({ x: 900, y: 4, w: 56, h: 56 });
   });
 
   it('21:9 with insets', () => {
     const r = layoutButtons(COVER.w, COVER.h, INSETS);
-    // Centre x 56 in from the safe right edge: 960 - 48 - 56 = 856.
-    expect(r.bomb).toEqual({ x: 812, y: 300, w: 88, h: 88 });
-    expect(r.super).toEqual({ x: 818, y: 234, w: 76, h: 76 });
+    // Centre x 44 in from the safe right edge: 960 - 48 - 44 = 868. Top inset 10 moves it all down 10.
+    expect(r.super).toEqual({ x: 836, y: 74, w: 64, h: 64 });
+    expect(r.bomb).toEqual({ x: 836, y: 150, w: 64, h: 64 });
     expect(r.pause).toEqual({ x: 852, y: 14, w: 56, h: 56 });
   });
 
-  it('10:9 without insets', () => {
+  it('10:9 without insets: the stack sits as low as the ring clearance allows', () => {
     const r = layoutButtons(MAIN.w, MAIN.h, ZERO_INSETS);
-    expect(r.bomb).toEqual({ x: 740, y: 664, w: 88, h: 88 });
-    expect(r.super).toEqual({ x: 746, y: 598, w: 76, h: 76 });
+    // Zone 688 to 752, bomb bottom 688 - 144 = 544.
+    expect(r.super).toEqual({ x: 764, y: 404, w: 64, h: 64 });
+    expect(r.bomb).toEqual({ x: 764, y: 480, w: 64, h: 64 });
     expect(r.pause).toEqual({ x: 780, y: 4, w: 56, h: 56 });
   });
 
   it('10:9 with insets', () => {
     const r = layoutButtons(MAIN.w, MAIN.h, INSETS);
-    expect(r.bomb).toEqual({ x: 692, y: 644, w: 88, h: 88 });
-    expect(r.super).toEqual({ x: 698, y: 578, w: 76, h: 76 });
+    expect(r.super).toEqual({ x: 716, y: 384, w: 64, h: 64 });
+    expect(r.bomb).toEqual({ x: 716, y: 460, w: 64, h: 64 });
     expect(r.pause).toEqual({ x: 732, y: 14, w: 56, h: 56 });
   });
 
@@ -81,13 +81,12 @@ describe('hitButton', () => {
     expect(hitButton(r, r.bomb.x - 1, r.bomb.y + r.bomb.h - 1)).toBeNull();
   });
 
-  it('resolves the bomb and super overlap to the nearer centre', () => {
+  it('leaves a 12 px dead gap between super and bomb', () => {
     const b = rectCentre(r.bomb);
-    const s = rectCentre(r.super);
-    // Centres 72 px apart; overlap band is 34 to 44 px above the bomb centre.
-    expect(b.y - s.y).toBe(72);
-    expect(hitButton(r, b.x, b.y - 35)).toBe('bomb');
-    expect(hitButton(r, b.x, b.y - 40)).toBe('super');
+    expect(r.bomb.y - (r.super.y + r.super.h)).toBe(12);
+    expect(hitButton(r, b.x, r.super.y + r.super.h - 1)).toBe('super');
+    expect(hitButton(r, b.x, r.super.y + r.super.h + 6)).toBeNull();
+    expect(hitButton(r, b.x, r.bomb.y + 1)).toBe('bomb');
   });
 
   it('misses open arena', () => {

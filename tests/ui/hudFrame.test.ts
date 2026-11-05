@@ -18,7 +18,6 @@ import {
   hudRects,
   MAIN_RIGHT,
   MAIN_ROWS,
-  mainBottom,
   mainTop,
   overlayPadding,
   overlaps,
@@ -107,8 +106,8 @@ describe('B6 HUD frame keeps the HUD off the arena', () => {
     expect(f.boxes.score.x + f.boxes.score.w).toBeLessThanOrEqual(f.arena.x);
   });
 
-  it('main picks the arrangement with the larger arena', () => {
-    expect(hudFrame(832, 750, ZERO, 1800, 1000).arrangement).toBe('topBottom');
+  it('main always uses the right column: the stacked buttons sit high, so a bottom band would hold nothing', () => {
+    expect(hudFrame(832, 750, ZERO, 1800, 1000).arrangement).toBe('topRight');
     expect(hudFrame(832, 750, ZERO, 1100, 1100).arrangement).toBe('topRight');
   });
 
@@ -201,42 +200,39 @@ describe('B9 main screen arena scale: on-screen ship speed', () => {
     }
   });
 
-  it('main is faster than at B6 on levels 1, 6 and 20', () => {
-    for (const r of rows) expect(r.main, `L${r.level}`).toBeGreaterThan(AT_B6[r.level as (typeof LEVELS)[number]] + 5);
-  });
-
-  it('level 20 main is within 5 percent of pre-B6; levels 1 and 6 reach the best the HUD allows (88 percent or more)', () => {
+  it('main is faster than at B6 on levels 1 and 6, and within 1 percent of B6 on level 20', () => {
+    // thumbs-buttons: the narrower 68 px column speeds up levels 1 and 6; level 20 lost the bottom
+    // band arrangement (the buttons no longer sit at the bottom), so it lands just under B6.
     const [l1, l6, l20] = rows;
-    expect(l20?.main ?? 0).toBeGreaterThanOrEqual(0.95 * (l20?.preB6Main ?? Infinity));
-    expect(l1?.main ?? 0).toBeGreaterThanOrEqual(0.88 * (l1?.preB6Main ?? Infinity));
-    expect(l6?.main ?? 0).toBeGreaterThanOrEqual(0.88 * (l6?.preB6Main ?? Infinity));
+    for (const r of [l1, l6]) expect(r?.main ?? 0, `L${r?.level}`).toBeGreaterThan(AT_B6[r?.level as (typeof LEVELS)[number]] + 5);
+    expect(l20?.main ?? 0).toBeGreaterThanOrEqual(0.99 * AT_B6[20]);
   });
 
-  it('why 95 percent is out of reach on levels 1 and 6: no HUD-clear rect with the stacked buttons gets there', () => {
-    // The arena is width limited on main, so any HUD element whose x range meets the arena must
-    // sit above or below it. The super-over-bomb stack is 88 px wide, so it is either a column
-    // (arena width W - MAIN_RIGHT) or a bottom band (arena height H - top band - stack band).
+  it('main reaches 90 percent or more of pre-B6 on levels 1, 6 and 20', () => {
+    for (const r of rows) expect(r.main, `L${r.level}`).toBeGreaterThanOrEqual(0.9 * r.preB6Main);
+  });
+
+  it('why 95 percent is out of reach: the arena is width limited and the stack needs its column', () => {
+    // The super-over-bomb stack is 64 px wide and sits mid height on the right edge, so the only
+    // HUD-clear rect beside it is the column layout (arena width W - MAIN_RIGHT).
     const buttons = layoutButtons(MAIN.w, MAIN.h, ZERO);
     const columnRect = { x: 0, y: 0, w: MAIN.w - MAIN_RIGHT, h: MAIN.h };
-    const bandRect = { x: 0, y: 0, w: MAIN.w, h: MAIN.h - mainTop(buttons, ZERO) - mainBottom(buttons, MAIN.h, ZERO) };
-    expect(mainBottom(buttons, MAIN.h, ZERO)).toBe(158);
     expect(mainTop(buttons, ZERO)).toBe(60);
-    expect(MAIN_RIGHT).toBe(92);
-    for (const r of rows.slice(0, 2)) {
+    expect(MAIN_RIGHT).toBe(68);
+    for (const r of rows) {
       const [aw, ah] = r.arena.split('x').map(Number) as [number, number];
-      const best = Math.max(fitArena(aw, ah, columnRect).scale, fitArena(aw, ah, bandRect).scale);
+      const best = fitArena(aw, ah, columnRect).scale;
       expect(pxPerSec(best), `L${r.level}`).toBeLessThan(0.95 * r.preB6Main);
       expect(r.main).toBeCloseTo(pxPerSec(best), 6);
     }
   });
 
-  it('main bands are measured, not fixed: top band 60, bottom band 158, column 92 at zero insets', () => {
-    const tb = hudFrame(MAIN.w, MAIN.h, ZERO, 1800, 1000);
-    expect(tb.arrangement).toBe('topBottom');
-    expect(tb.playRect).toEqual({ x: 0, y: 60, w: 832, h: 750 - 60 - 158 });
-    const tr = hudFrame(MAIN.w, MAIN.h, ZERO, 960, 720);
-    expect(tr.arrangement).toBe('topRight');
-    expect(tr.playRect).toEqual({ x: 0, y: 60, w: 832 - 92, h: 690 });
+  it('main bands are measured, not fixed: top band 60, column 68 at zero insets', () => {
+    for (const [aw, ah] of [[1800, 1000], [960, 720]] as const) {
+      const tr = hudFrame(MAIN.w, MAIN.h, ZERO, aw, ah);
+      expect(tr.arrangement).toBe('topRight');
+      expect(tr.playRect).toEqual({ x: 0, y: 60, w: 832 - 68, h: 690 });
+    }
   });
 });
 
