@@ -99,3 +99,4 @@ One line per decision: clock time, who raised it, what was decided, why.
 | 195:00 | Ryan | Font: a code drawn vector stroke font for headlines, titles, big numbers and buttons; body text keeps the current font (ledger-vector-font). |
 | 198:40 | Ryan | Font: vector line font rated 3, HUD hard to read: switch headlines to an original code drawn pixel arcade font (5 x 7 cells); HUD score back to the plain font. |
 | 211:00 | Ryan | Orbit stays melee only unless in a combo. Bomb and Super stack above the right stick on the right edge (Thumbs). A paged How to guide on the main menu replaces the interactive tutorial (Ledger). |
+| 216:30 | Ryan | Build d9bfb54 is the tester release, tagged tester-1. |
