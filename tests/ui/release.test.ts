@@ -47,7 +47,7 @@ describe('rename to Shapes of War', () => {
   it('the menu screen shows the new title', () => {
     try {
       const root = installFakeDocument();
-      createMenuScreen(asParent(root), { adventure: () => undefined, levels: () => undefined, endless: () => undefined, freePlay: () => undefined, settings: () => undefined });
+      createMenuScreen(asParent(root), { adventure: () => undefined, levels: () => undefined, endless: () => undefined, freePlay: () => undefined, settings: () => undefined, howTo: () => undefined });
       expect(root.all().some((e) => e.classList.contains('sow-title') && e.textContent === 'Shapes of War')).toBe(true);
     } finally {
       vi.unstubAllGlobals();

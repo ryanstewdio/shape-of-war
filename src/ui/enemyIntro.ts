@@ -166,19 +166,25 @@ export const FOE_ICON_PX = 36;
 
 /** Edge: the kind's neon shape on a small canvas. Blank where the 2D context is missing (tests). */
 export function iconCanvas(kind: FoeKind, px = FOE_ICON_PX): HTMLCanvasElement {
-  const c = el('canvas', 'sow-foe-icon');
+  const c = specCanvas(foeSpec(kind), px, 'sow-foe-icon');
+  c.setAttribute('data-foe', kind);
+  return c;
+}
+
+/** Edge: any shape spec on a small canvas (the How to guide draws the ship, drone and pickups). */
+export function specCanvas(spec: ShapeSpec, px: number, cls: string): HTMLCanvasElement {
+  const c = el('canvas', cls);
   const dpr = Math.min(3, typeof window !== 'undefined' && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1);
   c.width = Math.round(px * dpr);
   c.height = Math.round(px * dpr);
   c.style.width = `${px}px`;
   c.style.height = `${px}px`;
-  c.setAttribute('data-foe', kind);
   c.setAttribute('aria-hidden', 'true');
   const ctx = typeof c.getContext === 'function' ? c.getContext('2d') : null;
   if (ctx === null) return c;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  for (const p of iconPaths(foeSpec(kind), px * dpr)) {
+  for (const p of iconPaths(spec, px * dpr)) {
     ctx.beginPath();
     for (let i = 0; i + 1 < p.pts.length; i += 2) {
       const x = p.pts[i] ?? 0;

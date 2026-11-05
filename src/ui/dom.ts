@@ -87,6 +87,32 @@ export const UI_CSS = `
   border-top: 1px solid hsla(185, 90%, 60%, 0.35); padding-top: 4px; }
 @keyframes sow-row-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .sow-btn.sow-menu-row { animation: none; opacity: 1; } }
+.sow-btn.sow-menu-row.sow-menu-howto { border-color: hsl(55, 95%, 62%);
+  box-shadow: 0 0 10px hsla(55, 95%, 55%, 0.55), inset 0 0 8px hsla(55, 95%, 55%, 0.25); }
+.sow-screen.sow-howto { background: rgba(2, 4, 12, 0.86);
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
+.sow-card.sow-howto-card { overflow: hidden; gap: 10px; height: 100%; max-height: 100%; width: min(620px, 100%); }
+.sow-howto-card .sow-title { font-size: clamp(18px, 4vmin, 30px); }
+.sow-howto-body { width: 100%; flex: 1 1 auto !important; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  touch-action: pan-y; display: flex; flex-direction: column; gap: 12px; padding: 2px 4px; box-sizing: border-box; text-align: left; }
+.sow-howto-section { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 12px; box-sizing: border-box;
+  border: 1px solid hsla(185, 90%, 55%, 0.35); border-radius: 10px; }
+.sow-howto-head { font-size: 18px; }
+.sow-howto-top { display: flex; align-items: center; gap: 14px; }
+.sow-howto-lines { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.sow-howto-line { font-size: clamp(15px, 3.4vmin, 19px); line-height: 1.3; }
+.sow-howto-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 14px; }
+.sow-howto-item { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sow-howto-words { display: flex; flex-direction: column; min-width: 0; }
+.sow-howto-name { font-size: 16px; font-weight: 700; color: hsl(185, 90%, 75%); }
+.sow-howto-text { font-size: 15px; line-height: 1.25; opacity: 0.92; }
+.sow-howto-icon { flex: 0 0 auto; }
+.sow-howto-dots { display: flex; gap: 10px; justify-content: center; }
+.sow-howto-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid hsl(185, 90%, 60%); box-sizing: border-box; }
+.sow-howto-dot.sow-on { background: hsl(55, 95%, 62%); border-color: hsl(55, 95%, 70%); box-shadow: 0 0 8px hsl(55, 95%, 55%); }
+.sow-grid .sow-btn .sow-level-num { font-size: 18px; display: block; }
+.sow-grid .sow-btn .sow-level-stars { display: block; }
 .sow-card-screen { gap: 0; }
 .sow-card { display: flex; flex-direction: column; align-items: center; gap: 8px; box-sizing: border-box;
   width: min(560px, 100%); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 14px 18px;
