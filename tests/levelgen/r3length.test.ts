@@ -284,7 +284,7 @@ describe('R3 flags, versions and determinism', () => {
     let h = 0x811c9dc5;
     for (const seed of [1, 42, 777, 0xdeadbeef]) for (let n = 1; n <= 50; n++) h = fold(h, levelHash(generateLevel(seed, n, V6_GEN_CONFIG)));
     // Pinned on this branch; V6 reproduces the version 6 gcTriage hashes of main (7AFE6A2E and on).
-    expect(fmix32(h).toString(16)).toBe('3a33d889');
+    expect(fmix32(h).toString(16)).toBe('fd696876'); // foundry-score-target: scoreInTime target 0.6 x par (was 3a33d889)
     expect(levelHash(generateLevel(42, 6, V6_GEN_CONFIG))).toBe('7AFE6A2E');
     expect(generateLevel(42, 13, V6_GEN_CONFIG).generatorVersion).toBe(GENERATOR_VERSION_V6);
     expect(generateLevel(42, 10, V6_GEN_CONFIG).generatorVersion).toBe(GENERATOR_VERSION_V7);
