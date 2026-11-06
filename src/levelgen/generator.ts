@@ -1112,7 +1112,10 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const legacy = whole === null ? computePar(waves, objective) : null;
   const par = whole?.par ?? legacy?.par ?? PAR_MIN;
   if (objective.kind === 'scoreInTime') {
-    objective = { ...objective, target: long ? scaledTarget(waves, objective.timeLimitSec, BANDS[band].scoreTimeSec.max, par) : (legacy?.target ?? PAR_MIN) };
+    // Tester 1: whole level par (R1 and later) takes the goal at WHOLE_TARGET_FRACTION x par, so the
+    // goal sits near the 1 star line. Legacy configs (V1 to V5) keep their old targets.
+    const target = whole !== null ? wholeLevelTarget(par) : long ? scaledTarget(waves, objective.timeLimitSec, BANDS[band].scoreTimeSec.max, par) : (legacy?.target ?? PAR_MIN);
+    objective = { ...objective, target };
   }
   const def: LevelDef = {
     version: LEVELDEF_VERSION,
@@ -1177,6 +1180,14 @@ export function r1LevelOf(levelIndex: number, cfg: GenConfig): boolean {
 /** Pulse shape of a long level in a band. */
 export function longPulse(l: LongBandParams): PulseShape {
   return { calmSec: LONG_CALM_SEC, peakEverySec: l.peakEverySec, breatherSec: LONG_BREATHER_SEC };
+}
+
+/** Tester 1: the scoreInTime goal as a share of a whole level par (Normal). */
+export const WHOLE_TARGET_FRACTION = 0.6;
+
+/** Whole level scoreInTime target: WHOLE_TARGET_FRACTION x par on the PAR_STEP grid, at least PAR_MIN, at most par. */
+export function wholeLevelTarget(par: number): number {
+  return Math.min(par, Math.max(PAR_MIN, Math.round((WHOLE_TARGET_FRACTION * par) / PAR_STEP) * PAR_STEP));
 }
 
 /**

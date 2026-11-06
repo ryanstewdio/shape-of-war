@@ -20,6 +20,7 @@
 // The gate is pure and ticks on sim time, so a pause during Ready freezes it.
 import { DIFFICULTIES, DIFFICULTY, type Difficulty } from '../core/difficulty';
 import { INSANE_STARS, STAR_CAP, targetsFor, type ParScaleTable } from '../core/stars';
+import { objectiveFor } from '../game/difficulty';
 import { DETONATE_RADIUS, HOMING_RADIUS, SUPER_DURATION, TURBO_DURATION, TURBO_PIERCE, TURBO_SCALE, TURBO_SPEED_SCALE } from '../game/supers';
 import type { BossSpec, DroneKind, LevelDef, ObjectiveDef, SuperKind } from '../levelgen/leveldef';
 import { bossName } from './boss';
@@ -282,7 +283,7 @@ export interface IntroExtra {
 
 /**
  * Pure: intro card text for an Adventure level. R6: the star targets are the level's own times
- * the difficulty's parScale (`table` is DIFFICULTY outside tests).
+ * the difficulty's parScale (`table` is DIFFICULTY outside tests); so is a scoreInTime goal.
  */
 export function introCard(
   levelIndex: number,
@@ -291,11 +292,13 @@ export function introCard(
   extra: IntroExtra = {},
   table: ParScaleTable = DIFFICULTY,
 ): IntroCard {
+  // Tester 1: the goal reads the target the sim plays (createGame scales it the same way).
+  const goal: GoalDef = { ...(def.boss === undefined ? {} : { boss: def.boss }), objective: objectiveFor(def.objective, difficulty, table) };
   return {
     title: `Level ${Math.max(1, Math.floor(levelIndex))}`,
     arena: arenaDetail(def),
-    goal: goalSentence(def),
-    victory: victorySentence(def),
+    goal: goalSentence(goal),
+    victory: victorySentence(goal),
     stars: starTargets(targetsFor({ par: def.par ?? 0, stars: def.stars }, difficulty, table).stars),
     starCap: starCapLine(difficulty),
     enemies: foeLines(extra.newFoes ?? []),

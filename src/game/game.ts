@@ -26,7 +26,7 @@ import { endlessLevel, startEndless, stepEndlessAwards } from './endless';
 import { currentMultiplier, gs, syncMultiplier, type GameMode, type GameState, type ScoringPort, type SegmentSource } from './state';
 import { stepSupers, triggerSuper } from './supers';
 import { resetWellState, stepWellArrivals } from './wellArrival';
-import { levelWithLiveCap } from './difficulty';
+import { levelWithLiveCap, levelWithTarget } from './difficulty';
 import { createWorld, ENTITY_CAP, stepWorld, type World } from './world';
 
 export interface GameOptions {
@@ -118,7 +118,9 @@ export function createGame(level: LevelDef, opts: GameOptions = {}): World {
   const base = opts.freePlay === undefined ? level : freePlayLevelRules(level, opts.freePlay);
   // R5: liveCapScale scales maxLiveEnemies once here, so every cap reader (spawners, gravity
   // wells, boss adds) sees the scaled value. Normal keeps the level object unchanged.
-  const lv = levelWithLiveCap(base, DIFFICULTY[difficulty].liveCapScale, ENTITY_CAP);
+  // Tester 1: a scoreInTime target scales with parScale here too, so the sim, HUD, intro and
+  // results all read one number (world.level.objective). Normal keeps the level unchanged.
+  const lv = levelWithTarget(levelWithLiveCap(base, DIFFICULTY[difficulty].liveCapScale, ENTITY_CAP), difficulty);
   const w = createWorld(lv, opts.capacity, difficulty);
   const g = gs(w);
   if (opts.mode !== undefined) g.mode = opts.mode;

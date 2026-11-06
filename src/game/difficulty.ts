@@ -1,8 +1,9 @@
 // Release polish: the run's difficulty (docs/14 item 6). createGame stores GameOptions.difficulty on
 // the world (default normal); every rule reads the table through difficultyOf. Normal multiplies
 // by 1 and adds 0 everywhere, so a normal run is bit identical to the build before this module.
-import { DIFFICULTY, type DifficultyTable } from '../core/difficulty';
-import type { LevelDef } from '../levelgen/leveldef';
+import { DIFFICULTY, type Difficulty, type DifficultyTable } from '../core/difficulty';
+import { parScaleFor, scaleTarget, type ParScaleTable } from '../core/stars';
+import type { LevelDef, ObjectiveDef } from '../levelgen/leveldef';
 import type { World } from './world';
 
 /** The difficulty table of this run (GameOptions.difficulty, normal by default). */
@@ -52,4 +53,24 @@ export function levelWithLiveCap(level: LevelDef, scale: number, cap: number): L
   const next = scaledLiveCap(max, scale, cap);
   if (next === max) return level;
   return { ...level, waves: { ...level.waves, maxLiveEnemies: next } };
+}
+
+/**
+ * Pure: the objective a run on difficulty d plays. A scoreInTime target scales by parScale exactly
+ * as par and the star targets do (core/stars.ts scaleTarget), so it never passes the 1 star line.
+ * Every other objective, and every objective on Normal, is returned as the same object.
+ */
+export function objectiveFor(o: ObjectiveDef, d: Difficulty, table: ParScaleTable = DIFFICULTY): ObjectiveDef {
+  if (o.kind !== 'scoreInTime') return o;
+  const target = scaleTarget(o.target, parScaleFor(d, table));
+  return target === o.target ? o : { ...o, target };
+}
+
+/**
+ * Pure: level with its objective for difficulty d (objectiveFor). Returns the same object when the
+ * objective is unchanged (always on Normal), else a shallow copy; the input is never mutated.
+ */
+export function levelWithTarget(level: LevelDef, d: Difficulty, table: ParScaleTable = DIFFICULTY): LevelDef {
+  const objective = objectiveFor(level.objective, d, table);
+  return objective === level.objective ? level : { ...level, objective };
 }
