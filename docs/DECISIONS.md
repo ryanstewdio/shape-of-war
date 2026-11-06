@@ -100,3 +100,4 @@ One line per decision: clock time, who raised it, what was decided, why.
 | 198:40 | Ryan | Font: vector line font rated 3, HUD hard to read: switch headlines to an original code drawn pixel arcade font (5 x 7 cells); HUD score back to the plain font. |
 | 211:00 | Ryan | Orbit stays melee only unless in a combo. Bomb and Super stack above the right stick on the right edge (Thumbs). A paged How to guide on the main menu replaces the interactive tutorial (Ledger). |
 | 216:30 | Ryan | Build d9bfb54 is the tester release, tagged tester-1. |
+| 230:00 | Fable | scoreInTime target becomes 60 percent of par on whole level par configs, scaled by parScale per difficulty, so finishing the goal lands near the 1 star line. |
