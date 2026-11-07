@@ -119,9 +119,7 @@ export interface Events {
   'sim:enrage': { id: number; x: number; y: number };
   /** Forge to Glow and Chorus (R2 contract stub): an open drum drift burst starts in inSec seconds (telegraph). */
   'sim:driftBurst': { inSec: number; dir: 1 | -1 };
-  /** Forge to Glow and Chorus (T3 contract stub): a pond ripple starts at (x, y) in inSec seconds (RIPPLE_WARN_SEC). */
-  'sim:rippleWarn': { x: number; y: number; inSec: number; strength: number };
-  /** Forge to Glow and Chorus (T3 contract stub): a pond ripple wave starts now at (x, y). */
+  /** Forge to Glow and Chorus (T3 contract stub, T4): a pond ripple wave starts now at (x, y), when a super nova well is destroyed. */
   'sim:ripple': { x: number; y: number; strength: number };
   /** Swarm to Glow and Chorus: Turbo started (active true, at the ship) or ended. */
   'fx:turbo': { active: boolean; x: number; y: number };

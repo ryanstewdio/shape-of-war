@@ -49,12 +49,6 @@ describe('ripple sfx (pure)', () => {
 });
 
 describe('ripple sfx lifecycle', () => {
-  it('plays no cue on the old sim:rippleWarn event', () => {
-    const { bus, be } = setup();
-    bus.emit('sim:rippleWarn', { x: 10, y: 20, inSec: 1, strength: 0.5 });
-    expect(be.plays).toHaveLength(0);
-  });
-
   it('plays the thump and whoosh on sim:ripple, louder with strength', () => {
     const { bus, be } = setup();
     bus.emit('sim:ripple', { x: 0, y: 0, strength: 0.2 });

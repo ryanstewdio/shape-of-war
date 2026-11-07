@@ -244,14 +244,6 @@ describe('ripple on nova well death', () => {
     expect(hasLiveWave(en.pond)).toBe(false);
   });
 
-  it('never emits the deprecated warning', () => {
-    const { w, id } = wellGame(0, 0, true);
-    let warns = 0;
-    bus.on('sim:rippleWarn', () => warns++);
-    killEnemy(w, id, true);
-    for (let i = 0; i < WAVE_STEPS; i++) stepGame(w, DT, idle());
-    expect(warns).toBe(0);
-  });
 });
 
 describe('push', () => {

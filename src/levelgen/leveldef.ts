@@ -54,7 +54,7 @@ export const GENERATOR_VERSION_V8 = 8;
 /**
  * Tester 3 (wave T3). Generator version of every level built with the version 8 config plus
  * GenConfig.enableT3 (the default config): Brood first and Warden second with the first fight at
- * FIRST_FIGHT_HP_MUL, and level 8 a gentle open drum with no drift. No ripples (see RippleEvent). Versions 1 to 8 are unchanged, byte for byte (V8_GEN_CONFIG builds 8).
+ * FIRST_FIGHT_HP_MUL, and level 8 a gentle open drum with no drift. No ripples (they start in the sim when a super nova well is destroyed). Versions 1 to 8 are unchanged, byte for byte (V8_GEN_CONFIG builds 8).
  */
 export const GENERATOR_VERSION_V9 = 9;
 
@@ -242,23 +242,10 @@ export interface LevelDef {
   /** V3 stub (docs/13): present only on a boss level. Absent on every other level and when GenConfig.enableBosses is off. */
   boss?: BossSpec;
   /**
-   * Deprecated (ripples now start when a super nova well is destroyed). The generator no longer
-   * emits it; kept so older branches compile. Fable deletes it at merge.
-   */
-  ripples?: RippleEvent[];
-  /**
    * Tester 3 drum taste (wave T3): true only on the version 9 level 8 open drum, which must not
    * drift (Forge: isOpenDrum is false when this is set). Absent on every other level.
    */
   noDrift?: true;
-}
-
-/** Deprecated with LevelDef.ripples: one scheduled ring wave. Fable deletes it at merge. */
-export interface RippleEvent {
-  atSec: number;
-  x: number;
-  y: number;
-  strength: number;
 }
 
 /** W2: most deterministic re-derives generateLevel makes after the first attempt. */

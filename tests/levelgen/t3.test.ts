@@ -131,7 +131,7 @@ function expectTaste(d: LevelDef): void {
   expect(d.noDrift, at).toBe(true);
   expect(d.hazards.wells.length, at).toBeLessThanOrEqual(1);
   expect(d.hazards.spawners, at).toEqual([]);
-  expect(d.ripples, at).toBeUndefined();
+  expect('ripples' in d, at).toBe(false);
   for (const e of d.roster) expect(DRUM_TASTE_KINDS, at).toContain(e.kind);
   for (const w of d.waves.waves) for (const e of w.entries) expect(DRUM_TASTE_KINDS, at).toContain(e.kind);
   expect(validateLevel(d, DEFAULT_GEN_CONFIG).errors, at).toEqual([]);

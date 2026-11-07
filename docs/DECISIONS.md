@@ -106,3 +106,5 @@ One line per decision: clock time, who raised it, what was decided, why.
 | 262:10 | Ryan | Level 8 is always a gentle open drum so players taste the drum early. |
 | 262:10 | Ryan | Pond ripples on flat non boss levels from 12, pushing ship and enemies, with a warning sound one second before. |
 | 262:10 | Ryan | Half drum (curved trough with slope gravity) planned for after the Tuesday 2026-11-10 Max reset. |
+| 263:30 | Ryan | Scheduled pond ripples dropped: a ripple fires only when a super nova Gravity well is destroyed, no warning marker or alert, one whoomp plus whoosh sound at the wave start, a stronger push and a much bigger floor wave. |
+| 263:30 | Fable | Generator V9 amended in place to drop ripple scheduling (live about an hour, nothing depended on it) rather than a V10. |
