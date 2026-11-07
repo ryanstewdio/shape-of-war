@@ -11,6 +11,7 @@ import {
   THUMP_F_START,
   WHOOSH_F0,
   WHOOSH_F1,
+  WHOOSH_SHARE,
   type RippleBackend,
 } from '../../src/audio/rippleSfx';
 import { CUES } from '../../src/audio/cues';
@@ -48,14 +49,12 @@ describe('ripple sfx (pure)', () => {
     expect(rippleGain(Number.NaN)).toBe(RIPPLE_GAIN_MIN);
   });
 
-  it('is louder than the old 0.1 to 0.2 and never above the loudest boss voice peak', () => {
-    const bossPeak = Math.max(
-      ...(['bossRumble', 'bossHit', 'bossDeath', 'bossShot'] as const).flatMap((n) => CUES[n].voices.map((vc) => vc.gain)),
-    );
+  it('is louder than the old 0.1 to 0.2 and its summed layers never top the summed boss death', () => {
+    const bossPeak = CUES.bossDeath.voices.reduce((a, vc) => a + vc.gain, 0);
     expect(RIPPLE_GAIN_MIN).toBeGreaterThanOrEqual(0.2); // the 2x ask: old min was 0.1
     expect(RIPPLE_GAIN_MAX).toBeGreaterThan(RIPPLE_GAIN_MIN);
     expect(RIPPLE_GAIN_MAX).toBeLessThanOrEqual(0.4);
-    expect(RIPPLE_GAIN_MAX).toBeLessThanOrEqual(bossPeak);
+    expect(RIPPLE_GAIN_MAX * (1 + WHOOSH_SHARE)).toBeLessThanOrEqual(bossPeak);
   });
 });
 
