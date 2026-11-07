@@ -22,8 +22,8 @@ import { SHIP_SPEED } from './ship';
 import { gs } from './state';
 import { Kind, type World } from './world';
 
-/** Ship push speed at strength 1, band centre, age 0 (u/s): 0.8 of the ship's top speed. */
-export const SHIP_PUSH = SHIP_SPEED * 0.8;
+/** Ship push speed at strength 1, band centre, age 0 (u/s): 1.2 of the ship's top speed. */
+export const SHIP_PUSH = SHIP_SPEED * 1.2;
 /** Enemy push speed at strength 1, band centre, age 0 (u/s): double the ship's. */
 export const ENEMY_PUSH = SHIP_PUSH * 2;
 /** Most waves alive at once; the oldest wave is dropped for a newer one past this. */

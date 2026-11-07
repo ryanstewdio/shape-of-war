@@ -110,7 +110,7 @@ describe('pure profile', () => {
   });
 
   it('enemies push double the ship, scaled by strength and driftScale', () => {
-    expect(SHIP_PUSH).toBeLessThan(SHIP_SPEED);
+    expect(SHIP_PUSH).toBeCloseTo(SHIP_SPEED * 1.2, 9);
     expect(ENEMY_PUSH).toBeCloseTo(SHIP_PUSH * 2, 9);
     expect(pushSpeed(SHIP_PUSH, 1, 0, 0, 1)).toBeCloseTo(SHIP_PUSH, 9);
     expect(pushSpeed(SHIP_PUSH, 0.5, 0, 0, 1)).toBeCloseTo(SHIP_PUSH / 2, 9);
@@ -247,11 +247,11 @@ describe('ripple on nova well death', () => {
 });
 
 describe('push', () => {
-  it('shoves an idle ship 300 u from the centre at least 150 u outward at strength 1', () => {
+  it('shoves an idle ship 300 u from the centre at least 250 u outward at strength 1', () => {
     const w = bigGame();
     startRipple(w, -300, 0, 1);
     for (let i = 0; i < WAVE_STEPS; i++) stepGame(w, DT, idle());
-    expect(w.x[0] ?? 0).toBeGreaterThanOrEqual(150);
+    expect(w.x[0] ?? 0).toBeGreaterThanOrEqual(250);
     expect(Math.abs(w.y[0] ?? 0)).toBeLessThan(1e-9);
     expect(hasLiveWave(w.pond)).toBe(false);
     const after = w.x[0];
@@ -296,7 +296,7 @@ describe('push', () => {
     podStep(w, WAVE_STEPS);
     const gruntMoved = -300 - (w.x[g] ?? 0);
     const shipMoved = -300 - (w.y[0] ?? 0);
-    expect(shipMoved).toBeGreaterThanOrEqual(150);
+    expect(shipMoved).toBeGreaterThanOrEqual(250);
     expect(gruntMoved).toBeGreaterThan(shipMoved * 1.5);
   });
 
@@ -371,7 +371,7 @@ describe('drum seam', () => {
     podStep(w, WAVE_STEPS);
     const sd = { x: 0, y: 0 };
     w.surface.delta(HALF - 50, 0, w.x[0] ?? 0, w.y[0] ?? 0, sd);
-    expect(sd.x).toBeGreaterThanOrEqual(300 + 150);
+    expect(sd.x).toBeGreaterThanOrEqual(300 + 250);
     expect(Math.abs(w.y[0] ?? 0)).toBeLessThan(1e-6);
   });
 });

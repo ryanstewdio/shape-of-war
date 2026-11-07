@@ -68,7 +68,7 @@ const PRE_RELEASE: readonly (readonly [number, number, string, number, number])[
 ];
 
 /** Seed 7 level 33 is an open drum: pre release hash, and the drift on hash (docs/14 item 8). */
-const OPEN_DRUM = { seed: 7, level: 33, levelHash: '0BDFEF03', pre: 1506431169, drift: 954469006 } /* R3: drift is a current (forge-r3-turbo): the ship takes the full drift, player bullets half, enemies a quarter, so the drift on hash moves; drift off still equals pre release. T4 (forge-nova-ripple): the nova well shot down at 10.86 s now ripples, so the drift on hash moves again */ as const;
+const OPEN_DRUM = { seed: 7, level: 33, levelHash: '0BDFEF03', pre: 1506431169, drift: 1178774924 } /* R3: drift is a current (forge-r3-turbo): the ship takes the full drift, player bullets half, enemies a quarter, so the drift on hash moves; drift off still equals pre release. T4 (forge-nova-ripple): the nova well shot down at 10.86 s now ripples, so the drift on hash moves again. T4 ripple-tune: SHIP_PUSH 0.8 to 1.2 of ship speed (enemy push follows), so the same ripple pushes harder and the drift on hash moves once more */ as const;
 
 describe('Normal difficulty is the pre release sim', () => {
   it('the Normal table multiplies by exactly 1 and adds exactly 0, on every field', () => {

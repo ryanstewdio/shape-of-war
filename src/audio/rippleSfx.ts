@@ -17,9 +17,12 @@ export const WHOOSH_F1 = 220;
 export const WHOOSH_Q = 1.2;
 /** Total cue length, seconds (about 1.5 s of whoosh, matching the wave). */
 export const RIPPLE_SEC = WHOOSH_SEC;
-/** Thump level at strength 0 and at strength 1 (gain rises between them). Below boss cues. */
-export const RIPPLE_GAIN_MIN = 0.1;
-export const RIPPLE_GAIN_MAX = 0.2;
+/**
+ * Thump level at strength 0 and at strength 1 (gain rises between them). The max is capped at
+ * the loudest boss voice peak (0.22, bossRumble and bossDeath noise in cues.ts).
+ */
+export const RIPPLE_GAIN_MIN = 0.2;
+export const RIPPLE_GAIN_MAX = 0.22;
 /** Whoosh level as a share of the thump gain. */
 export const WHOOSH_SHARE = 0.7;
 
