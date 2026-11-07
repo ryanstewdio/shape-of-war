@@ -1,15 +1,14 @@
 // Tester 3 (foundry-t3, version 9): Brood first and Warden second with a softer first fight, the
-// level 8 drum taste, and pond ripples on flat non boss levels from 12. Version 8 stays frozen.
+// level 8 drum taste, and no ripples (they start from destroyed wells). Version 8 stays frozen.
 import { describe, expect, it } from 'vitest';
 import { DIFFICULTY } from '../../src/core/difficulty';
 import { FIRST_FIGHT_HP_MUL, BOSS_R3_LEVEL_AT_SEC, bossForLevel, t3BossForLevel, t3BossOfNumber, bossOfNumber } from '../../src/levelgen/boss';
 import { DRUM_TASTE_KINDS, DRUM_TASTE_LEVEL } from '../../src/levelgen/cylinder';
-import { drumPatternFor, drumTaste, generateEndlessSegment, generateLevel, levelHash, pickSurface, rippleClear } from '../../src/levelgen/generator';
+import { drumPatternFor, drumTaste, generateEndlessSegment, generateLevel, levelHash, pickSurface } from '../../src/levelgen/generator';
 import {
   DEFAULT_GEN_CONFIG,
   GENERATOR_VERSION_V8,
   GENERATOR_VERSION_V9,
-  R3_MAX_LEVEL_SEC,
   V1_GEN_CONFIG,
   V2_GEN_CONFIG,
   V3_GEN_CONFIG,
@@ -22,22 +21,12 @@ import {
   runsT3,
 } from '../../src/levelgen/leveldef';
 import type { LevelDef } from '../../src/levelgen/leveldef';
-import {
-  RIPPLE_CLEAR,
-  RIPPLE_FIRST_MAX_SEC,
-  RIPPLE_FIRST_MIN_SEC,
-  RIPPLE_GAP_MAX_SEC,
-  RIPPLE_GAP_MIN_SEC,
-  rippleEligible,
-  rippleStrength,
-} from '../../src/levelgen/ripples';
-import { obstaclePointDistance, insideArena, validateLevel } from '../../src/levelgen/validate';
+import { validateLevel } from '../../src/levelgen/validate';
 
 const SPREAD = 0x9e3779b1;
 const seedAt = (i: number): number => (3 + i * SPREAD) >>> 0;
 const fold = (h: number, hash: string): number => fmix32((h ^ parseInt(hash, 16)) >>> 0);
 const ids = (errors: readonly string[]): string[] => errors.map((e) => e.split(':')[0] ?? '');
-const EPS = 1e-6;
 
 describe('T3 config and version', () => {
   it('enableT3 is on only in the default; every older config has it false', () => {
@@ -195,117 +184,5 @@ describe('T3 drum taste, level 8', () => {
     const stray = structuredClone(generateLevel(42, 9));
     stray.noDrift = true;
     expect(ids(validateLevel(stray, DEFAULT_GEN_CONFIG).errors)).toContain('T1');
-  });
-});
-
-describe('T3 pond ripples', { timeout: 120_000 }, () => {
-  it('rippleStrength: 0.3 at level 12, rising to 1 by level 40', () => {
-    expect(rippleStrength(12)).toBe(0.3);
-    expect(rippleStrength(26)).toBe(0.65);
-    expect(rippleStrength(40)).toBe(1);
-    expect(rippleStrength(60)).toBe(1);
-    for (let n = 13; n <= 40; n++) expect(rippleStrength(n)).toBeGreaterThan(rippleStrength(n - 1));
-  });
-
-  it('200 seeds x levels 1 to 45: the ripple rules hold, about half of eligible levels carry ripples', () => {
-    let eligible = 0;
-    let carry = 0;
-    const bad: string[] = [];
-    for (let i = 0; i < 200; i++) {
-      const seed = seedAt(i);
-      for (let n = 1; n <= 45; n++) {
-        const d = generateLevel(seed, n);
-        const at = `seed ${seed} level ${n}`;
-        const ok = rippleEligible(n, d.surface === 'flat', d.boss !== undefined, d.arena);
-        if (ok) eligible++;
-        if (d.retries !== 0) bad.push(`${at}: retries ${String(d.retries)}`);
-        const rs = d.ripples;
-        if (rs === undefined) continue;
-        carry++;
-        if (!ok || n < 12 || d.surface !== 'flat' || d.boss !== undefined || d.arena.shape === 'circle') bad.push(`${at}: ripples where none may be`);
-        if (rs.length === 0) bad.push(`${at}: empty ripples`);
-        const o = d.objective;
-        const end = o.kind === 'survive' ? o.durationSec : o.kind === 'scoreInTime' ? o.timeLimitSec : R3_MAX_LEVEL_SEC;
-        rs.forEach((r, k) => {
-          if (k === 0 && (r.atSec < RIPPLE_FIRST_MIN_SEC || r.atSec > RIPPLE_FIRST_MAX_SEC)) bad.push(`${at}: first at ${r.atSec}`);
-          const prev = rs[k - 1];
-          if (prev !== undefined) {
-            const gap = r.atSec - prev.atSec;
-            if (gap < RIPPLE_GAP_MIN_SEC - EPS || gap > RIPPLE_GAP_MAX_SEC + EPS) bad.push(`${at}: gap ${gap}`);
-          }
-          if (r.atSec >= end) bad.push(`${at}: ripple at ${r.atSec} after the end ${end}`);
-          if (!insideArena(d.arena, r, RIPPLE_CLEAR)) bad.push(`${at}: ripple ${k} near a wall`);
-          if (d.arena.obstacles.some((ob) => obstaclePointDistance(ob, r) < RIPPLE_CLEAR)) bad.push(`${at}: ripple ${k} near an obstacle`);
-          if (r.strength !== rippleStrength(n)) bad.push(`${at}: strength ${r.strength}`);
-        });
-        // Ripples run until the level ends: the next one would land at or after the end.
-        const last = rs[rs.length - 1];
-        if (last !== undefined && last.atSec + RIPPLE_GAP_MAX_SEC < end - EPS && o.kind !== 'destroy') bad.push(`${at}: ripples stop early at ${last.atSec} of ${end}`);
-        if (JSON.stringify(JSON.parse(JSON.stringify(d))) !== JSON.stringify(d)) bad.push(`${at}: not JSON stable`);
-      }
-    }
-    expect(bad.slice(0, 8)).toEqual([]);
-    expect(eligible).toBeGreaterThan(2000);
-    const share = carry / eligible;
-    expect(share).toBeGreaterThan(0.45);
-    expect(share).toBeLessThan(0.55);
-  });
-
-  it('deterministic: the same seed and level give the same ripples', () => {
-    for (const [seed, n] of [[1, 17], [42, 22], [777, 39]] as const) {
-      expect(JSON.stringify(generateLevel(seed, n).ripples)).toBe(JSON.stringify(generateLevel(seed, n).ripples));
-    }
-  });
-
-  it('ripples are a hazard only: a ripple level is its version 8 self apart from version and ripples (par unchanged)', () => {
-    let seen = 0;
-    for (let i = 0; i < 30; i++) {
-      for (const n of [12, 17, 23, 33, 44]) {
-        const a = generateLevel(seedAt(i), n);
-        if (a.ripples === undefined) continue;
-        seen++;
-        const b = generateLevel(seedAt(i), n, V8_GEN_CONFIG);
-        const { ripples: _r, generatorVersion: _v, ...rest } = a;
-        const { generatorVersion: _w, ...restB } = b;
-        expect(rest).toEqual(restB);
-        expect(a.par).toBe(b.par);
-      }
-    }
-    expect(seen).toBeGreaterThan(20);
-  });
-
-  it('rippleClear keeps the margin from walls and obstacles', () => {
-    const arena = { shape: 'rectObstacles' as const, width: 1400, height: 900, cornerRadius: 0, obstacles: [{ cx: 300, cy: 0, w: 24, h: 200 }], spawnPoint: { x: 0, y: 0 } };
-    expect(rippleClear(arena, { x: 0, y: 0 })).toBe(true);
-    expect(rippleClear(arena, { x: 0, y: 310 })).toBe(false);
-    expect(rippleClear(arena, { x: 200, y: 0 })).toBe(false);
-  });
-
-  it('K1 rejects unsorted, outside, too strong ripples and ripples on drums, boss levels and version 8', () => {
-    let d: LevelDef | null = null;
-    for (let n = 12; n <= 45 && d === null; n++) {
-      const g = generateLevel(42, n);
-      if (g.ripples !== undefined && g.ripples.length >= 2) d = g;
-    }
-    if (d === null) throw new Error('no ripple level for seed 42');
-    expect(validateLevel(d, DEFAULT_GEN_CONFIG).errors).toEqual([]);
-    const rs = d.ripples ?? [];
-    const k1 = (m: (x: LevelDef) => void): string[] => {
-      const x = structuredClone(d) as LevelDef;
-      m(x);
-      return ids(validateLevel(x).errors);
-    };
-    expect(k1((x) => (x.ripples = [...rs].reverse()))).toContain('K1');
-    expect(k1((x) => (x.ripples = rs.map((r, i) => (i === 0 ? { ...r, x: x.arena.width / 2 - 20 } : r))))).toContain('K1');
-    expect(k1((x) => (x.ripples = rs.map((r) => ({ ...r, strength: 1.5 }))))).toContain('K1');
-    expect(k1((x) => (x.ripples = []))).toContain('K1');
-    expect(k1((x) => (x.ripples = rs.map((r, i) => (i === 0 ? { ...r, atSec: 10 } : r))))).toContain('K1');
-    expect(k1((x) => (x.generatorVersion = GENERATOR_VERSION_V8))).toContain('K1');
-    const boss = structuredClone(generateLevel(42, 15));
-    boss.ripples = rs;
-    expect(ids(validateLevel(boss).errors)).toContain('K1');
-    const drum = structuredClone(generateLevel(42, 8));
-    drum.ripples = rs;
-    expect(ids(validateLevel(drum).errors)).toContain('K1');
   });
 });
