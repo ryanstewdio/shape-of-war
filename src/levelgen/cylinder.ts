@@ -17,6 +17,14 @@ export const CYLINDER_CHANCE = 0.35;
 /** Release gate R1: the share with GenConfig.enableR1Pacing on (same single draw, a higher bar). */
 export const R1_CYLINDER_CHANCE = 0.4;
 
+/**
+ * Tester 3 drum taste (version 9): this level is always a gentle open drum (no bars, no drift, at
+ * most one well, no spawners, the band 1 roster), so players meet the drum before level 11.
+ */
+export const DRUM_TASTE_LEVEL = 8;
+/** Kinds the drum taste roster may hold (the band 1 kinds). */
+export const DRUM_TASTE_KINDS: readonly string[] = Object.freeze(['grunt', 'wanderer', 'pinwheel']);
+
 /** True when level n may be a cylinder: 11 and up and not a boss level (boss levels stay flat). */
 export function cylinderEligible(levelIndex: number): boolean {
   return Number.isInteger(levelIndex) && levelIndex >= CYLINDER_MIN_LEVEL && bossForLevel(levelIndex) === null;

@@ -51,6 +51,13 @@ export const GENERATOR_VERSION_V7 = 7;
  * 1.5 par. Versions 1 to 7 are unchanged, byte for byte (V6_GEN_CONFIG builds versions 6 and 7).
  */
 export const GENERATOR_VERSION_V8 = 8;
+/**
+ * Tester 3 (wave T3). Generator version of every level built with the version 8 config plus
+ * GenConfig.enableT3 (the default config): Brood first and Warden second with the first fight at
+ * FIRST_FIGHT_HP_MUL, level 8 a gentle open drum with no drift, and pond ripples on some flat non
+ * boss levels from level 12. Versions 1 to 8 are unchanged, byte for byte (V8_GEN_CONFIG builds 8).
+ */
+export const GENERATOR_VERSION_V9 = 9;
 
 /**
  * Version 6 star thresholds as multiples of par, each rounded to the 500 grid: a strong player
@@ -58,12 +65,15 @@ export const GENERATOR_VERSION_V8 = 8;
  */
 export const R1_STAR_MULS: readonly [number, number, number] = [1, 1.25, 1.5];
 
-/** True when a def carries the long level pacing (version 5, 6, 7 or 8). */
+/** True when a def carries the long level pacing (version 5, 6, 7, 8 or 9). */
 export const isLongVersion = (v: number): boolean =>
-  v === GENERATOR_VERSION_V5 || v === GENERATOR_VERSION_V6 || v === GENERATOR_VERSION_V7 || v === GENERATOR_VERSION_V8;
+  v === GENERATOR_VERSION_V5 || v === GENERATOR_VERSION_V6 || v === GENERATOR_VERSION_V7 || v === GENERATOR_VERSION_V8 || v === GENERATOR_VERSION_V9;
 
-/** True when a def's stars sit at R1_STAR_MULS x par (version 6 or 8); else 1, 2 and 4 x par. */
-export const hasR1Stars = (v: number): boolean => v === GENERATOR_VERSION_V6 || v === GENERATOR_VERSION_V8;
+/** True when a def carries the R3 length tables and boss entrance (version 8 or 9). */
+export const isR3Version = (v: number): boolean => v === GENERATOR_VERSION_V8 || v === GENERATOR_VERSION_V9;
+
+/** True when a def's stars sit at R1_STAR_MULS x par (version 6, 8 or 9); else 1, 2 and 4 x par. */
+export const hasR1Stars = (v: number): boolean => v === GENERATOR_VERSION_V6 || isR3Version(v);
 
 /** V3 boss ids, in schedule order (docs/13). A BossView id is the index in this list. */
 export const BOSS_IDS = ['warden', 'brood', 'spindle', 'ember', 'mirage', 'gravitas', 'bastion', 'tempest', 'twins', 'prism'] as const;
@@ -237,6 +247,11 @@ export interface LevelDef {
    * non boss levels the generator chose for ripples; absent everywhere else. JSON serialisable.
    */
   ripples?: RippleEvent[];
+  /**
+   * Tester 3 drum taste (wave T3): true only on the version 9 level 8 open drum, which must not
+   * drift (Forge: isOpenDrum is false when this is set). Absent on every other level.
+   */
+  noDrift?: true;
 }
 
 /** One pond ripple: a ring wave from (x, y) that starts at atSec on the wave clock. strength 0.2 to 1. */
@@ -321,6 +336,13 @@ export interface GenConfig {
    * identical either way. Default on.
    */
   enableLeaver?: boolean;
+  /**
+   * Tester 3 (wave T3). On together with the version 8 flags: the T3 boss order and first fight
+   * hit points, the level 8 drum taste and pond ripples; reports GENERATOR_VERSION_V9. Optional;
+   * only true turns it on, so absent or false builds version 8 byte for byte. Default on. Endless
+   * and Free Play never read it.
+   */
+  enableT3?: boolean;
 }
 
 export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
@@ -335,6 +357,7 @@ export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>(
   enableR1Pacing: true,
   enableR3Length: true,
   enableLeaver: true,
+  enableT3: true,
 });
 
 /** DEFAULT_GEN_CONFIG with the v2 enemies, bosses and cylinder off: the v1 generator, byte for byte. */
@@ -347,6 +370,7 @@ export const V1_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
   enableR1Pacing: false,
   enableR3Length: false,
   enableLeaver: false,
+  enableT3: false,
 });
 
 /** DEFAULT_GEN_CONFIG with the bosses and cylinder off: the v2.1 generator (v2 enemies on), byte for byte. */
@@ -358,6 +382,7 @@ export const V2_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
   enableR1Pacing: false,
   enableR3Length: false,
   enableLeaver: false,
+  enableT3: false,
 });
 
 /** DEFAULT_GEN_CONFIG with the cylinder off: the v3 generator (v2 enemies and bosses on), byte for byte. */
@@ -368,22 +393,29 @@ export const V3_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
   enableR1Pacing: false,
   enableR3Length: false,
   enableLeaver: false,
+  enableT3: false,
 });
 
 /** DEFAULT_GEN_CONFIG with the long levels off: the v4 generator (cylinder drums on), byte for byte. */
-export const V4_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableLongLevels: false, enableR1Pacing: false, enableR3Length: false, enableLeaver: false });
+export const V4_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableLongLevels: false, enableR1Pacing: false, enableR3Length: false, enableLeaver: false, enableT3: false });
 
 /** DEFAULT_GEN_CONFIG with the R1 pacing off: the v5 generator (long levels on), byte for byte. */
-export const V5_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableR1Pacing: false, enableR3Length: false, enableLeaver: false });
+export const V5_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableR1Pacing: false, enableR3Length: false, enableLeaver: false, enableT3: false });
 
 /** DEFAULT_GEN_CONFIG with the R3 length off: the R2 generator (versions 6 and 7), byte for byte. */
-export const V6_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableR3Length: false, enableLeaver: false });
+export const V6_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableR3Length: false, enableLeaver: false, enableT3: false });
+
+/** DEFAULT_GEN_CONFIG with the T3 changes off: the version 8 generator (Leaver on), byte for byte. */
+export const V8_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableT3: false });
 
 /** True when a config builds R1 paced levels (long levels and R1 pacing both on). */
 export const runsR1 = (cfg: Readonly<GenConfig>): boolean => cfg.enableLongLevels === true && cfg.enableR1Pacing === true;
 
 /** True when a config builds R3 length levels (version 8): the R1 config plus enableR3Length. */
 export const runsR3 = (cfg: Readonly<GenConfig>): boolean => runsR1(cfg) && cfg.enableR3Length === true;
+
+/** True when a config builds Tester 3 levels (version 9): the R3 config plus enableT3. */
+export const runsT3 = (cfg: Readonly<GenConfig>): boolean => runsR3(cfg) && cfg.enableT3 === true;
 
 export interface ValidationResult {
   ok: boolean;

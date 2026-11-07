@@ -4,10 +4,10 @@
 // R1 waves (fight about 3 minutes), whole level par on every level (boss levels count the fight
 // waves and the boss bonus), stars at 1, 1.25 and 1.5 par. Every older config is untouched.
 import { describe, expect, it } from 'vitest';
+// T3 pin: version 8 is now V8_GEN_CONFIG (the default builds version 9), so every default call here names it.
 import { BOSS_BONUS_SHARE, BOSS_EVERY, BOSS_FIGHT_SEC, BOSS_R3_LEVEL_AT_SEC } from '../../src/levelgen/boss';
 import { bossLevelAtSec, generateLevel, levelHash, longPulse } from '../../src/levelgen/generator';
 import {
-  DEFAULT_GEN_CONFIG,
   GENERATOR_VERSION_V6,
   GENERATOR_VERSION_V7,
   GENERATOR_VERSION_V8,
@@ -17,6 +17,7 @@ import {
   R3_MIN_LEVEL_SEC,
   V5_GEN_CONFIG,
   V6_GEN_CONFIG,
+  V8_GEN_CONFIG,
   bandOf,
   fmix32,
 } from '../../src/levelgen/leveldef';
@@ -50,7 +51,7 @@ const rows: { seed: number; n: number; def: LevelDef }[] = [];
 for (let i = 0; i < 200; i++) {
   for (let k = 0; k < 5; k++) {
     const n = (i % 10) + 1 + 10 * k;
-    if (!isBoss(n)) rows.push({ seed: seedAt(i), n, def: generateLevel(seedAt(i), n) });
+    if (!isBoss(n)) rows.push({ seed: seedAt(i), n, def: generateLevel(seedAt(i), n, V8_GEN_CONFIG) });
   }
 }
 /** 200 seeds; seed i plays boss level BOSS_LEVELS[i mod 10] and BOSS_LEVELS[(i + 5) mod 10] (400 levels). */
@@ -58,7 +59,7 @@ const bossRows: { seed: number; n: number; def: LevelDef }[] = [];
 for (let i = 0; i < 200; i++) {
   for (const j of [i % 10, (i + 5) % 10]) {
     const n = BOSS_LEVELS[j] ?? 5;
-    bossRows.push({ seed: seedAt(i), n, def: generateLevel(seedAt(i), n) });
+    bossRows.push({ seed: seedAt(i), n, def: generateLevel(seedAt(i), n, V8_GEN_CONFIG) });
   }
 }
 
@@ -108,7 +109,7 @@ describe('R3 non boss length (200 seeds, 800 levels)', () => {
   it('every level is version 8, valid with the default config and needs no re-derive', () => {
     const bad: string[] = [];
     for (const { seed, n, def } of rows) {
-      const e = validateLevel(def, DEFAULT_GEN_CONFIG).errors;
+      const e = validateLevel(def, V8_GEN_CONFIG).errors;
       if (e.length > 0 || def.retries !== 0 || def.generatorVersion !== GENERATOR_VERSION_V8) bad.push(`seed ${seed} level ${n}: ${e.join('; ')} v${def.generatorVersion}`);
     }
     expect(bad.slice(0, 5)).toEqual([]);
@@ -165,7 +166,7 @@ describe('R3 boss levels (200 seeds, 400 levels)', () => {
   it('the boss enters at 120 s; the R2 config keeps 200 s', () => {
     expect(AT).toBe(120);
     expect(BOSS_FIGHT_SEC).toBe(180);
-    expect(bossLevelAtSec(DEFAULT_GEN_CONFIG)).toBe(120);
+    expect(bossLevelAtSec(V8_GEN_CONFIG)).toBe(120);
     expect(bossLevelAtSec(V6_GEN_CONFIG)).toBe(200);
     for (const { def } of bossRows) expect(def.boss?.atSec).toBe(AT);
   });
@@ -173,7 +174,7 @@ describe('R3 boss levels (200 seeds, 400 levels)', () => {
   it('flat, version 8, valid with no re-derive; no hold before the fight ends, so the waves run about 5 minutes', () => {
     const bad: string[] = [];
     for (const { seed, n, def } of bossRows) {
-      const e = validateLevel(def, DEFAULT_GEN_CONFIG).errors;
+      const e = validateLevel(def, V8_GEN_CONFIG).errors;
       const hold = objectiveSec(def.objective, def.waves);
       if (e.length > 0 || def.retries !== 0 || def.surface !== 'flat' || def.generatorVersion !== GENERATOR_VERSION_V8 || hold < AT + BOSS_FIGHT_SEC) {
         bad.push(`seed ${seed} level ${n}: ${e.join('; ')} v${def.generatorVersion} hold ${hold}`);
@@ -293,38 +294,38 @@ describe('R3 flags, versions and determinism', () => {
 
   it('the R3 flag needs the R1 pacing: V5 with it on is version 5, byte for byte', () => {
     for (const n of [3, 5, 13, 27]) expect(levelHash(generateLevel(42, n, { ...V5_GEN_CONFIG, enableR3Length: true }))).toBe(levelHash(generateLevel(42, n, V5_GEN_CONFIG)));
-    const older = { ...DEFAULT_GEN_CONFIG };
+    const older = { ...V8_GEN_CONFIG };
     delete older.enableR3Length;
     for (const n of [5, 12]) expect(levelHash(generateLevel(42, n, older))).toBe(levelHash(generateLevel(42, n, V6_GEN_CONFIG)));
   });
 
   it('J10 ties version 8 to the R3 flag; B1 checks the 120 s entrance; O1 the R3 ranges', () => {
-    const v8 = structuredClone(generateLevel(42, 13));
-    expect(validateLevel(v8, DEFAULT_GEN_CONFIG).errors).toEqual([]);
+    const v8 = structuredClone(generateLevel(42, 13, V8_GEN_CONFIG));
+    expect(validateLevel(v8, V8_GEN_CONFIG).errors).toEqual([]);
     expect(ids(validateLevel(v8, V6_GEN_CONFIG).errors)).toContain('J10');
     const v6 = generateLevel(42, 13, V6_GEN_CONFIG);
-    expect(ids(validateLevel(v6, DEFAULT_GEN_CONFIG).errors)).toContain('J10');
+    expect(ids(validateLevel(v6, V8_GEN_CONFIG).errors)).toContain('J10');
     expect(validateLevel(v6, V6_GEN_CONFIG).errors).toEqual([]);
-    const boss = structuredClone(generateLevel(42, 5));
-    expect(validateLevel(boss, DEFAULT_GEN_CONFIG).errors).toEqual([]);
+    const boss = structuredClone(generateLevel(42, 5, V8_GEN_CONFIG));
+    expect(validateLevel(boss, V8_GEN_CONFIG).errors).toEqual([]);
     if (boss.boss === undefined) throw new Error('no boss');
     boss.boss = { ...boss.boss, atSec: 200 };
     expect(ids(validateLevel(boss).errors)).toContain('B1');
-    const long = structuredClone(generateLevel(42, 12));
+    const long = structuredClone(generateLevel(42, 12, V8_GEN_CONFIG));
     long.objective = { kind: 'survive', durationSec: 300 };
     expect(ids(validateLevel(long).errors)).toContain('O1');
-    const stars = structuredClone(generateLevel(42, 10));
+    const stars = structuredClone(generateLevel(42, 10, V8_GEN_CONFIG));
     stars.stars = [stars.par, 2 * stars.par, 4 * stars.par];
     expect(ids(validateLevel(stars).errors)).toContain('P1');
   });
 
   it('deterministic and JSON safe, in any order', () => {
     const levels = [3, 5, 14, 25, 38, 50];
-    const a = levels.map((n) => levelHash(generateLevel(77, n)));
-    const b = [...levels].reverse().map((n) => levelHash(generateLevel(77, n))).reverse();
+    const a = levels.map((n) => levelHash(generateLevel(77, n, V8_GEN_CONFIG)));
+    const b = [...levels].reverse().map((n) => levelHash(generateLevel(77, n, V8_GEN_CONFIG))).reverse();
     expect(b).toEqual(a);
-    const d = generateLevel(77, 25);
+    const d = generateLevel(77, 25, V8_GEN_CONFIG);
     expect(JSON.parse(JSON.stringify(d))).toEqual(d);
-    expect(JSON.stringify(generateLevel(77, 38))).toBe(JSON.stringify(generateLevel(77, 38)));
+    expect(JSON.stringify(generateLevel(77, 38, V8_GEN_CONFIG))).toBe(JSON.stringify(generateLevel(77, 38, V8_GEN_CONFIG)));
   });
 });

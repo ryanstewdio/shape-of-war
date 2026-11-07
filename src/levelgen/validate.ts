@@ -16,6 +16,7 @@ import {
   GENERATOR_VERSION_V6,
   GENERATOR_VERSION_V7,
   GENERATOR_VERSION_V8,
+  GENERATOR_VERSION_V9,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_MIN_REPEAT_SEC,
@@ -23,6 +24,7 @@ import {
   R1_STAR_MULS,
   hasR1Stars,
   isLongVersion,
+  isR3Version,
   r3ObjectiveTable,
   SPAWN_PATTERNS,
   SUPER_KINDS,
@@ -34,7 +36,16 @@ import {
   speedScaleFor,
 } from './leveldef';
 import { DRUM_BAR_THICK, MEMBRANE_MAX, MEMBRANE_MIN } from './drum';
-import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, BOSS_SEGMENT_AT_SEC, bossForLevel, bossForSegment, bossTierOf, freePlayBossFor, sameBoss } from './boss';
+import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, BOSS_SEGMENT_AT_SEC, FIRST_FIGHT_HP_MUL, bossForLevel, bossForSegment, bossTierOf, freePlayBossFor, sameBoss, t3BossForLevel } from './boss';
+import {
+  RIPPLE_CLEAR,
+  RIPPLE_FIRST_MAX_SEC,
+  RIPPLE_FIRST_MIN_SEC,
+  RIPPLE_GAP_MIN_SEC,
+  RIPPLE_MAX_STRENGTH,
+  RIPPLE_STRENGTH_FLOOR,
+  rippleEligible,
+} from './ripples';
 import type {
   ArenaDef,
   Band,
@@ -57,6 +68,8 @@ import type { FreePlayDensity, FreePlaySize } from '../core/freeplayConfig';
 import {
   CYLINDER_MAX_OBSTACLES,
   CYLINDER_WIDTH_STEP,
+  DRUM_TASTE_KINDS,
+  DRUM_TASTE_LEVEL,
   cylDist,
   cylObstacleDistance,
   cylObstacleGap,
@@ -452,7 +465,7 @@ function checkJson(c: Collector, def: unknown): void {
 function checkVersions(c: Collector, version: number, generatorVersion: number): void {
   c.check('J3', (report) => {
     if (version !== LEVELDEF_VERSION) report(`version ${version} !== ${LEVELDEF_VERSION}`);
-    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8];
+    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9];
     if (!known.includes(generatorVersion)) report(`generatorVersion ${generatorVersion} not ${known.join(', ')}`);
   });
 }
@@ -478,6 +491,8 @@ export interface LevelCheckOptions extends BossCheckOptions {
   enableR1Pacing?: boolean;
   /** Release gate R3: with enableLongLevels and enableR1Pacing true, J10 ties GENERATOR_VERSION_V8 to this flag. */
   enableR3Length?: boolean;
+  /** Tester 3: with the version 8 flags on, J10 and J11 tie GENERATOR_VERSION_V9 to this flag. */
+  enableT3?: boolean;
 }
 
 interface BossRules {
@@ -520,7 +535,8 @@ function checkBoss(c: Collector, boss: BossSpec | undefined, generatorVersion: n
     const tier = bossTierOf(boss.id);
     if (tier === null) report(`boss id ${String(boss.id)} not in BOSS_IDS`);
     else if (boss.tier !== tier) report(`boss ${boss.id} tier ${boss.tier} !== table tier ${tier}`);
-    if (!(boss.hpMul >= 1) || !Number.isFinite(boss.hpMul)) report(`boss hpMul ${boss.hpMul} not a finite number from 1`);
+    // Tester 3: the first fight of a version 9 run sits at FIRST_FIGHT_HP_MUL (B1 checks the exact value).
+    if (!(boss.hpMul >= FIRST_FIGHT_HP_MUL) || !Number.isFinite(boss.hpMul)) report(`boss hpMul ${boss.hpMul} not a finite number from ${FIRST_FIGHT_HP_MUL}`);
   });
   c.check('B3', (report) => {
     if (boss === undefined) return;
@@ -795,7 +811,7 @@ function checkArena(c: Collector, arena: ArenaDef, cylinder = false, circleObsta
 function checkObjective(c: Collector, def: LevelDef, band: Band): void {
   const long = isLongVersion(def.generatorVersion);
   // Release gate R3: version 8 reads the R3 tables (boss levels keep the LONG_BANDS objectives).
-  const l = def.generatorVersion === GENERATOR_VERSION_V8 ? r3ObjectiveTable(band, def.boss !== undefined) : LONG_BANDS[band];
+  const l = isR3Version(def.generatorVersion) ? r3ObjectiveTable(band, def.boss !== undefined) : LONG_BANDS[band];
   const b = long ? { ...BANDS[band], surviveSec: l.surviveSec, scoreTimeSec: l.scoreTimeSec } : BANDS[band];
   const o = def.objective;
   c.check('O1', (report) => {
@@ -970,9 +986,10 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   // Release gate R2: version 7 (the R1 config) brings the boss in at 200 s, versions 5 and 6 at 240 s.
   const v = def.generatorVersion;
   // Release gate R3: version 8 at 120 s.
-  const bossAt = v === GENERATOR_VERSION_V8 ? BOSS_R3_LEVEL_AT_SEC : v === GENERATOR_VERSION_V7 ? BOSS_LONG_LEVEL_AT_SEC : isLongVersion(v) ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
+  const bossAt = isR3Version(v) ? BOSS_R3_LEVEL_AT_SEC : v === GENERATOR_VERSION_V7 ? BOSS_LONG_LEVEL_AT_SEC : isLongVersion(v) ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
   checkBoss(c, def.boss, def.generatorVersion, {
-    want: bossForLevel(def.levelIndex, bossAt),
+    // Tester 3: version 9 reads the T3 order (Brood, then Warden) and the softer first fight.
+    want: v === GENERATOR_VERSION_V9 ? t3BossForLevel(def.levelIndex, bossAt) : bossForLevel(def.levelIndex, bossAt),
     unit: 'level',
     index: def.levelIndex,
     atSec: bossAt,
@@ -1007,11 +1024,22 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
     // Release gate R3: on a long level, version 8 exactly when the R1 pacing and the R3 length are
     // both on (boss or not), when the caller says.
     if (opts?.enableLongLevels !== true) return;
-    const flag = opts.enableR1Pacing === true && opts.enableR3Length === true;
+    // Tester 3: with enableT3 on as well, J11 owns the version instead.
+    const flag = opts.enableR1Pacing === true && opts.enableR3Length === true && opts.enableT3 !== true;
     const v8 = def.generatorVersion === GENERATOR_VERSION_V8;
     if (flag && !v8) report(`generatorVersion ${def.generatorVersion} with enableR3Length on, want ${GENERATOR_VERSION_V8}`);
-    if (!flag && v8) report(`generatorVersion ${GENERATOR_VERSION_V8} with enableR1Pacing or enableR3Length off`);
+    if (!flag && v8) report(`generatorVersion ${GENERATOR_VERSION_V8} with enableR1Pacing or enableR3Length off, or enableT3 on`);
   });
+  c.check('J11', (report) => {
+    // Tester 3: on a long level, version 9 exactly when the version 8 flags and enableT3 are on, when the caller says.
+    if (opts?.enableLongLevels !== true) return;
+    const flag = opts.enableR1Pacing === true && opts.enableR3Length === true && opts.enableT3 === true;
+    const v9 = def.generatorVersion === GENERATOR_VERSION_V9;
+    if (flag && !v9) report(`generatorVersion ${def.generatorVersion} with enableT3 on, want ${GENERATOR_VERSION_V9}`);
+    if (!flag && v9) report(`generatorVersion ${GENERATOR_VERSION_V9} with enableT3 or a version 8 flag off`);
+  });
+  checkDrumTaste(c, def, opts);
+  checkRipples(c, def);
   c.check('J5', (report) => {
     const r = def.retries;
     if (r === undefined || !isInt(r) || r < 0 || r > MAX_RETRIES) report(`retries ${String(r)} not an integer 0 to ${MAX_RETRIES}`);
@@ -1042,13 +1070,89 @@ function checkCylinder(c: Collector, def: LevelDef): void {
       if (def.generatorVersion === GENERATOR_VERSION_V4) report(`generatorVersion ${GENERATOR_VERSION_V4} on a ${String(def.surface)} level`);
       return;
     }
-    if (!cylinderEligible(def.levelIndex)) report(`cylinder on level ${def.levelIndex}: only levels from 11 that are not boss levels`);
+    const taste = def.generatorVersion === GENERATOR_VERSION_V9 && def.levelIndex === DRUM_TASTE_LEVEL;
+    if (!cylinderEligible(def.levelIndex) && !taste) report(`cylinder on level ${def.levelIndex}: only levels from 11 that are not boss levels`);
     const a = def.arena;
     if (a.shape !== 'rect' && a.shape !== 'rectObstacles') report(`cylinder arena shape ${String(a.shape)}, want rect or rectObstacles`);
     if (!isInt(a.width / CYLINDER_WIDTH_STEP)) report(`cylinder width ${a.width} not a multiple of ${CYLINDER_WIDTH_STEP}`);
     if (def.generatorVersion !== GENERATOR_VERSION_V4 && !isLongVersion(def.generatorVersion)) {
       report(`cylinder with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V4}, ${GENERATOR_VERSION_V5} or ${GENERATOR_VERSION_V6}`);
     }
+  });
+}
+
+/**
+ * T1 (Tester 3, version 9): level DRUM_TASTE_LEVEL is a gentle open drum (cylinder, no
+ * obstacles, noDrift, at most one well, no spawners, only DRUM_TASTE_KINDS) when the config has
+ * drums (opts.enableCylinder not false). noDrift appears on that level only.
+ */
+function checkDrumTaste(c: Collector, def: LevelDef, opts: LevelCheckOptions | undefined): void {
+  c.check('T1', (report) => {
+    const nd: unknown = (def as { noDrift?: unknown }).noDrift;
+    const taste = def.generatorVersion === GENERATOR_VERSION_V9 && def.levelIndex === DRUM_TASTE_LEVEL && opts?.enableCylinder !== false;
+    if (nd !== undefined && nd !== true) report(`noDrift ${String(nd)} must be true or absent`);
+    if (!taste) {
+      if (nd !== undefined) report(`noDrift on level ${def.levelIndex} (generatorVersion ${def.generatorVersion}), only the version 9 drum taste level ${DRUM_TASTE_LEVEL}`);
+      return;
+    }
+    if (def.surface !== 'cylinder') report(`drum taste level ${DRUM_TASTE_LEVEL} surface ${String(def.surface)}, want cylinder`);
+    if (def.arena.obstacles.length > 0) report(`drum taste level has ${def.arena.obstacles.length} obstacles, want an open drum`);
+    if (nd !== true) report('drum taste level lacks noDrift');
+    if (def.hazards.wells.length > 1) report(`drum taste level has ${def.hazards.wells.length} gravity wells, want 0 or 1`);
+    if (def.hazards.spawners.length > 0) report(`drum taste level has ${def.hazards.spawners.length} spawners, want 0`);
+    const kinds = namedKinds(def.roster, def.waves).filter((k) => !DRUM_TASTE_KINDS.includes(k));
+    if (kinds.length > 0) report(`drum taste level names ${[...new Set(kinds)].join(', ')}, want only ${DRUM_TASTE_KINDS.join(', ')}`);
+  });
+}
+
+const RIPPLE_EPS = 1e-6;
+
+/**
+ * K1 (Tester 3, version 9): pond ripples appear only on a version 9 flat non boss level from
+ * level 12 that is not a circle arena, as a non empty list sorted by atSec: the first at 40 to 70
+ * s, each next 25 to 45 s on, every one before the end of a timed objective, each epicentre at
+ * least RIPPLE_CLEAR inside the walls and from every obstacle, strength 0.2 to 1.
+ */
+function checkRipples(c: Collector, def: LevelDef): void {
+  c.check('K1', (report) => {
+    const rs: unknown = (def as { ripples?: unknown }).ripples;
+    if (rs === undefined) return;
+    if (!Array.isArray(rs) || rs.length === 0) {
+      report('ripples must be a non empty array or absent');
+      return;
+    }
+    if (def.generatorVersion !== GENERATOR_VERSION_V9) report(`ripples with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V9}`);
+    if (!rippleEligible(def.levelIndex, def.surface === 'flat', def.boss !== undefined, def.arena)) {
+      report(`ripples on level ${def.levelIndex} (${String(def.surface)}, ${def.arena.shape}${def.boss !== undefined ? ', boss' : ''}): only flat non boss levels from 12 that are not circles`);
+    }
+    const o = def.objective;
+    const end = o.kind === 'survive' ? o.durationSec : o.kind === 'scoreInTime' ? o.timeLimitSec : MAX_EST_SEC;
+    let prev: number | null = null;
+    (rs as unknown[]).forEach((e, i) => {
+      const r = e as { atSec?: unknown; x?: unknown; y?: unknown; strength?: unknown };
+      const { atSec, x, y, strength } = r;
+      if (typeof atSec !== 'number' || typeof x !== 'number' || typeof y !== 'number' || typeof strength !== 'number' || ![atSec, x, y, strength].every(Number.isFinite)) {
+        report(`ripple ${i} fields not finite numbers`);
+        return;
+      }
+      if (prev === null) {
+        if (atSec < RIPPLE_FIRST_MIN_SEC - RIPPLE_EPS || atSec > RIPPLE_FIRST_MAX_SEC + RIPPLE_EPS) report(`ripple 0 at ${atSec} s, want ${RIPPLE_FIRST_MIN_SEC} to ${RIPPLE_FIRST_MAX_SEC} s`);
+      } else {
+        const gap = atSec - prev;
+        if (gap <= 0) report(`ripple ${i} at ${atSec} s not after ripple ${i - 1} at ${prev} s (unsorted)`);
+        else if (gap < RIPPLE_GAP_MIN_SEC - RIPPLE_EPS) report(`ripple ${i} only ${f1(gap)} s after the previous, want at least ${RIPPLE_GAP_MIN_SEC}`);
+        // A left out ripple (no clear epicentre) widens a gap, so only the floor is strict.
+      }
+      if (atSec >= end) report(`ripple ${i} at ${atSec} s, at or after the level end ${end} s`);
+      prev = atSec;
+      const p = { x, y };
+      if (!insideArena(def.arena, p, RIPPLE_CLEAR)) report(`ripple ${i} epicentre (${x}, ${y}) within ${RIPPLE_CLEAR} of a wall`);
+      def.arena.obstacles.forEach((ob, j) => {
+        const d = obstaclePointDistance(ob, p);
+        if (d < RIPPLE_CLEAR) report(`ripple ${i} epicentre within ${f1(d)} of obstacle ${j}`);
+      });
+      if (strength < RIPPLE_STRENGTH_FLOOR - RIPPLE_EPS || strength > RIPPLE_MAX_STRENGTH + RIPPLE_EPS) report(`ripple ${i} strength ${strength} outside ${RIPPLE_STRENGTH_FLOOR} to ${RIPPLE_MAX_STRENGTH}`);
+    });
   });
 }
 

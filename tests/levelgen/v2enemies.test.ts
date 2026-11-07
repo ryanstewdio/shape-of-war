@@ -454,8 +454,8 @@ describe('v2 enemy stage', { timeout: 60_000 }, () => {
 
     it('J3: unknown generator versions fail', () => {
       const d = v2Level();
-      // V3, D13, release polish, R1, R2 and R3: 3 to 8 (GENERATOR_VERSION_V3 to _V8) are known, so 9 is the first unknown.
-      d.generatorVersion = 9;
+      // V3, D13, release polish, R1, R2, R3 and T3: 3 to 9 (GENERATOR_VERSION_V3 to _V9) are known, so 10 is the first unknown.
+      d.generatorVersion = 10;
       expect(validateLevel(d).errors.some((e) => e.startsWith('J3:'))).toBe(true);
     });
 

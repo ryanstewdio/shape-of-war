@@ -30,6 +30,7 @@ import {
   V4_GEN_CONFIG,
   V5_GEN_CONFIG,
   V6_GEN_CONFIG,
+  V8_GEN_CONFIG,
   bandOf,
   expandSpawns,
   levelSeed,
@@ -303,10 +304,12 @@ describe('flags, versions and Endless', () => {
     expect(DEFAULT_GEN_CONFIG.enableLongLevels).toBe(true);
     for (const c of [V1_GEN_CONFIG, V2_GEN_CONFIG, V3_GEN_CONFIG, V4_GEN_CONFIG]) expect(c.enableLongLevels).toBe(false);
     // forge-leaver: the legacy configs also turn the Leaver off.
-    expect({ ...V4_GEN_CONFIG, enableLongLevels: true, enableR1Pacing: true, enableR3Length: true, enableLeaver: true }).toEqual(DEFAULT_GEN_CONFIG);
-    expect({ ...V5_GEN_CONFIG, enableR1Pacing: true, enableR3Length: true, enableLeaver: true }).toEqual(DEFAULT_GEN_CONFIG);
-    expect({ ...V6_GEN_CONFIG, enableR3Length: true, enableLeaver: true }).toEqual(DEFAULT_GEN_CONFIG);
+    expect({ ...V4_GEN_CONFIG, enableLongLevels: true, enableR1Pacing: true, enableR3Length: true, enableLeaver: true, enableT3: true }).toEqual(DEFAULT_GEN_CONFIG);
+    expect({ ...V5_GEN_CONFIG, enableR1Pacing: true, enableR3Length: true, enableLeaver: true, enableT3: true }).toEqual(DEFAULT_GEN_CONFIG);
+    expect({ ...V6_GEN_CONFIG, enableR3Length: true, enableLeaver: true, enableT3: true }).toEqual(DEFAULT_GEN_CONFIG);
     expect(V5_GEN_CONFIG.enableLongLevels).toBe(true);
+    // T3: the legacy configs and V8_GEN_CONFIG also turn the T3 changes off.
+    expect({ ...V8_GEN_CONFIG, enableT3: true }).toEqual(DEFAULT_GEN_CONFIG);
   });
 
   it('a config without the field (an older literal) builds the flag off level', () => {
