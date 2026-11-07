@@ -280,7 +280,7 @@ export function installAudio(opts: AudioOptions): () => void {
   const turbo: TurboController = installTurboSfx(b, turboBackend);
   // Tester 2: a quiet retro tick while info screens scroll (scrollTick.ts).
   const scrollTick: ScrollTickController = installScrollTick(b, scrollTickBackend);
-  // Tester 3: pond ripple warning alert and splash (rippleSfx.ts).
+  // Tester 3: pond ripple thump and whoosh (rippleSfx.ts).
   const ripple: RippleController = installRippleSfx(b, rippleBackend);
   const offs = [
     gw2.dispose,

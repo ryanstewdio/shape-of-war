@@ -1,19 +1,17 @@
-// Web Audio backend for the pond ripple sounds (rippleSfx.ts). Native node graphs, one shot,
-// every voice feeds the sfx master so the effects volume applies, and every voice is registered
-// with the shared sfx voice cap.
-import { attackSec, leadCutoffHz, LEAD_LP_Q, NOISE_LP_HZ } from './tone';
+// Web Audio backend for the pond ripple sound (rippleSfx.ts). Native node graphs, one shot,
+// every voice feeds the sfx master so the effects volume and mute apply, and every voice is
+// registered with the shared sfx voice cap. Oscillators and noise only.
+import { attackSec } from './tone';
 import {
-  SPLASH_F_END,
-  SPLASH_F_PEAK,
-  SPLASH_SEC,
-  SPLASH_TAIL_F0,
-  SPLASH_TAIL_F1,
-  SPLASH_TAIL_SEC,
-  SPLASH_TAIL_SHARE,
-  WARN_GAIN,
-  WARN_SEC,
-  WARN_STEP_SEC,
-  WARN_STEPS,
+  THUMP_F_END,
+  THUMP_F_START,
+  THUMP_SEC,
+  WHOOSH_DELAY_SEC,
+  WHOOSH_F0,
+  WHOOSH_F1,
+  WHOOSH_Q,
+  WHOOSH_SEC,
+  WHOOSH_SHARE,
   type RippleBackend,
 } from './rippleSfx';
 
@@ -25,89 +23,58 @@ export interface RippleDeps {
   registerOneShot(start: number, end: number, stop: (at: number) => void): void;
 }
 
-function register(deps: RippleDeps, start: number, end: number, sources: AudioScheduledSourceNode[]): void {
-  deps.registerOneShot(start, end, (at) => {
-    for (const s of sources) {
-      try {
-        s.stop(at);
-      } catch {
-        // Already stopped.
-      }
-    }
-  });
-}
-
 export function createRippleBackend(deps: RippleDeps): RippleBackend {
   return {
-    playWarn(): void {
+    playRipple(gain: number): void {
       const g = deps.graph();
       if (!g) return;
       const c = g.ctx;
       const t = c.currentTime;
-      const end = t + WARN_SEC;
-      const env = c.createGain();
-      env.gain.setValueAtTime(FLOOR, t);
-      env.gain.linearRampToValueAtTime(WARN_GAIN, t + attackSec(0.01));
-      env.gain.setValueAtTime(WARN_GAIN, end - 0.1);
-      env.gain.exponentialRampToValueAtTime(FLOOR, end);
-      const lp = c.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.Q.value = LEAD_LP_Q;
-      const o = c.createOscillator();
-      o.type = 'square';
-      WARN_STEPS.forEach((hz, i) => {
-        o.frequency.setValueAtTime(hz, t + i * WARN_STEP_SEC);
-        lp.frequency.setValueAtTime(leadCutoffHz(hz), t + i * WARN_STEP_SEC);
-      });
-      o.connect(lp);
-      lp.connect(env);
-      env.connect(g.master);
-      o.onended = (): void => env.disconnect();
-      o.start(t);
-      o.stop(end + 0.02);
-      register(deps, t, end + 0.02, [o]);
-    },
-    playSplash(gain: number): void {
-      const g = deps.graph();
-      if (!g) return;
-      const c = g.ctx;
-      const t = c.currentTime;
-      const end = t + SPLASH_TAIL_SEC;
+      const end = t + WHOOSH_DELAY_SEC + WHOOSH_SEC;
       const out = c.createGain();
       out.connect(g.master);
-      // Bloop: a quick rise to the peak, then a fall.
+      // Thump: sine, fast drop.
       const env = c.createGain();
       env.gain.setValueAtTime(FLOOR, t);
-      env.gain.linearRampToValueAtTime(gain, t + attackSec(0.012));
-      env.gain.exponentialRampToValueAtTime(FLOOR, t + SPLASH_SEC);
+      env.gain.linearRampToValueAtTime(gain, t + attackSec(0.01));
+      env.gain.exponentialRampToValueAtTime(FLOOR, t + THUMP_SEC);
       const o = c.createOscillator();
       o.type = 'sine';
-      o.frequency.setValueAtTime(SPLASH_F_PEAK * 0.5, t);
-      o.frequency.exponentialRampToValueAtTime(SPLASH_F_PEAK, t + 0.05);
-      o.frequency.exponentialRampToValueAtTime(SPLASH_F_END, t + SPLASH_SEC);
+      o.frequency.setValueAtTime(THUMP_F_START, t);
+      o.frequency.exponentialRampToValueAtTime(THUMP_F_END, t + THUMP_SEC);
       o.connect(env);
       env.connect(out);
-      // Tail: noise through a falling low pass, under the 7 kHz limit.
+      // Whoosh: noise through a band pass that sweeps down while it fades.
       const ns = c.createBufferSource();
       ns.buffer = deps.noise(c);
       ns.loop = true;
-      const lp = c.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.setValueAtTime(Math.min(SPLASH_TAIL_F0, NOISE_LP_HZ), t);
-      lp.frequency.exponentialRampToValueAtTime(SPLASH_TAIL_F1, end);
+      const bp = c.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.Q.value = WHOOSH_Q;
+      const w0 = t + WHOOSH_DELAY_SEC;
+      bp.frequency.setValueAtTime(WHOOSH_F0, w0);
+      bp.frequency.exponentialRampToValueAtTime(WHOOSH_F1, end);
       const ng = c.createGain();
-      ng.gain.setValueAtTime(FLOOR, t);
-      ng.gain.linearRampToValueAtTime(gain * SPLASH_TAIL_SHARE, t + attackSec(0.02));
+      ng.gain.setValueAtTime(FLOOR, w0);
+      ng.gain.linearRampToValueAtTime(gain * WHOOSH_SHARE, w0 + attackSec(0.15));
       ng.gain.exponentialRampToValueAtTime(FLOOR, end);
-      ns.connect(lp);
-      lp.connect(ng);
+      ns.connect(bp);
+      bp.connect(ng);
       ng.connect(out);
       ns.onended = (): void => out.disconnect();
       o.start(t);
-      o.stop(t + SPLASH_SEC + 0.02);
-      ns.start(t);
+      o.stop(t + THUMP_SEC + 0.02);
+      ns.start(w0);
       ns.stop(end + 0.02);
-      register(deps, t, end + 0.02, [o, ns]);
+      deps.registerOneShot(t, end + 0.02, (at) => {
+        for (const s of [o, ns]) {
+          try {
+            s.stop(at);
+          } catch {
+            // Already stopped.
+          }
+        }
+      });
     },
   };
 }
