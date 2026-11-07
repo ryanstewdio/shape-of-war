@@ -135,8 +135,8 @@ export function createGame(level: LevelDef, opts: GameOptions = {}): World {
   spawnWells(w);
   initLevelBoss(w); // V3: arms LevelDef.boss when present; nothing otherwise
   if (opts.freePlay !== undefined) applyFreePlay(w, opts.freePlay);
-  // Tester 3: pond ripples play in Adventure only; Free Play and Endless stay as before.
-  if (opts.freePlay !== undefined || g.mode === 'endless') w.pond.active = false;
+  // T4: pond ripples come from nova well deaths, so they play wherever wells do (Endless has none).
+  if (g.mode === 'endless') w.pond.active = false;
   if (opts.startBonus !== undefined) applyStartBonus(w, opts.startBonus);
   watchPause(w);
   return w;
@@ -235,7 +235,7 @@ export function stepGame(w: World, dt: number, input: InputState): void {
   const g = gs(w);
   if (g.outcome !== 'running') return;
   stepWorld(w, dt, input);
-  if (w.pond.active) stepPond(w, dt); // Tester 3: ripple warn, start and push (no op without ripples)
+  stepPond(w, dt); // T4: nova well ripples expire and push (no op with no live wave)
   stepWeapons(w, dt);
   stepWellArrivals(w); // GW2: wells arriving in play (telegraph, then live)
   stepWells(w, dt);

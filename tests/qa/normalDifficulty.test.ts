@@ -68,7 +68,7 @@ const PRE_RELEASE: readonly (readonly [number, number, string, number, number])[
 ];
 
 /** Seed 7 level 33 is an open drum: pre release hash, and the drift on hash (docs/14 item 8). */
-const OPEN_DRUM = { seed: 7, level: 33, levelHash: '0BDFEF03', pre: 1506431169, drift: 1569863015 } /* R3: drift is a current (forge-r3-turbo): the ship takes the full drift, player bullets half, enemies a quarter, so the drift on hash moves; drift off still equals pre release */ as const;
+const OPEN_DRUM = { seed: 7, level: 33, levelHash: '0BDFEF03', pre: 1506431169, drift: 954469006 } /* R3: drift is a current (forge-r3-turbo): the ship takes the full drift, player bullets half, enemies a quarter, so the drift on hash moves; drift off still equals pre release. T4 (forge-nova-ripple): the nova well shot down at 10.86 s now ripples, so the drift on hash moves again */ as const;
 
 describe('Normal difficulty is the pre release sim', () => {
   it('the Normal table multiplies by exactly 1 and adds exactly 0, on every field', () => {
@@ -134,13 +134,14 @@ describe('Normal difficulty is the pre release sim', () => {
     });
   }
 
-  it('the open drum differs only by drift: with drift off it equals the pre release build', () => {
+  it('the open drum differs only by drift and the nova ripple: with both off it equals the pre release build', () => {
     const def = generateLevel(OPEN_DRUM.seed, OPEN_DRUM.level, V4_GEN_CONFIG);
     expect(levelHash(def)).toBe(OPEN_DRUM.levelHash);
     expect(isOpenDrum(def)).toBe(true);
     expect(play(createGame(def, { vibrate: () => undefined })).hash).toBe(OPEN_DRUM.drift);
     const w = createGame(def, { vibrate: () => undefined });
     w.drift.active = false;
+    w.pond.active = false; // T4: the nova kill ripple is new too; with both off it is the pre release sim
     expect(play(w).hash).toBe(OPEN_DRUM.pre);
   });
 });

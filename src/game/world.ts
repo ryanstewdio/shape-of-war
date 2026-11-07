@@ -100,7 +100,7 @@ export interface World {
   enraged: Uint8Array;
   /** R2: membrane the entity is inside: 0 for none, else plus or minus (index + 1) by the side it entered from. */
   memIn: Int16Array;
-  /** Tester 3 pond ripples (pondRipple.ts). Inactive without LevelDef.ripples, in Free Play and in Endless. */
+  /** Pond ripples (pondRipple.ts): waves started by nova well deaths. Inactive in Endless. */
   pond: PondState;
 }
 
@@ -152,7 +152,7 @@ export function createWorld(level: LevelDef, capacity: number = ENTITY_CAP, diff
     membranes: hasMembrane(level.arena),
     enraged: new Uint8Array(cap),
     memIn: new Int16Array(cap),
-    pond: createPond(level),
+    pond: createPond(),
   };
   w.kind[0] = Kind.Ship;
   w.radius[0] = SHIP_RADIUS;
