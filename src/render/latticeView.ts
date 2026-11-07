@@ -58,6 +58,7 @@ import {
 import { BACK_ALPHA, drumProjectNodes, type Drum } from './drum';
 import { projectNodes, type Camera } from './project';
 import { addPondToNodes, type PondWave } from './pondWave';
+import { addPondGlow } from './lattice/pondGlow';
 import { FADE_TEXEL, writeFadeUv } from './lattice/depthFade';
 
 // Vertex colour line shader. Written in the GLSL style pixi's own programs use: no version line,
@@ -299,6 +300,8 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   let layoutNow: LatticeLayout | null = null;
   let lift: Float32Array = new Float32Array(0);
   let pond: readonly PondWave[] = [];
+  /** Per node pond glow 0 to 1 (pondGlow of the crest height), written while a wave is live. */
+  let pondGlowBuf: Float32Array = new Float32Array(0);
   /** True when the last upload carried a pond wave, so the next frame writes the rest grid once. */
   let pondDrawn = false;
   const motes: Dust = createDust();
@@ -336,6 +339,7 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     heat = createHeat(layout.count);
     ambient = createAmbient(layout);
     lift = new Float32Array(layout.count);
+    pondGlowBuf = new Float32Array(layout.count);
     if (camera || drum) setZEnabled(sim, true);
     if (drum || camera) applyLineTexture();
   }
@@ -368,7 +372,7 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   /** Drum only: lift and project the frame just written, and pick each node's texel. */
   function drumFrame(s: LatticeSim, g: Gpu, d: Drum): void {
     writeLift(s, lift, latticeAlpha(s));
-    addPondToNodes(g.positions, s.layout.restX, s.layout.restY, s.layout.free, pond, lift);
+    addPondToNodes(g.positions, s.layout.restX, s.layout.restY, s.layout.free, pond, lift, pondGlowBuf, d.width);
     const uv = g.uvBuf.data;
     drumProjectNodes(g.positions, lift, s.layout.count, d, uv instanceof Float32Array ? uv : null);
     g.uvBuf.update();
@@ -377,13 +381,13 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   /** Tilt only: lift and project the frame just written into the position buffer. */
   function projectFrame(s: LatticeSim, g: Gpu, cam: Camera): void {
     writeLift(s, lift, latticeAlpha(s));
-    addPondToNodes(g.positions, s.layout.restX, s.layout.restY, s.layout.free, pond, lift);
+    addPondToNodes(g.positions, s.layout.restX, s.layout.restY, s.layout.free, pond, lift, pondGlowBuf);
     projectNodes(g.positions, lift, s.layout.count, cam);
   }
 
   /** Flat path: add the pond waves in plane to the frame just written. */
   function flatPond(s: LatticeSim, g: Gpu): void {
-    addPondToNodes(g.positions, s.layout.restX, s.layout.restY, s.layout.free, pond, null);
+    addPondToNodes(g.positions, s.layout.restX, s.layout.restY, s.layout.free, pond, null, pondGlowBuf);
   }
 
   function frame(dt: number, timeSec: number): void {
@@ -391,8 +395,10 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     stepLattice(sim, dt);
     // Pond waves are added at render time: while one is live (and once after) every node is rewritten.
     const pondLive = pond.length > 0;
+    const pondWasDrawn = pondDrawn;
     if (pondLive || pondDrawn) sim.dirty = true;
     pondDrawn = pondLive;
+    if (pondLive) pondGlowBuf.fill(0);
     if (drum) {
       // The drum turns with the ship: write and project every node every frame.
       sim.dirty = true;
@@ -416,9 +422,15 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     if (heat) {
       const wasAwake = heat.awake;
       stepHeat(heat, sim.layout, dt);
-      if (writeHeatColours(heat, gpu.heatColours)) gpu.heatBuf.update();
+      // T4 pond: while a wave is live (and once after) the heat colours are rewritten every
+      // frame and the crest glow is added on top, so the lifted lines burn toward white.
+      if (pondLive || pondWasDrawn) heat.dirty = true;
+      if (writeHeatColours(heat, gpu.heatColours)) {
+        if (pondLive) addPondGlow(gpu.heatColours, pondGlowBuf, sim.layout.free);
+        gpu.heatBuf.update();
+      }
       // Hidden while cold: no draw call. One last upload above wrote the cooled zeros.
-      const show = heat.awake || wasAwake;
+      const show = heat.awake || wasAwake || pondLive || pondWasDrawn;
       gpu.heatMesh.visible = show;
       gpu.heatEcho.visible = show;
     }
