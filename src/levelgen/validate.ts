@@ -37,15 +37,6 @@ import {
 } from './leveldef';
 import { DRUM_BAR_THICK, MEMBRANE_MAX, MEMBRANE_MIN } from './drum';
 import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, BOSS_SEGMENT_AT_SEC, FIRST_FIGHT_HP_MUL, bossForLevel, bossForSegment, bossTierOf, freePlayBossFor, sameBoss, t3BossForLevel } from './boss';
-import {
-  RIPPLE_CLEAR,
-  RIPPLE_FIRST_MAX_SEC,
-  RIPPLE_FIRST_MIN_SEC,
-  RIPPLE_GAP_MIN_SEC,
-  RIPPLE_MAX_STRENGTH,
-  RIPPLE_STRENGTH_FLOOR,
-  rippleEligible,
-} from './ripples';
 import type {
   ArenaDef,
   Band,
@@ -1039,7 +1030,6 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
     if (!flag && v9) report(`generatorVersion ${GENERATOR_VERSION_V9} with enableT3 or a version 8 flag off`);
   });
   checkDrumTaste(c, def, opts);
-  checkRipples(c, def);
   c.check('J5', (report) => {
     const r = def.retries;
     if (r === undefined || !isInt(r) || r < 0 || r > MAX_RETRIES) report(`retries ${String(r)} not an integer 0 to ${MAX_RETRIES}`);
@@ -1102,57 +1092,6 @@ function checkDrumTaste(c: Collector, def: LevelDef, opts: LevelCheckOptions | u
     if (def.hazards.spawners.length > 0) report(`drum taste level has ${def.hazards.spawners.length} spawners, want 0`);
     const kinds = namedKinds(def.roster, def.waves).filter((k) => !DRUM_TASTE_KINDS.includes(k));
     if (kinds.length > 0) report(`drum taste level names ${[...new Set(kinds)].join(', ')}, want only ${DRUM_TASTE_KINDS.join(', ')}`);
-  });
-}
-
-const RIPPLE_EPS = 1e-6;
-
-/**
- * K1 (Tester 3, version 9): pond ripples appear only on a version 9 flat non boss level from
- * level 12 that is not a circle arena, as a non empty list sorted by atSec: the first at 40 to 70
- * s, each next 25 to 45 s on, every one before the end of a timed objective, each epicentre at
- * least RIPPLE_CLEAR inside the walls and from every obstacle, strength 0.2 to 1.
- */
-function checkRipples(c: Collector, def: LevelDef): void {
-  c.check('K1', (report) => {
-    const rs: unknown = (def as { ripples?: unknown }).ripples;
-    if (rs === undefined) return;
-    if (!Array.isArray(rs) || rs.length === 0) {
-      report('ripples must be a non empty array or absent');
-      return;
-    }
-    if (def.generatorVersion !== GENERATOR_VERSION_V9) report(`ripples with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V9}`);
-    if (!rippleEligible(def.levelIndex, def.surface === 'flat', def.boss !== undefined, def.arena)) {
-      report(`ripples on level ${def.levelIndex} (${String(def.surface)}, ${def.arena.shape}${def.boss !== undefined ? ', boss' : ''}): only flat non boss levels from 12 that are not circles`);
-    }
-    const o = def.objective;
-    const end = o.kind === 'survive' ? o.durationSec : o.kind === 'scoreInTime' ? o.timeLimitSec : MAX_EST_SEC;
-    let prev: number | null = null;
-    (rs as unknown[]).forEach((e, i) => {
-      const r = e as { atSec?: unknown; x?: unknown; y?: unknown; strength?: unknown };
-      const { atSec, x, y, strength } = r;
-      if (typeof atSec !== 'number' || typeof x !== 'number' || typeof y !== 'number' || typeof strength !== 'number' || ![atSec, x, y, strength].every(Number.isFinite)) {
-        report(`ripple ${i} fields not finite numbers`);
-        return;
-      }
-      if (prev === null) {
-        if (atSec < RIPPLE_FIRST_MIN_SEC - RIPPLE_EPS || atSec > RIPPLE_FIRST_MAX_SEC + RIPPLE_EPS) report(`ripple 0 at ${atSec} s, want ${RIPPLE_FIRST_MIN_SEC} to ${RIPPLE_FIRST_MAX_SEC} s`);
-      } else {
-        const gap = atSec - prev;
-        if (gap <= 0) report(`ripple ${i} at ${atSec} s not after ripple ${i - 1} at ${prev} s (unsorted)`);
-        else if (gap < RIPPLE_GAP_MIN_SEC - RIPPLE_EPS) report(`ripple ${i} only ${f1(gap)} s after the previous, want at least ${RIPPLE_GAP_MIN_SEC}`);
-        // A left out ripple (no clear epicentre) widens a gap, so only the floor is strict.
-      }
-      if (atSec >= end) report(`ripple ${i} at ${atSec} s, at or after the level end ${end} s`);
-      prev = atSec;
-      const p = { x, y };
-      if (!insideArena(def.arena, p, RIPPLE_CLEAR)) report(`ripple ${i} epicentre (${x}, ${y}) within ${RIPPLE_CLEAR} of a wall`);
-      def.arena.obstacles.forEach((ob, j) => {
-        const d = obstaclePointDistance(ob, p);
-        if (d < RIPPLE_CLEAR) report(`ripple ${i} epicentre within ${f1(d)} of obstacle ${j}`);
-      });
-      if (strength < RIPPLE_STRENGTH_FLOOR - RIPPLE_EPS || strength > RIPPLE_MAX_STRENGTH + RIPPLE_EPS) report(`ripple ${i} strength ${strength} outside ${RIPPLE_STRENGTH_FLOOR} to ${RIPPLE_MAX_STRENGTH}`);
-    });
   });
 }
 

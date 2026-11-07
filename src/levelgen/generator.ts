@@ -112,7 +112,6 @@ import {
   FREE_PLAY_SNAKE_FROM_SEGMENT,
 } from './validate';
 import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards, t3BossForLevel } from './boss';
-import { RIPPLE_CLEAR, RIPPLE_SALT, generateRipples, rippleEligible } from './ripples';
 import { R3_COLLECT_RATE, bossLevelPar, destroyCountFor, inBreather, pulseAt, wholeLevelPar } from './pacing';
 import type { PulseShape } from './pacing';
 import {
@@ -1075,7 +1074,7 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const r1Waves = runsR1(cfg);
   // Release gate R3: 3.5 minute non boss levels, the boss at 120 s, whole level par everywhere (version 8).
   const r3 = runsR3(cfg);
-  // Tester 3: boss order, drum taste and pond ripples (version 9).
+  // Tester 3: boss order and drum taste (version 9).
   const t3 = runsT3(cfg);
   const bossLevel = cfg.enableBosses && bossForLevel(levelIndex) !== null;
   const objTable = r3 ? r3ObjectiveTable(band, bossLevel) : LONG_BANDS[band];
@@ -1124,11 +1123,6 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const drawn = generateHazards(stream(s, SALT.hazards), arena, b, cfg, objective, cyl);
   // Drum taste: at most one well and no spawners (the boss rule 12 step, no draw).
   const hazards = taste ? bossHazards(drawn) : drawn;
-  // Pond ripples: own stream after every other draw, so nothing else moves. Par ignores them.
-  const ripples =
-    t3 && longObjective !== null && rippleEligible(levelIndex, !cyl, bossLevel, arena)
-      ? generateRipples(stream(s, RIPPLE_SALT), arena, levelIndex, longObjective.clearSec, (p) => rippleClear(arena, p))
-      : null;
   const whole = r3
     ? bossLevel
       ? bossLevelPar(waves, objective, bossLevelAtSec(cfg))
@@ -1168,15 +1162,9 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     surface,
     retries: attempt,
     // Version 9 only, appended last so every older def keeps its keys and bytes.
-    ...(ripples !== null ? { ripples } : {}),
     ...(taste ? { noDrift: true as const } : {}),
   };
   return withLevelBoss(def, cfg);
-}
-
-/** A ripple epicentre keeps RIPPLE_CLEAR from every wall and obstacle of a flat arena. */
-export function rippleClear(arena: ArenaDef, p: Vec2): boolean {
-  return insideArena(arena, p, RIPPLE_CLEAR) && arena.obstacles.every((o) => obstaclePointDistance(o, p) >= RIPPLE_CLEAR);
 }
 
 /**

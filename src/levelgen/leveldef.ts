@@ -54,8 +54,7 @@ export const GENERATOR_VERSION_V8 = 8;
 /**
  * Tester 3 (wave T3). Generator version of every level built with the version 8 config plus
  * GenConfig.enableT3 (the default config): Brood first and Warden second with the first fight at
- * FIRST_FIGHT_HP_MUL, level 8 a gentle open drum with no drift, and pond ripples on some flat non
- * boss levels from level 12. Versions 1 to 8 are unchanged, byte for byte (V8_GEN_CONFIG builds 8).
+ * FIRST_FIGHT_HP_MUL, and level 8 a gentle open drum with no drift. No ripples (see RippleEvent). Versions 1 to 8 are unchanged, byte for byte (V8_GEN_CONFIG builds 8).
  */
 export const GENERATOR_VERSION_V9 = 9;
 
@@ -243,8 +242,8 @@ export interface LevelDef {
   /** V3 stub (docs/13): present only on a boss level. Absent on every other level and when GenConfig.enableBosses is off. */
   boss?: BossSpec;
   /**
-   * Tester 3 pond ripples (Fable contract stub, wave T3). Sorted by atSec. Present only on flat,
-   * non boss levels the generator chose for ripples; absent everywhere else. JSON serialisable.
+   * Deprecated (ripples now start when a super nova well is destroyed). The generator no longer
+   * emits it; kept so older branches compile. Fable deletes it at merge.
    */
   ripples?: RippleEvent[];
   /**
@@ -254,7 +253,7 @@ export interface LevelDef {
   noDrift?: true;
 }
 
-/** One pond ripple: a ring wave from (x, y) that starts at atSec on the wave clock. strength 0.2 to 1. */
+/** Deprecated with LevelDef.ripples: one scheduled ring wave. Fable deletes it at merge. */
 export interface RippleEvent {
   atSec: number;
   x: number;
@@ -338,7 +337,7 @@ export interface GenConfig {
   enableLeaver?: boolean;
   /**
    * Tester 3 (wave T3). On together with the version 8 flags: the T3 boss order and first fight
-   * hit points, the level 8 drum taste and pond ripples; reports GENERATOR_VERSION_V9. Optional;
+   * hit points and the level 8 drum taste; reports GENERATOR_VERSION_V9. Optional;
    * only true turns it on, so absent or false builds version 8 byte for byte. Default on. Endless
    * and Free Play never read it.
    */
