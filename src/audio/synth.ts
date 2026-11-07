@@ -9,6 +9,8 @@ import { installTurboSfx, type TurboController } from './turboSfx';
 import { installScrollTick, type ScrollTickController } from './scrollTick';
 import { createScrollTickBackend } from './scrollTickSynth';
 import { createTurboBackend } from './turboSynth';
+import { installRippleSfx, type RippleController } from './rippleSfx';
+import { createRippleBackend } from './rippleSynth';
 import {
   clampVolume,
   CUES,
@@ -152,6 +154,7 @@ function registerOneShot(start: number, end: number, stop: (at: number) => void)
 
 const gw2Backend = createGw2Backend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
 const turboBackend = createTurboBackend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
+const rippleBackend = createRippleBackend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
 const scrollTickBackend = createScrollTickBackend({ graph: sfxGraph });
 
 function stopVoice(vc: Voice, at: number): void {
@@ -277,8 +280,11 @@ export function installAudio(opts: AudioOptions): () => void {
   const turbo: TurboController = installTurboSfx(b, turboBackend);
   // Tester 2: a quiet retro tick while info screens scroll (scrollTick.ts).
   const scrollTick: ScrollTickController = installScrollTick(b, scrollTickBackend);
+  // Tester 3: pond ripple warning alert and splash (rippleSfx.ts).
+  const ripple: RippleController = installRippleSfx(b, rippleBackend);
   const offs = [
     gw2.dispose,
+    ripple.dispose,
     turbo.dispose,
     scrollTick.dispose,
     // combat emits fx:kill then sfx explode, so the colour decides the explode sound.
