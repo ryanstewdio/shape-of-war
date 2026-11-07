@@ -1,26 +1,24 @@
-// Pond ripple sounds (src/audio/rippleSfx.ts): warn alert on 'sim:rippleWarn', splash on
-// 'sim:ripple' with gain rising with strength, and dispose removing the listeners.
+// Pond ripple sound (src/audio/rippleSfx.ts): no cue on the old warn event, thump plus whoosh on
+// 'sim:ripple' with gain rising with strength, about 1.5 s long, and dispose removing the listener.
 import { describe, expect, it } from 'vitest';
 import {
   installRippleSfx,
-  SPLASH_GAIN_MAX,
-  SPLASH_GAIN_MIN,
-  splashGain,
-  WARN_SEC,
-  WARN_STEPS,
-  warnHzAt,
+  RIPPLE_GAIN_MAX,
+  RIPPLE_GAIN_MIN,
+  RIPPLE_SEC,
+  rippleGain,
+  THUMP_F_END,
+  THUMP_F_START,
+  WHOOSH_F0,
+  WHOOSH_F1,
   type RippleBackend,
 } from '../../src/audio/rippleSfx';
 import { Bus } from '../../src/core/events';
 
 class FakeBackend implements RippleBackend {
-  warns = 0;
-  splashes: number[] = [];
-  playWarn(): void {
-    this.warns++;
-  }
-  playSplash(gain: number): void {
-    this.splashes.push(gain);
+  plays: number[] = [];
+  playRipple(gain: number): void {
+    this.plays.push(gain);
   }
 }
 
@@ -31,48 +29,44 @@ function setup(): { bus: Bus; be: FakeBackend; ctl: ReturnType<typeof installRip
 }
 
 describe('ripple sfx (pure)', () => {
-  it('the alert lasts 0.6 to 0.9 s and climbs', () => {
-    expect(WARN_SEC).toBeGreaterThanOrEqual(0.6);
-    expect(WARN_SEC).toBeLessThanOrEqual(0.9);
-    for (let i = 1; i < WARN_STEPS.length; i++) expect(WARN_STEPS[i]).toBeGreaterThan(WARN_STEPS[i - 1] ?? 0);
-    expect(warnHzAt(0)).toBe(WARN_STEPS[0]);
-    expect(warnHzAt(WARN_SEC + 5)).toBe(WARN_STEPS[WARN_STEPS.length - 1]);
-    expect(warnHzAt(Number.NaN)).toBe(WARN_STEPS[0]);
+  it('lasts about 1.5 s, thump is low and drops, whoosh sweeps down', () => {
+    expect(RIPPLE_SEC).toBeGreaterThanOrEqual(1.4);
+    expect(RIPPLE_SEC).toBeLessThanOrEqual(1.6);
+    expect(THUMP_F_START).toBeLessThanOrEqual(70);
+    expect(THUMP_F_END).toBeGreaterThanOrEqual(50);
+    expect(THUMP_F_END).toBeLessThan(THUMP_F_START);
+    expect(WHOOSH_F1).toBeLessThan(WHOOSH_F0);
   });
 
-  it('splash gain rises with strength and is clamped', () => {
-    expect(splashGain(0)).toBe(SPLASH_GAIN_MIN);
-    expect(splashGain(1)).toBe(SPLASH_GAIN_MAX);
-    expect(splashGain(0.7)).toBeGreaterThan(splashGain(0.3));
-    expect(splashGain(5)).toBe(SPLASH_GAIN_MAX);
-    expect(splashGain(-2)).toBe(SPLASH_GAIN_MIN);
-    expect(splashGain(Number.NaN)).toBe(SPLASH_GAIN_MIN);
+  it('gain rises with strength and is clamped', () => {
+    expect(rippleGain(0)).toBe(RIPPLE_GAIN_MIN);
+    expect(rippleGain(1)).toBe(RIPPLE_GAIN_MAX);
+    expect(rippleGain(0.7)).toBeGreaterThan(rippleGain(0.3));
+    expect(rippleGain(5)).toBe(RIPPLE_GAIN_MAX);
+    expect(rippleGain(-2)).toBe(RIPPLE_GAIN_MIN);
+    expect(rippleGain(Number.NaN)).toBe(RIPPLE_GAIN_MIN);
   });
 });
 
 describe('ripple sfx lifecycle', () => {
-  it('plays the warn cue on sim:rippleWarn only', () => {
+  it('plays no cue on the old sim:rippleWarn event', () => {
     const { bus, be } = setup();
     bus.emit('sim:rippleWarn', { x: 10, y: 20, inSec: 1, strength: 0.5 });
-    expect(be.warns).toBe(1);
-    expect(be.splashes).toHaveLength(0);
+    expect(be.plays).toHaveLength(0);
   });
 
-  it('plays the splash on sim:ripple, louder with strength', () => {
+  it('plays the thump and whoosh on sim:ripple, louder with strength', () => {
     const { bus, be } = setup();
     bus.emit('sim:ripple', { x: 0, y: 0, strength: 0.2 });
     bus.emit('sim:ripple', { x: 0, y: 0, strength: 0.9 });
-    expect(be.warns).toBe(0);
-    expect(be.splashes).toHaveLength(2);
-    expect(be.splashes[1]).toBeGreaterThan(be.splashes[0] ?? 1);
+    expect(be.plays).toHaveLength(2);
+    expect(be.plays[1]).toBeGreaterThan(be.plays[0] ?? 1);
   });
 
-  it('dispose removes the listeners', () => {
+  it('dispose removes the listener', () => {
     const { bus, be, ctl } = setup();
     ctl.dispose();
-    bus.emit('sim:rippleWarn', { x: 0, y: 0, inSec: 1, strength: 1 });
     bus.emit('sim:ripple', { x: 0, y: 0, strength: 1 });
-    expect(be.warns).toBe(0);
-    expect(be.splashes).toHaveLength(0);
+    expect(be.plays).toHaveLength(0);
   });
 });

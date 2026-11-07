@@ -1,62 +1,45 @@
-// Pond ripple sounds (Tester 3: "a sound when an arena ripple happens so the player is alerted").
-// 'sim:rippleWarn' plays a short rising retro alert RIPPLE_WARN_SEC before the wave; 'sim:ripple'
-// plays a low watery bloop with a falling tail, louder with strength. Pure parameters plus the
-// event controller; no Web Audio here, so tests run in node. rippleSynth.ts makes the sound.
-// The existing cues do not pan by position, so neither does this one.
+// Pond ripple sound. A ripple starts only when a super nova gravity well is destroyed, so the
+// cue follows that explosion. There is no warning sound: 'sim:ripple' plays one short wave cue,
+// a deep thump then a watery whoosh that sweeps down for about 1.5 s, a little louder with
+// strength. Pure parameters plus the event controller; no Web Audio here, so tests run in node.
+// rippleSynth.ts makes the sound. The existing cues do not pan by position, so neither does this one.
 import type { Bus } from '../core/events';
 
-/** Warn alert: six rising square steps, Hz. A stepped climb, unlike the drift burst's smooth sine. */
-export const WARN_STEPS: readonly number[] = [330, 415, 523, 659, 831, 1047];
-export const WARN_STEP_SEC = 0.125;
-/** Total alert length, seconds (0.75, inside the 0.6 to 0.9 s brief). */
-export const WARN_SEC = WARN_STEPS.length * WARN_STEP_SEC;
-export const WARN_GAIN = 0.05;
+/** Thump: a low sine that drops fast, Hz and seconds. */
+export const THUMP_F_START = 70;
+export const THUMP_F_END = 50;
+export const THUMP_SEC = 0.35;
+/** Whoosh: band passed noise whose centre sweeps down, Hz. Starts just after the thump. */
+export const WHOOSH_DELAY_SEC = 0.12;
+export const WHOOSH_SEC = 1.5;
+export const WHOOSH_F0 = 1800;
+export const WHOOSH_F1 = 220;
+export const WHOOSH_Q = 1.2;
+/** Total cue length, seconds (about 1.5 s of whoosh, matching the wave). */
+export const RIPPLE_SEC = WHOOSH_SEC;
+/** Thump level at strength 0 and at strength 1 (gain rises between them). Below boss cues. */
+export const RIPPLE_GAIN_MIN = 0.1;
+export const RIPPLE_GAIN_MAX = 0.2;
+/** Whoosh level as a share of the thump gain. */
+export const WHOOSH_SHARE = 0.7;
 
-/** Splash bloop: a sine that jumps up then falls, Hz and seconds. */
-export const SPLASH_F_PEAK = 300;
-export const SPLASH_F_END = 70;
-export const SPLASH_SEC = 0.4;
-/** Tail: low passed noise that falls in cutoff, Hz and seconds. */
-export const SPLASH_TAIL_SEC = 0.5;
-export const SPLASH_TAIL_F0 = 900;
-export const SPLASH_TAIL_F1 = 160;
-/** Splash level at strength 0 and at strength 1 (gain rises between them). */
-export const SPLASH_GAIN_MIN = 0.06;
-export const SPLASH_GAIN_MAX = 0.16;
-/** Tail noise level as a share of the splash gain. */
-export const SPLASH_TAIL_SHARE = 0.4;
-
-/** Pure: the warn note frequency at `elapsed` seconds, held on the last step after the end. */
-export function warnHzAt(elapsed: number): number {
-  const i = Math.floor((Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0) / WARN_STEP_SEC);
-  return WARN_STEPS[Math.min(WARN_STEPS.length - 1, i)] ?? WARN_STEPS[0] ?? 440;
-}
-
-/** Pure: splash gain for a strength; strength is clamped to 0..1 and a bad value counts as 0. */
-export function splashGain(strength: number): number {
+/** Pure: ripple gain for a strength; strength is clamped to 0..1 and a bad value counts as 0. */
+export function rippleGain(strength: number): number {
   const k = Number.isFinite(strength) ? Math.min(1, Math.max(0, strength)) : 0;
-  return SPLASH_GAIN_MIN + (SPLASH_GAIN_MAX - SPLASH_GAIN_MIN) * k;
+  return RIPPLE_GAIN_MIN + (RIPPLE_GAIN_MAX - RIPPLE_GAIN_MIN) * k;
 }
 
 /** What the controller needs from the sound side. Each call is silent when audio is not available. */
 export interface RippleBackend {
-  playWarn(): void;
-  playSplash(gain: number): void;
+  playRipple(gain: number): void;
 }
 
 export interface RippleController {
   dispose(): void;
 }
 
-/** Wire 'sim:rippleWarn' and 'sim:ripple' on `b` to `backend`. Payload objects are reused: fields are read here. */
+/** Wire 'sim:ripple' on `b` to `backend`. Payload objects are reused: fields are read here. */
 export function installRippleSfx(b: Bus, backend: RippleBackend): RippleController {
-  const offs = [
-    b.on('sim:rippleWarn', () => backend.playWarn()),
-    b.on('sim:ripple', (p) => backend.playSplash(splashGain(p.strength))),
-  ];
-  return {
-    dispose: () => {
-      for (const off of offs) off();
-    },
-  };
+  const off = b.on('sim:ripple', (p) => backend.playRipple(rippleGain(p.strength)));
+  return { dispose: off };
 }
