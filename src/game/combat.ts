@@ -9,6 +9,7 @@ import { BULLET_RADIUS, hasHit, killBullet, passThrough, recordHit, STYLE_ORBIT,
 import { queryCircleInto } from './collide';
 import { defOf } from './defs';
 import { isWarping } from './enemies/blink';
+import { novaDeathRipple } from './enemies/gravitywell';
 import { shardColour, shardHolding, splitLeaver } from './enemies/leaver';
 import { shieldBlocks } from './enemies/bulwark';
 import { isArmed } from './enemies/mine';
@@ -67,6 +68,7 @@ export function killEnemy(w: World, id: number, scored: boolean): void {
     removeEntity(w, id);
     return;
   }
+  if (k === Kind.GravityWell) novaDeathRipple(w, id); // T4: a nova well shot down ripples the pond
   const g = gs(w);
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;

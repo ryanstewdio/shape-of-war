@@ -24,10 +24,15 @@
 // entity pool and maxLiveEnemies (a due emergence with no room is skipped). They are normal snakes
 // (scored, shot down normally); the well's explosion removes its snakes wherever they are.
 // 'sim:wellSpawn' fires once per emergence. Endless has no wells, so no nova snakes.
+//
+// Nova ripple (T4): a well in nova that is destroyed (shot down, cut down or exploding at
+// MASS_LIMIT) starts a pond ripple at its centre on that step (pondRipple.ts). A well destroyed
+// before its nova, a bomb (which resets a well, not destroys it) and level end or reset removal do not.
 import { bus } from '../../core/events';
 import { BULLET_RADIUS, killBullet, STYLE_ORBIT, STYLE_SPREAD, styleRadius } from '../bullets';
 import { emitHit, emitKill, killEnemy } from '../combat';
 import { killShip } from '../player';
+import { wellDeathRipple } from '../pondRipple';
 import { removeEntity } from '../remove';
 import { gs, isHostile, MAX_WELLS, SNAKE_SLOTS, spawnFromDef, type GameState } from '../state';
 import { SHIP_RADIUS } from '../ship';
@@ -236,11 +241,20 @@ export function feed(w: World, well: number, victim: number): void {
   if (m >= MASS_LIMIT) explode(w, well);
 }
 
+/** Radius of a well at MASS_LIMIT (the size it explodes at). */
+export const FULL_RADIUS = def.radius + 2 * MASS_LIMIT;
+
+/** Destroying kill hook: a well in nova starts a pond ripple, strength from its size. Call before removal. */
+export function novaDeathRipple(w: World, well: number): void {
+  wellDeathRipple(w, well, def.radius, FULL_RADIUS);
+}
+
 /** Kill every enemy within 220 u (no score) and the ship if not invulnerable, then remove the well. */
 export function explode(w: World, well: number): void {
   const g = gs(w);
   const x = w.x[well] ?? 0;
   const y = w.y[well] ?? 0;
+  novaDeathRipple(w, well);
   removeEntity(w, well);
   removeWellSnakes(w, well);
   const r2 = EXPLODE_RADIUS * EXPLODE_RADIUS;
