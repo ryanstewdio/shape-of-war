@@ -152,25 +152,19 @@ import {
   stepParticles,
   STREAK_TEX_LEN,
 } from './particles';
-import { addRipple, stepRipples, traceRippledGrid, type Ripple } from './ripple';
+import { addRipple, stepRipples, tracePondGridProjected, traceRippledGrid, type Ripple } from './ripple';
 import {
-  addPondWarn,
   addPondWave,
   crestAlpha,
+  crestWhite,
   devPondDrop,
   DEV_POND_PERIOD,
   parsePondKnob,
   POND_CRESTS,
   pondCrestRadius,
-  stepPondWarns,
   stepPondWaves,
-  warnAlpha,
-  warnProgress,
-  warnRadius,
-  type PondWarn,
   type PondWave,
 } from './pondWave';
-import { RIPPLE_WARN_SEC } from '../core/pondRipple';
 import { addShake, createShake, stepShake } from './shake';
 import { buildBloomSourceContext, buildContext, buildGlowSourceContext, contextForSlot, rebuildShapeContexts } from './shapes';
 import type { GraphicsContext } from 'pixi.js';
@@ -1724,9 +1718,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const shakeOff = { x: 0, y: 0 };
   const ripples: Ripple[] = [];
   let gridRippling = false;
-  // Tester 3 pond ripples: telegraphs and live waves, aged on the sim clock so a pause freezes them.
+  // T4 pond ripples (a super nova well destroyed): live waves, aged on the sim clock so a pause freezes them.
   const pondWaves: PondWave[] = [];
-  const pondWarns: PondWarn[] = [];
   lattice.setPond(pondWaves);
   /** Sim clock at the last draw, -1 before the first. */
   let pondSimTime = -1;
@@ -1734,8 +1727,6 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const devPond = parsePondKnob(window.location.search);
   let devPondAt = 1;
   let devPondN = 0;
-  let devPondWaveAt = -1;
-  let devPondDropNow = { x: 0, y: 0, strength: 1 };
   const ringList: { x: number; y: number; age: number; colour: PaletteKey }[] = [];
   // Old shape contexts are freed after the next render, once no view batches from them.
   let retiredContexts: GraphicsContext[] = [];
@@ -1904,9 +1895,17 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       return;
     }
     if (cam.on) {
-      // Tilt on the low tier: the projected v1 grid, without the ripple bend (known gap).
-      drawGridProjected(grid, gridSegs, palette.grid, fit.scale, cam);
-      gridRippling = false;
+      // Tilt on the low tier: the projected v1 grid, bent and lifted by a live pond wave (the
+      // small explosion ripples stay off it).
+      if (pondWaves.length === 0) {
+        drawGridProjected(grid, gridSegs, palette.grid, fit.scale, cam);
+        gridRippling = false;
+        return;
+      }
+      grid.clear();
+      tracePondGridProjected(gridSegs, pondWaves, grid, cam);
+      grid.stroke({ width: gridLineWidth(fit.scale), color: palette.grid, alpha: 1 });
+      gridRippling = true;
       return;
     }
     if (ripples.length === 0 && pondWaves.length === 0) {
@@ -3308,8 +3307,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     // R2 (Forge): an enemy came through a membrane and stays enraged; an open drum burst is due.
     bus.on('sim:enrage', (p) => markEnraged(enraged, p.id)),
     bus.on('sim:driftBurst', (p) => driftBurstEvent(streaks, p.inSec, p.dir)),
-    // Tester 3 (Forge): a pond ripple telegraph, then the wave itself. Payloads are reused.
-    bus.on('sim:rippleWarn', (p) => addPondWarn(pondWarns, p.x, p.y, p.inSec, p.strength)),
+    // T4 (Forge): a super nova well was destroyed; the pond wave starts at once, no telegraph.
     bus.on('sim:ripple', (p) => addPondWave(pondWaves, p.x, p.y, p.strength)),
   ];
   offFx.push(
@@ -4328,57 +4326,41 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   }
 
   /**
-   * Tester 3: age the pond telegraphs and waves by the sim clock step since the last draw (a
-   * pause, the menu or a new level adds nothing), and fire the dev drops behind ?dev=1&pond=1.
+   * T4: age the pond waves by the sim clock step since the last draw (a pause, the menu or a new
+   * level adds nothing), and fire the dev drops behind ?dev=1&pond=1: a strength 1 wave every
+   * DEV_POND_PERIOD seconds, at once, with no telegraph.
    */
   function stepPond(simNow: number): void {
     const t = Number.isFinite(simNow) ? simNow : 0;
     const step = pondSimTime < 0 ? 0 : t - pondSimTime;
     pondSimTime = t;
     const d = step > 0 && step < 0.5 ? step : 0;
-    if (pondWarns.length > 0) stepPondWarns(pondWarns, d);
     if (pondWaves.length > 0) stepPondWaves(pondWaves, d);
     if (!devPond) return;
     if (t < devPondAt - DEV_POND_PERIOD) devPondAt = t + 1;
     if (t >= devPondAt) {
-      devPondDropNow = devPondDrop(devPondN++, arena.width, arena.height);
-      addPondWarn(pondWarns, devPondDropNow.x, devPondDropNow.y, RIPPLE_WARN_SEC, devPondDropNow.strength);
-      devPondWaveAt = t + RIPPLE_WARN_SEC;
+      const drop = devPondDrop(devPondN++, arena.width, arena.height);
+      addPondWave(pondWaves, drop.x, drop.y, drop.strength);
       devPondAt = t + DEV_POND_PERIOD;
-    }
-    if (devPondWaveAt >= 0 && t >= devPondWaveAt) {
-      addPondWave(pondWaves, devPondDropNow.x, devPondDropNow.y, devPondDropNow.strength);
-      devPondWaveAt = -1;
     }
   }
 
   /**
-   * Tester 3: the telegraph (a pulsing ring tightening on the drop point, a dot at its centre)
-   * and a faint outline on each wave crest, so the wave reads on every tier and under tilt. Grid
-   * colour lifted toward white; the bloom picks it up through the neon settings.
+   * T4: an outline on each wave crest, so the wave reads on every tier and under tilt (on low it
+   * is the only whitening). Each crest is lifted from the grid colour toward white and thickened
+   * by its height right now; the bloom picks it up through the neon settings.
    */
   function drawPond(): void {
-    if (pondWarns.length === 0 && pondWaves.length === 0) return;
+    if (pondWaves.length === 0) return;
     const g = wellLayer();
-    const col = mixRgb(palette.grid, palette.white, 0.55);
-    for (const w of pondWarns) {
-      const p = warnProgress(w);
-      const al = warnAlpha(w);
-      penOwner(g, w.x, w.y);
-      penCircle(g, w.x, w.y, warnRadius(p));
-      penStroke(g, 2.5, col, al);
-      penCircle(g, w.x, w.y, warnRadius(p) * 0.55);
-      penStroke(g, 1.2, col, al * 0.5);
-      penCircle(g, w.x, w.y, 3 + 5 * p);
-      penFill(g, col, 0.3 + 0.6 * p);
-    }
     for (const w of pondWaves) {
       penOwner(g, w.x, w.y);
       for (let k = 0; k < POND_CRESTS; k++) {
         const al = crestAlpha(w, k);
         if (al <= 0.01) continue;
+        const wh = crestWhite(w, k);
         penCircle(g, w.x, w.y, pondCrestRadius(w.age, k));
-        penStroke(g, 2, col, al);
+        penStroke(g, 2 + 3 * wh, mixRgb(palette.grid, palette.white, wh), al);
       }
     }
   }
@@ -5483,10 +5465,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     clearParticles();
     ripples.length = 0;
     pondWaves.length = 0;
-    pondWarns.length = 0;
     pondSimTime = -1;
     devPondAt = 1;
-    devPondWaveAt = -1;
     ringList.length = 0;
     shake.list.length = 0;
     resetEnemyAndMapFx();

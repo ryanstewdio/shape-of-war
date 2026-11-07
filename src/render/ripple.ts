@@ -4,6 +4,7 @@
 import type { ArenaDef } from '../levelgen/leveldef';
 import { gridSegments } from './gridGeom';
 import { pondDisplace, type PondOut, type PondWave } from './pondWave';
+import { project, type Camera, type Projected } from './project';
 
 export const RIPPLE_SPEED = 900; // arena units per second
 export const RIPPLE_LIFE = 1.1; // seconds
@@ -57,7 +58,8 @@ export interface Pen {
 }
 
 const penScratch: Vec = { x: 0, y: 0 };
-const pondScratch: PondOut = { x: 0, y: 0, z: 0 };
+const pondScratch: PondOut = { x: 0, y: 0, z: 0, h: 0 };
+const projScratch: Projected = { x: 0, y: 0, s: 1 };
 
 /**
  * Trace the grid segments bent by the ripples (and any pond waves) straight into a pen, with no
@@ -84,6 +86,32 @@ export function traceRippledGrid(segs: readonly number[], list: readonly Ripple[
       }
       if (k === 0) pen.moveTo(x + d.x, y + d.y);
       else pen.lineTo(x + d.x, y + d.y);
+    }
+  }
+}
+
+/**
+ * Low tier with tilt on: trace the grid segments bent and lifted by the pond waves, then
+ * projected through the camera, straight into a pen with no allocation. Called only while a pond
+ * wave is live (the explosion ripples stay off the tilted v1 grid, as before).
+ */
+export function tracePondGridProjected(segs: readonly number[], pond: readonly PondWave[], pen: Pen, cam: Camera): void {
+  const q = pondScratch;
+  const p = projScratch;
+  for (let i = 0; i + 3 < segs.length; i += 4) {
+    const x0 = segs[i] ?? 0;
+    const y0 = segs[i + 1] ?? 0;
+    const x1 = segs[i + 2] ?? 0;
+    const y1 = segs[i + 3] ?? 0;
+    const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / RIPPLE_STEP));
+    for (let k = 0; k <= n; k++) {
+      const t = k / n;
+      const x = x0 + (x1 - x0) * t;
+      const y = y0 + (y1 - y0) * t;
+      pondDisplace(x, y, pond, q);
+      project(x + q.x, y + q.y, q.z, cam, p);
+      if (k === 0) pen.moveTo(p.x, p.y);
+      else pen.lineTo(p.x, p.y);
     }
   }
 }
