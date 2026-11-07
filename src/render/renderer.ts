@@ -153,6 +153,24 @@ import {
   STREAK_TEX_LEN,
 } from './particles';
 import { addRipple, stepRipples, traceRippledGrid, type Ripple } from './ripple';
+import {
+  addPondWarn,
+  addPondWave,
+  crestAlpha,
+  devPondDrop,
+  DEV_POND_PERIOD,
+  parsePondKnob,
+  POND_CRESTS,
+  pondCrestRadius,
+  stepPondWarns,
+  stepPondWaves,
+  warnAlpha,
+  warnProgress,
+  warnRadius,
+  type PondWarn,
+  type PondWave,
+} from './pondWave';
+import { RIPPLE_WARN_SEC } from '../core/pondRipple';
 import { addShake, createShake, stepShake } from './shake';
 import { buildBloomSourceContext, buildContext, buildGlowSourceContext, contextForSlot, rebuildShapeContexts } from './shapes';
 import type { GraphicsContext } from 'pixi.js';
@@ -1706,6 +1724,18 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const shakeOff = { x: 0, y: 0 };
   const ripples: Ripple[] = [];
   let gridRippling = false;
+  // Tester 3 pond ripples: telegraphs and live waves, aged on the sim clock so a pause freezes them.
+  const pondWaves: PondWave[] = [];
+  const pondWarns: PondWarn[] = [];
+  lattice.setPond(pondWaves);
+  /** Sim clock at the last draw, -1 before the first. */
+  let pondSimTime = -1;
+  /** Dev only (?dev=1&pond=1): sim time of the next hand fired drop, and its count. */
+  const devPond = parsePondKnob(window.location.search);
+  let devPondAt = 1;
+  let devPondN = 0;
+  let devPondWaveAt = -1;
+  let devPondDropNow = { x: 0, y: 0, strength: 1 };
   const ringList: { x: number; y: number; age: number; colour: PaletteKey }[] = [];
   // Old shape contexts are freed after the next render, once no view batches from them.
   let retiredContexts: GraphicsContext[] = [];
@@ -1879,13 +1909,13 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       gridRippling = false;
       return;
     }
-    if (ripples.length === 0) {
+    if (ripples.length === 0 && pondWaves.length === 0) {
       drawGrid(grid, gridSegs, palette.grid, fit.scale);
       gridRippling = false;
       return;
     }
     grid.clear();
-    traceRippledGrid(gridSegs, ripples, grid);
+    traceRippledGrid(gridSegs, ripples, grid, pondWaves);
     grid.stroke({ width: gridLineWidth(fit.scale), color: palette.grid, alpha: 1 });
     gridRippling = true;
   }
@@ -3278,6 +3308,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     // R2 (Forge): an enemy came through a membrane and stays enraged; an open drum burst is due.
     bus.on('sim:enrage', (p) => markEnraged(enraged, p.id)),
     bus.on('sim:driftBurst', (p) => driftBurstEvent(streaks, p.inSec, p.dir)),
+    // Tester 3 (Forge): a pond ripple telegraph, then the wave itself. Payloads are reused.
+    bus.on('sim:rippleWarn', (p) => addPondWarn(pondWarns, p.x, p.y, p.inSec, p.strength)),
+    bus.on('sim:ripple', (p) => addPondWave(pondWaves, p.x, p.y, p.strength)),
   ];
   offFx.push(
     onEffectsTierChanged((t) => {
@@ -3297,7 +3330,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   function stepEffects(dt: number): void {
     stepShake(shake, dt, shakeOff);
     world.position.set(fit.x + shakeOff.x, fit.y + shakeOff.y);
-    if (ripples.length > 0 || gridRippling) {
+    if (ripples.length > 0 || pondWaves.length > 0 || gridRippling) {
       stepRipples(ripples, dt);
       redrawGrid();
     }
@@ -4294,6 +4327,62 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     penFill(g, col, 0.45);
   }
 
+  /**
+   * Tester 3: age the pond telegraphs and waves by the sim clock step since the last draw (a
+   * pause, the menu or a new level adds nothing), and fire the dev drops behind ?dev=1&pond=1.
+   */
+  function stepPond(simNow: number): void {
+    const t = Number.isFinite(simNow) ? simNow : 0;
+    const step = pondSimTime < 0 ? 0 : t - pondSimTime;
+    pondSimTime = t;
+    const d = step > 0 && step < 0.5 ? step : 0;
+    if (pondWarns.length > 0) stepPondWarns(pondWarns, d);
+    if (pondWaves.length > 0) stepPondWaves(pondWaves, d);
+    if (!devPond) return;
+    if (t < devPondAt - DEV_POND_PERIOD) devPondAt = t + 1;
+    if (t >= devPondAt) {
+      devPondDropNow = devPondDrop(devPondN++, arena.width, arena.height);
+      addPondWarn(pondWarns, devPondDropNow.x, devPondDropNow.y, RIPPLE_WARN_SEC, devPondDropNow.strength);
+      devPondWaveAt = t + RIPPLE_WARN_SEC;
+      devPondAt = t + DEV_POND_PERIOD;
+    }
+    if (devPondWaveAt >= 0 && t >= devPondWaveAt) {
+      addPondWave(pondWaves, devPondDropNow.x, devPondDropNow.y, devPondDropNow.strength);
+      devPondWaveAt = -1;
+    }
+  }
+
+  /**
+   * Tester 3: the telegraph (a pulsing ring tightening on the drop point, a dot at its centre)
+   * and a faint outline on each wave crest, so the wave reads on every tier and under tilt. Grid
+   * colour lifted toward white; the bloom picks it up through the neon settings.
+   */
+  function drawPond(): void {
+    if (pondWarns.length === 0 && pondWaves.length === 0) return;
+    const g = wellLayer();
+    const col = mixRgb(palette.grid, palette.white, 0.55);
+    for (const w of pondWarns) {
+      const p = warnProgress(w);
+      const al = warnAlpha(w);
+      penOwner(g, w.x, w.y);
+      penCircle(g, w.x, w.y, warnRadius(p));
+      penStroke(g, 2.5, col, al);
+      penCircle(g, w.x, w.y, warnRadius(p) * 0.55);
+      penStroke(g, 1.2, col, al * 0.5);
+      penCircle(g, w.x, w.y, 3 + 5 * p);
+      penFill(g, col, 0.3 + 0.6 * p);
+    }
+    for (const w of pondWaves) {
+      penOwner(g, w.x, w.y);
+      for (let k = 0; k < POND_CRESTS; k++) {
+        const al = crestAlpha(w, k);
+        if (al <= 0.01) continue;
+        penCircle(g, w.x, w.y, pondCrestRadius(w.age, k));
+        penStroke(g, 2, col, al);
+      }
+    }
+  }
+
   /** Look GW2: arrival rings converging on new wells and the snake emergence bursts and trails. */
   function drawWellFx(): void {
     if (arriveAny(arrive)) {
@@ -5006,6 +5095,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     drawBossIdentity(timeSec);
     drawDroneMode(arm.mode);
     drawWellFx();
+    drawPond();
     if (novaLive) stepNovaState(nova, dt);
     stepArrive(arrive, dt);
     stepEmerge(emerge, dt);
@@ -5261,6 +5351,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       drum.camU = followCamU(drum.camU, shipX, drumSnap ? Number.POSITIVE_INFINITY : fxDt, drum.width);
       drumSnap = false;
     }
+    stepPond(w.time);
     drawEntities(w, a, nowSec, fxDt);
     drawHazards(nowSec);
     drawGhost();
@@ -5391,6 +5482,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     setParticleBounds(arena.width, arena.height);
     clearParticles();
     ripples.length = 0;
+    pondWaves.length = 0;
+    pondWarns.length = 0;
+    pondSimTime = -1;
+    devPondAt = 1;
+    devPondWaveAt = -1;
     ringList.length = 0;
     shake.list.length = 0;
     resetEnemyAndMapFx();

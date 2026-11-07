@@ -57,6 +57,7 @@ import {
 } from './lattice/sim';
 import { BACK_ALPHA, drumProjectNodes, type Drum } from './drum';
 import { projectNodes, type Camera } from './project';
+import { addPondToNodes, type PondWave } from './pondWave';
 import { FADE_TEXEL, writeFadeUv } from './lattice/depthFade';
 
 // Vertex colour line shader. Written in the GLSL style pixi's own programs use: no version line,
@@ -150,6 +151,8 @@ export interface LatticeView {
   setCamera(cam: Camera | null): void;
   /** Drum for a cylinder level, or null. Read every frame (its camU moves); wins over the camera. */
   setDrum(drum: Drum | null): void;
+  /** Tester 3 pond waves, read every frame (the renderer owns and ages the list). */
+  setPond(list: readonly PondWave[]): void;
   destroy(): void;
 }
 
@@ -295,6 +298,9 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   let fadeTex: Texture | null = null;
   let layoutNow: LatticeLayout | null = null;
   let lift: Float32Array = new Float32Array(0);
+  let pond: readonly PondWave[] = [];
+  /** True when the last upload carried a pond wave, so the next frame writes the rest grid once. */
+  let pondDrawn = false;
   const motes: Dust = createDust();
   const items: Particle[] = [];
   const dotW = Math.max(1, dotTexture.width);
@@ -362,6 +368,7 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   /** Drum only: lift and project the frame just written, and pick each node's texel. */
   function drumFrame(s: LatticeSim, g: Gpu, d: Drum): void {
     writeLift(s, lift, latticeAlpha(s));
+    addPondToNodes(g.positions, s.layout.restX, s.layout.restY, s.layout.free, pond, lift);
     const uv = g.uvBuf.data;
     drumProjectNodes(g.positions, lift, s.layout.count, d, uv instanceof Float32Array ? uv : null);
     g.uvBuf.update();
@@ -370,12 +377,22 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   /** Tilt only: lift and project the frame just written into the position buffer. */
   function projectFrame(s: LatticeSim, g: Gpu, cam: Camera): void {
     writeLift(s, lift, latticeAlpha(s));
+    addPondToNodes(g.positions, s.layout.restX, s.layout.restY, s.layout.free, pond, lift);
     projectNodes(g.positions, lift, s.layout.count, cam);
+  }
+
+  /** Flat path: add the pond waves in plane to the frame just written. */
+  function flatPond(s: LatticeSim, g: Gpu): void {
+    addPondToNodes(g.positions, s.layout.restX, s.layout.restY, s.layout.free, pond, null);
   }
 
   function frame(dt: number, timeSec: number): void {
     if (!sim || !gpu) return;
     stepLattice(sim, dt);
+    // Pond waves are added at render time: while one is live (and once after) every node is rewritten.
+    const pondLive = pond.length > 0;
+    if (pondLive || pondDrawn) sim.dirty = true;
+    pondDrawn = pondLive;
     if (drum) {
       // The drum turns with the ship: write and project every node every frame.
       sim.dirty = true;
@@ -389,9 +406,11 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
       stepAmbient(ambient, timeSec, ambientAmp);
       writePositionsAmbient(sim, gpu.positions, latticeAlpha(sim), ambient);
       if (camera) projectFrame(sim, gpu, camera);
+      else flatPond(sim, gpu);
       gpu.posBuf.update();
     } else if (writePositions(sim, gpu.positions, latticeAlpha(sim))) {
       if (camera) projectFrame(sim, gpu, camera);
+      else flatPond(sim, gpu);
       gpu.posBuf.update();
     }
     if (heat) {
@@ -510,6 +529,9 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
     setAmbient,
     setCamera,
     setDrum,
+    setPond(list: readonly PondWave[]): void {
+      pond = list;
+    },
     destroy(): void {
       clear();
       glassTex?.destroy(true);

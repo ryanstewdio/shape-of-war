@@ -3,6 +3,7 @@
 // static grid costs nothing between explosions.
 import type { ArenaDef } from '../levelgen/leveldef';
 import { gridSegments } from './gridGeom';
+import { pondDisplace, type PondOut, type PondWave } from './pondWave';
 
 export const RIPPLE_SPEED = 900; // arena units per second
 export const RIPPLE_LIFE = 1.1; // seconds
@@ -56,13 +57,15 @@ export interface Pen {
 }
 
 const penScratch: Vec = { x: 0, y: 0 };
+const pondScratch: PondOut = { x: 0, y: 0, z: 0 };
 
 /**
- * Trace the grid segments bent by the ripples straight into a pen, with no allocation. segs is
- * gridSegments output, cached by the caller per arena.
+ * Trace the grid segments bent by the ripples (and any pond waves) straight into a pen, with no
+ * allocation. segs is gridSegments output, cached by the caller per arena.
  */
-export function traceRippledGrid(segs: readonly number[], list: readonly Ripple[], pen: Pen): void {
+export function traceRippledGrid(segs: readonly number[], list: readonly Ripple[], pen: Pen, pond: readonly PondWave[] = []): void {
   const d = penScratch;
+  const q = pondScratch;
   for (let i = 0; i + 3 < segs.length; i += 4) {
     const x0 = segs[i] ?? 0;
     const y0 = segs[i + 1] ?? 0;
@@ -74,6 +77,11 @@ export function traceRippledGrid(segs: readonly number[], list: readonly Ripple[
       const x = x0 + (x1 - x0) * t;
       const y = y0 + (y1 - y0) * t;
       rippleDisplace(x, y, list, d);
+      if (pond.length > 0) {
+        pondDisplace(x, y, pond, q);
+        d.x += q.x;
+        d.y += q.y;
+      }
       if (k === 0) pen.moveTo(x + d.x, y + d.y);
       else pen.lineTo(x + d.x, y + d.y);
     }
