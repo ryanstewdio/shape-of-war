@@ -239,3 +239,18 @@ describe('R2 objective bar', () => {
     expect(formatCompact(-5)).toBe('0');
   });
 });
+
+describe('boss level bar', () => {
+  const spec = { id: 'warden', tier: 1, atSec: 120, hpMul: 1 } as const;
+  const snap = (t: number) => ({ elapsedSec: t, score: 0, kills: 0, lives: 3 });
+  const obj = { kind: 'destroy', count: 300 } as const;
+  it('before the entrance it fills with time and reads BOSS IN', () => {
+    expect(objectiveProgress(obj, snap(30), false, undefined, { spec, hpFraction: 1 })).toMatchObject({ label: 'BOSS IN 1:30', fraction: 0.25 });
+  });
+  it('from the entrance it shows the boss health and name', () => {
+    expect(objectiveProgress(obj, snap(120), true, undefined, { spec, hpFraction: 0.4 })).toMatchObject({ label: 'Warden', fraction: 0.4 });
+  });
+  it('non boss levels are unchanged', () => {
+    expect(objectiveProgress(obj, snap(30)).label).toBe('Destroy 0 / 300');
+  });
+});

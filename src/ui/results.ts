@@ -169,6 +169,8 @@ export interface ResultText {
   newBest: boolean;
   /** Everything else, labelled, for the collapsed Details row. */
   details: LabelledValue[];
+  /** Boss level win: "<Boss name> defeated", '' otherwise (a loss keeps the out of lives text). */
+  goalLine: string;
   /** R2: the par reward shows. */
   parReached: boolean;
   /** R2: the big left button. */
@@ -219,6 +221,7 @@ export function resultLines(r: LevelResult): ResultText {
     bestStars: '',
     newBest: false,
     details: detailItems(r),
+    goalLine: '',
     parReached: false,
     primary: 'retry' as const,
   };
@@ -245,6 +248,7 @@ export function resultLines(r: LevelResult): ResultText {
     best: formatInt(r.best),
     bestStars: r.bestStars === undefined ? '' : starGlyphs(r.bestStars),
     newBest: r.newBest,
+    goalLine: r.success && r.bossName !== undefined && r.bossName !== '' ? `${r.bossName} defeated` : '',
     parReached: earnsParReward(r),
     primary: r.success ? 'next' : 'retry',
   };
@@ -279,7 +283,9 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
   diff.setAttribute('data-results', 'difficulty');
   const badge = el('div', 'sow-badge');
   badge.setAttribute('data-results', 'badge');
-  headBox.append(title, sub, diff, badge);
+  const goalEl = el('div', 'sow-card-line');
+  goalEl.setAttribute('data-results', 'goalLine');
+  headBox.append(title, sub, diff, badge, goalEl);
   // (2) Score block.
   const scoreBox = el('div', 'sow-block');
   scoreBox.setAttribute('data-results', 'scoreBlock');
@@ -339,6 +345,7 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
       showText(diff, t.difficulty);
       diff.classList.toggle('sow-diff-insane', r.difficulty === 'insane');
       showText(badge, t.badge);
+      showText(goalEl, t.goalLine);
       setVectorText(score, t.score);
       par.replaceChildren();
       if (t.par !== '') par.append(el('span', 'sow-k', PAR_LABEL), el('span', 'sow-v', t.par.slice(PAR_LABEL.length + 1)));
