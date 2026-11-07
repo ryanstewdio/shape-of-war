@@ -40,6 +40,8 @@ import {
 } from '../core/settings';
 import { button, createScreen, el, type Screen } from './dom';
 import { createFrameThrottle, createSlider } from './slider';
+import { bus } from '../core/events';
+import { attachScrollbar } from './scrollbar';
 
 export interface SettingsEffects {
   /** Glow's setShowFps from src/render/devpanel.ts. */
@@ -559,6 +561,7 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
 
   panel.append(title, neon.root, volume.root, music.root, weaponRow, effectsRow, tiltRow, toggles, seedRow, seedLine, bottom, debugRow, version);
   s.root.append(panel);
+  attachScrollbar(panel, bus);
 
   function refresh(): void {
     neon.set(model.state.neon);

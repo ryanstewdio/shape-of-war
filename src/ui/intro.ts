@@ -30,6 +30,8 @@ import { foeLines, iconCanvas, type FoeKind, type FoeLine } from './enemyIntro';
 import { formatClock, formatCompact } from './format';
 import { DIFFICULTY_ROW_LABEL, difficultyButtonStates, difficultyLabel } from './settings';
 import { setVectorText } from './vectorFont';
+import { bus } from '../core/events';
+import { attachScrollbar } from './scrollbar';
 
 /** Seconds the Endless and Free Play "Ready" text holds the sim. */
 export const INTRO_SEC = 1.5;
@@ -415,6 +417,7 @@ export function createIntroScreen(parent: HTMLElement, onStart: () => void, onDi
   const details = createDetails('data-intro');
   card.append(head, goal.root, stars.root, foes.root, play, details.root);
   s.root.append(card);
+  attachScrollbar(card, bus);
   let shown = { stars: false, foes: false, details: false };
   const show = (ready: boolean): void => {
     goal.root.style.display = ready ? 'none' : '';

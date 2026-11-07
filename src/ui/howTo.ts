@@ -22,6 +22,8 @@ import { FOE_INFO, iconCanvas, paletteCss, specCanvas, type FoeKind, type FoeTyp
 import { iconStrokes, strokeCanvas, type Stroke } from './parReward';
 import { difficultyLabel } from './settings';
 import { setVectorText, type VectorTone } from './vectorFont';
+import { bus } from '../core/events';
+import { attachScrollbar } from './scrollbar';
 
 export const HOW_TO_TITLE = 'How to';
 /** Hard ceiling per page section (tests); the writing aims for about 30. */
@@ -626,6 +628,7 @@ export function createHowToScreen(parent: HTMLElement, actions: HowToActions): H
   row.append(back, next, close);
   card.append(title, body, dots, row);
   s.root.append(card);
+  attachScrollbar(body, bus);
 
   function paint(): void {
     const p = pages[page];

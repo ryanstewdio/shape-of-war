@@ -244,6 +244,23 @@ export const UI_CSS = `
   .sow-vec { --sow-cell: max(1px, round(calc(1em / 10), 1px));
     width: calc(var(--sow-cw) * var(--sow-cell)); height: calc(var(--sow-ch) * var(--sow-cell)); } }
 .sow-vec-host { line-height: 1; }
+/* Pixel scroll bar (scrollbar.ts). Colours are set inline from the neon state. */
+.sow-sb-host { scrollbar-width: none; -ms-overflow-style: none; }
+.sow-sb-host::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.sow-howto-body.sow-sb-host, .sow-fp-body.sow-sb-host { padding-right: 14px; }
+.sow-sb-parent:not(.sow-screen) { position: relative; }
+.sow-sb { position: absolute; z-index: 2; display: none; pointer-events: none; box-sizing: border-box; }
+.sow-sb.sow-sb-on { display: block; }
+.sow-sb-track { position: absolute; width: 10px; pointer-events: auto; touch-action: none; }
+.sow-sb-cells, .sow-sb-thumb { position: absolute; right: 0; width: 6px; border-radius: 0; }
+.sow-sb-cells { top: 0; bottom: 0; }
+.sow-sb-more { position: absolute; right: 16px; bottom: 4px; display: none; align-items: center; gap: 4px;
+  padding: 2px 6px; font-size: 16px; line-height: 1; pointer-events: none; border-radius: 0;
+  background: rgba(2, 6, 16, 0.86); }
+.sow-sb-more.sow-on { display: flex; }
+.sow-sb-arrow { width: 10px; height: 10px; animation: sow-sb-blink 900ms steps(1, end) infinite; }
+@keyframes sow-sb-blink { 0% { opacity: 1; } 50% { opacity: 0.15; } }
+@media (prefers-reduced-motion: reduce) { .sow-sb-arrow { animation: none; } }
 .sow-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden;
   clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 `;
