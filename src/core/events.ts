@@ -44,6 +44,8 @@ export interface Events {
   'game:quit': void;
   /** Ledger to Chorus (wave 6 contract stub): the visible screen changed. title and menu play the menu theme. */
   'ui:screen': { screen: 'title' | 'menu' | 'settings' | 'play' | 'results' };
+  /** Tester 2 scroll bar wave: an info screen scrolled. delta in CSS px since the last emit (positive is down), progress 0 at top to 1 at bottom. Emitted at most once per animation frame by src/ui/scrollbar.ts; src/audio turns it into a tick. */
+  'ui:scroll': { delta: number; progress: number };
   'game:over': { score: number; stars: 0 | 1 | 2 | 3; levelIndex: number; mode: 'adventure' | 'endless' };
   'hud:score': { score: number; multiplier: number; lives: number; bombs: number; superCharge: number };
   'viewport:changed': ViewportInfo;
