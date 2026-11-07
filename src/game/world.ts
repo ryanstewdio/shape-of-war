@@ -10,6 +10,7 @@ import { createBulletPool, stepBullets, type BulletPool } from './bullets';
 import { createGrid, rebuild, type Grid } from './collide';
 import { createDrift, stepDrift, type DriftState } from './drift';
 import { enrageSpeed, hasMembrane, membraneMove } from './membrane';
+import { createPond, type PondState } from './pondRipple';
 import { createShipState, respawnShip, SHIP_RADIUS, stepShip, type ShipState } from './ship';
 
 export const enum Kind {
@@ -99,6 +100,8 @@ export interface World {
   enraged: Uint8Array;
   /** R2: membrane the entity is inside: 0 for none, else plus or minus (index + 1) by the side it entered from. */
   memIn: Int16Array;
+  /** Tester 3 pond ripples (pondRipple.ts). Inactive without LevelDef.ripples, in Free Play and in Endless. */
+  pond: PondState;
 }
 
 /** Per kind behaviour. Swarm registers one per enemy kind in W2. */
@@ -149,6 +152,7 @@ export function createWorld(level: LevelDef, capacity: number = ENTITY_CAP, diff
     membranes: hasMembrane(level.arena),
     enraged: new Uint8Array(cap),
     memIn: new Int16Array(cap),
+    pond: createPond(level),
   };
   w.kind[0] = Kind.Ship;
   w.radius[0] = SHIP_RADIUS;
