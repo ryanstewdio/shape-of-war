@@ -20,6 +20,7 @@ import { spawnWells, stepWells } from './enemies/gravitywell';
 import { SUPER_CHARGE_MAX } from './geoms';
 import { stepObjective } from './objective';
 import { stepPlayer } from './player';
+import { stepPond } from './pondRipple';
 import { stepPresence } from './presence';
 import { stepSpawner } from './spawner';
 import { endlessLevel, startEndless, stepEndlessAwards } from './endless';
@@ -134,6 +135,8 @@ export function createGame(level: LevelDef, opts: GameOptions = {}): World {
   spawnWells(w);
   initLevelBoss(w); // V3: arms LevelDef.boss when present; nothing otherwise
   if (opts.freePlay !== undefined) applyFreePlay(w, opts.freePlay);
+  // Tester 3: pond ripples play in Adventure only; Free Play and Endless stay as before.
+  if (opts.freePlay !== undefined || g.mode === 'endless') w.pond.active = false;
   if (opts.startBonus !== undefined) applyStartBonus(w, opts.startBonus);
   watchPause(w);
   return w;
@@ -232,6 +235,7 @@ export function stepGame(w: World, dt: number, input: InputState): void {
   const g = gs(w);
   if (g.outcome !== 'running') return;
   stepWorld(w, dt, input);
+  if (w.pond.active) stepPond(w, dt); // Tester 3: ripple warn, start and push (no op without ripples)
   stepWeapons(w, dt);
   stepWellArrivals(w); // GW2: wells arriving in play (telegraph, then live)
   stepWells(w, dt);
