@@ -232,6 +232,19 @@ export interface LevelDef {
   retries?: number;
   /** V3 stub (docs/13): present only on a boss level. Absent on every other level and when GenConfig.enableBosses is off. */
   boss?: BossSpec;
+  /**
+   * Tester 3 pond ripples (Fable contract stub, wave T3). Sorted by atSec. Present only on flat,
+   * non boss levels the generator chose for ripples; absent everywhere else. JSON serialisable.
+   */
+  ripples?: RippleEvent[];
+}
+
+/** One pond ripple: a ring wave from (x, y) that starts at atSec on the wave clock. strength 0.2 to 1. */
+export interface RippleEvent {
+  atSec: number;
+  x: number;
+  y: number;
+  strength: number;
 }
 
 /** W2: most deterministic re-derives generateLevel makes after the first attempt. */

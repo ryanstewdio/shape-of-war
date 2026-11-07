@@ -101,3 +101,8 @@ One line per decision: clock time, who raised it, what was decided, why.
 | 211:00 | Ryan | Orbit stays melee only unless in a combo. Bomb and Super stack above the right stick on the right edge (Thumbs). A paged How to guide on the main menu replaces the interactive tutorial (Ledger). |
 | 216:30 | Ryan | Build d9bfb54 is the tester release, tagged tester-1. |
 | 230:00 | Fable | scoreInTime target becomes 60 percent of par on whole level par configs, scaled by parScale per difficulty, so finishing the goal lands near the 1 star line. |
+| 262:10 | Ryan | Boss levels: goal is survive until the boss arrives, then defeat it; the regular objective is no longer shown there. |
+| 262:10 | Ryan | First boss becomes Brood (Warden moves to level 10), the first fight gets 0.75 hit points, Easy bossScale 0.65 to 0.55. |
+| 262:10 | Ryan | Level 8 is always a gentle open drum so players taste the drum early. |
+| 262:10 | Ryan | Pond ripples on flat non boss levels from 12, pushing ship and enemies, with a warning sound one second before. |
+| 262:10 | Ryan | Half drum (curved trough with slope gravity) planned for after the Tuesday 2026-11-10 Max reset. |
