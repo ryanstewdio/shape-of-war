@@ -6,6 +6,8 @@ import { hash01 } from '../core/rng';
 import { installGw2, type Gw2Controller } from './gw2';
 import { createGw2Backend } from './gw2Synth';
 import { installTurboSfx, type TurboController } from './turboSfx';
+import { installScrollTick, type ScrollTickController } from './scrollTick';
+import { createScrollTickBackend } from './scrollTickSynth';
 import { createTurboBackend } from './turboSynth';
 import {
   clampVolume,
@@ -150,6 +152,7 @@ function registerOneShot(start: number, end: number, stop: (at: number) => void)
 
 const gw2Backend = createGw2Backend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
 const turboBackend = createTurboBackend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
+const scrollTickBackend = createScrollTickBackend({ graph: sfxGraph });
 
 function stopVoice(vc: Voice, at: number): void {
   for (const s of vc.sources) {
@@ -272,9 +275,12 @@ export function installAudio(opts: AudioOptions): () => void {
   const gw2: Gw2Controller = installGw2(b, gw2Backend);
   // R3 Turbo: ignition sweep, engine hum, power down sweep (turboSfx.ts).
   const turbo: TurboController = installTurboSfx(b, turboBackend);
+  // Tester 2: a quiet retro tick while info screens scroll (scrollTick.ts).
+  const scrollTick: ScrollTickController = installScrollTick(b, scrollTickBackend);
   const offs = [
     gw2.dispose,
     turbo.dispose,
+    scrollTick.dispose,
     // combat emits fx:kill then sfx explode, so the colour decides the explode sound.
     b.on('fx:kill', (p) => {
       bigKill = isBigKillColour(p.colour);
