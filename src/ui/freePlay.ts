@@ -27,6 +27,8 @@ import { FOE_INFO, iconCanvas } from './enemyIntro';
 import { scoreAttackLabel } from './results';
 import { DIFFICULTY_ROW_LABEL, difficultyLabel } from './settings';
 import { setVectorText } from './vectorFont';
+import { bus } from '../core/events';
+import { attachScrollbar } from './scrollbar';
 
 export const FREE_PLAY_TITLE = 'Free Play';
 export const ARENA_ROW_LABEL = 'Arena';
@@ -286,6 +288,7 @@ export function createFreePlayScreen(parent: HTMLElement, actions: FreePlayActio
   row.append(start, back);
   card.append(title, body, row);
   s.root.append(card);
+  attachScrollbar(body, bus);
   paint();
   return {
     ...s,

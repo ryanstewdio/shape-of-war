@@ -26,6 +26,8 @@ import { starCapLine, type LabelledValue } from './intro';
 import { createRewardChooser, earnsParReward } from './parReward';
 import { difficultyLabel, SPACE_ROW_LABEL, spaceLabel } from './settings';
 import { setVectorText, type VectorTone } from './vectorFont';
+import { bus } from '../core/events';
+import { attachScrollbar } from './scrollbar';
 
 export interface ResultsActions {
   next(): void;
@@ -321,6 +323,7 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
   const details = createDetails('data-results');
   card.append(headBox, scoreBox, best, reward.root, row, details.root);
   s.root.append(card);
+  attachScrollbar(card, bus);
   const showText = (e: HTMLElement, text: string): void => {
     e.textContent = text;
     e.style.display = text === '' ? 'none' : '';
