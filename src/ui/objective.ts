@@ -4,7 +4,8 @@
 // V3-A: on a boss level the sim holds the level until the boss dies (docs/13 boss rule 9), so the
 // fallback check skips success there (fallbackStatus), the sim's verdict decides the win
 // (levelSuccess) and the label reads "Defeat the boss" while the hold lasts (objectiveProgress).
-import type { ObjectiveDef } from '../levelgen/leveldef';
+import type { BossSpec, ObjectiveDef } from '../levelgen/leveldef';
+import { bossName } from './boss';
 import { formatClock, formatCompact, formatInt } from './format';
 
 export interface ObjectiveSnapshot {
@@ -113,6 +114,28 @@ export function starLine(score: number, thresholds: readonly [number, number, nu
   return { stars: frac(score, top), starMarks: [frac(thresholds[0], top), frac(thresholds[1], top)] };
 }
 
+/** The boss of a boss level and how much of its health is left (0 to 1, 1 before it is hurt). */
+export interface BossBarInput {
+  spec: BossSpec;
+  hpFraction: number;
+}
+
+/**
+ * Pure: the HUD bar on a boss level (Survive, then beat the boss). Before the entrance
+ * (elapsed < atSec) the bar fills with time toward atSec and reads "BOSS IN m:ss"; from the
+ * entrance it shows the boss health draining and reads the boss name. No kill or score count.
+ */
+export function bossObjectiveProgress(
+  boss: BossBarInput,
+  s: ObjectiveSnapshot,
+  thresholds?: readonly [number, number, number],
+): ObjectiveProgress {
+  const line = starLine(s.score, thresholds);
+  const at = boss.spec.atSec;
+  if (s.elapsedSec < at) return { label: `BOSS IN ${formatClock(at - s.elapsedSec)}`, fraction: frac(s.elapsedSec, at), ...line };
+  return { label: bossName(boss.spec.id), fraction: Math.max(0, Math.min(1, boss.hpFraction)), ...line };
+}
+
 /**
  * Pure: HUD label and bar fill. R2: the bar shows progress toward what the player must complete
  * ("Survive 4:12", "Destroy 312 / 530", "Score 1.2M / 3.3M  2:41"); a score objective fills with
@@ -125,7 +148,9 @@ export function objectiveProgress(
   s: ObjectiveSnapshot,
   bossAlive = false,
   thresholds?: readonly [number, number, number],
+  boss?: BossBarInput,
 ): ObjectiveProgress {
+  if (boss !== undefined) return bossObjectiveProgress(boss, s, thresholds);
   const line = starLine(s.score, thresholds);
   if (bossHolds(obj, s, bossAlive)) return { label: HOLD_LABEL, fraction: 1, ...line };
   switch (obj.kind) {

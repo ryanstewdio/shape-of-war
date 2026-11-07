@@ -257,7 +257,7 @@ export function howToPages(): HowToPage[] {
         sec('Survive', ['Stay alive until the timer ends.'], undefined, [], { tone: GOAL_TONES.Survive }),
         sec('Destroy', ['Shoot the number of enemies shown.'], undefined, [], { tone: GOAL_TONES.Destroy }),
         sec('Score', ['Reach the target score before time runs out.'], undefined, [], { tone: GOAL_TONES.Score }),
-        sec('Boss', ['On a boss level, beat the boss to win.'], undefined, [], { tone: GOAL_TONES.Boss }),
+        sec('Boss', ['On a boss level, survive until the boss arrives.', 'Then defeat it to win.'], undefined, [], { tone: GOAL_TONES.Boss }),
       ],
     },
     {

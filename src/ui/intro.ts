@@ -163,7 +163,7 @@ type GoalDef = { objective: ObjectiveDef; boss?: BossSpec };
 
 /** Pure: the goal in one plain sentence (R3 brief wording). */
 export function goalSentence(def: GoalDef): string {
-  if (def.boss !== undefined) return `Clear the waves, then defeat ${bossName(def.boss.id)}`;
+  if (def.boss !== undefined) return `Survive until ${bossName(def.boss.id)} arrives, then defeat it (${formatClock(def.boss.atSec)})`;
   const o = def.objective;
   switch (o.kind) {
     case 'destroy':
@@ -188,8 +188,8 @@ function objectivePhrase(o: ObjectiveDef): string {
 
 /** Pure: what counts as a win. Every win needs a life left; the sim's lives rule ends a run on 0. */
 export function victorySentence(def: GoalDef): string {
+  if (def.boss !== undefined) return `${bossName(def.boss.id)} destroyed, with a life left`;
   const base = objectivePhrase(def.objective);
-  if (def.boss !== undefined) return `${base}, then ${bossName(def.boss.id)} destroyed, with a life left`;
   return `${base.charAt(0).toUpperCase()}${base.slice(1)} with a life left`;
 }
 

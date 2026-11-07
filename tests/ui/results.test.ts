@@ -307,3 +307,11 @@ describe('menu', () => {
     expect(continueLabel(4)).toBe('Continue  L4');
   });
 });
+
+describe('boss level results line', () => {
+  it('a win names the boss defeated, a loss and a non boss win add nothing', () => {
+    expect(resultLines({ ...base, success: true, bossName: 'Warden', bossBonus: 1000 }).goalLine).toBe('Warden defeated');
+    expect(resultLines({ ...base, success: false }).goalLine).toBe('');
+    expect(resultLines({ ...base, success: true }).goalLine).toBe('');
+  });
+});

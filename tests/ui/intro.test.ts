@@ -141,8 +141,8 @@ describe('R3 intro card text', () => {
     expect(introCard(1, score).goal).toBe('Score 2.1M in 3:30');
     expect(introCard(1, score).victory).toBe('2.1M points when the 3:30 clock runs out with a life left');
     const boss = { ...def, boss: { id: 'warden', tier: 1, atSec: 20, hpMul: 1 } as const };
-    expect(introCard(5, boss).goal).toBe(`Clear the waves, then defeat ${BOSS_NAMES.warden}`);
-    expect(introCard(5, boss).victory).toBe(`3:30 survived, then ${BOSS_NAMES.warden} destroyed, with a life left`);
+    expect(introCard(5, boss).goal).toBe(`Survive until ${BOSS_NAMES.warden} arrives, then defeat it (0:20)`);
+    expect(introCard(5, boss).victory).toBe(`${BOSS_NAMES.warden} destroyed, with a life left`);
     expect(objectiveSentence(def)).toBe('Survive 3:30.');
   });
 
@@ -306,7 +306,7 @@ describe('V3-A intro card boss name', () => {
   };
 
   it('every boss id is named in the goal from BOSS_NAMES', () => {
-    for (const id of BOSS_IDS) expect(introCard(5, { ...def, boss: { id, tier: 1, atSec: 20, hpMul: 1 } }).goal).toBe(`Clear the waves, then defeat ${BOSS_NAMES[id]}`);
+    for (const id of BOSS_IDS) expect(introCard(5, { ...def, boss: { id, tier: 1, atSec: 20, hpMul: 1 } }).goal).toBe(`Survive until ${BOSS_NAMES[id]} arrives, then defeat it (0:20)`);
     const lines = BOSS_IDS.map((id) => bossIntroLine({ id, tier: 1, atSec: 20, hpMul: 1 }));
     expect(lines).toEqual(BOSS_IDS.map((id) => `Boss: ${BOSS_NAMES[id]}`));
     expect(new Set(lines).size).toBe(10);
@@ -323,5 +323,14 @@ describe('V3-A intro card boss name', () => {
     const plain = introCard(7, def);
     const withBoss = introCard(7, { ...def, boss: { id: 'brood', tier: 1, atSec: 20, hpMul: 1 } });
     expect({ ...withBoss, goal: plain.goal, victory: plain.victory }).toEqual(plain);
+  });
+});
+
+describe('boss level goal line', () => {
+  it('shows the arrival clock and no kill or score count', () => {
+    const def = { objective: { kind: 'destroy', count: 300 }, stars: [1, 2, 3] as [number, number, number], drone: 'none', superType: 'turbo', boss: { id: 'warden', tier: 1, atSec: 125, hpMul: 1 } } as const;
+    const g = introCard(5, def as never).goal;
+    expect(g).toBe(`Survive until ${BOSS_NAMES.warden} arrives, then defeat it (2:05)`);
+    expect(g).not.toContain('300');
   });
 });
