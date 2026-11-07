@@ -442,7 +442,10 @@ async function boot(): Promise<void> {
     } else {
       // Reads "Defeat the boss" while the level holds for a living boss (docs/13 boss rule 9).
       // R2: the bar fills toward the objective; the thin star line reads the level's thresholds.
-      hud.setObjective(objectiveProgress(level.objective, snapshotOf(world), bossAlive(), targets.stars)); // R6: scaled by difficulty
+      // T3: on a boss level the bar counts down to the entrance, then drains with the boss health.
+      const alive = bossAlive();
+      const bossBar = level.boss !== undefined ? { spec: level.boss, hpFraction: alive && bossRead.maxHp > 0 ? bossRead.hp / bossRead.maxHp : 1 } : undefined;
+      hud.setObjective(objectiveProgress(level.objective, snapshotOf(world), alive, targets.stars, bossBar)); // R6: scaled by difficulty
     }
   };
 

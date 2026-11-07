@@ -60,7 +60,8 @@ export interface DriftState {
 
 /** Pure: true when the level drifts (cylinder surface, no obstacles). */
 export function isOpenDrum(level: LevelDef): boolean {
-  return level.surface === 'cylinder' && level.arena.obstacles.length === 0;
+  // T3: the level 8 drum taste carries noDrift (Foundry), so it never drifts.
+  return level.surface === 'cylinder' && level.arena.obstacles.length === 0 && level.noDrift !== true;
 }
 
 /** Pure: drift direction for a seed, 1 or -1. */
