@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS_R3_LEVEL_AT_SEC, BOSS_SCHEDULE, bossForLevel, bossForSegment, bossOfNumber } from '../../src/levelgen/boss';
 import { generateEndlessSegment, generateLevel } from '../../src/levelgen/generator';
-import { DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V3, GENERATOR_VERSION_V8 } from '../../src/levelgen/leveldef';
+import { DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V3, GENERATOR_VERSION_V8, V8_GEN_CONFIG } from '../../src/levelgen/leveldef';
 import type { BossId, BossTier } from '../../src/levelgen/leveldef';
 import { validateLevel, validateSegment } from '../../src/levelgen/validate';
 
@@ -139,9 +139,10 @@ describe('boss schedule golden: the real generator follows the table', { timeout
     for (const seed of SEEDS) {
       for (let n = 1; n <= MAX_LEVEL; n++) {
         const id = 'seed ' + String(seed) + ' level ' + String(n);
-        const def = generateLevel(seed, n);
+        // T3 pin: the table golden is the version 8 order; version 9 (Brood first, 0.75 first fight) is pinned in tests/levelgen/t3.test.ts.
+        const def = generateLevel(seed, n, V8_GEN_CONFIG);
         const row = GOLDEN_AT(LEVEL_GOLDEN, n);
-        if (!validateLevel(def, DEFAULT_GEN_CONFIG).ok) bad.push(id + ': invalid');
+        if (!validateLevel(def, V8_GEN_CONFIG).ok) bad.push(id + ': invalid');
         if (JSON.stringify(JSON.parse(JSON.stringify(def))) !== JSON.stringify(def)) bad.push(id + ': not JSON stable');
         if (row === undefined) {
           if (def.boss !== undefined) bad.push(id + ': unexpected boss');

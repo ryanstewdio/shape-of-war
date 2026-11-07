@@ -92,6 +92,30 @@ export function bossForLevel(levelIndex: number, atSec: number = BOSS_LEVEL_AT_S
   return bossOfNumber(levelIndex / BOSS_EVERY, atSec);
 }
 
+/**
+ * Tester 3 (Ryan: Warden too hard at level 5): version 9 swaps the first two bosses, so pass 1
+ * opens with Brood at level 5 and Warden at level 10. Every later boss and every loop is as
+ * BOSS_SCHEDULE. Endless and Free Play keep the plain ladder.
+ */
+export const T3_SWAPPED_BOSSES: Readonly<Record<number, BossId>> = Object.freeze({ 1: 'brood', 2: 'warden' });
+/** Tester 3: the first boss fight of a run (boss number 1, pass 1) has this times its usual hpMul. */
+export const FIRST_FIGHT_HP_MUL = 0.75;
+
+/** Version 9 boss number j: bossOfNumber with the T3 swap and the softer first fight. */
+export function t3BossOfNumber(j: number, atSec: number): BossSpec | null {
+  const base = bossOfNumber(j, atSec);
+  if (base === null) return null;
+  const id = T3_SWAPPED_BOSSES[j] ?? base.id;
+  const tier = bossTierOf(id) ?? base.tier;
+  return { id, tier, atSec, hpMul: j === 1 ? base.hpMul * FIRST_FIGHT_HP_MUL : base.hpMul };
+}
+
+/** Version 9 boss of Adventure level n (bossForLevel with the T3 order), or null when n is not a boss level. */
+export function t3BossForLevel(levelIndex: number, atSec: number): BossSpec | null {
+  if (bossForLevel(levelIndex, atSec) === null) return null;
+  return t3BossOfNumber(levelIndex / BOSS_EVERY, atSec);
+}
+
 /** The boss of Endless segment s (0 based), or null unless s is a positive multiple of 6. */
 export function bossForSegment(segment: number): BossSpec | null {
   if (!Number.isInteger(segment) || segment < BOSS_SEGMENT_EVERY || segment % BOSS_SEGMENT_EVERY !== 0) return null;

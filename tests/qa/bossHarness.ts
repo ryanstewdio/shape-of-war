@@ -15,6 +15,7 @@ import type { World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
 import { generateLevel } from '../../src/levelgen/generator';
 import { BOSS_SCHEDULE } from '../../src/levelgen/boss';
+import { V8_GEN_CONFIG } from '../../src/levelgen/leveldef';
 import type { BossId, LevelDef } from '../../src/levelgen/leveldef';
 
 export const DT = 1 / 120;
@@ -31,7 +32,8 @@ export type InputRec = [mx: number, my: number, ax: number, ay: number, flags: n
 export function bossLevelFor(id: BossId, runSeed = 42): LevelDef {
   const row = BOSS_SCHEDULE.find((r) => r.id === id);
   if (row === undefined) throw new Error('no schedule row for ' + id);
-  const gen = generateLevel(runSeed, row.levelIndex);
+  // T3 pin: version 9 swaps Brood and Warden and softens the first fight; the harness keeps the version 8 levels so every replay stays bit identical.
+  const gen = generateLevel(runSeed, row.levelIndex, V8_GEN_CONFIG);
   if (gen.boss === undefined || gen.boss.id !== id) throw new Error('level ' + String(row.levelIndex) + ' has no ' + id + ' boss');
   const patched: LevelDef = { ...gen, lives: 99, boss: { ...gen.boss, atSec: ENTRANCE_AT_SEC } };
   return JSON.parse(JSON.stringify(patched)) as LevelDef;

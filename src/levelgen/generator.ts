@@ -25,6 +25,7 @@ import {
   GENERATOR_VERSION_V6,
   GENERATOR_VERSION_V7,
   GENERATOR_VERSION_V8,
+  GENERATOR_VERSION_V9,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_BREATHER_SEC,
@@ -45,6 +46,7 @@ import {
   r3ObjectiveTable,
   runsR1,
   runsR3,
+  runsT3,
   segmentSeed,
   speedScaleFor,
 } from './leveldef';
@@ -109,11 +111,13 @@ import {
   FREE_PLAY_SNAKES_PER_SEGMENT,
   FREE_PLAY_SNAKE_FROM_SEGMENT,
 } from './validate';
-import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards } from './boss';
+import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards, t3BossForLevel } from './boss';
+import { RIPPLE_CLEAR, RIPPLE_SALT, generateRipples, rippleEligible } from './ripples';
 import { R3_COLLECT_RATE, bossLevelPar, destroyCountFor, inBreather, pulseAt, wholeLevelPar } from './pacing';
 import type { PulseShape } from './pacing';
 import {
   CYLINDER_CHANCE,
+  DRUM_TASTE_LEVEL,
   R1_CYLINDER_CHANCE,
   SURFACE_SALT,
   canonX,
@@ -267,15 +271,26 @@ export function generateCylinderArena(r: Rng, band: Band): ArenaDef {
  * level seed (not the retry seed), so a re-derive keeps the surface.
  */
 export function pickSurface(seed: number, levelIndex: number, cfg: GenConfig): SurfaceKind {
+  if (drumTaste(levelIndex, cfg)) return 'cylinder';
   if (!cfg.enableCylinder || !cylinderEligible(levelIndex)) return 'flat';
   return chance(mulberry32(deriveSeed(seed, SURFACE_SALT)), runsR1(cfg) ? R1_CYLINDER_CHANCE : CYLINDER_CHANCE) ? 'cylinder' : 'flat';
 }
 
 /**
+ * Tester 3 (version 9): level DRUM_TASTE_LEVEL is always a gentle open drum. Needs the cylinder
+ * flag as well, so a config without drums never gets one. No draw.
+ */
+export function drumTaste(levelIndex: number, cfg: GenConfig): boolean {
+  return runsT3(cfg) && cfg.enableCylinder && levelIndex === DRUM_TASTE_LEVEL;
+}
+
+/**
  * The surface stream positioned after its cylinder draw, with the drum pattern drawn next. Null
  * for a flat level (no draw beyond pickSurface's). Layout draws continue on the returned stream.
+ * The drum taste level is 'open' with no surface draw at all.
  */
 function drumDraw(seed: number, levelIndex: number, cfg: GenConfig): { pattern: DrumPattern; r: Rng } | null {
+  if (drumTaste(levelIndex, cfg)) return { pattern: 'open', r: mulberry32(deriveSeed(seed, SURFACE_SALT)) };
   if (pickSurface(seed, levelIndex, cfg) !== 'cylinder') return null;
   const r = mulberry32(deriveSeed(seed, SURFACE_SALT));
   r();
@@ -1060,14 +1075,18 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const r1Waves = runsR1(cfg);
   // Release gate R3: 3.5 minute non boss levels, the boss at 120 s, whole level par everywhere (version 8).
   const r3 = runsR3(cfg);
+  // Tester 3: boss order, drum taste and pond ripples (version 9).
+  const t3 = runsT3(cfg);
   const bossLevel = cfg.enableBosses && bossForLevel(levelIndex) !== null;
   const objTable = r3 ? r3ObjectiveTable(band, bossLevel) : LONG_BANDS[band];
   const b = r3 ? r3BandParams(band, bossLevel) : long ? longBandParams(band) : BANDS[band];
   // D13: the surface stream is separate, so drawing it here moves no draw of any flat level.
   const surface = pickSurface(seed, levelIndex, cfg);
   const cyl = surface === 'cylinder';
+  const taste = drumTaste(levelIndex, cfg);
   const arena = cyl ? cylinderArena(seed, levelIndex, cfg, stream(s, SALT.arena), band) : generateArena(stream(s, SALT.arena), band);
-  const v1Roster = generateRoster(stream(s, SALT.roster), band, cfg);
+  // Drum taste: the gentle band 1 roster (grunt, wanderer, pinwheel) from the same stream.
+  const v1Roster = generateRoster(stream(s, SALT.roster), taste ? 1 : band, cfg);
   const loadout = stream(s, SALT.loadout);
   const drone = pickAllowed(loadout, DRONE_KINDS, b.droneWeights, cfg.drones, 'attack');
   const superType = pickAllowed(loadout, SUPER_KINDS, b.superWeights, cfg.supers, 'turbo');
@@ -1091,7 +1110,8 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     // R2 boss level: the R1 plan stops at the entrance, so the fight keeps the version 5 waves.
     ...(r1Waves ? { volatile: stream(s, R1_SALT), ...(bossLevel ? { volatileUntilSec: bossLevelAtSec(cfg) } : {}) } : {}),
   });
-  const v2 = runsV2(cfg, band);
+  // Drum taste: no v2 stage, so the roster stays gentle.
+  const v2 = runsV2(cfg, band) && !taste;
   // The v2 stage only rewrites kinds and entries; atSec is untouched, so the loop fields match v1.
   const staged = v2 ? applyV2Enemies(stream(s, V2_ENEMY_SALT), band, arena, v1Roster, v1List, cyl) : { roster: v1Roster, waves: v1List.waves, groups: v1List.groups };
   // Leaver stage: levels from LEAVER_FROM_LEVEL, own stream; null keeps the staged def byte for byte.
@@ -1101,7 +1121,14 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const loop = loopFields(list, scheduleSec, b.intervalEndSec, long ? LONG_MIN_REPEAT_SEC : 0);
   const waves = scheduleOf(b, list, loop.from, loop.period);
   if (longObjective !== null && objective.kind === 'destroy') objective = { kind: 'destroy', count: destroyCountFor(waves, longObjective.clearSec) };
-  const hazards = generateHazards(stream(s, SALT.hazards), arena, b, cfg, objective, cyl);
+  const drawn = generateHazards(stream(s, SALT.hazards), arena, b, cfg, objective, cyl);
+  // Drum taste: at most one well and no spawners (the boss rule 12 step, no draw).
+  const hazards = taste ? bossHazards(drawn) : drawn;
+  // Pond ripples: own stream after every other draw, so nothing else moves. Par ignores them.
+  const ripples =
+    t3 && longObjective !== null && rippleEligible(levelIndex, !cyl, bossLevel, arena)
+      ? generateRipples(stream(s, RIPPLE_SALT), arena, levelIndex, longObjective.clearSec, (p) => rippleClear(arena, p))
+      : null;
   const whole = r3
     ? bossLevel
       ? bossLevelPar(waves, objective, bossLevelAtSec(cfg))
@@ -1121,7 +1148,7 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     version: LEVELDEF_VERSION,
     // D13: a cylinder level reports GENERATOR_VERSION_V4; every flat level keeps its v3 version.
     // Release polish: every long level reports GENERATOR_VERSION_V5 instead; R1: version 6.
-    generatorVersion: r3 ? GENERATOR_VERSION_V8 : r1 ? GENERATOR_VERSION_V6 : long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
+    generatorVersion: t3 ? GENERATOR_VERSION_V9 : r3 ? GENERATOR_VERSION_V8 : r1 ? GENERATOR_VERSION_V6 : long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
     runSeed,
     levelIndex,
     seed,
@@ -1140,8 +1167,16 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     stars: whole === null ? [par, 2 * par, 4 * par] : whole.stars,
     surface,
     retries: attempt,
+    // Version 9 only, appended last so every older def keeps its keys and bytes.
+    ...(ripples !== null ? { ripples } : {}),
+    ...(taste ? { noDrift: true as const } : {}),
   };
   return withLevelBoss(def, cfg);
+}
+
+/** A ripple epicentre keeps RIPPLE_CLEAR from every wall and obstacle of a flat arena. */
+export function rippleClear(arena: ArenaDef, p: Vec2): boolean {
+  return insideArena(arena, p, RIPPLE_CLEAR) && arena.obstacles.every((o) => obstaclePointDistance(o, p) >= RIPPLE_CLEAR);
 }
 
 /**
@@ -1151,12 +1186,14 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
  */
 export function withLevelBoss(def: LevelDef, cfg: GenConfig): LevelDef {
   const long = cfg.enableLongLevels === true;
-  const boss = cfg.enableBosses ? bossForLevel(def.levelIndex, bossLevelAtSec(cfg)) : null;
+  const at = bossLevelAtSec(cfg);
+  // Tester 3: version 9 opens with Brood, then Warden, the first fight at FIRST_FIGHT_HP_MUL.
+  const boss = !cfg.enableBosses ? null : runsT3(cfg) ? t3BossForLevel(def.levelIndex, at) : bossForLevel(def.levelIndex, at);
   if (boss === null) return def;
   // Release gate R2: a boss level built with the R1 config has the R1 waves and the 200 s entrance
   // (version 7); with the R1 pacing off it keeps version 5 (long) or 3.
   // Release gate R3: version 8 with the R3 length on.
-  const generatorVersion = runsR3(cfg) ? GENERATOR_VERSION_V8 : runsR1(cfg) ? GENERATOR_VERSION_V7 : long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3;
+  const generatorVersion = runsT3(cfg) ? GENERATOR_VERSION_V9 : runsR3(cfg) ? GENERATOR_VERSION_V8 : runsR1(cfg) ? GENERATOR_VERSION_V7 : long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3;
   return { ...def, generatorVersion, hazards: bossHazards(def.hazards), boss };
 }
 
