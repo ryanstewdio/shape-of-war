@@ -32,4 +32,4 @@ History before 2026-11-08 (gate log, merged branches with spend, old bugs): docs
 - 2026-11-07: ledger-scrollbar, chorus-scroll-tick (9bb4ebe); T3: foundry-t3, forge-ripple, glow-ripple, chorus-ripple, ledger-boss-goal, glue 1f1efb5; T4: forge-nova-ripple, foundry-ripple-off, glow-nova-ripple, chorus-nova-ripple, glue c7aa3be; forge-ripple-tune (Console Sonnet $0.25), glue 585f174.
 
 ## Next action
-Ryan is updating the project instructions (PROJECT-INSTRUCTIONS.md) and planning the public phase. Make no game changes until he gives the next instruction. Then: brief the ripple sound per his note if he confirms it, and plan the half drum after the reset.
+Ryan reviews docs/16-public-plan.md (draft, 16 open questions; the first four block P1 briefs) and picks a name from its shortlist. No game changes until he rules. Ripple sound and the half drum wait behind that.
