@@ -108,3 +108,4 @@ One line per decision: clock time, who raised it, what was decided, why.
 | 262:10 | Ryan | Half drum (curved trough with slope gravity) planned for after the Tuesday 2026-11-10 Max reset. |
 | 263:30 | Ryan | Scheduled pond ripples dropped: a ripple fires only when a super nova Gravity well is destroyed, no warning marker or alert, one whoomp plus whoosh sound at the wave start, a stronger push and a much bigger floor wave. |
 | 263:30 | Fable | Generator V9 amended in place to drop ripple scheduling (live about an hour, nothing depended on it) rather than a V10. |
+| 286:30 | Ryan | Project instructions refreshed for the public phase planning; STATUS.md slimmed, history frozen in docs/STATUS-ARCHIVE.md, map in docs/00-START-HERE.md. |
