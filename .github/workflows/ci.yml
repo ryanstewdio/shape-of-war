@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Tests
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: No PixiJS v7 API
+        run: |
+          hits=$(grep -rnE "beginFill|endFill|lineStyle|drawRect|drawCircle|drawEllipse|drawPolygon|drawRoundedRect|drawStar|app\.view|cacheAsBitmap|getChildByName|\.interactive\b|\.name\s*=|BLEND_MODES|PIXI\." src/ tests/ || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "PixiJS v7 API found, see CLAUDE.md definition of done"
+            exit 1
+          fi
+      - name: No em or en dashes in changed files
+        run: |
+          if [ -z "${{ github.base_ref }}" ]; then
+            echo "No base ref (manual run), skipping"
+            exit 0
+          fi
+          files=$(git diff --name-only --diff-filter=AMR origin/${{ github.base_ref }}...HEAD)
+          if [ -z "$files" ]; then
+            echo "No changed files, skipping"
+            exit 0
+          fi
+          echo "$files" | tr '\n' '\0' | xargs -0 perl -CSD -ne 'if (/[\x{2013}\x{2014}]/) { print "$ARGV:$.: $_"; $f=1 } END { exit($f ? 1 : 0) }'
