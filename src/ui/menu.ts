@@ -1,4 +1,4 @@
-// Main menu (docs/01 section 10): title "Shapes of War", Continue (Adventure at the highest
+// Main menu (docs/01 section 10): title "Shape Legend", Continue (Adventure at the highest
 // unlocked level), Level select, Endless, Settings.
 // Look (Ryan, wave 2): a centred neon panel with a double glowing border over the grid, the title
 // in the game's own neon style, four stacked framed neon rows, the focused or last used row in a
@@ -15,7 +15,7 @@ import { button, createScreen, el, MIN_HIT_PX, type Screen } from './dom';
 import { aspectClass } from './hudFrame';
 import { setVectorText } from './vectorFont';
 
-export const GAME_TITLE = 'Shapes of War';
+export const GAME_TITLE = 'Shape Legend';
 export const SHOW_ENDLESS = true;
 /** Delay between one row's entrance and the next. */
 export const MENU_STAGGER_MS = 200;
@@ -23,7 +23,7 @@ export const MENU_ROWS = 6; // Adventure, Level select, Endless, Free Play, How 
 /** Clear space kept between the panel and the safe area edge: room for the outer border and glow. */
 export const MENU_MARGIN = 12;
 /**
- * The pixel title is 74 cells wide ("Shapes of War" plus its shadow) at a font size over 10 cells,
+ * The pixel title is 70 cells wide ("Shape Legend" plus its shadow) at a font size over 10 cells,
  * rounded to whole px: 8.9 em covers the worst rounding (25 px draws 3 px cells) from 18 to 52 px.
  */
 export const TITLE_EMS = 8.9;

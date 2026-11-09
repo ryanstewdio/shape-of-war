@@ -1,4 +1,4 @@
-// Release polish (docs/14 items 1 to 4 and 6): the Shapes of War name everywhere a player sees it,
+// Release polish (docs/14 items 1 to 4 and 6): the Shape Legend name everywhere a player sees it,
 // the menu footer line testers screenshot, the ?dev=1 gate in front of every test URL knob, the
 // title splash and its tap skip, and the difficulty line on the intro card.
 import { readFileSync } from 'node:fs';
@@ -20,21 +20,21 @@ import { asParent, installFakeDocument, type FakeEl } from './fakeDom';
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const read = (p: string): string => readFileSync(join(ROOT, p), 'utf8');
 
-describe('rename to Shapes of War', () => {
-  it('the menu, boot and splash title is Shapes of War', () => {
-    expect(GAME_TITLE).toBe('Shapes of War');
+describe('rename to Shape Legend', () => {
+  it('the menu, boot and splash title is Shape Legend', () => {
+    expect(GAME_TITLE).toBe('Shape Legend');
   });
 
   it('the document title and the iOS home screen title', () => {
     const html = read('index.html');
-    expect(html).toContain('<title>Shapes of War</title>');
-    expect(html).toContain('<meta name="apple-mobile-web-app-title" content="Shapes of War" />');
+    expect(html).toContain('<title>Shape Legend</title>');
+    expect(html).toContain('<meta name="apple-mobile-web-app-title" content="Shape Legend" />');
   });
 
   it('the manifest name and short_name', () => {
     const m = JSON.parse(read('public/manifest.webmanifest')) as { name?: string; short_name?: string };
-    expect(m.name).toBe('Shapes of War');
-    expect(m.short_name).toBe('Shapes of War');
+    expect(m.name).toBe('Shape Legend');
+    expect(m.short_name).toBe('Shape Legend');
   });
 
   it('no player facing file keeps the old name', () => {
@@ -48,7 +48,7 @@ describe('rename to Shapes of War', () => {
     try {
       const root = installFakeDocument();
       createMenuScreen(asParent(root), { adventure: () => undefined, levels: () => undefined, endless: () => undefined, freePlay: () => undefined, settings: () => undefined, howTo: () => undefined });
-      expect(root.all().some((e) => e.classList.contains('sow-title') && e.textContent === 'Shapes of War')).toBe(true);
+      expect(root.all().some((e) => e.classList.contains('sow-title') && e.textContent === 'Shape Legend')).toBe(true);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -175,7 +175,7 @@ describe('title splash', () => {
     const { root, screen } = build();
     expect(screen.classList.contains('sow-open')).toBe(true);
     expect(screen.classList.contains('sow-splash')).toBe(true);
-    expect(root.all().some((e) => e.textContent === 'Shapes of War')).toBe(true);
+    expect(root.all().some((e) => e.textContent === 'Shape Legend')).toBe(true);
     expect(root.all().some((e) => e.tag === 'img' || e.tag === 'canvas')).toBe(false);
   });
 

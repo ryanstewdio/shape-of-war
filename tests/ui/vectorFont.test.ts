@@ -122,7 +122,7 @@ describe('layoutPixels and the path', () => {
   it('runs merge neighbouring cells and the path is integer rectangles', () => {
     expect(glyphRuns(GLYPHS.T ?? FALLBACK_GLYPH)[0]).toEqual([0, 0, 5]);
     expect(runsPath([[2, 3, 4]])).toBe('M2 3h4v1h-4z');
-    const d = pixelBox('Shapes of War 1,234!').d;
+    const d = pixelBox('Shape Legend 1,234!').d;
     expect(d).toMatch(/^(M\d+ \d+h\d+v1h-\d+z)+$/);
   });
 
