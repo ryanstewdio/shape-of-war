@@ -116,3 +116,5 @@ One line per decision: clock time, who raised it, what was decided, why.
 | 316:20 | Ryan | Name confirmed: Shape Legend (shapelegend.com bought; store and USPTO checks clean). Repo, Pages path and storage keys keep shape-of-war and sow. |
 | 316:20 | Ryan | P1 start approved. Wave P1-A: scribe-rename, shipwright-capacitor, ledger-gems. |
 | 316:20 | Morpheus | App id com.shapelegend.game for Android and iOS (permanent after the first store upload; Ryan can change it before then). |
+| 316:40 | Ryan | Tester Tom: recalibrate par to realistic geom pickup (generator V10) and a gentler spawn ramp for levels 1 to 10 on every difficulty; Normal no longer has to stay bit identical for those levels. |
+| 316:40 | Ryan | Tester Mike: story briefing scenes between Adventure levels and pre-fight boss intros, in P1 before launch, tone light and funny. Story bible first (docs/18), UI after the rename merges. |
