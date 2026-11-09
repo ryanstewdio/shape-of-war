@@ -110,5 +110,5 @@ One line per decision: clock time, who raised it, what was decided, why.
 | 263:30 | Fable | Generator V9 amended in place to drop ripple scheduling (live about an hour, nothing depended on it) rather than a V10. |
 | 286:30 | Ryan | Project instructions refreshed for the public phase planning; STATUS.md slimmed, history frozen in docs/STATUS-ARCHIVE.md, map in docs/00-START-HERE.md. |
 | 287:00 | Ryan | Public phase interview: audience everyone incl. under 13; first store launch solo plus gems and Repo shop, private PVP and co op next; free plus one time premium unlock, gems earned, optional gem packs and cosmetics, no loot boxes; Capacitor wrap of the web game; no accounts at launch; no ads; emotes and preset phrases only; new game company publishes; name one invented neon arcade word, unused on both stores, .com free; worldwide English. docs/16-public-plan.md drafted for approval. |
-| 303:20 | Ryan | P1 publishes as an individual on both stores; company formed later (triggers and the launch free then transfer path in docs/16 open question 1). |
-| 303:20 | Ryan | New name pick: "Shape of Destiny" (shapeofdestiny.com), pending a trademark knockout because of Bungie's DESTINY mark; no rename work until confirmed. |
+| 315:15 | Ryan | P1 publishes as an individual on both stores; company formed later (triggers and the launch free then transfer path in docs/16 open question 1). |
+| 315:15 | Ryan | New name pick: "Shape of Destiny" (shapeofdestiny.com), pending a trademark knockout because of Bungie's DESTINY mark; no rename work until confirmed. |
