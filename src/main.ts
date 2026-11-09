@@ -32,6 +32,9 @@ import {
   type EffectsTierSetting,
   type SpaceLevelSetting,
 } from './core/settings';
+import { loadCallsign, loadStorySeen, recordStorySeen, saveCallsign } from './core/settings';
+import { bossWinScenes, levelStartScenes, replayScenes, storyLevels } from './story/triggers';
+import { createStoryPlayer } from './ui/story/player';
 import { capDpr, fmt3, readInsets, viewportLine } from './core/viewport';
 import { awardKill, bossBonus, collectGeom, resetScore, scoreOf, shipDied, stars } from './game/scoring';
 import { readBoss, type BossView } from './game/bosses/view';
@@ -581,6 +584,11 @@ async function boot(): Promise<void> {
       bus.emit('game:start', { mode: 'adventure', levelIndex: index });
     },
     back: () => dispatch({ type: 'closeLevels' }),
+    // Story scenes (docs/19): replay what was shown on this level; level select stays underneath.
+    replay: (index) => {
+      storyLevel = index;
+      story.play(replayScenes(loadStorySeen(), index), () => undefined);
+    },
   });
   const pauseScreen = createPauseScreen(uiRoot, {
     resume: () => bus.emit('game:resume'),
@@ -670,6 +678,27 @@ async function boot(): Promise<void> {
       paintIntro();
     },
   );
+  // Story scenes (docs/19, brief ledger-story-scenes): a full screen overlay above every screen.
+  // Level start scenes play over the intro card, which already holds the sim; a boss win's freeing
+  // scene plays before the results while the step below is held. Seen scenes and the call sign are
+  // device only keys (core/settings.ts).
+  let storyLevel = 1;
+  const story = createStoryPlayer(uiRoot, {
+    emit: (e) => bus.emit('ui:story', e),
+    seen: (id) => void recordStorySeen(id, storyLevel),
+    loadCallsign: () => loadCallsign(),
+    saveCallsign: (name) => void saveCallsign(name),
+    seed: () => freshSeed(),
+  });
+  /** Adventure only: the opening, briefings, combo and guardian intro due before this level. */
+  function playStartStory(): void {
+    if (flow.mode !== 'adventure' || flow.screen !== 'playing') return;
+    const index = flow.levelIndex;
+    const foesByLevel = [...earlierLevels(index), level].map((d) => levelFoes(d));
+    const ids = levelStartScenes({ mode: flow.mode, levelIndex: index, foesByLevel, boss: level.boss?.id, seen: loadStorySeen() });
+    storyLevel = index;
+    story.play(ids, () => undefined);
+  }
   /** Show the intro card or Ready text while the gate holds a playing sim. */
   function paintIntro(): void {
     if (flow.screen !== 'playing' || !introActive(intro)) {
@@ -725,7 +754,7 @@ async function boot(): Promise<void> {
         break;
       }
       case 'levels':
-        levelSelect.open(loadUnlocked(), loadAdventureScores());
+        levelSelect.open(loadUnlocked(), loadAdventureScores(), storyLevels(loadStorySeen()));
         break;
       case 'freeplay':
         freePlayScreen.open({ ...freePlayChoice, difficulty: settingsModel.state.difficulty });
@@ -754,8 +783,10 @@ async function boot(): Promise<void> {
     const next = reduceFlow(prev, a);
     if (next === prev) return;
     flow = next;
-    if (next.run !== prev.run) startLevel(next.mode, next.levelIndex);
-    else if (next.screen !== prev.screen) syncScene();
+    if (next.run !== prev.run) {
+      startLevel(next.mode, next.levelIndex);
+      playStartStory(); // a no op outside Adventure or when nothing is due
+    } else if (next.screen !== prev.screen) syncScene();
     if (!simRunning(next)) renderer?.setSticks([]);
     applyMusicCue(musicCue(prev, next)); // after startLevel, so a start reads the new level's seed
     cues.flow(prev, next); // levelComplete or levelFail on entering results, once
@@ -766,6 +797,7 @@ async function boot(): Promise<void> {
   /** game:over from the sim (Swarm) or the fallback check below. */
   const onGameOver = (p: { score: number; stars: 0 | 1 | 2 | 3; levelIndex: number; mode: 'adventure' | 'endless' }): void => {
     if (flow.screen !== 'playing' && flow.screen !== 'paused') return;
+    if (story.active()) return; // a freeing scene is already holding the results
     emitHud();
     const index = flow.levelIndex;
     const space = spaceForDifficulty(runDifficulty); // B13: the level in effect as the run ends
@@ -850,6 +882,10 @@ async function boot(): Promise<void> {
     if (level.boss !== undefined) result.bossName = bossName(level.boss.id);
     // The results "Boss defeated" line reports the number the sim paid: scoring.bossBonus, the only copy.
     if (success && bossDown) result.bossBonus = bossBonus(level.par, 'adventure', level.boss?.tier ?? 0);
+    // Story: a boss win plays its freeing scene first; progress is already saved above.
+    const freed = success ? bossWinScenes('adventure', level.boss?.id, loadStorySeen()) : [];
+    storyLevel = index;
+    if (story.play(freed, () => dispatch({ type: 'over', result }))) return;
     dispatch({ type: 'over', result });
   };
 
@@ -867,6 +903,7 @@ async function boot(): Promise<void> {
   const loop: Loop = createLoop({
     step(dt) {
       if (!simRunning(flow)) return;
+      if (story.active()) return; // a story scene holds the sim (the level start card holds it too)
       const input = touch !== null ? touch.poll() : idle;
       if (input.pause) {
         bus.emit('game:pause');
