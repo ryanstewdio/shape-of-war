@@ -11,6 +11,8 @@ import { createScrollTickBackend } from './scrollTickSynth';
 import { createTurboBackend } from './turboSynth';
 import { installRippleSfx, type RippleController } from './rippleSfx';
 import { createRippleBackend } from './rippleSynth';
+import { installStorySfx, type StoryController } from './storySfx';
+import { createStoryBackend } from './storySfxSynth';
 import {
   clampVolume,
   CUES,
@@ -156,6 +158,7 @@ const gw2Backend = createGw2Backend({ graph: sfxGraph, noise: noiseBuffer, regis
 const turboBackend = createTurboBackend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
 const rippleBackend = createRippleBackend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
 const scrollTickBackend = createScrollTickBackend({ graph: sfxGraph });
+const storyBackend = createStoryBackend({ graph: sfxGraph });
 
 function stopVoice(vc: Voice, at: number): void {
   for (const s of vc.sources) {
@@ -282,8 +285,11 @@ export function installAudio(opts: AudioOptions): () => void {
   const scrollTick: ScrollTickController = installScrollTick(b, scrollTickBackend);
   // Tester 3: pond ripple thump and whoosh (rippleSfx.ts).
   const ripple: RippleController = installRippleSfx(b, rippleBackend);
+  // P1 story scene cues: reveal, guardian drone, freed chord, panel tick (storySfx.ts).
+  const story: StoryController = installStorySfx(b, storyBackend);
   const offs = [
     gw2.dispose,
+    story.dispose,
     ripple.dispose,
     turbo.dispose,
     scrollTick.dispose,
