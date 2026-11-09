@@ -1,6 +1,6 @@
-# Shape of War project package
+# Shape Legend project package
 
-Everything needed to kick off a Claude Desktop project (orchestrator: Fable 5.1) that builds Shape of War through headless Claude Code builders on console API credits, a personal-use twin-stick neon arena shooter for the Samsung Galaxy Z Fold 7, and installs it on the device as a fullscreen PWA within 30 hours.
+Everything needed to kick off a Claude Desktop project (orchestrator: Fable 5.1) that builds Shape Legend (formerly Shape of War) through headless Claude Code builders on console API credits, a personal-use twin-stick neon arena shooter for the Samsung Galaxy Z Fold 7, and installs it on the device as a fullscreen PWA within 30 hours.
 
 ## Read in this order
 1. `SPEC.md`: canon. Stack, scope, device rules, orchestration model (section 7: Desktop project plus dispatcher), waves, gates, cut order, open questions for Ryan.
