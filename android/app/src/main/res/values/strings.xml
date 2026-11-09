@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Shape Legend</string>
+    <string name="title_activity_main">Shape Legend</string>
+    <string name="package_name">com.shapelegend.game</string>
+    <string name="custom_url_scheme">com.shapelegend.game</string>
+</resources>
