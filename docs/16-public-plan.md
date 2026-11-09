@@ -363,7 +363,13 @@ Shortlist (researcher run, 2026-11-08; about 250 coined words tried, nearly all 
 | 7 | Glimvolt | GLIM volt | glimmer plus volt | a prescription medicine "Glimivolt" in India, one letter off; Gunvolt series sounds similar |
 | 8 | Lumiblip | LOO mee blip | a light blip on radar, kid friendly | LumiBLO night light brand; reads cute rather than fast |
 
-Morpheus recommendation: Strobora or Vectazo; register the chosen .com as soon as you pick it. Before committing, run a USPTO and EUIPO search in classes 9 and 41, and ask a Spanish speaker and an Arabic speaker to say it aloud.
+Ryan's pick (2026-11-09): "Shape of Destiny", shapeofdestiny.com reported available by Ryan (Morpheus could not run the RDAP check from this session). It is two real words, not the one invented word in ruling 9; Ryan's newer choice wins. Risks found 2026-11-09, before committing:
+- Bungie owns a live US trademark DESTINY (Reg. 4321315) for computer and video game software, and Destiny 2's final expansion is named "The Final Shape". "Shape of Destiny" combines both words of that franchise in the same goods class, which is a likelihood of confusion risk (opposition, store takedown under App Store guideline 5.2.1, or a forced rename after launch).
+- Search results for the name are dominated by Destiny 2: The Final Shape, which hurts discoverability.
+- Web search found no game called "Shape of Destiny"; an itch.io game "Shape Your Destiny" exists. Store searches were not run for the exact name.
+- Mitigation before any rename work: a trademark attorney knockout opinion on classes 9 and 41 (US, EU, UAE); buying the .com now is cheap and safe either way.
+
+Earlier Morpheus recommendation: Strobora or Vectazo; register the chosen .com as soon as you pick it. Before committing, run a USPTO and EUIPO search in classes 9 and 41, and ask a Spanish speaker and an Arabic speaker to say it aloud.
 Why: they are the only two with no hits on either store, the web or trademark web searches, and both are three easy syllables.
 
 Criteria (ruling 9):
@@ -382,7 +388,13 @@ Rename work starts only after Ryan picks the name; it is a single builder wave (
 
 ## Open questions for Ryan
 
-1. Company jurisdiction: UAE mainland, a UAE free zone, or abroad (for example a US LLC)? Considerations: Apple requires a recognised legal entity with a D-U-N-S number and does not accept DBAs or trade names (verified); store payouts need a bank account in the company's name; which data protection law the company falls under; tax treatment of store income; cost and speed of formation; whether Ryan's other ventures should share or stay separate from this entity.
+1. Publisher path (ruled 2026-11-09): Ryan publishes P1 as an individual on both stores; a company comes later. Findings 2026-11-09:
+   - Google: a developer that sells (paid app or in app purchases) is a merchant account and must show its full address on Google Play, taken from the payments profile. Google's payments profile page asks for the legal address as on official documents, a physical address, no PO boxes; it does not say a virtual office is accepted on a personal account. Treat the home address as public once purchases are on.
+   - Apple: traders on EU storefronts (anyone selling) must publish address, phone and email; Apple verifies the address with documents. Virtual addresses are suggested by third parties, not confirmed by Apple.
+   - App transfer: Apple states a transferred app keeps its ratings and reviews and users keep updates (some services such as Game Center groups need setup again). Google's transfer keeps ratings, reviews, download statistics and users (per a secondary guide pointing to Google's transfer help page); earnings reports do not move.
+   - Resulting path (Morpheus recommendation): publish under individual accounts and launch free with purchases switched off (no merchant address on Google; declare non trader on Apple), form the company in parallel, transfer both apps to company accounts (reviews kept), then switch purchases on under the company. Why: keeps the home address off the stores without delaying the launch build.
+   - Company triggers (form it when the first one hits): purchases are about to be switched on; online play (P2) is about to ship; revenue approaches the UAE corporate tax line (secondary source: natural persons in scope above AED 1M turnover from UAE activities); a team member or partner joins.
+   - Still open: jurisdiction for that company (twofour54 gaming licence in Abu Dhabi, another UAE free zone, or a US LLC), with an adviser on UAE tax.
 2. Premium unlock price range (placeholder: 2.99 to 6.99 USD)?
 3. Which perks are premium: browser guest hosting only, or also extra modes (which ones), extra Repo slots, or a gem bonus? Free players must still get a complete solo game.
 4. PVP stance: cosmetics only, cosmetics plus balanced side grades, or normalised loadouts in ranked play?
