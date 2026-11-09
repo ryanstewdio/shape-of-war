@@ -363,7 +363,9 @@ Shortlist (researcher run, 2026-11-08; about 250 coined words tried, nearly all 
 | 7 | Glimvolt | GLIM volt | glimmer plus volt | a prescription medicine "Glimivolt" in India, one letter off; Gunvolt series sounds similar |
 | 8 | Lumiblip | LOO mee blip | a light blip on radar, kid friendly | LumiBLO night light brand; reads cute rather than fast |
 
-Ryan's pick (2026-11-09): "Shape of Destiny", shapeofdestiny.com reported available by Ryan (Morpheus could not run the RDAP check from this session). It is two real words, not the one invented word in ruling 9; Ryan's newer choice wins. Risks found 2026-11-09, before committing:
+Update 2026-11-09: Ryan dropped "Shape of Destiny" to avoid any conflict with Bungie. Current candidate: "Shape Legend" (shapelegend.com reported available by Ryan). Web searches found no game with that name or "Shape Legends"; no trademark hit for the phrase. Risks: "shape legend" is a common charting term, so search results fill with data visualisation docs; two common words make a weak, crowded mark ("Legend" is used widely in games, for example Mobile Legends, Apex Legends, League of Legends). Pending: store search for the exact name and the plural, and a USPTO search in classes 9 and 41.
+
+Earlier pick (2026-11-09, dropped): "Shape of Destiny", shapeofdestiny.com reported available by Ryan (Morpheus could not run the RDAP check from this session). It is two real words, not the one invented word in ruling 9; Ryan's newer choice wins. Risks found 2026-11-09, before committing:
 - Bungie owns a live US trademark DESTINY (Reg. 4321315) for computer and video game software, and Destiny 2's final expansion is named "The Final Shape". "Shape of Destiny" combines both words of that franchise in the same goods class, which is a likelihood of confusion risk (opposition, store takedown under App Store guideline 5.2.1, or a forced rename after launch).
 - Search results for the name are dominated by Destiny 2: The Final Shape, which hurts discoverability.
 - Web search found no game called "Shape of Destiny"; an itch.io game "Shape Your Destiny" exists. Store searches were not run for the exact name.
