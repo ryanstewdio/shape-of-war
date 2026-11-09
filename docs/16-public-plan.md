@@ -1,6 +1,6 @@
 # Public plan
 
-Status: draft for Ryan's approval, 2026-11-08. Drafted by an Opus drafter from Morpheus's spec. Nothing in this plan is approved until Ryan rules on it and the ruling lands in `docs/DECISIONS.md`.
+Status: approved by Ryan to start P1 on 2026-11-09 (open questions 2 to 16 still open; each blocks only the work that needs it). Drafted 2026-11-08. Drafted by an Opus drafter from Morpheus's spec. Nothing in this plan is approved until Ryan rules on it and the ruling lands in `docs/DECISIONS.md`.
 
 Conventions: every cost and time figure is an estimate unless it cites a source. "Verified" means checked against a source listed in the Sources section on 2026-11-08. Sizing is given in builder waves and external lead times, not calendar weeks, because progress is measured by landings.
 
@@ -363,7 +363,7 @@ Shortlist (researcher run, 2026-11-08; about 250 coined words tried, nearly all 
 | 7 | Glimvolt | GLIM volt | glimmer plus volt | a prescription medicine "Glimivolt" in India, one letter off; Gunvolt series sounds similar |
 | 8 | Lumiblip | LOO mee blip | a light blip on radar, kid friendly | LumiBLO night light brand; reads cute rather than fast |
 
-Update 2026-11-09: Ryan dropped "Shape of Destiny" to avoid any conflict with Bungie. Current candidate: "Shape Legend" (shapelegend.com reported available by Ryan). Web searches found no game with that name or "Shape Legends"; no trademark hit for the phrase. Risks: "shape legend" is a common charting term, so search results fill with data visualisation docs; two common words make a weak, crowded mark ("Legend" is used widely in games, for example Mobile Legends, Apex Legends, League of Legends). Pending: store search for the exact name and the plural, and a USPTO search in classes 9 and 41.
+Confirmed 2026-11-09: the name is "Shape Legend". Ryan bought shapelegend.com (shapelegends.com not bought); his checks found no game on Google Play or the App Store and no USPTO record for SHAPE LEGEND or SHAPE LEGENDS. Ryan dropped "Shape of Destiny" to avoid any conflict with Bungie. Candidate notes kept for the record: "Shape Legend" (shapelegend.com reported available by Ryan). Web searches found no game with that name or "Shape Legends"; no trademark hit for the phrase. Risks: "shape legend" is a common charting term, so search results fill with data visualisation docs; two common words make a weak, crowded mark ("Legend" is used widely in games, for example Mobile Legends, Apex Legends, League of Legends). Pending: store search for the exact name and the plural, and a USPTO search in classes 9 and 41.
 
 Earlier pick (2026-11-09, dropped): "Shape of Destiny", shapeofdestiny.com reported available by Ryan (Morpheus could not run the RDAP check from this session). It is two real words, not the one invented word in ruling 9; Ryan's newer choice wins. Risks found 2026-11-09, before committing:
 - Bungie owns a live US trademark DESTINY (Reg. 4321315) for computer and video game software, and Destiny 2's final expansion is named "The Final Shape". "Shape of Destiny" combines both words of that franchise in the same goods class, which is a likelihood of confusion risk (opposition, store takedown under App Store guideline 5.2.1, or a forced rename after launch).

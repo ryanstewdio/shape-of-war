@@ -6,7 +6,7 @@ History before 2026-11-08 (gate log, merged branches with spend, old bugs): docs
 - Live build: 585f174 on main, deployed to https://stoopstoop.github.io/shape-of-war/ (GitHub Pages, Actions deploy.yml runs npm test then build). Tags: v1.0.0, v1.1.0, v2.0.0, v2.1.0, v3.0.0, tester-1 (d9bfb54).
 - Tests: 4852 pass, 1 skipped, 2 todo. Accepted exception: tests/levelgen/generator.test.ts "200 levels under 500 ms" flakes locally (CI budget 2500 ms).
 - Generator: GENERATOR_VERSION_V9 is the default (V1 to V8 configs frozen, bit identical).
-- Name: "Shapes of War" is taken by another game. Ryan is choosing a new unique name that fits future modes (PVP, geometric tank battles). Until he rules, keep the current name in the build; do not rename anything.
+- Name: Shape Legend (ruled 2026-11-09). Rename wave in flight.
 - Builders: cloud sessions on Ryan's Max account (claude --cloud through the dispatcher). Console API credit about $5 left (valid to 2026-11-29), used only for tiny Sonnet jobs. Ryan's Max usage resets Tuesday; check headroom before large waves.
 
 ## Open checks and items
@@ -32,4 +32,4 @@ History before 2026-11-08 (gate log, merged branches with spend, old bugs): docs
 - 2026-11-07: ledger-scrollbar, chorus-scroll-tick (9bb4ebe); T3: foundry-t3, forge-ripple, glow-ripple, chorus-ripple, ledger-boss-goal, glue 1f1efb5; T4: forge-nova-ripple, foundry-ripple-off, glow-nova-ripple, chorus-nova-ripple, glue c7aa3be; forge-ripple-tune (Console Sonnet $0.25), glue 585f174.
 
 ## Next action
-Ryan reviews docs/16-public-plan.md (draft, 16 open questions; the first four block P1 briefs) and picks a name from its shortlist. No game changes until he rules. Ripple sound and the half drum wait behind that.
+Name confirmed: Shape Legend. P1 wave A launched (scribe-rename, shipwright-capacitor, ledger-gems). Tester feedback from Tom (par too hard at level 6 on Normal, early swarm too aggressive) and Mike (story or enemy intro scenes between Adventure levels) is triaged and waiting for Ryan's ruling. Half drum and the ripple sound wait behind P1.

@@ -113,3 +113,6 @@ One line per decision: clock time, who raised it, what was decided, why.
 | 315:15 | Ryan | P1 publishes as an individual on both stores; company formed later (triggers and the launch free then transfer path in docs/16 open question 1). |
 | 315:15 | Ryan | New name pick: "Shape of Destiny" (shapeofdestiny.com), pending a trademark knockout because of Bungie's DESTINY mark; no rename work until confirmed. |
 | 315:30 | Ryan | "Shape of Destiny" dropped to avoid any Bungie conflict; "Shape Legend" (shapelegend.com) is the new candidate, pending store and USPTO checks. |
+| 316:20 | Ryan | Name confirmed: Shape Legend (shapelegend.com bought; store and USPTO checks clean). Repo, Pages path and storage keys keep shape-of-war and sow. |
+| 316:20 | Ryan | P1 start approved. Wave P1-A: scribe-rename, shipwright-capacitor, ledger-gems. |
+| 316:20 | Morpheus | App id com.shapelegend.game for Android and iOS (permanent after the first store upload; Ryan can change it before then). |
