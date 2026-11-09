@@ -35,6 +35,9 @@ const REF_DIR = 'docs/ref/';
 /** Player guide images (Fable 44:40): generated docs only, never imported, bundled or in public/. */
 const GUIDE_DIR = 'docs/player-guide/img/';
 
+/** P1 native shells (Morpheus 316:55): launcher icons and splash images the Capacitor platform templates need. Images only. */
+const NATIVE_DIRS: readonly string[] = ['android/app/src/main/res/', 'ios/App/App/Assets.xcassets/'];
+
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (SKIP_DIRS.has(e.name)) continue;
@@ -50,7 +53,7 @@ const assets = files.filter((f) => ASSET_EXT.test(f));
 
 /** Pure: assets that are neither a PWA icon nor an image under docs/ref/. */
 function disallowed(paths: readonly string[]): string[] {
-  return paths.filter((p) => !PWA_ICONS.includes(p) && !((p.startsWith(REF_DIR) || p.startsWith(GUIDE_DIR)) && IMAGE_EXT.test(p)));
+  return paths.filter((p) => !PWA_ICONS.includes(p) && !((p.startsWith(REF_DIR) || p.startsWith(GUIDE_DIR) || NATIVE_DIRS.some((d) => p.startsWith(d))) && IMAGE_EXT.test(p)));
 }
 
 /** Pure: width and height from a PNG header, or null when the bytes are not a PNG. */
