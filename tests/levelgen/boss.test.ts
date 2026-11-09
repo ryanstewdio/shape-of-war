@@ -421,11 +421,11 @@ describe('validator: B1 to B4 and J7', () => {
     expect(ids(validateSegment(copySeg(good), OFF).errors)).toEqual(['J7']);
   });
 
-  it('J3 accepts version 3 and still rejects 10', () => {
+  it('J3 accepts version 3 and still rejects 11', () => {
     const d = boss5();
     expect(validateLevel(d).errors).toEqual([]);
-    // D13: 4 (cylinder levels), release polish 5 (long levels), R1 6, R2 7, R3 8 and T3 9 are known, so 10 is the first unknown.
-    d.generatorVersion = 10;
+    // D13: 4 (cylinder levels), release polish 5 (long levels), R1 6, R2 7, R3 8, T3 9 and par ramp 10 are known, so 11 is the first unknown.
+    d.generatorVersion = 11;
     expect(ids(validateLevel(d).errors)).toContain('J3');
   });
 

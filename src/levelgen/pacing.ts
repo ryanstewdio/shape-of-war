@@ -157,6 +157,18 @@ export function wholeLevelPar(w: WaveSchedule, o: ObjectiveDef, collectRate: num
 /** Geoms collected per geom dropped in the version 8 par. Calibrated on the scripted strong run. */
 export const R3_COLLECT_RATE = 0.5;
 
+// Tester Tom par ramp (version 10, Ryan 2026-11-09). R3_COLLECT_RATE came from a scripted run
+// that picks up half the geoms. Tom played level 6 on Normal several times, aggressively
+// collecting with no life lost, and never reached par; Ryan's level 1 on Easy scored about 0.21
+// of par. Real pickup is lower: geoms fade, scatter into enemy traffic and the multiplier is the
+// only reason to chase them. Par grows almost linearly in the collect rate once the multiplier
+// dominates, so a quarter roughly halves the multiplier term: an aggressive clean run (about
+// 0.55 to 0.7 of the old par on the tester data) now clears 1 star, and stars at 1.25 and 1.5 par
+// still reward better collecting. One value for non boss and boss levels.
+
+/** Geoms collected per geom dropped in the version 10 par (non boss and boss levels). */
+export const V10_COLLECT_RATE = 0.25;
+
 /** Seconds of waves a boss level plays for a competent player: to the end of the fight or the hold. */
 export function bossWavesSec(w: WaveSchedule, o: ObjectiveDef, atSec: number): number {
   return Math.min(objectiveSec(o, w), atSec + BOSS_FIGHT_SEC);

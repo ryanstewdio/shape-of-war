@@ -50,13 +50,14 @@ describe('scoreInTime target on the release config', () => {
     for (const d of levels.slice(0, 60)) expect(validateLevel(d).errors).toEqual([]);
   }, 120_000);
 
-  it("level 4 of a tester style random seed: goal near 600K at Normal (was about 11K)", () => {
+  it("level 4 of a tester style random seed: goal near 240K at Normal (version 9: 576.5K; first: about 11K)", () => {
     const d = generateLevel(2471588027, 4);
     expect(d.objective.kind).toBe('scoreInTime');
     if (d.objective.kind !== 'scoreInTime') return;
-    expect(d.objective.target).toBe(576_500);
-    expect(d.objective.target).toBeGreaterThan(500_000);
-    expect(d.objective.target).toBeLessThan(700_000);
+    // foundry-par-ramp: par 960.5K to 402.5K (quarter geom pickup, gentler ramp), so the goal 576.5K to 241.5K.
+    expect(d.objective.target).toBe(241_500);
+    expect(d.objective.target).toBeGreaterThan(150_000);
+    expect(d.objective.target).toBeLessThan(300_000);
     expect(d.objective.target).toBe(wholeLevelTarget(d.par));
   });
 

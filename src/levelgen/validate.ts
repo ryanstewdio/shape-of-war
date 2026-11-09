@@ -17,6 +17,9 @@ import {
   GENERATOR_VERSION_V7,
   GENERATOR_VERSION_V8,
   GENERATOR_VERSION_V9,
+  GENERATOR_VERSION_V10,
+  isT3Version,
+  levelMaxLive,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_MIN_REPEAT_SEC,
@@ -456,7 +459,7 @@ function checkJson(c: Collector, def: unknown): void {
 function checkVersions(c: Collector, version: number, generatorVersion: number): void {
   c.check('J3', (report) => {
     if (version !== LEVELDEF_VERSION) report(`version ${version} !== ${LEVELDEF_VERSION}`);
-    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9];
+    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9, GENERATOR_VERSION_V10];
     if (!known.includes(generatorVersion)) report(`generatorVersion ${generatorVersion} not ${known.join(', ')}`);
   });
 }
@@ -484,6 +487,8 @@ export interface LevelCheckOptions extends BossCheckOptions {
   enableR3Length?: boolean;
   /** Tester 3: with the version 8 flags on, J10 and J11 tie GENERATOR_VERSION_V9 to this flag. */
   enableT3?: boolean;
+  /** Tester Tom: with the version 9 flags on, J11 and J12 tie GENERATOR_VERSION_V10 to this flag. */
+  enableParRamp?: boolean;
 }
 
 interface BossRules {
@@ -965,7 +970,8 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   checkObjective(c, def, band);
   checkWaves(c, def.waves, def.arena, def.roster, {
     firstAtSec: FIRST_WAVE_SEC,
-    maxLive: BANDS[band].maxLiveEnemies,
+    // Tester Tom: version 10 scales the cap by PAR_RAMP_SCALE on levels 1 to 14.
+    maxLive: levelMaxLive(band, def.levelIndex, def.generatorVersion),
     segmentSec: null,
   }, def.surface === 'cylinder');
   checkHazards(c, def, band);
@@ -980,7 +986,7 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   const bossAt = isR3Version(v) ? BOSS_R3_LEVEL_AT_SEC : v === GENERATOR_VERSION_V7 ? BOSS_LONG_LEVEL_AT_SEC : isLongVersion(v) ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
   checkBoss(c, def.boss, def.generatorVersion, {
     // Tester 3: version 9 reads the T3 order (Brood, then Warden) and the softer first fight.
-    want: v === GENERATOR_VERSION_V9 ? t3BossForLevel(def.levelIndex, bossAt) : bossForLevel(def.levelIndex, bossAt),
+    want: isT3Version(v) ? t3BossForLevel(def.levelIndex, bossAt) : bossForLevel(def.levelIndex, bossAt),
     unit: 'level',
     index: def.levelIndex,
     atSec: bossAt,
@@ -1024,10 +1030,19 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   c.check('J11', (report) => {
     // Tester 3: on a long level, version 9 exactly when the version 8 flags and enableT3 are on, when the caller says.
     if (opts?.enableLongLevels !== true) return;
-    const flag = opts.enableR1Pacing === true && opts.enableR3Length === true && opts.enableT3 === true;
+    // Tester Tom: with enableParRamp on as well, J12 owns the version instead.
+    const flag = opts.enableR1Pacing === true && opts.enableR3Length === true && opts.enableT3 === true && opts.enableParRamp !== true;
     const v9 = def.generatorVersion === GENERATOR_VERSION_V9;
     if (flag && !v9) report(`generatorVersion ${def.generatorVersion} with enableT3 on, want ${GENERATOR_VERSION_V9}`);
-    if (!flag && v9) report(`generatorVersion ${GENERATOR_VERSION_V9} with enableT3 or a version 8 flag off`);
+    if (!flag && v9) report(`generatorVersion ${GENERATOR_VERSION_V9} with enableT3 or a version 8 flag off, or enableParRamp on`);
+  });
+  c.check('J12', (report) => {
+    // Tester Tom: on a long level, version 10 exactly when the version 9 flags and enableParRamp are on, when the caller says.
+    if (opts?.enableLongLevels !== true) return;
+    const flag = opts.enableR1Pacing === true && opts.enableR3Length === true && opts.enableT3 === true && opts.enableParRamp === true;
+    const v10 = def.generatorVersion === GENERATOR_VERSION_V10;
+    if (flag && !v10) report(`generatorVersion ${def.generatorVersion} with enableParRamp on, want ${GENERATOR_VERSION_V10}`);
+    if (!flag && v10) report(`generatorVersion ${GENERATOR_VERSION_V10} with enableParRamp or a version 9 flag off`);
   });
   checkDrumTaste(c, def, opts);
   c.check('J5', (report) => {
@@ -1060,7 +1075,7 @@ function checkCylinder(c: Collector, def: LevelDef): void {
       if (def.generatorVersion === GENERATOR_VERSION_V4) report(`generatorVersion ${GENERATOR_VERSION_V4} on a ${String(def.surface)} level`);
       return;
     }
-    const taste = def.generatorVersion === GENERATOR_VERSION_V9 && def.levelIndex === DRUM_TASTE_LEVEL;
+    const taste = isT3Version(def.generatorVersion) && def.levelIndex === DRUM_TASTE_LEVEL;
     if (!cylinderEligible(def.levelIndex) && !taste) report(`cylinder on level ${def.levelIndex}: only levels from 11 that are not boss levels`);
     const a = def.arena;
     if (a.shape !== 'rect' && a.shape !== 'rectObstacles') report(`cylinder arena shape ${String(a.shape)}, want rect or rectObstacles`);
@@ -1079,7 +1094,7 @@ function checkCylinder(c: Collector, def: LevelDef): void {
 function checkDrumTaste(c: Collector, def: LevelDef, opts: LevelCheckOptions | undefined): void {
   c.check('T1', (report) => {
     const nd: unknown = (def as { noDrift?: unknown }).noDrift;
-    const taste = def.generatorVersion === GENERATOR_VERSION_V9 && def.levelIndex === DRUM_TASTE_LEVEL && opts?.enableCylinder !== false;
+    const taste = isT3Version(def.generatorVersion) && def.levelIndex === DRUM_TASTE_LEVEL && opts?.enableCylinder !== false;
     if (nd !== undefined && nd !== true) report(`noDrift ${String(nd)} must be true or absent`);
     if (!taste) {
       if (nd !== undefined) report(`noDrift on level ${def.levelIndex} (generatorVersion ${def.generatorVersion}), only the version 9 drum taste level ${DRUM_TASTE_LEVEL}`);

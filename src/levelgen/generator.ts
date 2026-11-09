@@ -26,6 +26,7 @@ import {
   GENERATOR_VERSION_V7,
   GENERATOR_VERSION_V8,
   GENERATOR_VERSION_V9,
+  GENERATOR_VERSION_V10,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_BREATHER_SEC,
@@ -46,7 +47,10 @@ import {
   r3ObjectiveTable,
   runsR1,
   runsR3,
+  runsParRamp,
   runsT3,
+  levelMaxLive,
+  parRampScale,
   segmentSeed,
   speedScaleFor,
 } from './leveldef';
@@ -112,7 +116,7 @@ import {
   FREE_PLAY_SNAKE_FROM_SEGMENT,
 } from './validate';
 import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards, t3BossForLevel } from './boss';
-import { R3_COLLECT_RATE, bossLevelPar, destroyCountFor, inBreather, pulseAt, wholeLevelPar } from './pacing';
+import { R3_COLLECT_RATE, V10_COLLECT_RATE, bossLevelPar, destroyCountFor, inBreather, pulseAt, wholeLevelPar } from './pacing';
 import type { PulseShape } from './pacing';
 import {
   CYLINDER_CHANCE,
@@ -686,6 +690,12 @@ interface WaveRun {
    * Applied before the R1 plan, so no draw before fromSec moves. Absent means no lift.
    */
   late?: { readonly fromSec: number; readonly budget: number };
+  /**
+   * Version 10 early ramp (PAR_RAMP_SCALE): each R1 planned wave's budget times this, rounded, at
+   * least R1_MIN_WAVE (lulls stay 1). Waves past volatileUntilSec (a boss fight) are untouched.
+   * Applied after the plan's draws, so it moves no draw. Absent means 1.
+   */
+  ramp?: number;
 }
 
 /**
@@ -698,6 +708,12 @@ interface WaveRun {
 export const R5_LATE_FROM = 2 / 3;
 export const R5_LATE_BUDGET = 1.4;
 export const R5_LATE_BANDS: readonly Band[] = Object.freeze<Band[]>([1]);
+/**
+ * Version 10 late lift on R5_LATE_BANDS. The early ramp cannot push a wave below R1_MIN_WAVE, so
+ * the quiet middle third shrinks less than the lifted final third and the R5 rise fell to about
+ * 1.19x to 1.2x. A larger lift keeps the final third above 1.2x the middle on the ramped levels.
+ */
+export const PAR_RAMP_LATE_BUDGET = 1.5;
 
 /**
  * Kind a snake group falls back to when the snake cap is full: grunt when the roster has it (every
@@ -827,6 +843,7 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
     const plan = run.volatile === undefined || !volatileOn ? null : r1Wave(run.volatile, budget, oldInterval, breather && !wasBreather);
     wasBreather = breather;
     if (plan !== null) budget = plan.budget;
+    if (plan !== null && run.ramp !== undefined && plan.flavour !== 'lull') budget = Math.max(R1_MIN_WAVE, Math.round(budget * run.ramp));
     const snakeRoom = (): number => b.maxLiveSnakes - snakeTimes.filter((s) => s > t - SNAKE_WINDOW_SEC).length;
     if (plan?.flavour === 'lull') {
       const kind = lullKind(roster, snakeRoom() > 0);
@@ -897,9 +914,9 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
   return { waves, groups };
 }
 
-function scheduleOf(b: BandParams, waves: WaveDef[], loopFromIndex: number, loopPeriodSec: number, budgetBonus = 0): WaveSchedule {
+function scheduleOf(b: BandParams, waves: WaveDef[], loopFromIndex: number, loopPeriodSec: number, budgetBonus = 0, maxLive = b.maxLiveEnemies): WaveSchedule {
   return {
-    maxLiveEnemies: b.maxLiveEnemies,
+    maxLiveEnemies: maxLive,
     intervalStartSec: b.intervalStartSec,
     intervalEndSec: b.intervalEndSec,
     rampSec: b.rampSec,
@@ -1076,6 +1093,9 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const r3 = runsR3(cfg);
   // Tester 3: boss order and drum taste (version 9).
   const t3 = runsT3(cfg);
+  // Tester Tom: quarter geom pickup par and the gentler early ramp (version 10).
+  const t10 = runsParRamp(cfg);
+  const ramp = t10 ? parRampScale(levelIndex) : 1;
   const bossLevel = cfg.enableBosses && bossForLevel(levelIndex) !== null;
   const objTable = r3 ? r3ObjectiveTable(band, bossLevel) : LONG_BANDS[band];
   const b = r3 ? r3BandParams(band, bossLevel) : long ? longBandParams(band) : BANDS[band];
@@ -1105,9 +1125,10 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     budgetBonus: 0,
     cylinder: cyl,
     ...(long ? { pulse: longPulse(LONG_BANDS[band]) } : {}),
-    ...(r3 && !bossLevel && longObjective !== null && R5_LATE_BANDS.includes(band) ? { late: { fromSec: round1(longObjective.clearSec * R5_LATE_FROM), budget: R5_LATE_BUDGET } } : {}),
+    ...(r3 && !bossLevel && longObjective !== null && R5_LATE_BANDS.includes(band) ? { late: { fromSec: round1(longObjective.clearSec * R5_LATE_FROM), budget: ramp < 1 ? PAR_RAMP_LATE_BUDGET : R5_LATE_BUDGET } } : {}),
     // R2 boss level: the R1 plan stops at the entrance, so the fight keeps the version 5 waves.
     ...(r1Waves ? { volatile: stream(s, R1_SALT), ...(bossLevel ? { volatileUntilSec: bossLevelAtSec(cfg) } : {}) } : {}),
+    ...(ramp < 1 ? { ramp } : {}),
   });
   // Drum taste: no v2 stage, so the roster stays gentle.
   const v2 = runsV2(cfg, band) && !taste;
@@ -1118,15 +1139,16 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const leaver = lw > 0 ? applyLeaver(stream(s, LEAVER_SALT), lw, arena, staged.roster, staged, cyl) : null;
   const { roster, waves: list } = leaver ?? staged;
   const loop = loopFields(list, scheduleSec, b.intervalEndSec, long ? LONG_MIN_REPEAT_SEC : 0);
-  const waves = scheduleOf(b, list, loop.from, loop.period);
+  const version = t10 ? GENERATOR_VERSION_V10 : t3 ? GENERATOR_VERSION_V9 : r3 ? GENERATOR_VERSION_V8 : r1 ? GENERATOR_VERSION_V6 : long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION;
+  const waves = scheduleOf(b, list, loop.from, loop.period, 0, levelMaxLive(band, levelIndex, version));
   if (longObjective !== null && objective.kind === 'destroy') objective = { kind: 'destroy', count: destroyCountFor(waves, longObjective.clearSec) };
   const drawn = generateHazards(stream(s, SALT.hazards), arena, b, cfg, objective, cyl);
   // Drum taste: at most one well and no spawners (the boss rule 12 step, no draw).
   const hazards = taste ? bossHazards(drawn) : drawn;
   const whole = r3
     ? bossLevel
-      ? bossLevelPar(waves, objective, bossLevelAtSec(cfg))
-      : wholeLevelPar(waves, objective, R3_COLLECT_RATE)
+      ? bossLevelPar(waves, objective, bossLevelAtSec(cfg), t10 ? V10_COLLECT_RATE : undefined)
+      : wholeLevelPar(waves, objective, t10 ? V10_COLLECT_RATE : R3_COLLECT_RATE)
     : r1
       ? wholeLevelPar(waves, objective)
       : null;
@@ -1142,7 +1164,7 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     version: LEVELDEF_VERSION,
     // D13: a cylinder level reports GENERATOR_VERSION_V4; every flat level keeps its v3 version.
     // Release polish: every long level reports GENERATOR_VERSION_V5 instead; R1: version 6.
-    generatorVersion: t3 ? GENERATOR_VERSION_V9 : r3 ? GENERATOR_VERSION_V8 : r1 ? GENERATOR_VERSION_V6 : long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION,
+    generatorVersion: version,
     runSeed,
     levelIndex,
     seed,
@@ -1181,7 +1203,7 @@ export function withLevelBoss(def: LevelDef, cfg: GenConfig): LevelDef {
   // Release gate R2: a boss level built with the R1 config has the R1 waves and the 200 s entrance
   // (version 7); with the R1 pacing off it keeps version 5 (long) or 3.
   // Release gate R3: version 8 with the R3 length on.
-  const generatorVersion = runsT3(cfg) ? GENERATOR_VERSION_V9 : runsR3(cfg) ? GENERATOR_VERSION_V8 : runsR1(cfg) ? GENERATOR_VERSION_V7 : long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3;
+  const generatorVersion = runsParRamp(cfg) ? GENERATOR_VERSION_V10 : runsT3(cfg) ? GENERATOR_VERSION_V9 : runsR3(cfg) ? GENERATOR_VERSION_V8 : runsR1(cfg) ? GENERATOR_VERSION_V7 : long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3;
   return { ...def, generatorVersion, hazards: bossHazards(def.hazards), boss };
 }
 

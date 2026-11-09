@@ -18,10 +18,11 @@ import {
   V2_GEN_CONFIG,
   V5_GEN_CONFIG,
   V6_GEN_CONFIG,
+  V9_GEN_CONFIG,
   fmix32,
   levelSeed,
 } from '../../src/levelgen/leveldef';
-import { R3_COLLECT_RATE, wholeLevelPar } from '../../src/levelgen/pacing';
+import { R3_COLLECT_RATE, V10_COLLECT_RATE, wholeLevelPar } from '../../src/levelgen/pacing';
 import type { Band, EnemyKind, LevelDef, WaveSchedule } from '../../src/levelgen/leveldef';
 import {
   ALL_ENEMY_KINDS,
@@ -327,8 +328,11 @@ describe('v2 enemy stage', { timeout: 60_000 }, () => {
         expect(gen.computePar(d.waves, d.objective).par).toBe(d.par);
         const d6 = gen.generateLevel(42, n, V6_GEN_CONFIG);
         expect(wholeLevelPar(d6.waves, d6.objective).par).toBe(d6.par);
-        const d8 = gen.generateLevel(42, n);
+        const d8 = gen.generateLevel(42, n, V9_GEN_CONFIG);
         expect(wholeLevelPar(d8.waves, d8.objective, R3_COLLECT_RATE).par).toBe(d8.par);
+        // Par ramp (version 10): V10_COLLECT_RATE.
+        const d10 = gen.generateLevel(42, n);
+        expect(wholeLevelPar(d10.waves, d10.objective, V10_COLLECT_RATE).par).toBe(d10.par);
       }
     });
   });
@@ -454,8 +458,8 @@ describe('v2 enemy stage', { timeout: 60_000 }, () => {
 
     it('J3: unknown generator versions fail', () => {
       const d = v2Level();
-      // V3, D13, release polish, R1, R2, R3 and T3: 3 to 9 (GENERATOR_VERSION_V3 to _V9) are known, so 10 is the first unknown.
-      d.generatorVersion = 10;
+      // V3, D13, release polish, R1, R2, R3, T3 and par ramp: 3 to 10 (GENERATOR_VERSION_V3 to _V10) are known, so 11 is the first unknown.
+      d.generatorVersion = 11;
       expect(validateLevel(d).errors.some((e) => e.startsWith('J3:'))).toBe(true);
     });
 
