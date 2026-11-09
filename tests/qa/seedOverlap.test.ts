@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { deriveSeed } from '../../src/core/rng';
 import { generateLevel } from '../../src/levelgen/generator';
-import { V2_GEN_CONFIG, type LevelDef } from '../../src/levelgen/leveldef';
+import { V2_GEN_CONFIG, V9_GEN_CONFIG, type LevelDef } from '../../src/levelgen/leveldef';
 
 /** Everything the player experiences, without the identity fields that name the run and the index. */
 function content(d: LevelDef): Omit<LevelDef, 'runSeed' | 'levelIndex'> {
@@ -23,8 +23,9 @@ describe('adjacent run seeds', () => {
   });
 
   it('typed seeds 1234 and 1235: level 2 of 1234 is level 1 of 1235 (same band, same content)', () => {
-    const a = generateLevel(1234, 2);
-    const b = generateLevel(1235, 1);
+    // foundry-par-ramp: V9_GEN_CONFIG, since version 10 scales levels 1 to 14 by their index (PAR_RAMP_SCALE), which breaks the shift.
+    const a = generateLevel(1234, 2, V9_GEN_CONFIG);
+    const b = generateLevel(1235, 1, V9_GEN_CONFIG);
     expect(a.band).toBe(b.band);
     expect(a.runSeed).not.toBe(b.runSeed);
     expect(content(a)).toEqual(content(b));

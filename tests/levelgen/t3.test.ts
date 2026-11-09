@@ -9,6 +9,7 @@ import {
   DEFAULT_GEN_CONFIG,
   GENERATOR_VERSION_V8,
   GENERATOR_VERSION_V9,
+  GENERATOR_VERSION_V10,
   V1_GEN_CONFIG,
   V2_GEN_CONFIG,
   V3_GEN_CONFIG,
@@ -16,6 +17,7 @@ import {
   V5_GEN_CONFIG,
   V6_GEN_CONFIG,
   V8_GEN_CONFIG,
+  V9_GEN_CONFIG,
   fmix32,
   levelSeed,
   runsT3,
@@ -36,12 +38,14 @@ describe('T3 config and version', () => {
       expect(c.enableT3).toBe(false);
       expect(runsT3(c)).toBe(false);
     }
-    expect({ ...V8_GEN_CONFIG, enableT3: true }).toEqual(DEFAULT_GEN_CONFIG);
+    // Par ramp: V9_GEN_CONFIG is the default with only enableParRamp off.
+    expect({ ...V8_GEN_CONFIG, enableT3: true }).toEqual(V9_GEN_CONFIG);
+    expect(V9_GEN_CONFIG.enableT3).toBe(true);
   });
 
-  it('every default level is version 9; V8_GEN_CONFIG is version 8', () => {
+  it('every V9_GEN_CONFIG level is version 9; V8_GEN_CONFIG is version 8', () => {
     for (const n of [1, 5, 8, 10, 12, 13, 25, 40]) {
-      expect(generateLevel(42, n).generatorVersion, `level ${n}`).toBe(GENERATOR_VERSION_V9);
+      expect(generateLevel(42, n, V9_GEN_CONFIG).generatorVersion, `level ${n}`).toBe(GENERATOR_VERSION_V9);
       expect(generateLevel(42, n, V8_GEN_CONFIG).generatorVersion, `level ${n}`).toBe(GENERATOR_VERSION_V8);
     }
   });
@@ -58,12 +62,12 @@ describe('T3 config and version', () => {
   });
 
   it('J10 and J11 tie version 8 and 9 to the flag', () => {
-    const v9 = generateLevel(42, 13);
-    expect(validateLevel(v9, DEFAULT_GEN_CONFIG).errors).toEqual([]);
+    const v9 = generateLevel(42, 13, V9_GEN_CONFIG);
+    expect(validateLevel(v9, V9_GEN_CONFIG).errors).toEqual([]);
     expect(ids(validateLevel(v9, V8_GEN_CONFIG).errors)).toContain('J10');
     const v8 = generateLevel(42, 13, V8_GEN_CONFIG);
     expect(validateLevel(v8, V8_GEN_CONFIG).errors).toEqual([]);
-    expect(ids(validateLevel(v8, DEFAULT_GEN_CONFIG).errors)).toContain('J11');
+    expect(ids(validateLevel(v8, V9_GEN_CONFIG).errors)).toContain('J11');
   });
 
   it('Easy bossScale is 0.55; Normal, Hard and Insane are unchanged', () => {
@@ -115,7 +119,7 @@ describe('T3 boss order and first fight', () => {
 
   it('boss levels keep the version 8 waves, par and stars (only the boss field and version move)', () => {
     for (const n of [5, 10, 15]) {
-      const a = generateLevel(42, n);
+      const a = generateLevel(42, n, V9_GEN_CONFIG);
       const b = generateLevel(42, n, V8_GEN_CONFIG);
       expect({ ...a, generatorVersion: 0, boss: null }).toEqual({ ...b, generatorVersion: 0, boss: null });
     }
@@ -124,7 +128,8 @@ describe('T3 boss order and first fight', () => {
 
 function expectTaste(d: LevelDef): void {
   const at = `seed ${d.runSeed}`;
-  expect(d.generatorVersion, at).toBe(GENERATOR_VERSION_V9);
+  // Par ramp: version 10 keeps the drum taste.
+  expect(d.generatorVersion, at).toBe(GENERATOR_VERSION_V10);
   expect(d.surface, at).toBe('cylinder');
   expect(d.arena.shape, at).toBe('rect');
   expect(d.arena.obstacles, at).toEqual([]);

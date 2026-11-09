@@ -29,7 +29,7 @@ import {
 } from '../../src/levelgen/drum';
 import type { DrumPattern } from '../../src/levelgen/drum';
 import { drumPatternFor, generateLevel, levelHash } from '../../src/levelgen/generator';
-import { DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V6, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9, V3_GEN_CONFIG, V4_GEN_CONFIG, V5_GEN_CONFIG, V6_GEN_CONFIG, V8_GEN_CONFIG, fmix32, levelSeed } from '../../src/levelgen/leveldef';
+import { DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V6, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9, GENERATOR_VERSION_V10, V3_GEN_CONFIG, V4_GEN_CONFIG, V5_GEN_CONFIG, V6_GEN_CONFIG, V8_GEN_CONFIG, V9_GEN_CONFIG, fmix32, levelSeed } from '../../src/levelgen/leveldef';
 import type { ArenaDef, LevelDef } from '../../src/levelgen/leveldef';
 import {
   CONNECT_CLEARANCE,
@@ -273,7 +273,8 @@ describe('drum patterns in the generator', () => {
 /** The config that builds a long level of this version (8: default, 6: V6, else V5). */
 // T3: the default config builds version 9 (version 8 is V8_GEN_CONFIG).
 const configOfVersion = (v: number): typeof DEFAULT_GEN_CONFIG =>
-  v === GENERATOR_VERSION_V9 ? DEFAULT_GEN_CONFIG : v === GENERATOR_VERSION_V8 ? V8_GEN_CONFIG : v === GENERATOR_VERSION_V6 ? V6_GEN_CONFIG : V5_GEN_CONFIG;
+  // Par ramp: version 10 is the default, version 9 its own config.
+  v === GENERATOR_VERSION_V10 ? DEFAULT_GEN_CONFIG : v === GENERATOR_VERSION_V9 ? V9_GEN_CONFIG : v === GENERATOR_VERSION_V8 ? V8_GEN_CONFIG : v === GENERATOR_VERSION_V6 ? V6_GEN_CONFIG : V5_GEN_CONFIG;
 
 function expectDrum(d: LevelDef, p: DrumPattern): void {
   const at = `seed ${d.runSeed} level ${d.levelIndex} ${p}`;

@@ -22,20 +22,22 @@ const EARLY_FRAC = 0.6;
  * 19541E27, C91F9CAD, ECE6591B, B7252DF2, 0AD5EE06.
  */
 // foundry-t3: every hash moved only because the default config now reports generatorVersion 9 (content unchanged, no ripples on these levels).
+// foundry-par-ramp: every hash moved again with version 10 (V10_COLLECT_RATE par; L6 and L9 also the PAR_RAMP_SCALE waves). At version 9 they were
+// A2BB5FF8, F5B2639B, 9CEB693F, B96340D5, 8988A5CA, 19B18454.
 const CASES: readonly { level: number; kind: EnemyKind; hash: string }[] = [
-  { level: 6, kind: 'charger', hash: 'A2BB5FF8' },
+  { level: 6, kind: 'charger', hash: 'B78C7357' },
   // foundry-score-target: L7 is scoreInTime, target now 0.6 x par (was D54392E1).
-  { level: 7, kind: 'swirl', hash: 'F5B2639B' },
-  { level: 9, kind: 'splime', hash: '9CEB693F' },
+  { level: 7, kind: 'swirl', hash: '290D6E36' },
+  { level: 9, kind: 'splime', hash: 'A3828605' },
   // D13 C0: seed 42 level 16 is now a cylinder level (was D736C51F flat at 374a7b9). Drum-maps:
   // a pillars drum (was 712BC1C1 open drum at 8d5c989).
-  { level: 16, kind: 'bulwark', hash: 'B96340D5' },
+  { level: 16, kind: 'bulwark', hash: '58D4019A' },
   // D13 C0: seed 42 level 17 is now a cylinder level too (was 43CADCE4 flat at 374a7b9). Drum-maps:
   // a pillars drum (was BCC2F1B8 open drum at 8d5c989).
-  { level: 17, kind: 'blink', hash: '8988A5CA' },
+  { level: 17, kind: 'blink', hash: '91A720FA' },
   // forge-leaver: seed 42 level 31 gains a Leaver group (was 524D746B); its Sower is unchanged.
   // foundry-score-target: L31 is scoreInTime, target now 0.6 x par (was DDB938BA).
-  { level: 31, kind: 'sower', hash: '19B18454' },
+  { level: 31, kind: 'sower', hash: 'C50210F9' },
 ];
 
 interface EarlySpawn {
