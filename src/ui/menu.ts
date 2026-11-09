@@ -13,6 +13,7 @@
 import type { Insets, Rect } from '../input/types';
 import { button, createScreen, el, MIN_HIT_PX, type Screen } from './dom';
 import { aspectClass } from './hudFrame';
+import { addMoveNotice } from './moveNotice';
 import { setVectorText } from './vectorFont';
 
 export const GAME_TITLE = 'Shape Legend';
@@ -275,6 +276,7 @@ export function createMenuScreen(parent: HTMLElement, actions: MenuActions): Men
   foot.style.gridArea = 'foot';
   panel.append(title, rowsBox, info, foot);
   s.root.append(panel);
+  addMoveNotice(s.root);
   return {
     ...s,
     setInfo(text) {

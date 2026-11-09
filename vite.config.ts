@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { currentBuildId } from './scripts/build-id.ts';
 
 export default defineConfig({
-  base: '/shape-of-war/', // GitHub Pages project path; Capacitor build overrides with --base=./
+  base: process.env.SOW_BASE || '/shape-of-war/', // from Pages in CI (deploy.yml); Capacitor build overrides with --base=./
   define: {
     // Visible on device in a corner label so a stale service worker cache is detectable.
     __BUILD_ID__: JSON.stringify(currentBuildId()),
