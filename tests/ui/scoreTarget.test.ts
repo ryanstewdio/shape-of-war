@@ -12,10 +12,10 @@ import { goalMet, objectiveProgress } from '../../src/ui/objective';
 afterEach(() => bus.clear());
 
 describe('one target on every screen', () => {
-  it('Normal level 4 of the tester seed style reads near 600K', () => {
+  it('Normal level 4 of the tester seed style reads near 240K (generator V10 par)', () => {
     const lv = generateLevel(2471588027, 4);
     const card = introCard(4, lv, 'normal');
-    expect(card.goal).toBe(`Score ${formatCompact(576_500)} in 3:35`);
+    expect(card.goal).toBe(`Score ${formatCompact(241_500)} in 3:35`);
   });
 
   for (const d of ['easy', 'insane'] as const) {

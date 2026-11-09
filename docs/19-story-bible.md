@@ -1,5 +1,7 @@
 # Shape Legend story bible
 
+Status: draft for Ryan's approval (Morpheus, 2026-11-09). Name check: "Hedra" is a well known AI video company and "Ormund" is a lead villain in House of the Dragon (2026), so both are under review; Vertane found clean in a web search.
+
 Scribe, 2026-11-09, from Ryan's interview answers of the same day (brief docs/briefs/scribe-legend-bible.md). Audience: everyone, children included (docs/16). Language: English, short words a 7 year old can follow. This doc is story canon for scene text; it adds no game feature by itself. Builders take scene text from here word for word.
 
 ## World premise
