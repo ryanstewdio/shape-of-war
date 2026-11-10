@@ -85,7 +85,7 @@ import { clearEnraged, createEnrageTrack, enrageGlowMul, enrageTint, growEnrageT
 import { createDriftStreaks, driftBurstEvent, driftStreakFrame, streakAt, type StreakFrame, type StreakSeg } from './driftStreaks';
 import { getTilt, setTilt, type TiltLevel } from './tilt';
 import { createTiltScene } from './tiltScene';
-import { WALL_LIP } from './tiltGeom';
+import { outlinePoints, WALL_LIP } from './tiltGeom';
 import {
   createDrumPen,
   penBegin,
@@ -117,7 +117,9 @@ import {
 import { volumeShapeOf, type VolumeShape } from './volume';
 import { createVolumeView } from './volumeView';
 // D13 phase C1: cylinder levels draw as a neon drum (drum.ts). Flat levels never touch it.
-import { BACK_ALPHA, drumCamBucket, drumCamera, drumProject, projectPhi, drumProjectNodes, drumRectSegsInto, drumULines, fitDrum, followCamU, interpWrap, makeDrum, ringArcs, unwrapNear, type Drum, type DrumPoint } from './drum';
+import { BACK_ALPHA, drumCamBucket, drumCamera, drumProject, projectPhi, drumProjectNodes, drumRectSegsInto, drumULines, fitDrum, followCamU, interpWrap, makeDrum, makeTroughDrum, ringArcs, unwrapNear, type Drum, type DrumPoint } from './drum';
+// Trough wave: a trough level draws through the drum's trough projection (no wrap, no turn).
+import { parseTroughKnob, troughGridSegs, troughOutline, troughShadeBands } from './troughGeom';
 import {
   backingSize,
   bloomResolution,
@@ -1169,6 +1171,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   // tier) or the wave D lattice and dust (standard and high); neither sets its own base alpha.
   const gridLayer = new Container({ label: 'gridLayer' });
   const grid = new Graphics({ label: 'grid' });
+  // Trough wave: the slope shade under the grid (trough levels only, static, every tier).
+  const troughShade = new Graphics({ label: 'troughShade' });
+  troughShade.visible = false;
   const dotTexture = makeDotTexture(app);
   const lattice = createLatticeView(dotTexture);
   const bloomLayer = new Container({ label: 'bloomLayer' });
@@ -1286,7 +1291,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
 
   bloomLayer.addChild(lattice.glow, wallGlow, drumObsGlow, membraneGlowG, streakGlowG, wallPulse, wallFlash, comets, glowSprites, particles, trails, pulseLayer, enemyFxGlow, ringGlow);
   lines.addChild(walls, drumObs, membraneG, streakG, floor, hazardLayer.container, enemyFx, entities, cueLayer.container, bullets, enemyBulletLayer.layer.container, rings);
-  gridLayer.addChild(lattice.dust, grid, lattice.lines);
+  gridLayer.addChild(lattice.dust, troughShade, grid, lattice.lines);
   world.addChild(gridLayer, bloomLayer, lines);
   app.stage.addChild(world, sticks);
   initParticles(particles, streak);
@@ -1320,6 +1325,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let drumRims: DrumArcs[] = [];
   let drumRings: DrumArcs[] = [];
   const drumUFront: number[] = [];
+  // Trough wave: the projected low tier grid segments (static per arena, tilt and fit).
+  const troughSegs: number[] = [];
   const drumUBack: number[] = [];
   const drumObsFront: number[] = [];
   const drumObsBack: number[] = [];
@@ -1725,6 +1732,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let pondSimTime = -1;
   /** Dev only (?dev=1&pond=1): sim time of the next hand fired drop, and its count. */
   const devPond = parsePondKnob(window.location.search);
+  /** Dev only (?dev=1&trough=1): draw every non cylinder level as a trough (render only). */
+  const devTrough = parseTroughKnob(window.location.search);
   let devPondAt = 1;
   let devPondN = 0;
   const ringList: { x: number; y: number; age: number; colour: PaletteKey }[] = [];
@@ -1887,6 +1896,13 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   function redrawGrid(): void {
     // Standard and high draw the lattice instead; the v1 grid stays empty and hidden.
     if (latticeActive) return;
+    if (drum && drum.trough) {
+      // Trough on the low tier: the clipped v1 grid bent along u onto the valley (static).
+      troughGridSegs(drum, gridSegs, troughSegs);
+      drawGrid(grid, troughSegs, palette.grid, fit.scale);
+      gridRippling = false;
+      return;
+    }
     if (drum) {
       // Cylinder on the low tier: static rings plus the u lines for the current camera angle.
       drumULines(drum, GRID_SPACING, drumUFront, drumUBack);
@@ -2151,7 +2167,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
    */
   function drawDriftStreaks(dt: number): void {
     driftStreakFrame(streaks, dt, streakFrame);
-    const on = drum !== null && streakFrame.level > 0;
+    const on = drum !== null && !drum.trough && streakFrame.level > 0;
     if (!on) {
       if (streakShown) {
         streakG.clear();
@@ -2246,6 +2262,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
 
   /** Cylinder: the rim arcs and the low tier v rings (camera angle invariant; tilt, arena or fit change only). */
   function rebuildDrumArcs(d: Drum): void {
+    if (d.trough) {
+      // Trough: the arena outline bent onto the valley is the one rim (front only); no rings.
+      drumRims = [{ front: troughOutline(d, outlinePoints(arena)), back: [] }];
+      drumRings = [];
+      return;
+    }
     const hh = d.height / 2;
     drumRims = [ringArcs(d, -hh), ringArcs(d, hh)];
     drumRings = [];
@@ -2265,6 +2287,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       drum.camU = wrapCoord(arena.spawnPoint.x, drum.width);
       wrapW = drum.width;
       drumSnap = true;
+    } else if (def.surface === 'trough' || devTrough) {
+      // Trough wave: the valley projection; nothing wraps and the camera never follows.
+      drum = makeTroughDrum(arena.width, arena.height, TILT_DEG[tiltLevel]);
+      wrapW = 0;
+      drumSnap = false;
     } else {
       drum = null;
       wrapW = 0;
@@ -2274,7 +2301,17 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     lattice.setCamera(drum || !cam.on ? null : cam);
   }
 
+  /** Trough wave: the slope shade bands in the grid colour (palette through applyNeon); hidden off a trough. */
+  function redrawTroughShade(): void {
+    troughShade.clear();
+    const on = drum !== null && drum.trough;
+    troughShade.visible = on;
+    if (!drum || !on) return;
+    for (const b of troughShadeBands(drum, outlinePoints(arena))) troughShade.poly(b.pts, true).fill({ color: palette.grid, alpha: b.alpha });
+  }
+
   function redrawArena(): void {
+    redrawTroughShade();
     redrawGrid();
     gridLayer.alpha = currentRender.gridAlpha;
     redrawWalls(currentRender);
@@ -2374,6 +2411,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       // Bullets: every slot restyles from the new palette, with the new trail alpha.
       restyleBullets();
       redrawGrid();
+      redrawTroughShade();
       lattice.setColour(palette.grid);
     },
     sprites(): void {
@@ -3330,7 +3368,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     world.position.set(fit.x + shakeOff.x, fit.y + shakeOff.y);
     if (ripples.length > 0 || pondWaves.length > 0 || gridRippling) {
       stepRipples(ripples, dt);
-      redrawGrid();
+      // Trough wave: the trough grid is static (ripples do not bend it), so it is never redrawn here.
+      if (!drum || !drum.trough) redrawGrid();
     }
     if (ringList.length > 0 || rings.visible) {
       rings.clear();
@@ -5329,7 +5368,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const shipY = interp(w.prevY[0] ?? 0, w.y[0] ?? 0, a);
     // G9: the camera u moves before anything is drawn, so every layer drawn through the drum
     // (drumPen.ts) uses the same camera u as the scene pass that projects the entity views.
-    if (drum && w.alive[0] === 1) {
+    if (drum && !drum.trough && w.alive[0] === 1) {
       drum.camU = followCamU(drum.camU, shipX, drumSnap ? Number.POSITIVE_INFINITY : fxDt, drum.width);
       drumSnap = false;
     }
