@@ -972,10 +972,11 @@ describe('boss bar: layout against the buttons on cover and main', () => {
     expect(f.playRect.y).toBe(60);
   });
 
-  it('main: the bar is centred under the objective bar', () => {
+  it('main: the bar starts under the objective bar, right of the clock, and is no wider than it', () => {
     for (const f of main) {
-      const { bossBar, bar } = f.boxes;
-      expect(bossBar.x + bossBar.w / 2, label(f)).toBeCloseTo(bar.x + bar.w / 2, 6);
+      const { bossBar, bar, clock } = f.boxes;
+      expect(bossBar.x, label(f)).toBe(bar.x);
+      expect(bossBar.x, label(f)).toBeGreaterThanOrEqual(clock.x + clock.w);
       expect(bossBar.w, label(f)).toBeLessThanOrEqual(bar.w);
     }
   });

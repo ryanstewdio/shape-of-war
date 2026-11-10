@@ -48,6 +48,9 @@ export function objectiveStatus(obj: ObjectiveDef, s: ObjectiveSnapshot): Object
   return 'running';
 }
 
+/** Survive label: hud-clock moved the time left out of the bar into the HUD clock (clockView). */
+export const SURVIVE_LABEL = 'Survive';
+
 /** What the objective label reads while the level holds for a living boss (docs/13 boss rule 9, section 8). */
 export const HOLD_LABEL = 'Defeat the boss';
 
@@ -138,7 +141,7 @@ export function bossObjectiveProgress(
 
 /**
  * Pure: HUD label and bar fill. R2: the bar shows progress toward what the player must complete
- * ("Survive 4:12", "Destroy 312 / 530", "Score 1.2M / 3.3M  2:41"); a score objective fills with
+ * ("Survive", "Destroy 312 / 530", "Score 1.2M / 3.3M"); a score objective fills with
  * the score only, a destroy objective with kills only. `thresholds` (LevelDef.stars) adds the thin
  * star line. While the level holds for a living boss the label reads "Defeat the boss" and the bar
  * is full.
@@ -156,12 +159,12 @@ export function objectiveProgress(
   switch (obj.kind) {
     case 'scoreInTime':
       return {
-        label: `Score ${formatCompact(s.score)} / ${formatCompact(obj.target)}  ${formatClock(obj.timeLimitSec - s.elapsedSec)}`,
+        label: `Score ${formatCompact(s.score)} / ${formatCompact(obj.target)}`,
         fraction: frac(s.score, obj.target),
         ...line,
       };
     case 'survive':
-      return { label: `Survive ${formatClock(obj.durationSec - s.elapsedSec)}`, fraction: frac(s.elapsedSec, obj.durationSec), ...line };
+      return { label: SURVIVE_LABEL, fraction: frac(s.elapsedSec, obj.durationSec), ...line };
     case 'destroy':
       return { label: `Destroy ${formatInt(Math.min(s.kills, obj.count))} / ${formatInt(obj.count)}`, fraction: frac(s.kills, obj.count), ...line };
   }
@@ -178,3 +181,115 @@ export function objectiveText(obj: ObjectiveDef): string {
       return `Destroy ${obj.count} enemies`;
   }
 }
+
+// ---- HUD clock (hud-clock) ----------------------------------------------------------------
+// The clock left the objective bar: once a score target was reached the bar was full and the time
+// left was hard to read. Timed objectives (scoreInTime, survive) count down in a framed pixel
+// clock that warns at 1:00, 0:30 and every second from 0:10; destroy and boss levels show the
+// time played, smaller and calm. Endless and Free Play keep their clock in the level line.
+
+export type ClockMode = 'countdown' | 'elapsed' | 'hidden';
+/** calm: more than a minute left (or time played). minute: 1:00 or less. half: 0:30 or less. final: 0:10 or less. */
+export type ClockTier = 'calm' | 'minute' | 'half' | 'final';
+/** Palette tones of the clock (vectorFont VECTOR_TONES keys). */
+export type ClockTone = 'cyan' | 'white' | 'yellow' | 'orange' | 'red';
+/** Digit size: small for time played, normal for a countdown, large from 0:10. */
+export type ClockSize = 'small' | 'normal' | 'large';
+
+export interface ClockView {
+  mode: ClockMode;
+  text: string;
+  tier: ClockTier;
+  tone: ClockTone;
+  size: ClockSize;
+  /** Whole seconds left as the clock shows them (rounded up), null unless counting down. */
+  shownLeft: number | null;
+}
+
+/** Warning lines in whole seconds left: yellow at 60, orange at 30, red with a pulse a second from 10. */
+export const CLOCK_MINUTE = 60;
+export const CLOCK_HALF = 30;
+export const CLOCK_FINAL = 10;
+
+export const CLOCK_HIDDEN: Readonly<ClockView> = { mode: 'hidden', text: '', tier: 'calm', tone: 'cyan', size: 'normal', shownLeft: null };
+
+/** Pure: the warning tier for whole seconds left as shown. */
+export function clockTier(shownLeft: number): ClockTier {
+  if (shownLeft <= CLOCK_FINAL) return 'final';
+  if (shownLeft <= CLOCK_HALF) return 'half';
+  if (shownLeft <= CLOCK_MINUTE) return 'minute';
+  return 'calm';
+}
+
+const TIER_TONE: Readonly<Record<ClockTier, ClockTone>> = { calm: 'cyan', minute: 'yellow', half: 'orange', final: 'red' };
+
+/** Pure: palette tone of a countdown tier. */
+export function tierTone(t: ClockTier): ClockTone {
+  return TIER_TONE[t];
+}
+
+/** Pure: the time limit of a timed objective in seconds, null for destroy. */
+export function timeLimitOf(obj: ObjectiveDef): number | null {
+  if (obj.kind === 'scoreInTime') return obj.timeLimitSec;
+  if (obj.kind === 'survive') return obj.durationSec;
+  return null;
+}
+
+/** Pure: whole seconds left as the clock shows them (rounded up, never below 0). */
+export function shownSeconds(sec: number): number {
+  return Number.isFinite(sec) ? Math.max(0, Math.ceil(sec)) : 0;
+}
+
+/**
+ * Pure: the HUD clock for an Adventure level. A boss level always shows time played (the sim, not
+ * the timer, ends it), whatever its objective kind.
+ */
+export function clockView(obj: ObjectiveDef, elapsedSec: number, bossLevel: boolean): ClockView {
+  const limit = timeLimitOf(obj);
+  if (limit === null || bossLevel) {
+    return { mode: 'elapsed', text: formatClock(Math.floor(Math.max(0, elapsedSec))), tier: 'calm', tone: 'white', size: 'small', shownLeft: null };
+  }
+  const left = shownSeconds(limit - elapsedSec);
+  const tier = clockTier(left);
+  return { mode: 'countdown', text: formatClock(left), tier, tone: tierTone(tier), size: tier === 'final' ? 'large' : 'normal', shownLeft: left };
+}
+
+/** Pure: true for a whole second that raises 'ui:timeWarn': 60, 30, and 10 down to 1. */
+export function isWarnSecond(s: number): boolean {
+  return s === CLOCK_MINUTE || s === CLOCK_HALF || (Number.isInteger(s) && s >= 1 && s <= CLOCK_FINAL);
+}
+
+/** Memory of the warning emitter: the last shown seconds it saw and the last second it warned for. */
+export interface WarnState {
+  prev: number | null;
+  lastWarned: number | null;
+}
+
+export const WARN_START: Readonly<WarnState> = { prev: null, lastWarned: null };
+
+/**
+ * Pure: feed the clock's shown seconds left (null when not counting down) and get the warning to
+ * emit, if any. A warning fires when the shown seconds cross a warning second going down (shown at
+ * or below it, previous above it). Paused time does not move the sim clock, so the same value
+ * arriving again emits nothing. Two warning seconds crossed in one call (a long frame) emit only the
+ * lower one, so the warnings never come in a burst, and a second is never warned twice: a value
+ * at or above the last warned second (a clock that went back up) only moves the memory.
+ * The first value of a run sets the memory and warns for nothing, so a level that starts under a
+ * minute does not warn for 60.
+ */
+export function warnStep(st: Readonly<WarnState>, shownLeft: number | null): { state: WarnState; warn: number | null } {
+  if (shownLeft === null) return { state: { prev: null, lastWarned: st.lastWarned }, warn: null };
+  const prev = st.prev;
+  if (prev === null || shownLeft >= prev) return { state: { prev: shownLeft, lastWarned: st.lastWarned }, warn: null };
+  let warn: number | null = null;
+  for (let s = prev - 1; s >= shownLeft; s--) {
+    if (isWarnSecond(s) && (st.lastWarned === null || s < st.lastWarned)) warn = s;
+  }
+  return { state: { prev: shownLeft, lastWarned: warn ?? st.lastWarned }, warn };
+}
+
+/**
+ * Length of one clock pulse in ms. Each warning starts one pulse, so the clock pulses at most once a
+ * second (the brief caps flashing at 3 a second).
+ */
+export const CLOCK_PULSE_MS = 360;

@@ -10,6 +10,9 @@
 // thumbs-button-look: the bomb and super buttons are arcade discs (fill, neon rim, a ring of pixel
 // cells, alphas from src/input/buttonLook.ts) in their palette colours at the saturation applyNeon
 // last set, read through onNeonChanged. One pixel font label sits above each.
+// hud-clock: the level clock in the pixel font inside a neon frame, in its own HUD box. main.ts
+// feeds it a ClockView (objective.ts) at the hud:score cadence and asks for a pulse with each
+// 'ui:timeWarn'. Colours are palette tones at the neon state applyNeon last set.
 import type { Bus, Events, WeaponKind } from '../core/events';
 import { pixelRing, RIM_W, superPaint, buttonPaint, type ButtonPaint } from '../input/buttonLook';
 import type { Insets, Rect } from '../input/types';
@@ -42,9 +45,9 @@ import {
 } from './indicator';
 import { formatInt, iconRun } from './format';
 import { aspectClass, BOMB_TEXT, SUPER_READY_TEXT, superText, type AspectClass, type HudBox, type HudFrame } from './hudFrame';
-import type { ObjectiveProgress } from './objective';
+import { CLOCK_PULSE_MS, type ClockSize, type ClockView, type ObjectiveProgress } from './objective';
 import { getNeonState, onNeonChanged, type NeonParams, type PaletteKey } from '../render/neon';
-import { glowBlur, setVectorText, toneColour } from './vectorFont';
+import { cellPx as cellPxOf, glowBlur, pixelBox, setVectorText, toneColour, VECTOR_TONES } from './vectorFont';
 import { weaponHue } from './weaponHue';
 
 export { aspectClass, type AspectClass };
@@ -251,6 +254,47 @@ export function discStyle(p: ButtonPaint, key: PaletteKey, neon: Pick<NeonParams
   };
 }
 
+/** Host font size of the clock digits per size: 2, 3 and 4 px pixel font cells. */
+export const CLOCK_FONT: Readonly<Record<ClockSize, number>> = { small: 20, normal: 30, large: 40 };
+/** Clock frame border and padding in CSS px (the frame is border-box around the digits). */
+export const CLOCK_BORDER = 2;
+export const CLOCK_PAD_X = 6;
+export const CLOCK_PAD_Y = 2;
+/** Scale of the clock at the top of a pulse. */
+export const CLOCK_PULSE_SCALE = 1.18;
+
+/** CSS for the clock frame and digits. */
+export interface ClockStyle {
+  fontPx: number;
+  border: string;
+  boxShadow: string;
+  background: string;
+}
+
+/**
+ * Pure: the clock frame CSS for a view and the neon state. The frame takes the digits' tone at the
+ * current saturation and glows by the current glow alpha; time played gets a fainter frame. A pulse
+ * doubles the glow.
+ */
+export function clockStyle(v: Pick<ClockView, 'tone' | 'size' | 'mode'>, neon: Pick<NeonParams, 'saturation' | 'glowAlpha'>, pulse = false): ClockStyle {
+  const k = VECTOR_TONES[v.tone];
+  const faint = v.mode === 'elapsed';
+  const blur = glowBlur(neon.glowAlpha) * (pulse ? 2 : 1) * (faint ? 0.6 : 1);
+  return {
+    fontPx: CLOCK_FONT[v.size],
+    border: `${CLOCK_BORDER}px solid ${toneColour(k.fill, neon.saturation, faint ? 0.45 : 0.95)}`,
+    boxShadow: `0 0 ${Math.round(blur * 10) / 10}px ${toneColour(k.glow, neon.saturation, faint ? 0.35 : 0.8)}`,
+    background: 'rgba(2, 4, 12, 0.6)',
+  };
+}
+
+/** Pure: the drawn frame size in CSS px for a clock text and size (pixel digits, padding, border). */
+export function clockFramePx(text: string, size: ClockSize): { w: number; h: number } {
+  const cell = cellPxOf(CLOCK_FONT[size]);
+  const box = pixelBox(text);
+  return { w: box.wCells * cell + 2 * (CLOCK_PAD_X + CLOCK_BORDER), h: box.hCells * cell + 2 * (CLOCK_PAD_Y + CLOCK_BORDER) };
+}
+
 /** Pure: "L3  Par 1,000  #abcd1234". */
 export function levelLine(levelIndex: number, par: number, hash: string): string {
   return `L${levelIndex}  Par ${formatInt(par)}  #${hash}`;
@@ -266,6 +310,8 @@ export interface Hud {
   /** Free Play infinite lives: the lives slot shows the infinity sign until set off. */
   setInfiniteLives(on: boolean): void;
   setObjective(p: ObjectiveProgress): void;
+  /** hud-clock: draw the level clock (CLOCK_HIDDEN hides it). `pulse` starts one warning pulse. */
+  setClock(v: ClockView, pulse?: boolean): void;
   /** Super kind for the label over the super button. */
   setSuper(kind: SuperKind): void;
   /** Pressed look: true while a finger holds that button (TouchHandle.buttonVisuals().held). */
@@ -496,6 +542,47 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   starFill.setAttribute('data-hud', 'starLine');
   const starTicks = [el('div', 'sow-hud-tick'), el('div', 'sow-hud-tick')];
   bar.append(fill, starFill, ...starTicks);
+  // hud-clock: a box host, a neon frame inside it, the pixel digits inside the frame. Hidden until set.
+  const clockHost = el('div', 'sow-hud-item');
+  clockHost.setAttribute('data-hud', 'clock');
+  clockHost.style.display = 'none';
+  clockHost.style.alignItems = 'center';
+  clockHost.style.overflow = 'visible';
+  const clockFrame = el('div');
+  clockFrame.setAttribute('data-hud', 'clock-frame');
+  clockFrame.style.boxSizing = 'border-box';
+  clockFrame.style.display = 'inline-flex';
+  clockFrame.style.alignItems = 'center';
+  clockFrame.style.justifyContent = 'center';
+  clockFrame.style.padding = `${CLOCK_PAD_Y}px ${CLOCK_PAD_X}px`;
+  clockFrame.style.transition = `transform ${CLOCK_PULSE_MS / 2}ms ease-out, box-shadow ${CLOCK_PULSE_MS / 2}ms ease-out`;
+  const clockDigits = el('div');
+  clockDigits.setAttribute('data-hud', 'clock-digits');
+  clockDigits.style.lineHeight = '1';
+  clockFrame.append(clockDigits);
+  clockHost.append(clockFrame);
+  let clockNow: ClockView | null = null;
+  let clockDrawn = '';
+  let clockPulseTimer: ReturnType<typeof setTimeout> | undefined;
+  const paintClock = (pulse: boolean): void => {
+    const v = clockNow;
+    if (v === null || v.mode === 'hidden') {
+      clockHost.style.display = 'none';
+      return;
+    }
+    clockHost.style.display = 'flex';
+    const key = `${v.text}|${v.tone}`;
+    if (key !== clockDrawn) {
+      clockDrawn = key;
+      setVectorText(clockDigits, v.text, { tone: v.tone });
+    }
+    const st = clockStyle(v, neon, pulse);
+    clockDigits.style.fontSize = `${st.fontPx}px`;
+    clockFrame.style.border = st.border;
+    clockFrame.style.boxShadow = st.boxShadow;
+    clockFrame.style.background = st.background;
+    clockFrame.style.transform = pulse ? `scale(${CLOCK_PULSE_SCALE})` : 'scale(1)';
+  };
   const par = el('div', 'sow-hud-item', '');
   const lives = el('div', 'sow-hud-item', '');
   const bombs = el('div', 'sow-hud-item', '');
@@ -515,7 +602,7 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   bombLabel.setAttribute('data-hud', 'bomb-label');
   const superName = el('div', 'sow-hud-item');
   superName.setAttribute('data-hud', 'super-label');
-  root.append(bar, objLabel, score, mult, weaponBar, weaponLabel, droneBar, droneLabel, par, bossBarEl, bossNameEl, bossPipsEl, bannerEl, lives, bombs, pause, bombRing, superRing, bombLabel, superName);
+  root.append(bar, objLabel, clockHost, score, mult, weaponBar, weaponLabel, droneBar, droneLabel, par, bossBarEl, bossNameEl, bossPipsEl, bannerEl, lives, bombs, pause, bombRing, superRing, bombLabel, superName);
   // Button look state: neon from applyNeon, bombs and charge from hud:score, held from setHeld.
   let neon: NeonParams = getNeonState().params;
   let bombsLeft = 1;
@@ -586,6 +673,10 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
     show: () => root.classList.add('sow-open'),
     hide: () => {
       root.classList.remove('sow-open');
+      if (clockPulseTimer !== undefined) {
+        clearTimeout(clockPulseTimer);
+        clockPulseTimer = undefined;
+      }
       if (pulseTimer !== undefined) {
         clearInterval(pulseTimer);
         pulseTimer = undefined;
@@ -729,8 +820,24 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
         t.style.left = `${Math.round((at ?? 0) * 1000) / 10}%`;
       });
     },
+    setClock(v, pulse = false) {
+      clockNow = v;
+      if (!pulse) {
+        paintClock(clockPulseTimer !== undefined); // a pulse in flight keeps its scale until its timer settles it
+        return;
+      }
+      if (clockPulseTimer !== undefined) clearTimeout(clockPulseTimer);
+      paintClock(true);
+      // Half the pulse up, half back down: at most one pulse a second, as warnings come no faster.
+      clockPulseTimer = setTimeout(() => {
+        clockPulseTimer = undefined;
+        paintClock(false);
+      }, CLOCK_PULSE_MS / 2);
+    },
     layout(frame, buttons) {
       const B = frame.boxes;
+      setBox(clockHost, B.clock, false);
+      clockHost.style.justifyContent = frame.cls === 'main' ? 'center' : 'flex-start';
       setBox(score, B.score, true);
       score.style.fontSize = `${hudScorePx(B.score)}px`;
       score.style.fontWeight = HUD_SCORE_WEIGHT;
@@ -823,6 +930,7 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
       const offNeon = onNeonChanged((p) => {
         neon = p;
         paintButtons();
+        paintClock(clockPulseTimer !== undefined);
       });
       return () => {
         offNeon();

@@ -83,7 +83,7 @@ import { gateSearch, isDev } from './ui/devGate';
 import { createSplashScreen } from './ui/splash';
 import { createPreviewWorld, previewRect, stepPreview } from './ui/preview';
 import { starsFor } from './game/objective';
-import { fallbackStatus, objectiveProgress } from './ui/objective';
+import { CLOCK_HIDDEN, clockView, fallbackStatus, objectiveProgress, WARN_START, warnStep, type WarnState } from './ui/objective';
 import { settleAdventure } from './ui/outcome';
 import { formatClock } from './ui/format';
 import { bonusLabel } from './ui/parReward';
@@ -433,8 +433,15 @@ async function boot(): Promise<void> {
     if (flow.screen === 'paused') bus.emit('game:resume');
   };
 
+  // hud-clock: warning memory for 'ui:timeWarn', reset whenever emitHud sees a new world.
+  let warnWorld: World | null = null;
+  let warn: WarnState = { ...WARN_START };
   const emitHud = (): void => {
     const s = scoreOf(world);
+    if (warnWorld !== world) {
+      warnWorld = world;
+      warn = { ...WARN_START };
+    }
     // B8: the sim already emits hud:score every HUD_INTERVAL with the super charge as a 0..1
     // fraction; this second emit sent the raw geom count, so the ring and hint flickered
     // between two values and read "ready" after one geom. Only the sim emits hud:score now.
@@ -442,13 +449,21 @@ async function boot(): Promise<void> {
     if (flow.mode === 'endless' || flow.mode === 'freeplay') {
       hud.setLine(flow.mode === 'endless' ? endlessLine(endlessSeed, world.time) : freePlayLine(freePlayArenaName(), freePlayChoice.config.length, world.time));
       hud.setObjective({ label: endlessLabel(bossAlive()), fraction: 0, stars: null }); // "Boss" while one lives; no stars
+      hud.setClock(CLOCK_HIDDEN); // the level line already carries the Endless and Free Play clock
     } else {
       // Reads "Defeat the boss" while the level holds for a living boss (docs/13 boss rule 9).
       // R2: the bar fills toward the objective; the thin star line reads the level's thresholds.
       // T3: on a boss level the bar counts down to the entrance, then drains with the boss health.
       const alive = bossAlive();
       const bossBar = level.boss !== undefined ? { spec: level.boss, hpFraction: alive && bossRead.maxHp > 0 ? bossRead.hp / bossRead.maxHp : 1 } : undefined;
-      hud.setObjective(objectiveProgress(level.objective, snapshotOf(world), alive, targets.stars, bossBar)); // R6: scaled by difficulty
+      const snap = snapshotOf(world);
+      hud.setObjective(objectiveProgress(level.objective, snap, alive, targets.stars, bossBar)); // R6: scaled by difficulty
+      // hud-clock: countdown or time played on the objective's own sim clock, so paused time never counts.
+      const clock = clockView(level.objective, snap.elapsedSec, level.boss !== undefined);
+      const step = warnStep(warn, clock.shownLeft);
+      warn = step.state;
+      hud.setClock(clock, step.warn !== null);
+      if (step.warn !== null) bus.emit('ui:timeWarn', { secondsLeft: step.warn });
     }
   };
 

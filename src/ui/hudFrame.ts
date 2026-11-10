@@ -28,6 +28,11 @@
 // boxes, between the weapon (left) and the drone (right), so the top band stays MAIN_ROWS high.
 // The boss banner (G3A) is not a HUD box: it is a transient line at the top of the play rect, the
 // place overlays use, and it is checked against every HUD rect instead (HudFrame.banner).
+// hud-clock: the level clock has its own framed pixel box, out of the objective bar. Cover puts
+// it in a COVER_CLOCK_ROW row above the bar (the bar, label, level line and column boss rows step
+// down). Main puts it at the left end of the objective area across the bar and level line rows,
+// and the bar, label, level line and boss rows take the rest of that area, so the band and the
+// arena are unchanged. The box is sized for the largest digits (0:10 and under).
 // B9: the main screen bands are measured from the real HUD elements (text row heights, and the
 // button hit rects that Thumbs lays out) instead of fixed generous bands, so the main screen
 // arena is as large as the HUD allows. The arena on main is usually width limited, so the right
@@ -65,6 +70,7 @@ export type BoxId =
   | 'drone'
   | 'droneBar'
   | 'bar'
+  | 'clock'
   | 'objLabel'
   | 'par'
   | 'lives'
@@ -164,6 +170,14 @@ export const COVER_DRONE_ROW = 22;
 export const DRONE_GAP = 8;
 export const MAIN_DRONE_MIN_W = 48;
 export const MAIN_DRONE_MAX_W = 64;
+/** Clock box (hud-clock): wide and tall enough for "0:10" at 4 px cells in its neon frame. */
+export const CLOCK_W = 96;
+export const CLOCK_H = 40;
+/** Main: gap between the clock and the objective bar to its right. Main clock box height (two rows). */
+export const MAIN_CLOCK_GAP = 8;
+export const MAIN_CLOCK_H = 48;
+/** Cover: height of the clock row above the objective bar (box plus a gap). */
+export const COVER_CLOCK_ROW = CLOCK_H + 6;
 /** Main: gap kept between the indicators and the objective or boss boxes to their right. */
 export const MAIN_INDICATOR_PAD = 4;
 /**
@@ -263,7 +277,7 @@ function coverStripBoss(b: Base): BossBoxes {
  * boss that shows up anyway is still drawn. Text is 13 px, the floor, not the old 11.
  */
 function coverColumnBoss(b: Base, lx: number, lw: number): BossBoxes {
-  const t = b.ins.top + COVER_DRONE_ROW;
+  const t = b.ins.top + COVER_DRONE_ROW + COVER_CLOCK_ROW;
   return {
     bossName: box(lx, t + 140, lw - BOSS_PIPS_W, 17, BOSS_TEXT_MIN),
     bossPips: box(lx + lw - BOSS_PIPS_W, t + 140, BOSS_PIPS_W, 17, 0, 'right'),
@@ -311,9 +325,11 @@ function sides(b: Base, strip: boolean): Partial0 {
       // GW1 drone indicator: the row under the weapon, same left edge and width.
       drone: box(lx + COVER_MULT_W + WEAPON_GAP, t + 54, lw - COVER_MULT_W - WEAPON_GAP, 13, 10),
       droneBar: box(lx + COVER_MULT_W + WEAPON_GAP, t + 69, lw - COVER_MULT_W - WEAPON_GAP, WEAPON_BAR_H, 0),
-      bar: box(lx, t + 58 + COVER_DRONE_ROW, lw, 12, 11),
-      objLabel: box(lx, t + 72 + COVER_DRONE_ROW, lw, 30, 11, 'left', true),
-      par: box(lx, t + 106 + COVER_DRONE_ROW, lw, 28, 11, 'left', true),
+      // hud-clock: the clock row above the bar; everything below steps down by COVER_CLOCK_ROW.
+      clock: box(lx, t + 56 + COVER_DRONE_ROW, Math.min(lw, CLOCK_W), CLOCK_H, 0),
+      bar: box(lx, t + 58 + COVER_DRONE_ROW + COVER_CLOCK_ROW, lw, 12, 11),
+      objLabel: box(lx, t + 72 + COVER_DRONE_ROW + COVER_CLOCK_ROW, lw, 30, 11, 'left', true),
+      par: box(lx, t + 106 + COVER_DRONE_ROW + COVER_CLOCK_ROW, lw, 28, 11, 'left', true),
       // V3 boss bar, drawn only while a boss lives: the top strip on a boss run (G3A), the left
       // column under the level line otherwise. The right column, with the moved bomb and super
       // buttons, is untouched either way.
@@ -352,8 +368,14 @@ function topRows(b: Base): Omit<HudBoxes, 'superLabel' | 'bombLabel'> {
   const mx = ins.left + 24;
   const multW = Math.min(sideW, MAIN_MULT_W);
   const wx = mx + multW + WEAPON_GAP;
-  const bossHalf = Math.max(BOSS_PIPS_W + 20, Math.min(objW / 2, livesRight - sideW - cx - 4));
-  const ind = mainIndicators(wx, Math.min(cx - objW / 2, cx - bossHalf) - MAIN_INDICATOR_PAD);
+  // hud-clock: the clock at the left end of the objective area, the bar and its rows to its right.
+  const ox = cx - objW / 2;
+  const clockW = Math.min(CLOCK_W, Math.max(0, objW / 2 - MAIN_CLOCK_GAP));
+  const tx = ox + clockW + MAIN_CLOCK_GAP;
+  const tw = objW - clockW - MAIN_CLOCK_GAP;
+  // The boss row starts at the bar's left edge and stops at the bar's right edge or short of the lives box.
+  const bossW = Math.max(BOSS_PIPS_W + 20, Math.min(tw, livesRight - sideW - 4 - tx));
+  const ind = mainIndicators(wx, ox - MAIN_INDICATOR_PAD);
   return {
     score: box(mx, t + 6, sideW, 32, 28),
     mult: box(mx, t + 38, multW, MAIN_ROWS - 38, 18),
@@ -361,16 +383,18 @@ function topRows(b: Base): Omit<HudBoxes, 'superLabel' | 'bombLabel'> {
     weaponBar: box(wx, t + 54, ind.weaponW, WEAPON_BAR_H, 0),
     drone: box(ind.droneX, t + 38, ind.droneW, 14, 12),
     droneBar: box(ind.droneX, t + 54, ind.droneW, WEAPON_BAR_H, 0),
-    bar: box(cx - objW / 2, t + 8, objW, 20, 14),
-    objLabel: box(cx - objW / 2, t + 8, objW, 20, 14, 'center'),
-    par: box(cx - objW / 2, t + 32, objW, 20, 14, 'center'),
+    clock: box(ox, t + 6, clockW, MAIN_CLOCK_H, 0),
+    bar: box(tx, t + 8, tw, 20, 14),
+    objLabel: box(tx, t + 8, tw, 20, 14, 'center'),
+    par: box(tx, t + 32, tw, 20, 14, 'center'),
     // V3 boss bar: it takes the level line's slot (the HUD hides the line while a boss lives) and the
     // free strip under it, so the band stays MAIN_ROWS high. Name and pips on one row, the thick
-    // hit point bar below, both ending above t + MAIN_ROWS. Centred under the objective bar and, on
-    // a narrow screen, narrowed symmetrically so it stops short of the lives and bombs boxes.
-    bossName: box(cx - bossHalf, t + 31, 2 * bossHalf - BOSS_PIPS_W, 14, BOSS_TEXT_MIN),
-    bossPips: box(cx + bossHalf - BOSS_PIPS_W, t + 31, BOSS_PIPS_W, 14, 0, 'right'),
-    bossBar: box(cx - bossHalf, t + 46, 2 * bossHalf, 12, 0),
+    // hit point bar below, both ending above t + MAIN_ROWS. hud-clock: left aligned under the
+    // objective bar (the clock holds the left end of the area) and, on a narrow screen, cut short
+    // on the right so it stops short of the lives and bombs boxes.
+    bossName: box(tx, t + 31, bossW - BOSS_PIPS_W, 14, BOSS_TEXT_MIN),
+    bossPips: box(tx + bossW - BOSS_PIPS_W, t + 31, BOSS_PIPS_W, 14, 0, 'right'),
+    bossBar: box(tx, t + 46, bossW, 12, 0),
     lives: box(livesRight - sideW, t + 8, sideW, 20, 16, 'right'),
     bombs: box(livesRight - sideW, t + 32, sideW, 18, 14, 'right'),
   };
