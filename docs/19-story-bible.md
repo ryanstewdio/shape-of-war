@@ -1,6 +1,6 @@
 # Shape Legend story bible
 
-Status: approved by Ryan 2026-11-09, with his names: the guide is Torus and the fallen legend is Vecta (replacing the draft names Torus and Vecta, which collided with an AI company and a TV villain). Revised 2026-11-10 with Ryan's opening and level 1 text and "the Dim" capitalised as a name. Builders take scene text from here word for word.
+Status: approved by Ryan 2026-11-09, with his names: the guide is Torus and the fallen legend is Vecta (replacing the draft names Torus and Vecta, which collided with an AI company and a TV villain). Revised 2026-11-10 with Ryan's opening and level 1 text, and guardians 35 to 50 as corrupted servants (Bastion serves Tempest, the Twins serve Prism) and "the Dim" capitalised as a name. Builders take scene text from here word for word.
 
 Scribe, 2026-11-09, from Ryan's interview answers of the same day (brief docs/briefs/scribe-legend-bible.md). Audience: everyone, children included (docs/16). Language: English, short words a 7 year old can follow. This doc is story canon for scene text; it adds no game feature by itself. Builders take scene text from here word for word.
 
@@ -31,9 +31,9 @@ Guardians, in the V9 Adventure order:
 | 20 | Ember, the Hearth Flame | Warmth for all | Burns wild and will not rest |
 | 25 | Mirage, Keeper of True Sight | Showing what is real | Shows only tricks |
 | 30 | Gravitas, Heart of the Deep | The pull that holds Vertane together | Pulls everything to itself |
-| 35 | Bastion, the Last Wall | Shelter in storms | Shuts out and pushes away |
-| 40 | Tempest, Rider of the Rim | Winds that carry light | A storm that circles and never stops |
-| 45 | The Twins, the Bound Stars | Friendship | Their bond became a sweeping bar |
+| 35 | Bastion, the Last Wall | Shelter in storms | A lesser guardian serving Tempest: its towers wall in the storm |
+| 40 | Tempest, Rider of the Rim | Winds that carry light | Vecta's herald: a storm that circles the rim, his eyes on the pilot |
+| 45 | The Twins, the Bound Stars | Friendship | Lesser guardians serving Prism: the guards of Vecta's crown, their bond a sweeping bar |
 | 50 | Prism, Crown of All Colours | Every colour, shared out | Vecta's throne, holding all colour in |
 
 Name check: Vertane, Torus and Vecta are coined for this game; the guardian names are the existing boss ids with new titles. None is taken from another game or franchise to Scribe's knowledge; Fable to confirm with a search before release.
@@ -44,8 +44,8 @@ Each act is ten levels with two guardians (levels 5 and 10 of the act). Each fre
 1. **Act 1, The Waking (levels 1 to 10).** Brood, Warden. The pilot learns to fly and the Dim is named. Torus speaks only in riddles. After Warden is freed, a grey outline is seen far off, then gone. Theme: you were called.
 2. **Act 2, The Turning (levels 11 to 20).** Spindle, Ember. The world's time and warmth return. Torus starts to explain: a legend came before. Theme: the world remembers.
 3. **Act 3, The True Sight (levels 21 to 30).** Mirage, Gravitas. Freeing Mirage shows the truth: Vecta took the light. Freeing Gravitas, the heart, shows Vecta clearly for the first time, on the far rim. Torus stops speaking in riddles and becomes a plain, true ally. Theme: seeing clearly.
-4. **Act 4, The Walls and Winds (levels 31 to 40).** Bastion, Tempest. Vecta stops hiding and sends the Dim harder. The pilot's ship shines brighter with each guardian freed. Theme: standing firm.
-5. **Act 5, The Crown (levels 41 to 50).** The Twins, Prism. The last two guardians. Prism is Vecta's throne. When Prism is freed, all colour returns to the guardians, and Vecta flees beyond the last star to the Hollow Star. The pilot is named a Shape Legend. Theme: becoming the legend.
+4. **Act 4, The Walls and Winds (levels 31 to 40).** Bastion, Tempest. Bastion is a lesser guardian serving Tempest, Vecta's herald; freeing Bastion breaks the wall around the storm. Vecta stops hiding and sends the Dim harder. The pilot's ship shines brighter with each guardian freed. Theme: standing firm.
+5. **Act 5, The Crown (levels 41 to 50).** The Twins, Prism. The last two guardians. The Twins are lesser guardians serving Prism, the guards of Vecta's crown; freeing them leaves the throne unguarded. Prism is Vecta's throne. When Prism is freed, all colour returns to the guardians, and Vecta flees beyond the last star to the Hollow Star. The pilot is named a Shape Legend. Theme: becoming the legend.
 
 Where the fallen legend appears: a grey outline brushing each guardian in its intro (from level 5); seen far off after level 10; seen clearly after level 30; watching from the rim in the level 40 intro; flees after level 50, his one spoken line.
 
@@ -207,33 +207,33 @@ Opening exception (Ryan, 2026-11-10): the opening has 7 panels and two Torus lin
 
 ### Level 35: Bastion (guardian intro)
 - P1 (Bastion silhouette, grey red, a square fort with four corner towers): "Bastion, the Last Wall." | "It gave every shape shelter from storms."
-- P2 (Vecta's outline; the towers turn outward): "Vecta turned its towers outward." | "Now it shuts everyone out."
+- P2 (Vecta's outline; the towers turn outward around a circling storm): "Now it serves Tempest, Vecta's herald." | "Its towers wall the storm in for him."
 - P3 (corner turrets glow in turn; two break; the core opens; a Bulwark arrives): "Its four towers fire lanes. Break two" | "and the core opens. Watch for Bulwarks."
 - P4 (Torus beside the ship): Torus: "He is angry. So you are close."
 
 ### Level 35: Bastion freed
-- P1 (red returns; the towers face inward like arms; a seventh star lights): "Red light returns. The Wall shelters." | "Your ship shines brighter than before."
+- P1 (red returns; the towers face inward like arms; a seventh star lights): "Red light returns. The Wall shelters." | "The storm's wall falls. Tempest is open."
 
 ### Level 40: Tempest (guardian intro)
 - P1 (Tempest silhouette, grey red, racing round the arena edge): "Tempest, Rider of the Rim." | "Its winds carried light to every corner."
-- P2 (Vecta watching from the rim; Tempest's trail turns dim): "Vecta turned its wind into a storm." | "He watches from the rim as it rages."
+- P2 (Vecta watching from the rim through the storm; Tempest's trail turns dim): "Vecta made it his herald and his eyes." | "He watches you through its storm."
 - P3 (slime trail along the wall; a dash line across the floor): "It races the walls and leaves slime." | "Step off its dash. Bombs clear slime."
 - P4 (Torus, glow pulse): Torus: "Be the calm. The storm will follow."
 
 ### Level 40: Tempest freed
-- P1 (red returns; light flows around the rim; an eighth star lights): "Light rides the wind again." | "Vecta is gone from the rim. Two remain."
+- P1 (red returns; light flows around the rim; an eighth star lights): "Light rides the wind again." | "Vecta's grey light leaves. Two remain."
 
 ### Level 45: The Twins (guardian intro)
 - P1 (two silhouettes, grey red, a bright bar between them): "The Twins, the Bound Stars." | "Two friends who never left each other."
-- P2 (Vecta's outline; the bond between them turns into a blade of light): "Vecta turned their bond into a bar." | "It sweeps the floor as they turn."
+- P2 (Vecta's outline above a crown; the bond between the Twins turns into a blade of light): "Vecta set them to guard his crown." | "Their bond became a bar of light."
 - P3 (the bar sweeps; rings with gaps; one twin dims, the other speeds up): "Keep clear of the bar between them." | "When one falls, the other gets fast."
 - P4 (Torus beside the ship): Torus: "Free them both. A bond can heal."
 
 ### Level 45: The Twins freed
-- P1 (both twins glow red and gold, the bar becomes a soft ribbon; a ninth star lights): "The bond is light again, not a bar." | "Nine stars shine. One crown is left."
+- P1 (both twins glow red and gold, the bar becomes a soft ribbon; a ninth star lights): "The bond is light again, not a bar." | "Nine stars shine. The crown is open."
 
 ### Level 50: Prism (guardian intro)
-- P1 (Prism silhouette, all grey, the outline of a crown): "Prism, Crown of All Colours." | "It shared every colour with the world."
+- P1 (Prism silhouette, all grey, the outline of a crown): "Prism, Crown of All Colours." | "Its guards are free. It stands alone."
 - P2 (Vecta's grey outline above Prism, Prism holding colours locked inside): "Vecta made it his throne." | "It holds every colour in, for him alone."
 - P3 (Prism cycles through each guardian's attack as small icons; it flashes white): "It uses every guardian's trick in turn." | "Strike hard when it flashes white."
 - P4 (Torus, full size, every shape in it glowing): Torus: "Every legend began like you, {callsign}."
