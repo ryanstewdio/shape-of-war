@@ -1,0 +1,9 @@
+HAND-OFF ledger: start-card
+Branch: feat/ledger-start-card  Head: 14ef3e4 (code; this hand-off is the next commit)
+Files changed: src/ui/intro.ts, src/ui/vectorFont.ts ("&" glyph), src/ui/objective.ts (clockView, clockShown), src/core/settings.ts (resetProgress), src/main.ts (Return to Menu action), src/ui/settings.ts (reset confirm text only); tests/ui/intro, r6Layout, hudClock, vectorFont; tests/story/storage; tests/qa/storageKeysV2
+Tests added: intro +6 (stack order, Return to Menu tap and flow quit, Endless and Ready, mission tones and frame, sticky CSS), hudClock +4 (destroy and boss hidden, HUD hides, no warnings), storage reset rewritten 1, storageKeysV2 updated 1
+npm test: pass except the accepted generator perf test (200 levels under 500 ms)  npm run build: pass
+How to verify on device: 1. Adventure level 6: LEVEL 6 small, framed mission headline, one goal line, star row, New: icons, chips, Start beside Return to Menu, Details. 2. Return to Menu goes to the main menu, level not started. 3. Destroy and boss levels: no HUD clock; score and survive levels count down with warnings. 4. Settings, Reset progress twice (text says story and call sign), then Adventure plays the opening and asks for a call sign. 5. Cover screen: nothing clipped; with Details open, Start and Return to Menu stay on screen.
+Dependencies requested: none
+Requests (changes outside my ownership): src/ui/settings.ts confirmation text (RESET_CONFIRM_TEXT, RESET_DONE_TEXT) was needed for "the confirmation text says so"; please accept. Card CSS lives in intro.ts (INTRO_CSS, injected once) so dom.ts stayed untouched.
+Known gaps: checked in headless Chromium at 832x750, 960x411, 740x360 and 360x740 (no scroll on any with Details closed), not on the phone. Mission frame glows through the vectorFont sheet, so it follows applyNeon like the glyphs.
