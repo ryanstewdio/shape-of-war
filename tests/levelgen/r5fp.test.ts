@@ -50,8 +50,8 @@ describe('R5 bosses', () => {
         const e = entrances(d);
         expect(e.map((x) => x.sec)).toEqual([100, 400]);
         expect(e[0]?.sec ?? Infinity).toBeLessThanOrEqual(120);
-        // Flat: the ladder (warden, brood); a drum alternates its two bosses, which here coincide.
-        expect(e.map((x) => x.id)).toEqual(['warden', 'brood']);
+        // Flat: the ladder (brood, warden); a drum alternates its two bosses, which here coincide.
+        expect(e.map((x) => x.id)).toEqual(['brood', 'warden']);
       }
     }
   });

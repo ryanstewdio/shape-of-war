@@ -179,8 +179,8 @@ describe('flat invariants: the V1 to V5 configs and Endless are byte for byte as
       for (const seed of [1, 42]) for (let s = 0; s <= 20; s++) e = fold(e, canonicalJson(generateEndlessSegment(seed, s, cfg)));
       return fmix32(e).toString(16);
     };
-    expect(pin({ ...DEFAULT_GEN_CONFIG, enableLeaver: false })).toBe('4833a515');
-    expect(pin(DEFAULT_GEN_CONFIG)).toBe('35194387');
+    expect(pin({ ...DEFAULT_GEN_CONFIG, enableLeaver: false })).toBe('98c5ab3d');
+    expect(pin(DEFAULT_GEN_CONFIG)).toBe('37a6f8bd');
   });
 
   it('older configs keep their boss versions and entrances', () => {

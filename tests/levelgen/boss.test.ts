@@ -15,6 +15,7 @@ import {
   bossForSegment,
   bossHazards,
   bossOfNumber,
+  t3BossForLevel,
   bossTierOf,
   sameBoss,
 } from '../../src/levelgen/boss';
@@ -153,13 +154,14 @@ describe('bossForSegment', () => {
 
   it('walks the same list with the same pass rule and enters 10 s into the segment', () => {
     expect(BOSS_SEGMENT_AT_SEC).toBe(10);
-    expect(bossForSegment(6)).toEqual({ id: 'warden', tier: 1, atSec: 10, hpMul: 1 });
-    expect(bossForSegment(12)?.id).toBe('brood');
+    // Guardian order (Ryan, 2026-11-10): Endless opens Brood then Warden, no first fight discount.
+    expect(bossForSegment(6)).toEqual({ id: 'brood', tier: 1, atSec: 10, hpMul: 1 });
+    expect(bossForSegment(12)?.id).toBe('warden');
     expect(bossForSegment(60)).toEqual({ id: 'prism', tier: 4, atSec: 10, hpMul: 1 });
     expect(bossForSegment(66)).toEqual({ id: 'ember', tier: 2, atSec: 10, hpMul: 1.25 });
     for (let j = 1; j <= 100; j++) {
-      const lvl = bossForLevel(5 * j);
-      expect(bossForSegment(6 * j)).toEqual(lvl === null ? null : { ...lvl, atSec: 10 });
+      const lvl = t3BossForLevel(5 * j, 10);
+      expect(bossForSegment(6 * j)).toEqual(lvl === null ? null : { ...lvl, hpMul: j === 1 ? 1 : lvl.hpMul });
     }
   });
 });
