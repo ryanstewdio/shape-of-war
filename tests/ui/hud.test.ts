@@ -76,8 +76,8 @@ describe('hud', () => {
     expect(due(0, 100)).toBe(true);
   });
 
-  it('level line carries index, par and hash', () => {
-    expect(levelLine(3, 1500, 'abcd1234')).toBe('L3  Par 1,500  #abcd1234');
+  it('level line carries index and par, and the hash with the dev flag', () => {
+    expect(levelLine(3, 1500, 'abcd1234', true)).toBe('L3  Par 1,500  #abcd1234');
   });
 });
 

@@ -56,18 +56,18 @@ describe('rename to Shape Legend', () => {
 });
 
 describe('menu footer line', () => {
-  it('reads v3 build <short sha> seed <run seed>', () => {
-    expect(footerLine('abc1234 2026-11-02T10:00Z', 42)).toBe('v3 build abc1234 seed 42');
-    expect(footerLine('abc1234 2026-11-02T10:00Z', 4294967295)).toBe('v3 build abc1234 seed 4294967295');
+  it('reads Shape Legend v<version> (build <short sha>)', () => {
+    expect(footerLine('abc1234 2026-11-02T10:00Z')).toBe('Shape Legend v0.9.0 (build abc1234)');
+    expect(footerLine('abc1234 2026-11-02T10:00Z')).not.toContain('seed');
   });
 
   it('falls back to dev without a usable build id', () => {
     for (const id of [undefined, '', '   ', 'nogit 2026-11-02T10:00Z', 'unknown']) expect(shortSha(id), String(id)).toBe('dev');
-    expect(footerLine(undefined, 7)).toBe('v3 build dev seed 7');
+    expect(footerLine(undefined)).toBe('Shape Legend v0.9.0 (build dev)');
   });
 
-  it('keeps the seed an unsigned 32 bit integer', () => {
-    expect(footerLine('f00d', -1)).toBe('v3 build f00d seed 4294967295');
+  it('prints a plain short sha', () => {
+    expect(footerLine('f00d')).toBe('Shape Legend v0.9.0 (build f00d)');
   });
 
   it('the build id comes from the __BUILD_ID__ define in vite.config.ts', () => {

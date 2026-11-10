@@ -364,6 +364,7 @@ async function boot(): Promise<void> {
   // reducer; none of them touches the world.
   const uiRoot = createUiRoot();
   const hud = createHud(uiRoot);
+  hud.setDevCode(gated.dev); // the level code on the HUD line is a developer item (?dev=1)
   hud.listen(bus);
   let flow: FlowState = bootFlow(menuLevel());
   let intro: IntroGate = NO_INTRO; // B7: level intro card or Endless Ready, holds the sim
@@ -669,6 +670,7 @@ async function boot(): Promise<void> {
     },
     currentNeon: () => currentNeon,
     buildId: __BUILD_ID__,
+    dev: gated.dev,
   });
 
   // B7: boot "Tap to start" (the fullscreen and audio unlock gesture) and the intro overlay.
@@ -772,7 +774,7 @@ async function boot(): Promise<void> {
         const seedNote = customSeed ? `Seed ${runSeed} (typed)` : `Seed ${runSeed}`;
         menu.setContinue(customSeed ? 'Play typed seed' : continueLabel(menuLevel()));
         menu.setInfo(`Level ${adventureLevel()}  ${seedNote}${generator === null ? '  (fixture levels)' : ''}`);
-        menu.setFooter(footerLine(typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : undefined, runSeed));
+        menu.setFooter(footerLine(typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : undefined));
         menu.show();
         break;
       }
@@ -1017,20 +1019,23 @@ async function boot(): Promise<void> {
     };
     // Glow's debug panel binds setShowFps and setGlowPath to a live controller. Changes made in
     // the panel are mirrored into the settings model so the glow path persists too.
-    const panel = installDevPanel({
-      renderer: r,
-      settings,
-      saveSetting,
-      frameTimeMs: () => loop.stats.avgFrameMs,
-      glowPath: settingsModel.state.glowPath,
-    });
-    panel.controller.subscribe((s) => {
-      settingsModel.syncShowFps(s.showFps);
-      if (!query.sprite) settingsModel.syncGlowPath(s.glowPath);
-    });
-    // The real neon slider lives on the Settings screen now (W3 item 4): ?debug no longer opens
-    // Glow's panel and its slider. The panel stays installed for the FPS label it drives.
-    panel.close();
+    // The two finger long press that opens the panel is a developer item: only with ?dev=1.
+    if (gated.dev) {
+      const panel = installDevPanel({
+        renderer: r,
+        settings,
+        saveSetting,
+        frameTimeMs: () => loop.stats.avgFrameMs,
+        glowPath: settingsModel.state.glowPath,
+      });
+      panel.controller.subscribe((s) => {
+        settingsModel.syncShowFps(s.showFps);
+        if (!query.sprite) settingsModel.syncGlowPath(s.glowPath);
+      });
+      // The real neon slider lives on the Settings screen now (W3 item 4): ?debug no longer opens
+      // Glow's panel and its slider. The panel stays installed for the FPS label it drives.
+      panel.close();
+    }
   }
   // R1: the iridescent 4th star follows the neon palette; this listener only reads what applyNeon set.
   onNeonChanged((p) => syncFourthStarStyle(p.saturation, p.glowAlpha));
