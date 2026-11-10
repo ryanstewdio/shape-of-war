@@ -60,6 +60,7 @@ import { projectNodes, type Camera } from './project';
 import { addPondToNodes, type PondWave } from './pondWave';
 import { addPondGlow } from './lattice/pondGlow';
 import { FADE_TEXEL, writeFadeUv } from './lattice/depthFade';
+import { rimTexU, troughHeightFrac, TROUGH_FLOOR_LINE_ALPHA } from './troughDepth';
 
 // Vertex colour line shader. Written in the GLSL style pixi's own programs use: no version line,
 // so GlProgram adds the WebGL1 defines (in, out, finalColor) and it compiles on both contexts.
@@ -275,6 +276,23 @@ function makeFadeTexture(): Texture {
   return new Texture({ source, label: 'tilt-fade' });
 }
 
+/** Two texels, premultiplied: white at TROUGH_FLOOR_LINE_ALPHA (floor) and opaque white (rim), for the trough rim light. */
+function makeRimTexture(): Texture {
+  const b = Math.round(255 * TROUGH_FLOOR_LINE_ALPHA);
+  const resource = new Uint8Array([b, b, b, b, 255, 255, 255, 255]);
+  const source = new BufferImageSource({ resource, width: 2, height: 1, alphaMode: 'premultiplied-alpha', scaleMode: 'linear', label: 'trough-rim' });
+  return new Texture({ source, label: 'trough-rim' });
+}
+
+/** Pure: write each node's trough rim u (v stays 0) from its rest u: floor lines dim, rim lines full. */
+export function writeRimUv(uv: Float32Array, restX: ArrayLike<number>, count: number, width: number): void {
+  const n = Math.min(count, uv.length >> 1, restX.length);
+  for (let i = 0; i < n; i++) {
+    uv[2 * i] = rimTexU(troughHeightFrac(restX[i] ?? 0, width));
+    uv[2 * i + 1] = 0;
+  }
+}
+
 /** Create the lattice and dust views. dotTexture is a small soft dot (one source for all motes). */
 export function createLatticeView(dotTexture: Texture): LatticeView {
   const lines = new Container({ label: 'lattice' });
@@ -297,6 +315,7 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   let drum: Drum | null = null;
   let glassTex: Texture | null = null;
   let fadeTex: Texture | null = null;
+  let rimTex: Texture | null = null;
   let layoutNow: LatticeLayout | null = null;
   let lift: Float32Array = new Float32Array(0);
   let pond: readonly PondWave[] = [];
@@ -348,7 +367,15 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   function applyLineTexture(): void {
     if (!gpu) return;
     let t: Texture = Texture.WHITE;
-    if (drum) {
+    if (drum && drum.trough && layoutNow) {
+      // Glow trough-depth: each node's u picks its rim light from its rest u, written once here
+      // (nothing on a trough is behind the glass, so the glass texel is never needed).
+      rimTex ??= makeRimTexture();
+      t = rimTex;
+      const uv = gpu.uvBuf.data;
+      if (uv instanceof Float32Array) writeRimUv(uv, layoutNow.restX, layoutNow.count, drum.width);
+      gpu.uvBuf.update();
+    } else if (drum) {
       glassTex ??= makeGlassTexture();
       t = glassTex;
     } else if (camera && layoutNow && arenaNow) {
@@ -373,9 +400,10 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   function drumFrame(s: LatticeSim, g: Gpu, d: Drum): void {
     writeLift(s, lift, latticeAlpha(s));
     addPondToNodes(g.positions, s.layout.restX, s.layout.restY, s.layout.free, pond, lift, pondGlowBuf, d.period);
-    const uv = g.uvBuf.data;
+    // A trough keeps the rim light u written in applyLineTexture: no per frame uv upload.
+    const uv = d.trough ? null : g.uvBuf.data;
     drumProjectNodes(g.positions, lift, s.layout.count, d, uv instanceof Float32Array ? uv : null);
-    g.uvBuf.update();
+    if (!d.trough) g.uvBuf.update();
   }
 
   /** Tilt only: lift and project the frame just written into the position buffer. */
@@ -550,6 +578,8 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
       glassTex = null;
       fadeTex?.destroy(true);
       fadeTex = null;
+      rimTex?.destroy(true);
+      rimTex = null;
       lines.destroy({ children: true });
       glow.destroy({ children: true });
       heatShader.destroy();

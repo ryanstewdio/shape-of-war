@@ -4,6 +4,7 @@ import type { ArenaDef } from '../levelgen/leveldef';
 import { gridSegments, hexagonPoints } from './gridGeom';
 import type { Camera } from './project';
 import { barrierRects } from './membrane';
+import { rimBucketT, rimLineAlpha, rimLineWidth, rimWallAlpha, rimWallWidth } from './troughDepth';
 import { LIP_POST_ALPHA, LIP_TOP_ALPHA, lipPosts, obstaclePolys, outlinePoints, projectFlat, projectLifted, WALL_LIP } from './tiltGeom';
 
 /**
@@ -169,4 +170,50 @@ export function drawDrumGrid(
   for (const r of rings) strokeArc(g, r.front, w, colour, 1);
   for (let i = 0; i + 3 < uFront.length; i += 4) g.moveTo(uFront[i] ?? 0, uFront[i + 1] ?? 0).lineTo(uFront[i + 2] ?? 0, uFront[i + 3] ?? 0);
   if (uFront.length > 0) g.stroke({ width: w, color: colour, alpha: 1 });
+}
+
+/** Stroke a segment list, chaining a segment that starts where the last ended into one polyline. */
+function strokeSegList(g: Graphics, segs: readonly number[], width: number, colour: number, alpha: number, cap: 'butt' | 'round'): void {
+  if (segs.length < 4 || !(alpha > 0)) return;
+  let ex = Number.NaN;
+  let ey = Number.NaN;
+  for (let i = 0; i + 3 < segs.length; i += 4) {
+    const x0 = segs[i] ?? 0;
+    const y0 = segs[i + 1] ?? 0;
+    if (x0 !== ex || y0 !== ey) g.moveTo(x0, y0);
+    ex = segs[i + 2] ?? 0;
+    ey = segs[i + 3] ?? 0;
+    g.lineTo(ex, ey);
+  }
+  g.stroke({ width, color: colour, alpha, cap, join: 'round' });
+}
+
+/**
+ * Glow trough-depth, low tier: the trough grid sorted into height buckets (troughGeom.ts
+ * troughRimSegs), each bucket one stroke, wider and brighter toward the rims (troughDepth.ts).
+ * Static: drawn on arena, tilt, fit or neon change only.
+ */
+export function drawTroughGrid(g: Graphics, buckets: readonly (readonly number[])[], colour: number, scale: number): void {
+  g.clear();
+  const w = gridLineWidth(scale);
+  const n = buckets.length;
+  for (let b = 0; b < n; b++) {
+    const t = rimBucketT(b, n);
+    strokeSegList(g, buckets[b] ?? [], w * rimLineWidth(t), colour, rimLineAlpha(t), 'butt');
+  }
+}
+
+/**
+ * Glow trough-depth: the arena outline on a trough, sorted into height buckets, every pass wider
+ * and brighter toward the rims (alpha capped at 1 per pass). Static, like drawDrumWalls.
+ */
+export function drawTroughWalls(g: Graphics, buckets: readonly (readonly number[])[], colour: number, passes: readonly WallPass[]): void {
+  g.clear();
+  const n = buckets.length;
+  for (const pass of passes) {
+    for (let b = 0; b < n; b++) {
+      const t = rimBucketT(b, n);
+      strokeSegList(g, buckets[b] ?? [], pass.width * rimWallWidth(t), colour, rimWallAlpha(pass.alpha, t), 'round');
+    }
+  }
 }
