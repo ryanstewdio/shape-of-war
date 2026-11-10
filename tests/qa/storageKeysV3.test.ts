@@ -42,7 +42,9 @@ const DIFFICULTY_KEY = 'sow.settings.difficulty';
 const R2_KEYS: readonly string[] = ['sow.progress.difficulty', 'sow.progress.startBonus'];
 /** Free Play options (docs/14, docs/13 key table): the last setup screen choice, one JSON key. */
 const FREE_PLAY_KEY = 'sow.settings.freePlay';
-const ALLOWED_EXTRA: readonly string[] = [TILT_KEY, DIFFICULTY_KEY, ...R2_KEYS, FREE_PLAY_KEY];
+/** Story scenes (docs/19, brief ledger-story-scenes): two device only keys, the call sign and the seen scenes. */
+const STORY_KEYS: readonly string[] = ['sow.progress.callsign', 'sow.progress.storySeen'];
+const ALLOWED_EXTRA: readonly string[] = [TILT_KEY, DIFFICULTY_KEY, ...R2_KEYS, FREE_PLAY_KEY, ...STORY_KEYS];
 
 /** Every key the settings module implements: the exported *_KEY constants plus prefix + each Settings field. */
 function implementedKeys(): string[] {
@@ -80,7 +82,7 @@ function sowLiterals(text: string): string[] {
 describe('storage keys after v3', () => {
   const keys = implementedKeys();
 
-  it('the implemented set is exactly the v2 set, plus at most tilt, difficulty, the two R2 progress keys and freePlay', () => {
+  it('the implemented set is exactly the v2 set, plus at most tilt, difficulty, the two R2 progress keys, freePlay and the two story keys', () => {
     const extra = keys.filter((k) => !V2_KEYS.includes(k));
     expect(extra.filter((k) => !ALLOWED_EXTRA.includes(k)), 'a key outside the v2 set and outside docs/13').toEqual([]);
     expect(keys.filter((k) => V2_KEYS.includes(k)).sort()).toEqual([...V2_KEYS].sort());

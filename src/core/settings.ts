@@ -697,3 +697,73 @@ export function loadFreePlaySetup(storage: StorageLike | null = defaultStorage()
 export function saveFreePlaySetup(s: FreePlaySetup, storage: StorageLike | null = defaultStorage()): void {
   writeRaw(storage, FREE_PLAY_KEY, encodeFreePlaySetup(s));
 }
+
+// Story scenes (docs/19, brief ledger-story-scenes): two device only keys. The call sign is never
+// sent anywhere. Seen scenes map each trigger id to the Adventure level it was shown on, so level
+// select can offer "Replay story" for that level. Reset progress leaves both alone.
+
+export const CALLSIGN_KEY = 'sow.progress.callsign';
+export const STORY_SEEN_KEY = 'sow.progress.storySeen';
+
+/** A call sign: letters and digits only, 3 to 10 characters. */
+export const CALLSIGN_RE = /^[A-Za-z0-9]{3,10}$/;
+export const CALLSIGN_MIN = 3;
+export const CALLSIGN_MAX = 10;
+
+/** Pure: the stored call sign, or null when missing or not valid. */
+export function parseCallsign(raw: string | null): string | null {
+  return raw !== null && CALLSIGN_RE.test(raw) ? raw : null;
+}
+
+export function loadCallsign(storage: StorageLike | null = defaultStorage()): string | null {
+  return parseCallsign(readRaw(storage, CALLSIGN_KEY));
+}
+
+/** Writes only a valid call sign; returns whether it was written. */
+export function saveCallsign(name: string, storage: StorageLike | null = defaultStorage()): boolean {
+  if (!CALLSIGN_RE.test(name)) return false;
+  writeRaw(storage, CALLSIGN_KEY, name);
+  return true;
+}
+
+/** Trigger id to the 1 based Adventure level it was first shown on. */
+export type StorySeen = Readonly<Record<string, number>>;
+
+const STORY_ID_RE = /^[a-z]+(:[a-z]+(\+[a-z]+)?)?$/;
+
+/** Pure: the stored seen map; malformed rows are dropped, a malformed value reads as empty. */
+export function parseStorySeen(raw: string | null): StorySeen {
+  if (raw === null || raw === '') return {};
+  let v: unknown;
+  try {
+    v = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return {};
+  const out: Record<string, number> = {};
+  for (const [k, lvl] of Object.entries(v)) {
+    if (!STORY_ID_RE.test(k)) continue;
+    if (typeof lvl !== 'number' || !Number.isInteger(lvl) || lvl < 1) continue;
+    out[k] = lvl;
+  }
+  return out;
+}
+
+export function loadStorySeen(storage: StorageLike | null = defaultStorage()): StorySeen {
+  return parseStorySeen(readRaw(storage, STORY_SEEN_KEY));
+}
+
+/** Pure: the map with `id` marked as shown on `level`; an id already seen keeps its first level. */
+export function markStorySeen(seen: StorySeen, id: string, level: number): StorySeen {
+  if (seen[id] !== undefined || !STORY_ID_RE.test(id)) return seen;
+  return { ...seen, [id]: Math.max(1, Math.floor(level)) };
+}
+
+/** Mark one scene as seen and persist. Returns the new map. */
+export function recordStorySeen(id: string, level: number, storage: StorageLike | null = defaultStorage()): StorySeen {
+  const prev = loadStorySeen(storage);
+  const next = markStorySeen(prev, id, level);
+  if (next !== prev) writeRaw(storage, STORY_SEEN_KEY, JSON.stringify(next));
+  return next;
+}

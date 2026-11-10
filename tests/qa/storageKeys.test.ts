@@ -47,6 +47,10 @@ import {
   FREE_PLAY_KEY,
   DEFAULT_FREE_PLAY_SETUP,
   saveFreePlaySetup,
+  CALLSIGN_KEY,
+  STORY_SEEN_KEY,
+  saveCallsign,
+  recordStorySeen,
 } from '../../src/core/settings';
 import type { StorageLike } from '../../src/core/settings';
 import { stripComments } from './summary';
@@ -57,7 +61,9 @@ import { stripComments } from './summary';
  * sow.schema is the storage schema version, default 1, bump and migrate on shape change.
  */
 const IMPLEMENTED_KEYS: readonly string[] = [
+  'sow.progress.callsign', // story scenes (docs/19): the pilot's call sign, device only
   'sow.progress.difficulty', // R2: the card's last difficulty choice
+  'sow.progress.storySeen', // story scenes (docs/19): trigger id to the level it was shown on
   'sow.progress.runSeed',
   'sow.progress.startBonus', // R2: the par reward held for the next level start
   'sow.progress.unlocked',
@@ -173,6 +179,8 @@ describe('declared storage keys', () => {
     LAST_DIFFICULTY_KEY,
     START_BONUS_KEY,
     FREE_PLAY_KEY,
+    CALLSIGN_KEY,
+    STORY_SEEN_KEY,
   ];
 
   it('the exported constants are exactly the implemented key set', () => {
@@ -216,6 +224,8 @@ describe('keys written at run time', () => {
     saveLastDifficulty('insane', store);
     savePendingBonus({ level: 3, bonus: { kind: 'bomb' } }, store);
     saveFreePlaySetup(DEFAULT_FREE_PLAY_SETUP, store);
+    saveCallsign('NovaFox', store);
+    recordStorySeen('opening', 1, store);
     loadRunSeed(() => 123456, store);
     unlockLevel(4, store);
     recordAdventureScore(1, 2500, 1, store);

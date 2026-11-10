@@ -56,10 +56,22 @@ export function levelAriaLabel(e: LevelEntry): string {
 export interface LevelSelectActions {
   play(index: number): void;
   back(): void;
+  /** Story scenes (docs/19): replay the scenes already seen on this level. */
+  replay?(index: number): void;
 }
 
 export interface LevelSelectScreen extends Screen {
-  open(unlocked: number, scores: Readonly<AdventureScores>): void;
+  /** `story`: levels whose scenes were seen; non empty shows the "Replay story" entry. */
+  open(unlocked: number, scores: Readonly<AdventureScores>, story?: ReadonlySet<number>): void;
+}
+
+export const REPLAY_STORY_LABEL = 'Replay story';
+export const REPLAY_DONE_LABEL = 'Play levels';
+
+/** Pure: what a level tap does: play it, replay its story, or nothing (story mode, no scenes). */
+export function levelTapAction(index: number, replayMode: boolean, story: ReadonlySet<number>): 'play' | 'replay' | 'none' {
+  if (!replayMode) return 'play';
+  return story.has(index) ? 'replay' : 'none';
 }
 
 export function createLevelSelect(parent: HTMLElement, a: LevelSelectActions): LevelSelectScreen {
@@ -73,6 +85,8 @@ export function createLevelSelect(parent: HTMLElement, a: LevelSelectActions): L
   let unlocked = 1;
   let scores: Readonly<AdventureScores> = {};
   let page = 0;
+  let story: ReadonlySet<number> = new Set<number>();
+  let replayMode = false;
   const pixelButton = (label: string, onTap: () => void): HTMLButtonElement => {
     const b = button('', onTap);
     setVectorText(b, label);
@@ -80,7 +94,13 @@ export function createLevelSelect(parent: HTMLElement, a: LevelSelectActions): L
   };
   const prev = pixelButton('Prev', () => paint(page - 1));
   const next = pixelButton('Next', () => paint(page + 1));
-  row.append(prev, next, pixelButton('Back', a.back));
+  // Story scenes (docs/19): one toggle; while on, a tap on a level with seen scenes replays them.
+  const replay = button(REPLAY_STORY_LABEL, () => {
+    replayMode = !replayMode;
+    paint(page);
+  });
+  replay.setAttribute('data-story', 'replay');
+  row.append(prev, next, replay, pixelButton('Back', a.back));
   s.root.append(title, grid, info, row);
 
   function paint(p: number): void {
@@ -89,7 +109,17 @@ export function createLevelSelect(parent: HTMLElement, a: LevelSelectActions): L
     grid.replaceChildren(
       ...lp.entries.map((e) => {
         // Ryan (font check): the level number is in the pixel font; the star glyphs stay plain.
-        const b = button('', () => a.play(e.index));
+        const b = button('', () => {
+          const act = levelTapAction(e.index, replayMode, story);
+          if (act === 'play') a.play(e.index);
+          else if (act === 'replay') a.replay?.(e.index);
+        });
+        if (replayMode) {
+          const on = story.has(e.index);
+          b.classList.toggle('sow-on', on);
+          b.setAttribute('aria-disabled', String(!on));
+          if (!on) b.style.opacity = '0.35';
+        }
         const num = el('span', 'sow-level-num');
         setVectorText(num, String(e.index));
         b.append(num, el('span', 'sow-level-stars', starGlyphs(e.stars)));
@@ -99,16 +129,21 @@ export function createLevelSelect(parent: HTMLElement, a: LevelSelectActions): L
         return b;
       }),
     );
-    info.textContent = `Page ${lp.page + 1} of ${lp.pages}`;
+    info.textContent = replayMode ? 'Tap a level to replay its story' : `Page ${lp.page + 1} of ${lp.pages}`;
+    replay.textContent = replayMode ? REPLAY_DONE_LABEL : REPLAY_STORY_LABEL;
+    replay.classList.toggle('sow-on', replayMode);
+    replay.style.display = story.size > 0 && a.replay !== undefined ? '' : 'none';
     prev.style.visibility = lp.page > 0 ? 'visible' : 'hidden';
     next.style.visibility = lp.page < lp.pages - 1 ? 'visible' : 'hidden';
   }
 
   return {
     ...s,
-    open(u, sc) {
+    open(u, sc, st) {
       unlocked = u;
       scores = sc;
+      story = st ?? new Set<number>();
+      replayMode = false;
       paint(pageCount(u) - 1);
       s.show();
     },
