@@ -47,6 +47,10 @@ export interface Events {
   /** Tester 2 scroll bar wave: an info screen scrolled. delta in CSS px since the last emit (positive is down), progress 0 at top to 1 at bottom. Emitted at most once per animation frame by src/ui/scrollbar.ts; src/audio turns it into a tick. */
   'ui:scroll': { delta: number; progress: number };
   /** P1 story scenes (Morpheus stub, docs/19): Ledger's scene player to Chorus. phase 'start' when a scene opens, 'panel' on each panel shown (panel index from 0), 'end' when it closes or is skipped. */
+  /** Wave C stub: Swarm to Glow, Chorus and Ledger. A special (hunt) enemy spawned, was destroyed, or escaped. */
+  'sim:special': { id: number; x: number; y: number; phase: 'spawn' | 'kill' | 'escape' };
+  /** Wave C stub: Ledger's HUD clock to Chorus. Time left on a timed objective crossed 60 or 30 seconds, then every whole second from 10 down to 1 (paused time does not count). */
+  'ui:timeWarn': { secondsLeft: number };
   'ui:story': { id: string; type: 'opening' | 'briefing' | 'guardian' | 'freed'; panel: number; phase: 'start' | 'panel' | 'end' };
   'game:over': { score: number; stars: 0 | 1 | 2 | 3; levelIndex: number; mode: 'adventure' | 'endless' };
   'hud:score': { score: number; multiplier: number; lives: number; bombs: number; superCharge: number };
