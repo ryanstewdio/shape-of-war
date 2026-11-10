@@ -48,7 +48,9 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const files = walk(ROOT);
+/** Local native build outputs and cap sync copies of dist (git ignored, never committed): skipped so a Mac Android build does not trip the scan. */
+const NATIVE_BUILD_DIRS: readonly string[] = ['android/app/build/', 'android/build/', 'android/.gradle/', 'android/app/src/main/assets/public/', 'ios/App/App/public/', 'ios/App/build/', 'ios/DerivedData/'];
+const files = walk(ROOT).filter((f) => !NATIVE_BUILD_DIRS.some((d) => f.startsWith(d)));
 const assets = files.filter((f) => ASSET_EXT.test(f));
 
 /** Pure: assets that are neither a PWA icon nor an image under docs/ref/. */

@@ -95,6 +95,7 @@ import { musicCue, type MusicCue } from './ui/musicFlow';
 import { createBootScreen } from './ui/boot';
 import { arenaName, armIntro, createIntroScreen, endlessIntroCard, introActive, introCard, NO_INTRO, startIntro, tickIntro, type IntroGate } from './ui/intro';
 import { createResultsScreen } from './ui/results';
+import { createDoubleBack, installBackButton } from './native/backButton';
 import { createSettingsModel, createSettingsScreen } from './ui/settings';
 
 // Foundry's generator, if src/levelgen/generator.ts exists at build time. import.meta.glob
@@ -906,6 +907,20 @@ async function boot(): Promise<void> {
 
   bus.on('game:start', (p) => dispatch({ type: 'start', mode: p.mode, levelIndex: p.levelIndex }));
   bus.on('game:pause', () => dispatch({ type: 'pause' }));
+  // Android back (Ryan 2026-11-10): pause in a level, previous screen elsewhere, double back on the menu exits. No-op on the web.
+  const menuBack = createDoubleBack(() => performance.now());
+  installBackButton(() => {
+    const s = flow.screen;
+    if (s === 'playing') bus.emit('game:pause');
+    else if (s === 'paused') bus.emit('game:resume');
+    else if (s === 'levels') dispatch({ type: 'closeLevels' });
+    else if (s === 'freeplay') dispatch({ type: 'closeFreePlay' });
+    else if (s === 'settings') dispatch({ type: 'closeSettings' });
+    else if (s === 'results') dispatch({ type: 'menu' });
+    else if (menuBack() === 'exit') return 'exit';
+    else menu.setInfo('Press back again to exit');
+    return 'handled';
+  });
   bus.on('game:resume', () => dispatch({ type: 'resume' }));
   bus.on('game:quit', () => dispatch({ type: 'quit' }));
   bus.on('game:over', onGameOver);
