@@ -8,6 +8,7 @@
 //   profile slope, so steep ground near the rims reads as steep on every effects tier.
 import { troughSlope } from '../core/trough';
 import { troughProject, type Drum, type DrumPoint } from './drum';
+import { rimBucket, troughHeightFrac, TROUGH_RIM_BUCKETS } from './troughDepth';
 
 /** Sample spacing along u for outlines and grid lines on a trough, arena units. */
 export const TROUGH_SAMPLE_U = 16;
@@ -113,6 +114,58 @@ export function troughGridSegs(d: Drum, segs: readonly number[], out: number[], 
       py = pt.y;
     }
   }
+}
+
+/** Pure: empty segment lists, one per rim height bucket. */
+export function rimBuckets(buckets: number = TROUGH_RIM_BUCKETS): number[][] {
+  const n = Math.max(1, Math.round(buckets));
+  const out: number[][] = [];
+  for (let i = 0; i < n; i++) out.push([]);
+  return out;
+}
+
+/**
+ * Pure (glow trough-depth): flat arena segments [x0, y0, x1, y1, ...] projected onto the trough
+ * and cut about every step of u, as in troughGridSegs, but each piece sorted into the height
+ * bucket of its midpoint (troughDepth.ts rimBucket), so a static layer can stroke the rims wider
+ * and brighter than the floor with one stroke per bucket. Clears every list in out first.
+ */
+export function troughRimSegs(d: Drum, segs: readonly number[], out: number[][], step: number = TROUGH_SAMPLE_U): void {
+  for (const l of out) l.length = 0;
+  const nb = out.length;
+  if (nb === 0) return;
+  const s = step > 0 ? step : TROUGH_SAMPLE_U;
+  for (let i = 0; i + 3 < segs.length; i += 4) {
+    const x0 = segs[i] ?? 0;
+    const y0 = segs[i + 1] ?? 0;
+    const x1 = segs[i + 2] ?? 0;
+    const y1 = segs[i + 3] ?? 0;
+    const n = Math.max(1, Math.ceil(Math.abs(x1 - x0) / s));
+    troughProject(x0, y0, 0, d, pt);
+    let px = pt.x;
+    let py = pt.y;
+    for (let k = 1; k <= n; k++) {
+      const t = k / n;
+      const um = x0 + (x1 - x0) * (t - 0.5 / n);
+      troughProject(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0, d, pt);
+      const list = out[rimBucket(troughHeightFrac(um, d.width), nb)];
+      list?.push(px, py, pt.x, pt.y);
+      px = pt.x;
+      py = pt.y;
+    }
+  }
+}
+
+/** Pure: a closed arena polygon (flat, arena units) as its edge list [x0, y0, x1, y1, ...]. */
+export function polyEdges(poly: readonly number[]): number[] {
+  const n = poly.length >> 1;
+  const out: number[] = [];
+  if (n < 2) return out;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    out.push(poly[2 * i] ?? 0, poly[2 * i + 1] ?? 0, poly[2 * j] ?? 0, poly[2 * j + 1] ?? 0);
+  }
+  return out;
 }
 
 export interface ShadeBand {
