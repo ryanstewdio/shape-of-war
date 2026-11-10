@@ -55,7 +55,7 @@ Stop and report, and never work around the problem, when any of these happens:
 
 ## 7. Commands
 Run these in order and report each result:
-1. `npm ci`
+1. `npm ci --cache /tmp/npm-cache` (the sandbox home folder cannot hold the npm cache)
 2. `CI=true npm test` (the generator timing tests use their CI time budget only when CI is set to true)
 3. `npm run build`
 4. The PixiJS v7 grep, exactly as .github/workflows/ci.yml runs it. It must print nothing:
