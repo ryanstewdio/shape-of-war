@@ -29,20 +29,20 @@ afterEach(() => {
 });
 
 describe('absent config is today', () => {
-  // Hashes taken from main (64a20eb) before this change: def, then segments 0, 6 and 13.
+  // Hashes taken from main (64a20eb) before this change: def, then segments 0, 6 and 13. Segment 6 moved with the guardian order (Brood first, Ryan 2026-11-10); the other two are unchanged.
   const GOLDEN: readonly (readonly [FreePlayArena, boolean, number, string, string])[] = [
-    ['rect', false, 1, 'FD322F91', '8683585A,DA7277F2,0C3BE108'],
-    ['rect', false, 3735928559, '35A51E4E', 'D861D132,AC596B6C,F57AD752'],
-    ['rect', true, 1, '5219FF10', '8683585A,FCDE2ADD,069E0293'],
-    ['rect', true, 3735928559, '0B462C18', 'D861D132,AC596B6C,F57AD752'],
-    ['circle', false, 1, '622679DC', 'EA9CB292,B7CAFB06,BDDC6670'],
-    ['circle', false, 3735928559, '56A8188D', 'CED8C5B9,4510CE8A,615DB7DD'],
-    ['circle', true, 1, '60D7A108', 'EA9CB292,B7CAFB06,C5D8CC4E'],
-    ['circle', true, 3735928559, 'E36A04ED', 'CED8C5B9,B3F0334A,687D1CCA'],
-    ['drum', false, 1, 'CEBEEC73', 'BD6B2C3D,A0529061,5202EADE'],
-    ['drum', false, 3735928559, 'A1EB5989', '377AD182,790D1B91,F0BA4199'],
-    ['drum', true, 1, 'CDE6C706', 'BD6B2C3D,A0529061,CBF3D9AD'],
-    ['drum', true, 3735928559, '7C638F7A', '13D45026,711B686F,10BCBE4B'],
+    ['rect', false, 1, 'FD322F91', '8683585A,EC9E2910,0C3BE108'],
+    ['rect', false, 3735928559, '35A51E4E', 'D861D132,34DD88A9,F57AD752'],
+    ['rect', true, 1, '5219FF10', '8683585A,EB705615,069E0293'],
+    ['rect', true, 3735928559, '0B462C18', 'D861D132,34DD88A9,F57AD752'],
+    ['circle', false, 1, '622679DC', 'EA9CB292,BE0F6AEB,BDDC6670'],
+    ['circle', false, 3735928559, '56A8188D', 'CED8C5B9,CB71BA93,615DB7DD'],
+    ['circle', true, 1, '60D7A108', 'EA9CB292,BE0F6AEB,C5D8CC4E'],
+    ['circle', true, 3735928559, 'E36A04ED', 'CED8C5B9,149636A5,687D1CCA'],
+    ['drum', false, 1, 'CEBEEC73', 'BD6B2C3D,26925123,5202EADE'],
+    ['drum', false, 3735928559, 'A1EB5989', '377AD182,B80F26A8,F0BA4199'],
+    ['drum', true, 1, 'CDE6C706', 'BD6B2C3D,26925123,CBF3D9AD'],
+    ['drum', true, 3735928559, '7C638F7A', '13D45026,23B8FB39,10BCBE4B'],
   ];
   // forge-leaver: with the Leaver off these are main's hashes byte for byte. With it on (the
   // default) the catalogue lists the Leaver and segments from 6 may hold Leaver groups; the arena,
@@ -191,7 +191,7 @@ describe('bosses', () => {
       for (const s of [...SEGMENTS, 3, 13, 23]) expect(freePlaySegment(d, s).boss).toEqual(freePlayBossFor('every3', s, arena === 'drum') ?? undefined);
     }
     const flat = freePlayLevel({ arena: 'rect', barriers: false, seed: 6, config: cfg({ bosses: 'every3' }) });
-    expect([3, 13, 23].map((s) => freePlaySegment(flat, s).boss?.id)).toEqual(['warden', 'brood', 'spindle']);
+    expect([3, 13, 23].map((s) => freePlaySegment(flat, s).boss?.id)).toEqual(['brood', 'warden', 'spindle']);
   });
 
   it('a chosen boss on the R5 cadence on a flat arena; a drum fights it too (R6)', () => {

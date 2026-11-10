@@ -95,7 +95,7 @@ export function bossForLevel(levelIndex: number, atSec: number = BOSS_LEVEL_AT_S
 /**
  * Tester 3 (Ryan: Warden too hard at level 5): version 9 swaps the first two bosses, so pass 1
  * opens with Brood at level 5 and Warden at level 10. Every later boss and every loop is as
- * BOSS_SCHEDULE. Endless and Free Play keep the plain ladder.
+ * BOSS_SCHEDULE. Endless and Free Play use orderedBossOfNumber (same order, no discount).
  */
 export const T3_SWAPPED_BOSSES: Readonly<Record<number, BossId>> = Object.freeze({ 1: 'brood', 2: 'warden' });
 /** Tester 3: the first boss fight of a run (boss number 1, pass 1) has this times its usual hpMul. */
@@ -110,6 +110,18 @@ export function t3BossOfNumber(j: number, atSec: number): BossSpec | null {
   return { id, tier, atSec, hpMul: j === 1 ? base.hpMul * FIRST_FIGHT_HP_MUL : base.hpMul };
 }
 
+/**
+ * Guardian order for Endless and Free Play (Ryan, 2026-11-10): the Adventure pass 1 order (Brood,
+ * Warden, Spindle, Ember, ...) with the plain hpMul ladder. The T3 first fight discount is not
+ * shared: boss number 1 keeps hpMul 1. Later bosses and every loop are as bossOfNumber.
+ */
+export function orderedBossOfNumber(j: number, atSec: number): BossSpec | null {
+  const base = bossOfNumber(j, atSec);
+  if (base === null) return null;
+  const id = T3_SWAPPED_BOSSES[j] ?? base.id;
+  return { id, tier: bossTierOf(id) ?? base.tier, atSec, hpMul: base.hpMul };
+}
+
 /** Version 9 boss of Adventure level n (bossForLevel with the T3 order), or null when n is not a boss level. */
 export function t3BossForLevel(levelIndex: number, atSec: number): BossSpec | null {
   if (bossForLevel(levelIndex, atSec) === null) return null;
@@ -119,7 +131,7 @@ export function t3BossForLevel(levelIndex: number, atSec: number): BossSpec | nu
 /** The boss of Endless segment s (0 based), or null unless s is a positive multiple of 6. */
 export function bossForSegment(segment: number): BossSpec | null {
   if (!Number.isInteger(segment) || segment < BOSS_SEGMENT_EVERY || segment % BOSS_SEGMENT_EVERY !== 0) return null;
-  return bossOfNumber(segment / BOSS_SEGMENT_EVERY, BOSS_SEGMENT_AT_SEC);
+  return orderedBossOfNumber(segment / BOSS_SEGMENT_EVERY, BOSS_SEGMENT_AT_SEC);
 }
 
 /** Rule 12 post step on a boss level: no spawners, wells beyond the first removed. Pure, keeps order. */
@@ -168,7 +180,7 @@ export function freePlayBossNumber(segment: number): number | null {
 
 /**
  * Free Play options (docs/14): the boss of segment s. 'off': none. 'every3': the tier ladder
- * (bossOfNumber) on the Free Play cadence. A BossId: that boss each time, its hit point multiplier
+ * (orderedBossOfNumber) on the Free Play cadence. A BossId: that boss each time, its hit point multiplier
  * from the ladder's pass at the same boss number. On a drum a boss outside FREE_PLAY_DRUM_BOSSES
  * fights as Warden (R6: none is outside it, so the chosen boss and the full ladder both play as on
  * a flat arena). Pure, no draw.
@@ -176,7 +188,7 @@ export function freePlayBossNumber(segment: number): number | null {
 export function freePlayBossFor(bosses: 'off' | 'every3' | BossId, segment: number, cylinder: boolean): BossSpec | null {
   if (bosses === 'off') return null;
   const j = freePlayBossNumber(segment);
-  const ladder = j === null ? null : bossOfNumber(j, BOSS_SEGMENT_AT_SEC);
+  const ladder = j === null ? null : orderedBossOfNumber(j, BOSS_SEGMENT_AT_SEC);
   if (j === null || ladder === null) return null;
   let id: BossId;
   const want = bosses === 'every3' ? ladder.id : bosses;

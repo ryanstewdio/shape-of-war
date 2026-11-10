@@ -49,8 +49,8 @@ const LEVEL_GOLDEN: readonly Row[] = [
 
 /** Endless golden: segment index (0 based), boss, tier, hit point multiplier. Segments 6 to 120. */
 const SEGMENT_GOLDEN: readonly Row[] = [
-  [6, 'warden', 1, 1],
-  [12, 'brood', 1, 1],
+  [6, 'brood', 1, 1],
+  [12, 'warden', 1, 1],
   [18, 'spindle', 1, 1],
   [24, 'ember', 2, 1],
   [30, 'mirage', 2, 1],

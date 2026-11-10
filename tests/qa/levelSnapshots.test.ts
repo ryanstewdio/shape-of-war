@@ -189,12 +189,12 @@ describe('LevelDef boss pins (bosses on, long levels off)', () => {
     });
   });
 
-  it('Endless seed 42 segment 6 carries warden at 10 s and matches its pin', async () => {
+  it('Endless seed 42 segment 6 carries brood at 10 s and matches its pin', async () => {
     const seg = generateEndlessSegment(42, 6, DEFAULT_GEN_CONFIG);
-    expect(seg.boss).toEqual({ id: 'warden', tier: 1, atSec: 10, hpMul: 1 });
+    expect(seg.boss).toEqual({ id: 'brood', tier: 1, atSec: 10, hpMul: 1 });
     expect(seg.generatorVersion).toBe(GENERATOR_VERSION_V3);
     expect(validateSegment(seg, DEFAULT_GEN_CONFIG).errors).toEqual([]);
-    expect(segmentHash(seg)).toBe('80B24CF3');
+    expect(segmentHash(seg)).toBe('22035836');
     const { waves, ...head } = seg;
     const summary = { hash: segmentHash(seg), ...head, waveCount: waves.waves.length, firstWave: waves.waves[0] ?? null, lastWave: waves.waves[waves.waves.length - 1] ?? null };
     await expect(`${JSON.stringify(summary, null, 2)}\n`).toMatchFileSnapshot('./__snapshots__/levels/endless-seed42-segment6-boss.json');

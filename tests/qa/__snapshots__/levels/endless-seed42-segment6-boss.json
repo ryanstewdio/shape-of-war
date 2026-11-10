@@ -1,5 +1,5 @@
 {
-  "hash": "80B24CF3",
+  "hash": "22035836",
   "version": 1,
   "generatorVersion": 3,
   "endlessSeed": 42,
@@ -27,7 +27,7 @@
   ],
   "speedScale": 1.05,
   "boss": {
-    "id": "warden",
+    "id": "brood",
     "tier": 1,
     "atSec": 10,
     "hpMul": 1
