@@ -459,7 +459,8 @@ describe('v2 enemy stage', { timeout: 60_000 }, () => {
     it('J3: unknown generator versions fail', () => {
       const d = v2Level();
       // V3, D13, release polish, R1, R2, R3, T3 and par ramp: 3 to 10 (GENERATOR_VERSION_V3 to _V10) are known, so 11 is the first unknown.
-      d.generatorVersion = 11;
+      // foundry-short-levels: short levels are version 11, so 12 is the first unknown.
+      d.generatorVersion = 12;
       expect(validateLevel(d).errors.some((e) => e.startsWith('J3:'))).toBe(true);
     });
 

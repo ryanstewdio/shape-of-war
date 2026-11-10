@@ -18,6 +18,7 @@ import {
 import {
   BANDS,
   DEFAULT_GEN_CONFIG,
+  V10_GEN_CONFIG,
   ENEMY_BASE,
   ENEMY_GEOMS,
   LEAVER_FROM_LEVEL,
@@ -34,6 +35,10 @@ import { validateLevel, validateSegment } from '../../src/levelgen/validate';
 import { DEVICE_LEVEL, DEVICE_SEED } from './leaverDevice';
 
 const OFF = { ...DEFAULT_GEN_CONFIG, enableLeaver: false };
+// foundry-short-levels: version 11 formation beats draw from the final roster, so a Leaver moves
+// the formations too; the head count identity below is pinned on version 10.
+const ON10 = V10_GEN_CONFIG;
+const OFF10 = { ...V10_GEN_CONFIG, enableLeaver: false };
 const SEEDS = [1, 7, 42, 99, 777, 2024, 0xdeadbeef, 0x4e464f4c];
 const hasLeaver = (d: Pick<LevelDef, 'roster' | 'waves'>): boolean =>
   d.roster.some((e) => e.kind === 'leaver') || d.waves.waves.some((w) => w.entries.some((e) => e.kind === 'leaver'));
@@ -97,8 +102,8 @@ describe('Leaver stage, Adventure', () => {
     let moved = 0;
     for (const s of SEEDS) {
       for (let n = 1; n <= 45; n++) {
-        const on = generateLevel(s, n);
-        const off = generateLevel(s, n, OFF);
+        const on = generateLevel(s, n, ON10);
+        const off = generateLevel(s, n, OFF10);
         if (hasLeaver(on)) {
           moved++;
           // Only the roster, the waves and what par derives from them move.
