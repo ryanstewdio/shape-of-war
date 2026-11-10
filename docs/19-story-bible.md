@@ -1,11 +1,11 @@
 # Shape Legend story bible
 
-Status: approved by Ryan 2026-11-09, with his names: the guide is Torus and the fallen legend is Vecta (replacing the draft names Torus and Vecta, which collided with an AI company and a TV villain). Builders take scene text from here word for word.
+Status: approved by Ryan 2026-11-09, with his names: the guide is Torus and the fallen legend is Vecta (replacing the draft names Torus and Vecta, which collided with an AI company and a TV villain). Revised 2026-11-10 with Ryan's opening and level 1 text and "the Dim" capitalised as a name. Builders take scene text from here word for word.
 
 Scribe, 2026-11-09, from Ryan's interview answers of the same day (brief docs/briefs/scribe-legend-bible.md). Audience: everyone, children included (docs/16). Language: English, short words a 7 year old can follow. This doc is story canon for scene text; it adds no game feature by itself. Builders take scene text from here word for word.
 
 ## World premise
-A human pilot wakes alone in Vertane, a world made of shapes and lines of light.
+A human pilot wakes alone in Vertane, a galaxy made of shapes and lines of light.
 Vertane was in harmony once. Ten guardians kept its colours, and its shapes sang.
 Long ago a champion, the Grey Legend Vecta, grew hungry for their light and took it.
 Without their colour the guardians and the small shapes turned dim, glitchy and hostile.
@@ -15,15 +15,15 @@ To survive, the pilot must pass the trials, free the guardians, and become a Sha
 ## Names
 | What | Name | Notes |
 |---|---|---|
-| The world | Vertane | The world's grid (the lattice) is its body. It remembers every legend. |
-| The corruption | the dim | Shown as colour loss, glitching and dimming. Never as hurt or injury. |
+| The galaxy | Vertane | Its grid (the lattice) is its body. It remembers every legend. |
+| The corruption | the Dim | Shown as colour loss, glitching and dimming. Never as hurt or injury. |
 | The guide | Torus, the Old Shape | Ancient, friendly. Made of every shape at once. Answers the world's call; did not summon the pilot. |
 | The fallen legend | Vecta, the Grey Legend | The last champion before the pilot. Took the guardians' light. Grey, flickering outline of a ship like the pilot's. |
 | The pilot | the player's call sign | Chosen at the start. Silent in every scene. Token `{callsign}` in scene text. |
-| Freed light | shards of light | The geoms. What a dim shape becomes when you break it. |
+| Freed light | Geoms | The captured citizens of Vertane, freed when you break a Dim shape. |
 
 Guardians, in the V9 Adventure order:
-| Level | Guardian | What it kept | What the dim made it |
+| Level | Guardian | What it kept | What the Dim made it |
 |---|---|---|---|
 | 5 | Brood, Keeper of the Nest | Safe homes for small shapes | Guards its nest from everyone |
 | 10 | Warden, Keeper of the Old Gate | The way between places | Shuts every way, opens for no one |
@@ -41,15 +41,15 @@ Name check: Vertane, Torus and Vecta are coined for this game; the guardian name
 ## Arc: five acts, levels 1 to 50
 Each act is ten levels with two guardians (levels 5 and 10 of the act). Each freed guardian lights one star in the sky above the grid (a visual in its freeing panel only, no new menu).
 
-1. **Act 1, The Waking (levels 1 to 10).** Brood, Warden. The pilot learns to fly and the dim is named. Torus speaks only in riddles. After Warden is freed, a grey outline is seen far off, then gone. Theme: you were called.
+1. **Act 1, The Waking (levels 1 to 10).** Brood, Warden. The pilot learns to fly and the Dim is named. Torus speaks only in riddles. After Warden is freed, a grey outline is seen far off, then gone. Theme: you were called.
 2. **Act 2, The Turning (levels 11 to 20).** Spindle, Ember. The world's time and warmth return. Torus starts to explain: a legend came before. Theme: the world remembers.
 3. **Act 3, The True Sight (levels 21 to 30).** Mirage, Gravitas. Freeing Mirage shows the truth: Vecta took the light. Freeing Gravitas, the heart, shows Vecta clearly for the first time, on the far rim. Torus stops speaking in riddles and becomes a plain, true ally. Theme: seeing clearly.
-4. **Act 4, The Walls and Winds (levels 31 to 40).** Bastion, Tempest. Vecta stops hiding and sends the dim harder. The pilot's ship shines brighter with each guardian freed. Theme: standing firm.
+4. **Act 4, The Walls and Winds (levels 31 to 40).** Bastion, Tempest. Vecta stops hiding and sends the Dim harder. The pilot's ship shines brighter with each guardian freed. Theme: standing firm.
 5. **Act 5, The Crown (levels 41 to 50).** The Twins, Prism. The last two guardians. Prism is Vecta's throne. When Prism is freed, all colour returns to the guardians, and Vecta flees beyond the last star to the Hollow Star. The pilot is named a Shape Legend. Theme: becoming the legend.
 
 Where the fallen legend appears: a grey outline brushing each guardian in its intro (from level 5); seen far off after level 10; seen clearly after level 30; watching from the rim in the level 40 intro; flees after level 50, his one spoken line.
 
-Final confrontation (later update): Act 6, The Grey Legend, a trial beyond level 50 at the Hollow Star. The pilot does not destroy Vecta; the pilot surpasses him. When he is beaten his colour returns, he remembers who he was, and he becomes the keeper of the legend trials (see the trials section). Until that update, Adventure after level 50 plays the guardian echoes: the dim sends grey echoes of freed guardians (the existing loop from Ember with more hit points), and the pilot frees them again. No new scenes for echoes.
+Final confrontation (later update): Act 6, The Grey Legend, a trial beyond level 50 at the Hollow Star. The pilot does not destroy Vecta; the pilot surpasses him. When he is beaten his colour returns, he remembers who he was, and he becomes the keeper of the legend trials (see the trials section). Until that update, Adventure after level 50 plays the guardian echoes: the Dim sends grey echoes of freed guardians (the existing loop from Ember with more hit points), and the pilot frees them again. No new scenes for echoes.
 
 ## Scene rules
 - Kinds of scene: opening (once), briefing (new enemy kind or combo), guardian intro (before each boss level), freeing (after the boss is beaten, before results).
@@ -58,23 +58,28 @@ Final confrontation (later update): Act 6, The Grey Legend, a trial beyond level
 - Shown once per save, per trigger. Replayable from level select. One tap skips the whole scene.
 - Voice: narration first. At most one guide line per scene, marked `Torus:`. The pilot never speaks.
 - Text: at most 2 lines per panel, at most 40 characters per line, with `{callsign}` counted as 10 (the call sign cap).
-- Every briefing names the threat and gives one plain counter tip. Every guardian intro gives the title, what the dim did to it, and what to watch for.
+- Every briefing names the threat and gives one plain counter tip. Every guardian intro gives the title, what the Dim did to it, and what to watch for.
 
 Panel notation: `Pn (visual): "line one" | "line two"`.
 
 ## Opening, before level 1
 - P1 (black screen; one grid dot glows, then the lattice draws out from it): "You wake in the dark. No sky. No ground." | "Only lines of light, and one small ship."
-- P2 (pilot ship at centre, glow pulse; call sign picker opens after the text): "The ship is yours. It waits for a name." | "What will Vertane call you?"
-- P3 (the call sign types out above the ship; the grid brightens once): "{callsign}. The grid hums it back," | "as if it waited a long time to hear it."
-- P4 (wide grid; colour drains from the far corners in a slow dim): "This is Vertane, a world of shapes." | "Once it sang. Now the dim is spreading."
-- P5 (Torus fades in beside the ship, nested shapes turning): "Vertane called you here, on purpose." | Torus: "You heard it. Good. Now, the trials."
+- P2 (pilot ship at centre, glow pulse; call sign picker opens after the text): "The ship is yours. It waits for a name." | "What will the Vertane galaxy call you?"
+- P3 (the call sign types out above the ship; the grid brightens once): "{callsign}, the Shape Legend." | "The grid prayers have been answered."
+- P4 (wide grid in full colour, slowly turning): "Welcome to Vertane, a once peaceful" | "and brilliant galaxy."
+- P5 (colour drains from the far corners as the Dim spreads inward, grey static creeping along the lattice): "Until the Dim arrived, an ancient plague" | "spreading to extinguish our brightness."
+- P6 (Torus fades in beside the ship, nested shapes turning): "Vertane called you here... to save us." | Torus: "Good, you can hear the Voice of Vertane."
+- P7 (Torus turns brighter; the ship glow pulses once): Torus: "Let's prepare you for battle."
+
+Opening exception (Ryan, 2026-11-10): the opening has 7 panels and two Torus lines; every other scene keeps the limits below.
 
 ## Scene list, levels 1 to 50
 
 ### Level 1: Grunt (new kind)
-- P1 (Grunt icon, blue, pulsing; grey static flickers on it): "The first dim shapes are small squares." | "Grunts. They come straight at you."
-- P2 (ship circling, shots leading the Grunt): "Keep moving and shoot where they go." | "A touch costs a life, so stay clear."
-- P3 (a Grunt breaks into shards of light): "Break one and it turns to light again." | Torus: "Every shape here was good, once."
+- P1 (Grunt icon, blue, pulsing; grey static flickers on it): "The first Dim shapes are small squares." | "Grunts. They come straight at you."
+- P2 (ship circling, shots leading the Grunt): "Shoot the Dim before it reaches you."
+- P3 (a Grunt breaks into shards of light, the shards brighten into small Geoms): "Break the Dim to free the captured" | "citizens of Vertane, called Geoms."
+- P4 (wide grid; grey swarms gather where Geoms once glowed): "The Dim spreads through Vertane," | "turning Geoms into the swarms you face."
 
 ### Level 1 to 4: Wanderer (new kind, nominal level 2)
 - P1 (Wanderer icon, violet bow tie, spinning): "Wanderers drift and do not hunt you." | "They bounce off walls like lost birds."
@@ -240,13 +245,13 @@ Panel notation: `Pn (visual): "line one" | "line two"`.
 Note: P2 is the one spoken line of Vecta in the whole bible. It is a cliffhanger, said calmly, never shouted; Torus has no line in this scene.
 
 ## Endless and Free Play
-- Endless: the long watch at the rim, where a Shape Legend holds back the dim for as long as it lasts.
+- Endless: the long watch at the rim, where a Shape Legend holds back the Dim for as long as it lasts.
 - Free Play: the training grounds Torus shapes for you, where any shape can be called to practise.
 
 ## Legend trials: future modes
 Hooks only; each mode keeps its own plan in docs/16.
-- **PVP and battle modes (P3, P5): the legend trials.** Once a pilot becomes a Shape Legend, legends test each other in friendly trials to keep their light strong. Nobody is defeated for good: the loser's ship fades and returns, as in Adventure. Shield battle is "the trial of the shield", hockey "the trial of the spark", hide and seek "the trial of the dim" (hide in grey, seek by light). After the Act 6 update, Vecta, restored, keeps the trials as a way to make amends.
-- **Co-op: legends together.** Two or more legends fight the dim side by side. Framing: the world has called more than one pilot, and Torus links their ships with a light thread on the grid. Fits Endless co-op first (the long watch, shared).
+- **PVP and battle modes (P3, P5): the legend trials.** Once a pilot becomes a Shape Legend, legends test each other in friendly trials to keep their light strong. Nobody is defeated for good: the loser's ship fades and returns, as in Adventure. Shield battle is "the trial of the shield", hockey "the trial of the spark", hide and seek "the trial of the Dim" (hide in grey, seek by light). After the Act 6 update, Vecta, restored, keeps the trials as a way to make amends.
+- **Co-op: legends together.** Two or more legends fight the Dim side by side. Framing: the world has called more than one pilot, and Torus links their ships with a light thread on the grid. Fits Endless co-op first (the long watch, shared).
 - **Tanks (P4): war forms.** A legend's ship can take heavier forms, shaped from the guardians' gifts: the Bastion form (overhead tank, heavy and shielded), later the Tempest form (fast) and the Gravitas form (artillery, long range pull and arc). Unlocked as a legend earns them, framed as gifts from freed guardians, never as weapons of a real army. Battles are trials between war forms on the grid, with no real world settings, uniforms or flags.
 
 ## Panel spec for the builder

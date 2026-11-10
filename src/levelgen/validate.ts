@@ -18,6 +18,7 @@ import {
   GENERATOR_VERSION_V8,
   GENERATOR_VERSION_V9,
   GENERATOR_VERSION_V10,
+  GENERATOR_VERSION_V11,
   isT3Version,
   levelMaxLive,
   LEVELDEF_VERSION,
@@ -39,6 +40,7 @@ import {
   speedScaleFor,
 } from './leveldef';
 import { DRUM_BAR_THICK, MEMBRANE_MAX, MEMBRANE_MIN } from './drum';
+import { BOSS_SHORT_LEVEL_AT_SEC, shortLevelSec, shortObjectiveTable } from './short';
 import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, BOSS_SEGMENT_AT_SEC, FIRST_FIGHT_HP_MUL, bossForLevel, bossForSegment, bossTierOf, freePlayBossFor, sameBoss, t3BossForLevel } from './boss';
 import type {
   ArenaDef,
@@ -459,7 +461,7 @@ function checkJson(c: Collector, def: unknown): void {
 function checkVersions(c: Collector, version: number, generatorVersion: number): void {
   c.check('J3', (report) => {
     if (version !== LEVELDEF_VERSION) report(`version ${version} !== ${LEVELDEF_VERSION}`);
-    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9, GENERATOR_VERSION_V10];
+    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9, GENERATOR_VERSION_V10, GENERATOR_VERSION_V11];
     if (!known.includes(generatorVersion)) report(`generatorVersion ${generatorVersion} not ${known.join(', ')}`);
   });
 }
@@ -489,6 +491,8 @@ export interface LevelCheckOptions extends BossCheckOptions {
   enableT3?: boolean;
   /** Tester Tom: with the version 9 flags on, J11 and J12 tie GENERATOR_VERSION_V10 to this flag. */
   enableParRamp?: boolean;
+  /** Short levels: with the version 10 flags on, J12 and J13 tie GENERATOR_VERSION_V11 to this flag. */
+  enableShortLevels?: boolean;
 }
 
 interface BossRules {
@@ -807,7 +811,9 @@ function checkArena(c: Collector, arena: ArenaDef, cylinder = false, circleObsta
 function checkObjective(c: Collector, def: LevelDef, band: Band): void {
   const long = isLongVersion(def.generatorVersion);
   // Release gate R3: version 8 reads the R3 tables (boss levels keep the LONG_BANDS objectives).
-  const l = isR3Version(def.generatorVersion) ? r3ObjectiveTable(band, def.boss !== undefined) : LONG_BANDS[band];
+  // Short levels: a version 11 non boss level holds every objective at its SHORT_LENGTHS length.
+  const shortLevel = def.generatorVersion === GENERATOR_VERSION_V11 && def.boss === undefined;
+  const l = shortLevel ? shortObjectiveTable(band, shortLevelSec(def.runSeed, def.levelIndex)) : isR3Version(def.generatorVersion) ? r3ObjectiveTable(band, def.boss !== undefined) : LONG_BANDS[band];
   const b = long ? { ...BANDS[band], surviveSec: l.surviveSec, scoreTimeSec: l.scoreTimeSec } : BANDS[band];
   const o = def.objective;
   c.check('O1', (report) => {
@@ -983,7 +989,8 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   // Release gate R2: version 7 (the R1 config) brings the boss in at 200 s, versions 5 and 6 at 240 s.
   const v = def.generatorVersion;
   // Release gate R3: version 8 at 120 s.
-  const bossAt = isR3Version(v) ? BOSS_R3_LEVEL_AT_SEC : v === GENERATOR_VERSION_V7 ? BOSS_LONG_LEVEL_AT_SEC : isLongVersion(v) ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
+  // Short levels: version 11 at BOSS_SHORT_LEVEL_AT_SEC (85 s).
+  const bossAt = v === GENERATOR_VERSION_V11 ? BOSS_SHORT_LEVEL_AT_SEC : isR3Version(v) ? BOSS_R3_LEVEL_AT_SEC : v === GENERATOR_VERSION_V7 ? BOSS_LONG_LEVEL_AT_SEC : isLongVersion(v) ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
   checkBoss(c, def.boss, def.generatorVersion, {
     // Tester 3: version 9 reads the T3 order (Brood, then Warden) and the softer first fight.
     want: isT3Version(v) ? t3BossForLevel(def.levelIndex, bossAt) : bossForLevel(def.levelIndex, bossAt),
@@ -1039,10 +1046,19 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   c.check('J12', (report) => {
     // Tester Tom: on a long level, version 10 exactly when the version 9 flags and enableParRamp are on, when the caller says.
     if (opts?.enableLongLevels !== true) return;
-    const flag = opts.enableR1Pacing === true && opts.enableR3Length === true && opts.enableT3 === true && opts.enableParRamp === true;
+    // Short levels: with enableShortLevels on as well, J13 owns the version instead.
+    const flag = opts.enableR1Pacing === true && opts.enableR3Length === true && opts.enableT3 === true && opts.enableParRamp === true && opts.enableShortLevels !== true;
     const v10 = def.generatorVersion === GENERATOR_VERSION_V10;
     if (flag && !v10) report(`generatorVersion ${def.generatorVersion} with enableParRamp on, want ${GENERATOR_VERSION_V10}`);
-    if (!flag && v10) report(`generatorVersion ${GENERATOR_VERSION_V10} with enableParRamp or a version 9 flag off`);
+    if (!flag && v10) report(`generatorVersion ${GENERATOR_VERSION_V10} with enableParRamp or a version 9 flag off, or enableShortLevels on`);
+  });
+  c.check('J13', (report) => {
+    // Short levels: on a long level, version 11 exactly when the version 10 flags and enableShortLevels are on, when the caller says.
+    if (opts?.enableLongLevels !== true) return;
+    const flag = opts.enableR1Pacing === true && opts.enableR3Length === true && opts.enableT3 === true && opts.enableParRamp === true && opts.enableShortLevels === true;
+    const v11 = def.generatorVersion === GENERATOR_VERSION_V11;
+    if (flag && !v11) report(`generatorVersion ${def.generatorVersion} with enableShortLevels on, want ${GENERATOR_VERSION_V11}`);
+    if (!flag && v11) report(`generatorVersion ${GENERATOR_VERSION_V11} with enableShortLevels or a version 10 flag off`);
   });
   checkDrumTaste(c, def, opts);
   c.check('J5', (report) => {

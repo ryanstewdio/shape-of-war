@@ -7,11 +7,11 @@ import { levelWithTarget, objectiveFor } from '../../src/game/difficulty';
 import { createGame } from '../../src/game/game';
 import { evaluateObjective, objectiveMet } from '../../src/game/objective';
 import { generateLevel } from '../../src/levelgen/generator';
-import type { LevelDef, ObjectiveDef } from '../../src/levelgen/leveldef';
+import { V10_GEN_CONFIG, type LevelDef, type ObjectiveDef } from '../../src/levelgen/leveldef';
 
 afterEach(() => bus.clear());
 
-const TESTER_L4 = (): LevelDef => generateLevel(2471588027, 4);
+const TESTER_L4 = (): LevelDef => generateLevel(2471588027, 4, V10_GEN_CONFIG); // V11 made this level a survive; pin V10
 
 function scoreTarget(o: ObjectiveDef): number {
   if (o.kind !== 'scoreInTime') throw new Error('not a score level');

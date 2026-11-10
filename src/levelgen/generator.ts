@@ -27,6 +27,7 @@ import {
   GENERATOR_VERSION_V8,
   GENERATOR_VERSION_V9,
   GENERATOR_VERSION_V10,
+  GENERATOR_VERSION_V11,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_BREATHER_SEC,
@@ -48,6 +49,7 @@ import {
   runsR1,
   runsR3,
   runsParRamp,
+  runsShort,
   runsT3,
   levelMaxLive,
   parRampScale,
@@ -136,6 +138,22 @@ import type { SurfaceKind } from '../core/surface';
 import { applyDrumPattern, pickDrumPattern } from './drum';
 import type { DrumPattern } from './drum';
 import { ALL_ENEMY_KINDS, V2_ENEMY_SALT, V2_SPAWN_UNIT, isV2Kind, planV2Roster, swapGroupKind, v2GroupCount } from './v2enemies';
+import {
+  BOSS_SHORT_LEVEL_AT_SEC,
+  SHORT_BEAT_SALT,
+  SHORT_BOSS_SCALE,
+  SHORT_FORMATION_MIN,
+  SHORT_FORMATION_SALT,
+  beatBudgetAt,
+  beatSlots,
+  shortBossTable,
+  shortLevelSec,
+  shortObjectiveKind,
+  shortObjectiveTable,
+  shortPulse,
+  shortScale,
+} from './short';
+import type { BeatSlot } from './short';
 import { LEAVER_SALT, LEAVER_SPAWN_COST, leaverGroupCount, leaverJoins, leaverLevelWeight, leaverOn, leaverSegmentWeight, leaverSwapChance, rosterWithLeaver } from './leaver';
 
 /** Stage salts, docs/02 section 2. */
@@ -696,6 +714,13 @@ interface WaveRun {
    * Applied after the plan's draws, so it moves no draw. Absent means 1.
    */
   ramp?: number;
+  /**
+   * Version 11 minute beats: surge and rush slots lift each R1 planned wave (not a lull) inside them
+   * to their budget, rounded, at least R1_MIN_WAVE; where the R5 late lift already applies, only the
+   * part above it (the stronger of the two wins, they never stack). Applied
+   * after the plan's draws, so it moves no draw. Absent means no beats.
+   */
+  beats?: readonly BeatSlot[];
 }
 
 /**
@@ -838,12 +863,16 @@ export function generateWaveGroups(r: Rng, run: WaveRun): { waves: WaveDef[]; gr
     // R1: the first wave of each breather is a lull; every other wave draws a flavour.
     const breather = run.pulse !== undefined && inBreather(run.pulse, t);
     // R5 late lift: breathers keep their dip, so the final third still breathes after each peak.
-    if (run.late !== undefined && t >= run.late.fromSec && !breather) budget = Math.max(1, Math.round(budget * run.late.budget));
+    const lift = run.late !== undefined && t >= run.late.fromSec && !breather ? run.late.budget : 1;
+    if (lift !== 1) budget = Math.max(1, Math.round(budget * lift));
+    // Version 11: a surge or rush stronger than the late lift tops the wave up to its own multiplier.
+    const beat = run.beats === undefined ? 1 : beatBudgetAt(run.beats, t) / lift;
     const volatileOn = run.volatile !== undefined && (run.volatileUntilSec === undefined || t < run.volatileUntilSec);
     const plan = run.volatile === undefined || !volatileOn ? null : r1Wave(run.volatile, budget, oldInterval, breather && !wasBreather);
     wasBreather = breather;
     if (plan !== null) budget = plan.budget;
     if (plan !== null && run.ramp !== undefined && plan.flavour !== 'lull') budget = Math.max(R1_MIN_WAVE, Math.round(budget * run.ramp));
+    if (plan !== null && beat > 1 && plan.flavour !== 'lull') budget = Math.max(R1_MIN_WAVE, Math.round(budget * beat));
     const snakeRoom = (): number => b.maxLiveSnakes - snakeTimes.filter((s) => s > t - SNAKE_WINDOW_SEC).length;
     if (plan?.flavour === 'lull') {
       const kind = lullKind(roster, snakeRoom() > 0);
@@ -1095,10 +1124,13 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const t3 = runsT3(cfg);
   // Tester Tom: quarter geom pickup par and the gentler early ramp (version 10).
   const t10 = runsParRamp(cfg);
+  // Short levels: SHORT_LENGTHS lengths, score races, minute beats, the 85 s boss (version 11).
+  const short = runsShort(cfg);
   const ramp = t10 ? parRampScale(levelIndex) : 1;
   const bossLevel = cfg.enableBosses && bossForLevel(levelIndex) !== null;
-  const objTable = r3 ? r3ObjectiveTable(band, bossLevel) : LONG_BANDS[band];
-  const b = r3 ? r3BandParams(band, bossLevel) : long ? longBandParams(band) : BANDS[band];
+  const lengthSec = short && !bossLevel ? shortLevelSec(runSeed, levelIndex) : 0;
+  const objTable = short ? (bossLevel ? shortBossTable(band) : shortObjectiveTable(band, lengthSec)) : r3 ? r3ObjectiveTable(band, bossLevel) : LONG_BANDS[band];
+  const b = short ? { ...BANDS[band], surviveSec: objTable.surviveSec, scoreTimeSec: objTable.scoreTimeSec, rampSec: objTable.rampSec } : r3 ? r3BandParams(band, bossLevel) : long ? longBandParams(band) : BANDS[band];
   // D13: the surface stream is separate, so drawing it here moves no draw of any flat level.
   const surface = pickSurface(seed, levelIndex, cfg);
   const cyl = surface === 'cylinder';
@@ -1109,11 +1141,13 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const loadout = stream(s, SALT.loadout);
   const drone = pickAllowed(loadout, DRONE_KINDS, b.droneWeights, cfg.drones, 'attack');
   const superType = pickAllowed(loadout, SUPER_KINDS, b.superWeights, cfg.supers, 'turbo');
-  const longObjective = long ? generateLongObjective(stream(s, SALT.objective), b, objTable) : null;
+  const longObjective = short && !bossLevel ? shortObjective(runSeed, levelIndex, cfg.enableBosses, lengthSec) : long ? generateLongObjective(stream(s, SALT.objective), b, objTable) : null;
   let objective = longObjective === null ? generateObjective(stream(s, SALT.objective), b) : longObjective.objective;
   const timed = longObjective === null ? objectiveTimeSec(objective) : longObjective.clearSec;
   const scheduleSec =
     longObjective !== null ? longObjective.clearSec + LONG_SCHEDULE_PAD_SEC : timed === null ? b.scheduleSec : Math.max(b.scheduleSec, timed + 10);
+  const beats = short ? beatSlots(stream(s, SHORT_BEAT_SALT), lengthSec, bossLevel ? BOSS_SHORT_LEVEL_AT_SEC : null) : null;
+  const pulse = short ? shortPulse(objTable, bossLevel ? SHORT_BOSS_SCALE : shortScale(lengthSec)) : longPulse(LONG_BANDS[band]);
   const v1List = generateWaveGroups(stream(s, SALT.waves), {
     arena,
     roster: v1Roster,
@@ -1124,11 +1158,12 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     fullRamp: false,
     budgetBonus: 0,
     cylinder: cyl,
-    ...(long ? { pulse: longPulse(LONG_BANDS[band]) } : {}),
+    ...(long ? { pulse } : {}),
     ...(r3 && !bossLevel && longObjective !== null && R5_LATE_BANDS.includes(band) ? { late: { fromSec: round1(longObjective.clearSec * R5_LATE_FROM), budget: ramp < 1 ? PAR_RAMP_LATE_BUDGET : R5_LATE_BUDGET } } : {}),
     // R2 boss level: the R1 plan stops at the entrance, so the fight keeps the version 5 waves.
     ...(r1Waves ? { volatile: stream(s, R1_SALT), ...(bossLevel ? { volatileUntilSec: bossLevelAtSec(cfg) } : {}) } : {}),
     ...(ramp < 1 ? { ramp } : {}),
+    ...(beats !== null ? { beats } : {}),
   });
   // Drum taste: no v2 stage, so the roster stays gentle.
   const v2 = runsV2(cfg, band) && !taste;
@@ -1137,9 +1172,11 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   // Leaver stage: levels from LEAVER_FROM_LEVEL, own stream; null keeps the staged def byte for byte.
   const lw = leaverLevelWeight(levelIndex, band, cfg);
   const leaver = lw > 0 ? applyLeaver(stream(s, LEAVER_SALT), lw, arena, staged.roster, staged, cyl) : null;
-  const { roster, waves: list } = leaver ?? staged;
+  const { roster, waves: preBeat } = leaver ?? staged;
+  // Version 11: formation beats join the waves last, on their own stream, from the final roster.
+  const list = beats !== null ? applyFormations(stream(s, SHORT_FORMATION_SALT), beats, arena, roster, preBeat, b, ramp, cyl) : preBeat;
   const loop = loopFields(list, scheduleSec, b.intervalEndSec, long ? LONG_MIN_REPEAT_SEC : 0);
-  const version = t10 ? GENERATOR_VERSION_V10 : t3 ? GENERATOR_VERSION_V9 : r3 ? GENERATOR_VERSION_V8 : r1 ? GENERATOR_VERSION_V6 : long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION;
+  const version = short ? GENERATOR_VERSION_V11 : t10 ? GENERATOR_VERSION_V10 : t3 ? GENERATOR_VERSION_V9 : r3 ? GENERATOR_VERSION_V8 : r1 ? GENERATOR_VERSION_V6 : long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION;
   const waves = scheduleOf(b, list, loop.from, loop.period, 0, levelMaxLive(band, levelIndex, version));
   if (longObjective !== null && objective.kind === 'destroy') objective = { kind: 'destroy', count: destroyCountFor(waves, longObjective.clearSec) };
   const drawn = generateHazards(stream(s, SALT.hazards), arena, b, cfg, objective, cyl);
@@ -1203,12 +1240,13 @@ export function withLevelBoss(def: LevelDef, cfg: GenConfig): LevelDef {
   // Release gate R2: a boss level built with the R1 config has the R1 waves and the 200 s entrance
   // (version 7); with the R1 pacing off it keeps version 5 (long) or 3.
   // Release gate R3: version 8 with the R3 length on.
-  const generatorVersion = runsParRamp(cfg) ? GENERATOR_VERSION_V10 : runsT3(cfg) ? GENERATOR_VERSION_V9 : runsR3(cfg) ? GENERATOR_VERSION_V8 : runsR1(cfg) ? GENERATOR_VERSION_V7 : long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3;
+  const generatorVersion = runsShort(cfg) ? GENERATOR_VERSION_V11 : runsParRamp(cfg) ? GENERATOR_VERSION_V10 : runsT3(cfg) ? GENERATOR_VERSION_V9 : runsR3(cfg) ? GENERATOR_VERSION_V8 : runsR1(cfg) ? GENERATOR_VERSION_V7 : long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3;
   return { ...def, generatorVersion, hazards: bossHazards(def.hazards), boss };
 }
 
-/** Boss entrance second on a level of this config: 120 s (R3), 200 s (R1 config), 240 s (long levels), else 20 s. */
+/** Boss entrance second on a level of this config: 85 s (short levels), 120 s (R3), 200 s (R1 config), 240 s (long levels), else 20 s. */
 export function bossLevelAtSec(cfg: Readonly<GenConfig>): number {
+  if (runsShort(cfg)) return BOSS_SHORT_LEVEL_AT_SEC;
   if (runsR3(cfg)) return BOSS_R3_LEVEL_AT_SEC;
   if (runsR1(cfg)) return BOSS_LONG_LEVEL_AT_SEC;
   return cfg.enableLongLevels === true ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
@@ -1222,6 +1260,113 @@ export function bossLevelAtSec(cfg: Readonly<GenConfig>): number {
  */
 export function r1LevelOf(levelIndex: number, cfg: GenConfig): boolean {
   return runsR1(cfg) && !(cfg.enableBosses && bossForLevel(levelIndex, BOSS_LONG_LEVEL_AT_SEC) !== null);
+}
+
+/**
+ * Version 11 non boss objective: the kind from shortObjectiveKind, its one parameter the level's
+ * length (destroy: the clear second, the count filled from the waves later). No draw on the
+ * objective stream, and none that a retry moves.
+ */
+export function shortObjective(runSeed: number, levelIndex: number, bosses: boolean, lengthSec: number): { objective: ObjectiveDef; clearSec: number } {
+  const kind = shortObjectiveKind(runSeed, levelIndex, bosses);
+  if (kind === 'survive') return { objective: { kind, durationSec: lengthSec }, clearSec: lengthSec };
+  if (kind === 'destroy') return { objective: { kind, count: 0 }, clearSec: lengthSec };
+  return { objective: { kind, target: PAR_MIN, timeLimitSec: lengthSec }, clearSec: lengthSec };
+}
+
+/** Patterns a formation beat may take, by kind: darts keep their cluster, everything else picks a fresh shape. */
+const FORMATION_PATTERNS: readonly SpawnPattern[] = ['ring', 'corners', 'edges'];
+
+/** One formation beat as placed: second, roster kind, pattern and enemy count. */
+export interface FormationBeat {
+  atSec: number;
+  kind: EnemyKind;
+  pattern: SpawnPattern;
+  count: number;
+}
+
+/**
+ * Version 11 formation beats. Per formation slot, draws (formation stream): the kind (roster
+ * weights, snakes left out, the previous formation's kind left out when another is left), the
+ * pattern (FORMATION_PATTERNS less the previous formation's, darts always cluster), then emitGroup.
+ * The group joins the first wave at or after the slot second (within MAX_FORMATION_LAG_SEC) at
+ * offset 0. Units: the band's budgetEnd times the ramp, at least SHORT_FORMATION_MIN enemies.
+ * Returns a new wave list (the input is not changed); formations is a side output.
+ */
+export function applyFormations(
+  r: Rng,
+  slots: readonly BeatSlot[],
+  arena: ArenaDef,
+  roster: readonly RosterEntry[],
+  waves: readonly WaveDef[],
+  b: BandParams,
+  ramp: number,
+  cyl: boolean,
+  formations: FormationBeat[] = [],
+): WaveDef[] {
+  const out = waves.slice();
+  let prevKind: EnemyKind | null = null;
+  let prevPattern: SpawnPattern | null = null;
+  for (const slot of slots) {
+    if (slot.type !== 'formation') continue;
+    const at = out.findIndex((w) => w.atSec >= slot.atSec);
+    const wave = out[at];
+    if (wave === undefined || wave.atSec >= slot.atSec + MAX_FORMATION_LAG_SEC) continue;
+    const pool = roster.filter((e) => e.kind !== 'snake');
+    const fresh = pool.filter((e) => e.kind !== prevKind);
+    const pick = fresh.length > 0 ? fresh : pool;
+    if (pick.length === 0) continue;
+    const kind = rngPick(
+      r,
+      pick.map((e) => e.kind),
+      pick.map((e) => e.weight),
+    );
+    const patterns = FORMATION_PATTERNS.filter((p) => p !== prevPattern);
+    const drawn = rngPick(r, patterns);
+    const pattern: SpawnPattern = kind === 'dart' ? 'cluster' : drawn;
+    const units = Math.max(SHORT_FORMATION_MIN, Math.round(b.budgetEnd * ramp));
+    const count = kind === 'dart' ? Math.max(1, Math.floor(units / SPAWN_COST.dart)) * 5 : Math.max(SHORT_FORMATION_MIN, Math.floor(units / SPAWN_COST[kind]));
+    const emitted = emitGroup(r, arena, kind, count, pattern, 0, cyl);
+    out[at] = { ...wave, entries: [...wave.entries, ...emitted] };
+    formations.push({ atSec: wave.atSec, kind, pattern, count });
+    prevKind = kind;
+    prevPattern = pattern;
+  }
+  return out;
+}
+
+/** A formation beat joins a wave starting no later than this after its minute mark. */
+export const MAX_FORMATION_LAG_SEC = 5;
+
+/** One minute beat of a version 11 level as it plays: formations name their kind, pattern and count. */
+export interface LevelBeat {
+  type: BeatSlot['type'];
+  atSec: number;
+  lenSec: number;
+  kind?: EnemyKind;
+  pattern?: SpawnPattern;
+  count?: number;
+}
+
+/**
+ * The minute beats of a version 11 level, rebuilt from the def (the same streams buildLevel used,
+ * on its attempt seed). Empty for any other version. Pure; for tests, reports and the HUD.
+ */
+export function levelBeats(def: LevelDef): LevelBeat[] {
+  if (def.generatorVersion !== GENERATOR_VERSION_V11) return [];
+  const s = attemptSeed(def.seed, def.retries ?? 0);
+  const boss = def.boss !== undefined;
+  const lengthSec = boss ? 0 : shortLevelSec(def.runSeed, def.levelIndex);
+  const slots = beatSlots(stream(s, SHORT_BEAT_SALT), lengthSec, boss ? def.boss?.atSec ?? BOSS_SHORT_LEVEL_AT_SEC : null);
+  const formations: FormationBeat[] = [];
+  const pre = def.waves.waves.map((w) => ({ ...w, entries: [] }));
+  applyFormations(stream(s, SHORT_FORMATION_SALT), slots, def.arena, def.roster, pre, BANDS[def.band], parRampScale(def.levelIndex), def.surface === 'cylinder', formations);
+  let f = 0;
+  return slots.map((slot) => {
+    if (slot.type !== 'formation') return { ...slot };
+    const fb = formations[f++];
+    return fb === undefined ? { ...slot } : { ...slot, atSec: fb.atSec, kind: fb.kind, pattern: fb.pattern, count: fb.count };
+  });
 }
 
 /** Pulse shape of a long level in a band. */

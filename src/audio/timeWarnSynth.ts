@@ -1,4 +1,4 @@
-// Web Audio backend for the time warning (timeWarnSfx.ts): square oscillators through the sfx
+// Web Audio backend for the time warning (timeWarnSfx.ts): soft sine or triangle oscillators through the sfx
 // master, so the effects volume and mute apply. Silent while the context is not running.
 import type { Beep, TimeWarnBackend } from './timeWarnSfx';
 
@@ -19,12 +19,12 @@ export function createTimeWarnBackend(deps: TimeWarnDeps): TimeWarnBackend {
       for (const b of beeps) {
         const t = t0 + b.at;
         const env = ctx.createGain();
-        env.gain.setValueAtTime(b.gain, t);
-        env.gain.setValueAtTime(b.gain, t + b.dur * 0.7);
+        env.gain.setValueAtTime(FLOOR, t);
+        env.gain.linearRampToValueAtTime(b.gain, t + b.attack);
         env.gain.exponentialRampToValueAtTime(FLOOR, t + b.dur);
         env.connect(master);
         const o = ctx.createOscillator();
-        o.type = 'square';
+        o.type = b.wave;
         o.frequency.setValueAtTime(b.hz, t);
         o.connect(env);
         o.onended = (): void => env.disconnect();

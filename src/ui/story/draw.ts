@@ -52,6 +52,8 @@ export function panelSaturation(visual: Panel['visual'], age: number): number {
       return 0.12;
     case 'gridDrain':
       return 1 - 0.8 * ease(age / (TWEEN_SEC * 1.5));
+    case 'dimSpread':
+      return 1 - 0.85 * ease(age / (TWEEN_SEC * 1.5));
     default:
       return 1;
   }
@@ -177,6 +179,37 @@ function drain(s: Stage, amount: number): void {
   ctx.save();
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+}
+
+/** Grey static creeping inward along the lattice: amount 0 none, 1 deep. Short grey dashes on a shrinking frame. */
+function staticCreep(s: Stage, amount: number): void {
+  if (amount <= 0.001) return;
+  const { ctx, w, h, t } = s;
+  const step = Math.floor(t * GLITCH_HZ);
+  const depth = Math.min(w, h) * 0.38 * amount;
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i < 46; i++) {
+    const edge = i % 4;
+    const d = (((i * 53 + step * 17) % 100) / 100) * depth;
+    const along = (((i * 29 + step * 11) % 100) / 100) * (edge < 2 ? w : h);
+    const len = 6 + ((i * 7) % 14);
+    if (edge === 0) {
+      ctx.moveTo(along, d);
+      ctx.lineTo(along + len, d);
+    } else if (edge === 1) {
+      ctx.moveTo(along, h - d);
+      ctx.lineTo(along + len, h - d);
+    } else if (edge === 2) {
+      ctx.moveTo(d, along);
+      ctx.lineTo(d, along + len);
+    } else {
+      ctx.moveTo(w - d, along);
+      ctx.lineTo(w - d, along + len);
+    }
+  }
+  stroke(s, 'hsl(0, 0%, 62%)', 1.5, 0.5 * s.a, []);
   ctx.restore();
 }
 
@@ -591,6 +624,23 @@ export function drawPanel(ctx: CanvasRenderingContext2D, w: number, h: number, s
       drain(s, 1 - sat);
       ship(s, s.cx, s.cy, shipPx * 0.6, 1);
       break;
+    case 'gridFull':
+      ship(s, s.cx, s.cy, shipPx * 0.6, 1);
+      break;
+    case 'dimSpread':
+      drain(s, 1 - sat);
+      staticCreep(s, 1 - sat);
+      ship(s, s.cx, s.cy, shipPx * 0.6, 1);
+      break;
+    case 'dimSwarm': {
+      drain(s, 0.35);
+      const n = 7;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU + t * 0.15;
+        foeIcon(s, 'grunt', s.cx + Math.cos(a) * u * 0.34, s.cy + Math.sin(a) * u * 0.26, Math.max(24, u * 0.1), s.a * 0.8, 0);
+      }
+      break;
+    }
     case 'torus':
       ship(s, s.cx - u * 0.28, s.cy + u * 0.05, shipPx, 1);
       torus(s, s.cx + u * 0.18, s.cy - u * 0.02, u * torusScale(sc.act) * 1.6, sc.act / 5);
