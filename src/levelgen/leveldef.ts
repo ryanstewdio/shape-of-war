@@ -72,6 +72,14 @@ export const GENERATOR_VERSION_V10 = 10;
  * final rush. Versions 1 to 10 are unchanged, byte for byte (V10_GEN_CONFIG builds 10).
  */
 export const GENERATOR_VERSION_V11 = 11;
+/**
+ * Trough wave (Ryan, 2026-11-10). Generator version of a trough level only (surface 'trough'):
+ * the version 11 config plus GenConfig.enableTrough draws some non boss levels from
+ * TROUGH_MIN_LEVEL as a valley arena (trough.ts). Every other level keeps version 11, and versions
+ * 1 to 11 are unchanged, byte for byte (V11_GEN_CONFIG builds 11 everywhere). A trough Free Play
+ * def carries it too. A version 12 level plays every version 11 rule.
+ */
+export const GENERATOR_VERSION_V12 = 12;
 
 /**
  * Version 6 star thresholds as multiples of par, each rounded to the 500 grid: a strong player
@@ -89,8 +97,11 @@ export const isR3Version = (v: number): boolean => v === GENERATOR_VERSION_V8 ||
 /** True when a def carries the Tester 3 boss order and drum taste (version 9, 10 or 11). */
 export const isT3Version = (v: number): boolean => v === GENERATOR_VERSION_V9 || hasParRamp(v);
 
-/** True when a def carries the Tester Tom par ramp (version 10 or 11). */
-export const hasParRamp = (v: number): boolean => v === GENERATOR_VERSION_V10 || v === GENERATOR_VERSION_V11;
+/** True when a def carries the Tester Tom par ramp (version 10, 11 or 12). */
+export const hasParRamp = (v: number): boolean => v === GENERATOR_VERSION_V10 || isShortVersion(v);
+
+/** True when a def carries the short levels (version 11, or 12 on a trough level). */
+export const isShortVersion = (v: number): boolean => v === GENERATOR_VERSION_V11 || v === GENERATOR_VERSION_V12;
 
 /**
  * Tester Tom par ramp (version 10): multiplier on the wave budget and on maxLiveEnemies of level n,
@@ -383,6 +394,13 @@ export interface GenConfig {
    * literals inherit true but never meet it: runsShort needs enableParRamp too.
    */
   enableShortLevels?: boolean;
+  /**
+   * Trough wave (Ryan, 2026-11-10). On together with the version 11 config: some non boss levels
+   * from TROUGH_MIN_LEVEL that are not drums are drawn as troughs (trough.ts, own stream, never two
+   * in a row) and report GENERATOR_VERSION_V12. Optional; only true turns it on, so absent or false
+   * builds version 11 byte for byte. Default on. Endless never reads it.
+   */
+  enableTrough?: boolean;
 }
 
 export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
@@ -400,6 +418,7 @@ export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>(
   enableT3: true,
   enableParRamp: true,
   enableShortLevels: true,
+  enableTrough: true,
 });
 
 /** DEFAULT_GEN_CONFIG with the v2 enemies, bosses and cylinder off: the v1 generator, byte for byte. */
@@ -459,6 +478,9 @@ export const V9_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...
 /** DEFAULT_GEN_CONFIG with the short levels off: the version 10 generator (par ramp on), byte for byte. */
 export const V10_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableShortLevels: false });
 
+/** DEFAULT_GEN_CONFIG with the troughs off: the version 11 generator (short levels on), byte for byte. */
+export const V11_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableTrough: false });
+
 /** True when a config builds R1 paced levels (long levels and R1 pacing both on). */
 export const runsR1 = (cfg: Readonly<GenConfig>): boolean => cfg.enableLongLevels === true && cfg.enableR1Pacing === true;
 
@@ -473,6 +495,9 @@ export const runsParRamp = (cfg: Readonly<GenConfig>): boolean => runsT3(cfg) &&
 
 /** True when a config builds short levels (version 11): the par ramp config plus enableShortLevels. */
 export const runsShort = (cfg: Readonly<GenConfig>): boolean => runsParRamp(cfg) && cfg.enableShortLevels === true;
+
+/** True when a config may build trough levels (version 12): the short levels config plus enableTrough. */
+export const runsTrough = (cfg: Readonly<GenConfig>): boolean => runsShort(cfg) && cfg.enableTrough === true;
 
 export interface ValidationResult {
   ok: boolean;
@@ -948,6 +973,8 @@ export interface FreePlayLevelOptions {
   bosses: FreePlayBosses;
   wells: FreePlayWells;
   size: FreePlaySize;
+  /** Trough wave: present only as 'trough' (a trough arena, version 12); absent is flat, so older defs keep their bytes. */
+  surface?: 'trough';
 }
 
 /** Recursive Object.freeze. Returns its argument. */

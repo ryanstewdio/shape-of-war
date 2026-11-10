@@ -15,19 +15,24 @@ import { canonX, cylDist, cylObstacleDistance, insideRims } from './cylinder';
 import { applyDrumPattern } from './drum';
 import { attemptSeed, endlessSegmentOn, generateEndless, placeObstacles } from './generator';
 import type { SegmentTweaks } from './generator';
-import { BANDS, DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V7, MAX_RETRIES, bandOf, deepFreeze, effectiveIndexOf } from './leveldef';
+import { BANDS, DEFAULT_GEN_CONFIG, GENERATOR_VERSION_V7, GENERATOR_VERSION_V12, MAX_RETRIES, bandOf, deepFreeze, effectiveIndexOf } from './leveldef';
 import type { ArenaDef, EndlessDef, EndlessSegmentDef, FreePlayArena, FreePlayInfo, FreePlayLevelOptions, GenConfig, RosterEntry, Vec2 } from './leveldef';
 import { ALL_ENEMY_KINDS } from './v2enemies';
+import { TROUGH_MAX_OBSTACLES, troughFloorArena, troughWaves } from './trough';
 import {
   FREE_PLAY_DENSITY_SCALE,
   FREE_PLAY_WELL_PAIR,
   FREE_PLAY_WELL_SPAWN_CLEAR,
+  ENTRY_EDGE_MARGIN,
+  ENTRY_OBSTACLE_CLEAR,
+  ENTRY_SPAWN_CLEAR,
   MAX_OBSTACLES,
   WELL_EDGE,
   WELL_OBSTACLE,
   freePlayArenaSize,
   freePlayMaxLive,
   freePlaySnakeAllowed,
+  freePlayTroughWellRange,
   freePlayWellRange,
   insideArena,
   obstaclePointDistance,
@@ -85,13 +90,26 @@ export function freePlayArena(r: Rng, kind: FreePlayArena, barriers: boolean, si
 }
 
 /**
+ * Trough wave: the Free Play trough arena, a rect of the chosen size (the valley runs across its
+ * width). Draws: none with barriers off; else the count (2 to TROUGH_MAX_OBSTACLES), then the
+ * flat placement inside the floor band (troughFloorArena), so the steep rims stay clear.
+ */
+export function freePlayTroughArena(r: Rng, barriers: boolean, size: FreePlaySize = 'medium'): ArenaDef {
+  const base = baseArena('rect', size);
+  if (!barriers) return base;
+  const obstacles = placeObstacles(r, troughFloorArena(base), rngInt(r, FREE_PLAY_MIN_OBSTACLES, TROUGH_MAX_OBSTACLES));
+  return { ...base, shape: 'rectObstacles', obstacles };
+}
+
+/**
  * The level side of a config, as stored on the def: chosen kinds in ALL_ENEMY_KINDS order, kept
  * only when the run's catalogue has them (a GenConfig may cut snakes or the v2 kinds).
  */
 export function levelOptionsOf(config: FreePlayConfig, catalogue: readonly RosterEntry[]): FreePlayLevelOptions {
   const have = new Set(catalogue.map((e) => e.kind));
   const enemies = ALL_ENEMY_KINDS.filter((k) => config.enemies.includes(k) && have.has(k));
-  return { enemies, density: config.density, bosses: config.bosses, wells: config.wells, size: config.size };
+  // Trough wave: the surface joins the record only as 'trough', so a flat run keeps its bytes.
+  return { enemies, density: config.density, bosses: config.bosses, wells: config.wells, size: config.size, ...(config.surface === 'trough' ? { surface: 'trough' as const } : {}) };
 }
 
 /**
@@ -129,15 +147,21 @@ function buildFreePlay(o: FreePlayOptions, attempt: number, cfg: GenConfig): End
   const s = attemptSeed(seed, attempt);
   const endless = generateEndless(seed, cfg);
   const options = o.config === undefined ? null : levelOptionsOf(o.config, endless.roster);
-  const { arena, drumPattern } = freePlayArena(mulberry32(streamSeed(s, FREE_PLAY_SALT)), o.arena, o.barriers, options?.size ?? 'medium');
-  const cyl = o.arena === 'drum';
-  const range = options === null ? null : freePlayWellRange(options.wells);
-  const wells = range === null ? [] : placeFreePlayWells(mulberry32(streamSeed(s, FREE_PLAY_WELLS_SALT)), arena, cyl, range);
-  const freePlay: FreePlayInfo = { arena: o.arena, barriers: o.barriers, drumPattern, retries: attempt, ...(options === null ? {} : { options }) };
+  // Trough wave: options surface 'trough' builds a rect trough of the chosen size, whatever o.arena
+  // says (the valley needs side walls), with at most one well, placed on the floor band.
+  const trough = options?.surface === 'trough';
+  const size = options?.size ?? 'medium';
+  const arenaRng = mulberry32(streamSeed(s, FREE_PLAY_SALT));
+  const { arena, drumPattern } = trough ? { arena: freePlayTroughArena(arenaRng, o.barriers, size), drumPattern: null } : freePlayArena(arenaRng, o.arena, o.barriers, size);
+  const kind: FreePlayArena = trough ? 'rect' : o.arena;
+  const cyl = kind === 'drum';
+  const range = options === null ? null : freePlayTroughWellRange(freePlayWellRange(options.wells), trough);
+  const wells = range === null ? [] : placeFreePlayWells(mulberry32(streamSeed(s, FREE_PLAY_WELLS_SALT)), trough ? troughFloorArena(arena) : arena, cyl, range);
+  const freePlay: FreePlayInfo = { arena: kind, barriers: o.barriers, drumPattern, retries: attempt, ...(options === null ? {} : { options }) };
   return {
     ...endless,
-    generatorVersion: GENERATOR_VERSION_V7,
-    surface: cyl ? 'cylinder' : 'flat',
+    generatorVersion: trough ? GENERATOR_VERSION_V12 : GENERATOR_VERSION_V7,
+    surface: trough ? 'trough' : cyl ? 'cylinder' : 'flat',
     arena,
     roster: endless.roster.map((e) => ({ ...e })),
     hazards: { wells, spawners: [] },
@@ -165,7 +189,11 @@ export function freePlaySegment(def: EndlessDef, segment: number, cfg: GenConfig
   const cyl = def.surface === 'cylinder';
   const options = def.freePlay?.options;
   if (options === undefined) return endlessSegmentOn(def.endlessSeed, segment, cfg, def.arena, cyl);
-  return endlessSegmentOn(def.endlessSeed, segment, cfg, def.arena, cyl, segmentTweaks(def, options, segment, cfg));
+  const seg = endlessSegmentOn(def.endlessSeed, segment, cfg, def.arena, cyl, segmentTweaks(def, options, segment, cfg));
+  if (def.surface !== 'trough') return seg;
+  // Trough wave: fixed spawn points pulled in from the rims toward the floor (no draw).
+  const ok = (p: Vec2): boolean => insideArena(def.arena, p, ENTRY_EDGE_MARGIN) && Math.hypot(p.x, p.y) >= ENTRY_SPAWN_CLEAR && def.arena.obstacles.every((o) => obstaclePointDistance(o, p) >= ENTRY_OBSTACLE_CLEAR);
+  return deepFreeze({ ...seg, waves: { ...seg.waves, waves: troughWaves(seg.waves.waves, ok) } });
 }
 
 /**
