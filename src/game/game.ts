@@ -13,6 +13,7 @@ import { bulletHits, orbitHits, separate, shipHits, shipPickups } from './combat
 import { clearEnemyBullets, stepEnemyBullets } from './enemyBullets';
 import { clearPickup } from './pickup';
 import { applyDriftOption } from './drift';
+import { freePlaySurfaceRules } from './trough';
 import { equipWeapon, pauseSaw, setPermanentWeapon, setWeaponPickups, stepWeapons } from './weapons';
 import { registerSwarmBehaviours } from './defs';
 import { stepDrone } from './drones';
@@ -56,8 +57,10 @@ export interface GameOptions {
 
 /** Free Play: the level with the config's drone and super kinds (a copy; the caller's level is untouched). */
 export function freePlayLevelRules(level: LevelDef, fp: FreePlayConfig): LevelDef {
-  if (level.drone === fp.drone && level.superType === fp.superType) return level;
-  return { ...level, drone: fp.drone, superType: fp.superType };
+  // Trough wave: the Free Play surface option ('trough' turns a flat arena into a trough).
+  const lv = freePlaySurfaceRules(level, fp);
+  if (lv.drone === fp.drone && lv.superType === fp.superType) return lv;
+  return { ...lv, drone: fp.drone, superType: fp.superType };
 }
 
 /**

@@ -12,6 +12,7 @@ import { createDrift, stepDrift, type DriftState } from './drift';
 import { enrageSpeed, hasMembrane, membraneMove } from './membrane';
 import { createPond, type PondState } from './pondRipple';
 import { createShipState, respawnShip, SHIP_RADIUS, stepShip, type ShipState } from './ship';
+import { stepTrough } from './trough';
 
 export const enum Kind {
   None = 0,
@@ -279,6 +280,7 @@ export function stepWorld(w: World, dt: number, input: InputState): void {
   }
   stepBullets(w, dt);
   if (w.drift.active) stepDrift(w, dt);
+  if (w.surface.kind === 'trough') stepTrough(w, dt); // trough wave: the ship alone is pulled downhill
   wrapWorld(w);
   rebuild(w.grid, w);
   w.time += dt;
