@@ -78,40 +78,33 @@ describe('R6 intro layout', () => {
   afterEach(() => vi.unstubAllGlobals());
   const byIntro = (root: FakeEl, k: string): FakeEl | undefined => root.all().find((e) => e.getAttribute('data-intro') === k);
 
-  it('the title is "Level 12" only; the arena type and size are the first Details row', () => {
+  it('the title is "Level 12" only; the arena type and size are a Details row, before the seed', () => {
     const c = introCard(12, def, 'normal', { seed: '5' });
     expect(c.title).toBe('Level 12');
-    expect(introDetails(c)[0]).toEqual({ label: ARENA_LABEL, value: 'Circle 900 x 860' });
+    const rows = introDetails(c);
+    expect(rows).toContainEqual({ label: ARENA_LABEL, value: 'Circle 900 x 860' });
+    expect(rows.map((r) => r.label).slice(-2)).toEqual([ARENA_LABEL, 'Seed']);
     expect(introCard(3, { ...def, arena: { ...arena, obstacles: [] }, surface: 'cylinder' }).arena).toBe('Drum 900 x 860');
     expect(endlessIntroCard({}).arena).toBe('');
-    expect(introDetails(endlessIntroCard({}))).toEqual([]);
+    expect(introDetails(endlessIntroCard({})).map((r) => r.label)).toEqual([VICTORY_LABEL]);
   });
 
-  it('Goal and Victory: labels left, statements right, one grid row each', () => {
+  it('focused stack: one plain goal line on the card, the victory text moved into Details', () => {
     const root = installFakeDocument();
     const screen = createIntroScreen(asParent(root), () => undefined);
     screen.showCard(introCard(12, def, 'normal'));
     expect(byIntro(root, 'title')?.textContent).toBe('Level 12');
-    const grid = byIntro(root, 'goal');
-    expect(grid?.classList.contains('sow-goal-grid')).toBe(true);
-    const cells = (grid?.children ?? []).map((e) => [e.classList.contains('sow-goal-k') ? 'k' : 'v', e.textContent]);
-    expect(cells).toEqual([
-      ['k', GOAL_LABEL],
-      ['v', 'Destroy 5 enemies before your lives run out'],
-      ['k', VICTORY_LABEL],
-      ['v', '5 kills with a life left'],
-    ]);
-    expect(UI_CSS).toContain('grid-template-columns: max-content minmax(0, 1fr)');
-    expect(UI_CSS).toMatch(/\.sow-goal-grid \{[^}]*align-items: baseline;/);
-    // The goal grid rule comes after .sow-block so display: grid wins.
-    expect(UI_CSS.indexOf('.sow-goal-grid {')).toBeGreaterThan(UI_CSS.indexOf('.sow-block {'));
+    const goal = byIntro(root, 'goal');
+    expect((goal?.children ?? []).map((e) => e.textContent)).toEqual(['Destroy 5 enemies before your lives run out']);
+    expect(goal?.all().some((e) => e.textContent === GOAL_LABEL)).toBe(false);
+    expect(introDetails(introCard(12, def, 'normal'))[0]).toEqual({ label: VICTORY_LABEL, value: '5 kills with a life left' });
   });
 
   it('the difficulty chips carry no "Difficulty" label', () => {
     const root = installFakeDocument();
     const screen = createIntroScreen(asParent(root), () => undefined);
     screen.showCard(introCard(1, def, 'hard'));
-    const leaves = (byIntro(root, 'play')?.all() ?? []).filter((e) => e.children.length === 0).map((e) => e.textContent);
+    const leaves = (byIntro(root, 'difficulty')?.all() ?? []).filter((e) => e.children.length === 0).map((e) => e.textContent);
     expect(leaves).not.toContain('Difficulty');
     expect(leaves.slice(0, 4)).toEqual(['Easy', 'Normal', 'Hard', 'Insane']);
   });

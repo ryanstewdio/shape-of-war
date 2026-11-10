@@ -43,6 +43,10 @@ import { createFrameThrottle, createSlider } from './slider';
 import { bus } from '../core/events';
 import { attachScrollbar } from './scrollbar';
 
+/** Reset progress confirmation (second tap needed) and done texts. The reset clears the story too. */
+export const RESET_CONFIRM_TEXT = 'Tap again: clears levels, story and call sign';
+export const RESET_DONE_TEXT = 'Progress, story and call sign reset';
+
 export interface SettingsEffects {
   /** Glow's setShowFps from src/render/devpanel.ts. */
   setShowFps(on: boolean): void;
@@ -528,15 +532,16 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
   const seedRow = el('div', 'sow-row');
   seedRow.append(seedField, play);
 
+  // Ryan 2026-11-10: Reset progress also clears the story and the call sign, and says so.
   let resetArmed: number | null = null;
   const reset = button('Reset progress', () => {
     const r = confirmTap(resetArmed, performance.now());
     resetArmed = r.armedAt;
     if (r.fire) {
       a.resetProgress();
-      reset.textContent = 'Progress reset';
+      reset.textContent = RESET_DONE_TEXT;
     } else {
-      reset.textContent = 'Tap again to reset';
+      reset.textContent = RESET_CONFIRM_TEXT;
     }
   });
   const back = button('Back', () => {

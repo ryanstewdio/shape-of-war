@@ -8,6 +8,7 @@ import { COVER_LEFT, hudFrame, MAIN_ROWS, overlaps, type HudFrame } from '../../
 import {
   CLOCK_HIDDEN,
   CLOCK_PULSE_MS,
+  clockShown,
   clockTier,
   clockView,
   isWarnSecond,
@@ -32,15 +33,27 @@ describe('clock text per objective kind', () => {
     expect(clockView(surv, 200, false)).toMatchObject({ text: '0:00', shownLeft: 0 });
   });
 
-  it('destroy shows time played, smaller and calm', () => {
-    expect(clockView(destroy, 0, false)).toMatchObject({ mode: 'elapsed', text: '0:00', size: 'small', tone: 'white', shownLeft: null });
-    expect(clockView(destroy, 61.9, false)).toMatchObject({ text: '1:01', size: 'small' });
+  it('destroy shows no clock at all (Ryan 2026-11-10: it used to count up from 0:00)', () => {
+    for (const t of [0, 61.9, 600]) expect(clockView(destroy, t, false)).toEqual(CLOCK_HIDDEN);
+    expect(clockShown(destroy, false)).toBe(false);
   });
 
-  it('a boss level shows time played whatever its objective kind', () => {
+  it('a boss level shows no clock whatever its objective kind', () => {
     for (const obj of [sit, surv, destroy]) {
-      expect(clockView(obj, 140, true)).toMatchObject({ mode: 'elapsed', text: '2:20', size: 'small', shownLeft: null });
+      expect(clockView(obj, 0, true)).toEqual(CLOCK_HIDDEN);
+      expect(clockView(obj, 140, true)).toEqual(CLOCK_HIDDEN);
+      expect(clockShown(obj, true)).toBe(false);
     }
+  });
+
+  it('only timed missions without a boss show the clock', () => {
+    expect(clockShown(sit, false)).toBe(true);
+    expect(clockShown(surv, false)).toBe(true);
+  });
+
+  it('a hidden clock never warns', () => {
+    expect(run(destroy, ticks(0, 80))).toEqual([]);
+    expect(run(surv, ticks(0, 80), true)).toEqual([]);
   });
 
   it('the hidden clock is hidden', () => {
@@ -245,6 +258,18 @@ describe('clock DOM', () => {
     expect(digits.getAttribute('aria-label')).toBe('0:05');
     expect(digits.style.fontSize).toBe(`${CLOCK_FONT.large}px`);
     hud.setClock(CLOCK_HIDDEN);
+    expect(host.style.display).toBe('none');
+  });
+
+  it('the HUD hides its clock on destroy and boss levels (Ryan 2026-11-10)', () => {
+    const { hud, host } = build();
+    hud.setClock(clockView(destroy, 0, false));
+    expect(host.style.display).toBe('none');
+    hud.setClock(clockView(surv, 0, false));
+    expect(host.style.display).toBe('flex');
+    hud.setClock(clockView(destroy, 30, false));
+    expect(host.style.display).toBe('none');
+    hud.setClock(clockView(sit, 30, true));
     expect(host.style.display).toBe('none');
   });
 

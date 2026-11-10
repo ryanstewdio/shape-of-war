@@ -255,7 +255,7 @@ describe('what the v2 settings write', () => {
     }).not.toThrow();
   });
 
-  it('Reset progress touches only the progress keys (R2: plus the held par reward) and leaves every setting, v2 included', () => {
+  it('Reset progress touches only the progress keys (R2: plus the held par reward; 2026-11-10: plus the story keys) and leaves every setting, v2 included', () => {
     const store = recording(V1_PROFILE);
     saveSpacePhysics('medium', store);
     saveWeaponPickups(false, store);
@@ -263,7 +263,7 @@ describe('what the v2 settings write', () => {
     saveMusic(35, store);
     store.writes.length = 0;
     resetProgress(store);
-    expect([...store.writes].sort()).toEqual(['sow.progress.startBonus', 'sow.progress.unlocked', 'sow.scores.adventure']);
+    expect([...store.writes].sort()).toEqual(['sow.progress.callsign', 'sow.progress.startBonus', 'sow.progress.storySeen', 'sow.progress.unlocked', 'sow.scores.adventure']);
     expect([loadSpacePhysics(store), loadWeaponPickups(store), loadEffects(store), loadMusic(store)]).toEqual(['medium', false, 'high', 35]);
     expect(store.data.get('sow.settings.neon')).toBe('33');
   });

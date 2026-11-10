@@ -185,8 +185,9 @@ export function objectiveText(obj: ObjectiveDef): string {
 // ---- HUD clock (hud-clock) ----------------------------------------------------------------
 // The clock left the objective bar: once a score target was reached the bar was full and the time
 // left was hard to read. Timed objectives (scoreInTime, survive) count down in a framed pixel
-// clock that warns at 1:00, 0:30 and every second from 0:10; destroy and boss levels show the
-// time played, smaller and calm. Endless and Free Play keep their clock in the level line.
+// clock that warns at 1:00, 0:30 and every second from 0:10. Ryan (device check on ab5e14d,
+// 2026-11-10): destroy and boss levels show no clock at all; they used to count up from 0:00.
+// Endless and Free Play keep their clock in the level line.
 
 export type ClockMode = 'countdown' | 'elapsed' | 'hidden';
 /** calm: more than a minute left (or time played). minute: 1:00 or less. half: 0:30 or less. final: 0:10 or less. */
@@ -240,15 +241,18 @@ export function shownSeconds(sec: number): number {
   return Number.isFinite(sec) ? Math.max(0, Math.ceil(sec)) : 0;
 }
 
+/** Pure: true when an Adventure level shows the HUD clock: a timed objective on a level with no boss. */
+export function clockShown(obj: ObjectiveDef, bossLevel: boolean): boolean {
+  return !bossLevel && timeLimitOf(obj) !== null;
+}
+
 /**
- * Pure: the HUD clock for an Adventure level. A boss level always shows time played (the sim, not
- * the timer, ends it), whatever its objective kind.
+ * Pure: the HUD clock for an Adventure level. Only timed missions (scoreInTime, survive) show it,
+ * counting down; destroy and boss levels (the sim, not a timer, ends a boss level) get CLOCK_HIDDEN.
  */
 export function clockView(obj: ObjectiveDef, elapsedSec: number, bossLevel: boolean): ClockView {
   const limit = timeLimitOf(obj);
-  if (limit === null || bossLevel) {
-    return { mode: 'elapsed', text: formatClock(Math.floor(Math.max(0, elapsedSec))), tier: 'calm', tone: 'white', size: 'small', shownLeft: null };
-  }
+  if (limit === null || bossLevel) return CLOCK_HIDDEN;
   const left = shownSeconds(limit - elapsedSec);
   const tier = clockTier(left);
   return { mode: 'countdown', text: formatClock(left), tier, tone: tierTone(tier), size: tier === 'final' ? 'large' : 'normal', shownLeft: left };
