@@ -19,6 +19,8 @@ import {
   GENERATOR_VERSION_V9,
   GENERATOR_VERSION_V10,
   GENERATOR_VERSION_V11,
+  GENERATOR_VERSION_V12,
+  isShortVersion,
   isT3Version,
   levelMaxLive,
   LEVELDEF_VERSION,
@@ -59,6 +61,7 @@ import type {
   WaveSchedule,
 } from './leveldef';
 import { ALL_ENEMY_KINDS, isV2Kind } from './v2enemies';
+import { TROUGH_MAX_WELLS, TROUGH_MIN_ASPECT, TROUGH_MIN_LEVEL, troughEligible, troughMapErrors } from './trough';
 import { LEAVER_FROM_LEVEL, LEAVER_FROM_SEGMENT } from './leveldef';
 import type { FreePlayDensity, FreePlaySize } from '../core/freeplayConfig';
 import {
@@ -461,7 +464,7 @@ function checkJson(c: Collector, def: unknown): void {
 function checkVersions(c: Collector, version: number, generatorVersion: number): void {
   c.check('J3', (report) => {
     if (version !== LEVELDEF_VERSION) report(`version ${version} !== ${LEVELDEF_VERSION}`);
-    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9, GENERATOR_VERSION_V10, GENERATOR_VERSION_V11];
+    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9, GENERATOR_VERSION_V10, GENERATOR_VERSION_V11, GENERATOR_VERSION_V12];
     if (!known.includes(generatorVersion)) report(`generatorVersion ${generatorVersion} not ${known.join(', ')}`);
   });
 }
@@ -493,6 +496,8 @@ export interface LevelCheckOptions extends BossCheckOptions {
   enableParRamp?: boolean;
   /** Short levels: with the version 10 flags on, J12 and J13 tie GENERATOR_VERSION_V11 to this flag. */
   enableShortLevels?: boolean;
+  /** Trough wave: false makes V1 and TR1 reject a trough def; absent or true judges it on TR1 and TR2. */
+  enableTrough?: boolean;
 }
 
 interface BossRules {
@@ -812,7 +817,7 @@ function checkObjective(c: Collector, def: LevelDef, band: Band): void {
   const long = isLongVersion(def.generatorVersion);
   // Release gate R3: version 8 reads the R3 tables (boss levels keep the LONG_BANDS objectives).
   // Short levels: a version 11 non boss level holds every objective at its SHORT_LENGTHS length.
-  const shortLevel = def.generatorVersion === GENERATOR_VERSION_V11 && def.boss === undefined;
+  const shortLevel = isShortVersion(def.generatorVersion) && def.boss === undefined;
   const l = shortLevel ? shortObjectiveTable(band, shortLevelSec(def.runSeed, def.levelIndex)) : isR3Version(def.generatorVersion) ? r3ObjectiveTable(band, def.boss !== undefined) : LONG_BANDS[band];
   const b = long ? { ...BANDS[band], surviveSec: l.surviveSec, scoreTimeSec: l.scoreTimeSec } : BANDS[band];
   const o = def.objective;
@@ -982,15 +987,16 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   }, def.surface === 'cylinder');
   checkHazards(c, def, band);
   checkLoadout(c, def);
-  checkSurface(c, def.surface, opts?.enableCylinder !== false);
+  checkSurface(c, def.surface, opts?.enableCylinder !== false, opts?.enableTrough !== false);
   checkCylinder(c, def);
+  checkTrough(c, def);
   checkV2Content(c, def.generatorVersion, band, () => namedKinds(def.roster, def.waves));
   const o = def.objective;
   // Release gate R2: version 7 (the R1 config) brings the boss in at 200 s, versions 5 and 6 at 240 s.
   const v = def.generatorVersion;
   // Release gate R3: version 8 at 120 s.
   // Short levels: version 11 at BOSS_SHORT_LEVEL_AT_SEC (85 s).
-  const bossAt = v === GENERATOR_VERSION_V11 ? BOSS_SHORT_LEVEL_AT_SEC : isR3Version(v) ? BOSS_R3_LEVEL_AT_SEC : v === GENERATOR_VERSION_V7 ? BOSS_LONG_LEVEL_AT_SEC : isLongVersion(v) ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
+  const bossAt = isShortVersion(v) ? BOSS_SHORT_LEVEL_AT_SEC : isR3Version(v) ? BOSS_R3_LEVEL_AT_SEC : v === GENERATOR_VERSION_V7 ? BOSS_LONG_LEVEL_AT_SEC : isLongVersion(v) ? BOSS_V5_LEVEL_AT_SEC : BOSS_LEVEL_AT_SEC;
   checkBoss(c, def.boss, def.generatorVersion, {
     // Tester 3: version 9 reads the T3 order (Brood, then Warden) and the softer first fight.
     want: isT3Version(v) ? t3BossForLevel(def.levelIndex, bossAt) : bossForLevel(def.levelIndex, bossAt),
@@ -1056,8 +1062,9 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
     // Short levels: on a long level, version 11 exactly when the version 10 flags and enableShortLevels are on, when the caller says.
     if (opts?.enableLongLevels !== true) return;
     const flag = opts.enableR1Pacing === true && opts.enableR3Length === true && opts.enableT3 === true && opts.enableParRamp === true && opts.enableShortLevels === true;
-    const v11 = def.generatorVersion === GENERATOR_VERSION_V11;
-    if (flag && !v11) report(`generatorVersion ${def.generatorVersion} with enableShortLevels on, want ${GENERATOR_VERSION_V11}`);
+    // Trough wave: a trough level of that config carries version 12 instead (TR1).
+    const v11 = isShortVersion(def.generatorVersion);
+    if (flag && !v11) report(`generatorVersion ${def.generatorVersion} with enableShortLevels on, want ${GENERATOR_VERSION_V11} or ${GENERATOR_VERSION_V12}`);
     if (!flag && v11) report(`generatorVersion ${GENERATOR_VERSION_V11} with enableShortLevels or a version 10 flag off`);
   });
   checkDrumTaste(c, def, opts);
@@ -1072,10 +1079,35 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
  * V1: the surface is 'flat', or 'cylinder' where allowCylinder (a level with the cylinder flag not
  * known to be off). Every other value, and a missing field, is an error.
  */
-function checkSurface(c: Collector, surface: unknown, allowCylinder = false): void {
+function checkSurface(c: Collector, surface: unknown, allowCylinder = false, allowTrough = false): void {
   c.check('V1', (report) => {
-    if (surface === 'flat' || (allowCylinder && surface === 'cylinder')) return;
-    report(`surface ${String(surface)} !== 'flat'${allowCylinder ? " or 'cylinder'" : ''}`);
+    if (surface === 'flat' || (allowCylinder && surface === 'cylinder') || (allowTrough && surface === 'trough')) return;
+    report(`surface ${String(surface)} !== 'flat'${allowCylinder ? " or 'cylinder'" : ''}${allowTrough ? " or 'trough'" : ''}`);
+  });
+}
+
+/**
+ * TR1 (trough wave): a trough level is level TROUGH_MIN_LEVEL or later and not a boss level, its
+ * arena is at least TROUGH_MIN_ASPECT wide, and it carries GENERATOR_VERSION_V12, which no other
+ * level carries. TR2: the trough map rules (trough.ts troughMapErrors): rect family, at most 2
+ * obstacles and 1 well, both on the floor band, spawners and fixed spawn points off the steep rims.
+ */
+function checkTrough(c: Collector, def: LevelDef): void {
+  const trough = def.surface === 'trough';
+  c.check('TR1', (report) => {
+    if (!trough) {
+      if (def.generatorVersion === GENERATOR_VERSION_V12) report(`generatorVersion ${GENERATOR_VERSION_V12} on a ${String(def.surface)} level`);
+      return;
+    }
+    if (!troughEligible(def.levelIndex)) report(`trough on level ${def.levelIndex}: only levels from ${TROUGH_MIN_LEVEL} that are not boss levels`);
+    if (def.boss !== undefined) report('trough on a boss level');
+    if (def.generatorVersion !== GENERATOR_VERSION_V12) report(`trough with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V12}`);
+    const aspect = def.arena.width / def.arena.height;
+    if (aspect < TROUGH_MIN_ASPECT - 1e-9) report(`trough aspect ${aspect.toFixed(3)} < ${TROUGH_MIN_ASPECT}`);
+  });
+  if (!trough) return;
+  c.check('TR2', (report) => {
+    for (const e of troughMapErrors(def.arena, def.hazards, def.waves.waves.flatMap((w) => w.entries))) report(e);
   });
 }
 
@@ -1210,7 +1242,11 @@ export function validateSegment(seg: EndlessSegmentDef, opts?: BossCheckOptions)
  * validateSegment check, W4 run on the Free Play arena (wrapped on a drum).
  */
 export function validateFreePlaySegment(seg: EndlessSegmentDef, def: EndlessDef, opts?: BossCheckOptions): ValidationResult {
-  return segmentChecks(seg, def.arena, def.surface === 'cylinder', opts, def.freePlay?.options, def.roster);
+  const r = segmentChecks(seg, def.arena, def.surface === 'cylinder', opts, def.freePlay?.options, def.roster);
+  if (def.surface !== 'trough') return r;
+  // Trough wave FP7: the segment's fixed spawn points stay off the steep rims.
+  const extra = troughMapErrors(def.arena, { wells: [], spawners: [] }, seg.waves.waves.flatMap((w) => w.entries)).map((e) => `FP7: ${e}`);
+  return extra.length === 0 ? r : { ok: false, errors: [...r.errors, ...extra] };
 }
 
 /**
@@ -1345,6 +1381,15 @@ const FP_DENSITIES: readonly string[] = ['low', 'normal', 'swarm'];
 const FP_WELLS: readonly string[] = ['off', 'normal', 'many'];
 const FP_SIZES: readonly string[] = ['small', 'medium', 'large'];
 
+/**
+ * Trough wave: wells on a trough Free Play run are capped at TROUGH_MAX_WELLS (the range keeps its
+ * floor up to that cap); null (wells off) stays null. Other runs keep the range.
+ */
+export function freePlayTroughWellRange(range: Readonly<{ min: number; max: number }> | null, trough: boolean): Readonly<{ min: number; max: number }> | null {
+  if (range === null || !trough) return range;
+  return { min: Math.min(range.min, TROUGH_MAX_WELLS), max: Math.min(range.max, TROUGH_MAX_WELLS) };
+}
+
 /** FP3: the options record is well formed and its enemies are catalogue kinds in order. */
 function checkFreePlayOptions(c: Collector, o: FreePlayLevelOptions, roster: readonly RosterEntry[]): void {
   c.check('FP3', (report) => {
@@ -1356,6 +1401,8 @@ function checkFreePlayOptions(c: Collector, o: FreePlayLevelOptions, roster: rea
     if (!FP_WELLS.includes(o.wells)) report(`wells ${String(o.wells)}`);
     if (!FP_SIZES.includes(o.size)) report(`size ${String(o.size)}`);
     if (o.bosses !== 'off' && o.bosses !== 'every3' && bossTierOf(o.bosses) === null) report(`bosses ${String(o.bosses)}`);
+    const surface: unknown = (o as { surface?: unknown }).surface;
+    if (surface !== undefined && surface !== 'trough') report(`surface ${String(surface)}, want 'trough' or absent`);
   });
 }
 
@@ -1391,12 +1438,15 @@ export function validateFreePlay(def: EndlessDef): ValidationResult {
   const c = new Collector();
   checkJson(c, def);
   checkVersions(c, def.version, def.generatorVersion);
-  checkSurface(c, def.surface, true);
+  checkSurface(c, def.surface, true, true);
   const fp = def.freePlay;
+  const troughFp = fp?.options?.surface === 'trough';
   c.check('FP1', (report) => {
     if (fp === undefined) report('freePlay record missing');
     else if (!isInt(fp.retries) || fp.retries < 0 || fp.retries > MAX_RETRIES) report(`retries ${fp.retries} not an integer 0 to ${MAX_RETRIES}`);
-    if (def.generatorVersion !== GENERATOR_VERSION_V7) report(`generatorVersion ${def.generatorVersion} !== ${GENERATOR_VERSION_V7}`);
+    // Trough wave: a trough Free Play run is version 12; every other run stays version 7.
+    const wantV = troughFp ? GENERATOR_VERSION_V12 : GENERATOR_VERSION_V7;
+    if (def.generatorVersion !== wantV) report(`generatorVersion ${def.generatorVersion} !== ${wantV}`);
     if (def.mode !== 'endless') report(`mode ${String(def.mode)} !== 'endless'`);
     if (def.objective.kind !== 'none') report(`objective ${String(def.objective.kind)} !== 'none'`);
     if (!isInt(def.endlessSeed) || def.endlessSeed < 0 || def.endlessSeed > 0xffffffff) report(`endlessSeed ${def.endlessSeed} not a uint32`);
@@ -1407,7 +1457,14 @@ export function validateFreePlay(def: EndlessDef): ValidationResult {
   });
   const options = fp?.options;
   if (options !== undefined) checkFreePlayOptions(c, options, def.roster);
-  checkFreePlayWells(c, def, options === undefined ? null : freePlayWellRange(options.wells));
+  checkFreePlayWells(c, def, options === undefined ? null : freePlayTroughWellRange(freePlayWellRange(options.wells), troughFp));
+  c.check('FP7', (report) => {
+    // Trough wave: surface 'trough' exactly when the options ask for it, on the trough map rules.
+    if ((def.surface === 'trough') !== troughFp) report(`surface ${String(def.surface)} with options surface ${String(fp?.options?.surface)}`);
+    if (!troughFp) return;
+    if (fp?.arena !== 'rect') report(`trough Free Play arena ${String(fp?.arena)}, want rect`);
+    for (const e of troughMapErrors(def.arena, def.hazards, [])) report(e);
+  });
   c.check('FP2', (report) => {
     if (fp === undefined) return;
     const a = def.arena;

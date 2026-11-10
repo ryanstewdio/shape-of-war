@@ -28,6 +28,7 @@ import {
   GENERATOR_VERSION_V9,
   GENERATOR_VERSION_V10,
   GENERATOR_VERSION_V11,
+  GENERATOR_VERSION_V12,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_BREATHER_SEC,
@@ -51,6 +52,8 @@ import {
   runsParRamp,
   runsShort,
   runsT3,
+  runsTrough,
+  isShortVersion,
   levelMaxLive,
   parRampScale,
   segmentSeed,
@@ -136,6 +139,7 @@ import {
 } from './cylinder';
 import type { SurfaceKind } from '../core/surface';
 import { applyDrumPattern, pickDrumPattern } from './drum';
+import { TROUGH_CHANCE, TROUGH_MAX_OBSTACLES, TROUGH_MIN_ASPECT, TROUGH_SALT, troughEligible, troughFloorArena, troughFromCandidates, troughHazards, troughWaves } from './trough';
 import type { DrumPattern } from './drum';
 import { ALL_ENEMY_KINDS, V2_ENEMY_SALT, V2_SPAWN_UNIT, isV2Kind, planV2Roster, swapGroupKind, v2GroupCount } from './v2enemies';
 import {
@@ -334,6 +338,50 @@ function cylinderArena(seed: number, levelIndex: number, cfg: GenConfig, arenaRn
   // Release polish: ring membranes ride on the long level flag, drawn after every ring draw.
   // R1: an open drum drops the C0 bars, so it really has no barriers.
   return d === null ? base : applyDrumPattern(base, d.pattern, d.r, cfg.enableLongLevels === true, runsR1(cfg));
+}
+
+/**
+ * Trough wave: true when level n of the run is a trough. A candidate is a level with the trough
+ * config on, troughEligible (TROUGH_MIN_LEVEL and up, not a boss level), not a drum (pickSurface
+ * 'flat'), and the one draw of mulberry32(deriveSeed(levelSeed, TROUGH_SALT)) under TROUGH_CHANCE.
+ * Never two in a row (troughFromCandidates). Own stream, so no other stage moves. Pure.
+ */
+export function isTroughLevel(runSeed: number, levelIndex: number, cfg: GenConfig = DEFAULT_GEN_CONFIG): boolean {
+  if (!runsTrough(cfg) || !troughEligible(levelIndex)) return false;
+  const rs = runSeed >>> 0;
+  const candidate = (m: number): boolean => {
+    if (!troughEligible(m)) return false;
+    const seed = deriveSeed(rs, m);
+    if (pickSurface(seed, m, cfg) !== 'flat') return false;
+    return chance(mulberry32(deriveSeed(seed, TROUGH_SALT)), TROUGH_CHANCE);
+  };
+  return troughFromCandidates(levelIndex, candidate);
+}
+
+/**
+ * Trough arena, on the arena stream of a trough level only. Draws: shape among rect and
+ * rectObstacles (band weights), height, aspect from max(TROUGH_MIN_ASPECT, band min) to the band
+ * max (a wider floor), then obstacles: at most TROUGH_MAX_OBSTACLES, placed inside the floor band
+ * (troughFloorArena), so the steep rims stay clear.
+ */
+export function generateTroughArena(r: Rng, band: Band): ArenaDef {
+  const b = BANDS[band];
+  const shapes = ['rect', 'rectObstacles'] as const;
+  const shape = rngPick(r, shapes, shapes.map((k) => b.shapeWeights[k]));
+  const height = intStep(r, b.arenaHeight.min, b.arenaHeight.max, 20);
+  const lo = Math.max(TROUGH_MIN_ASPECT, b.aspect.min);
+  let width = Math.min(ARENA_MAX_WIDTH, roundTo(height * range(r, lo, Math.max(lo, b.aspect.max)), 20));
+  while (width / height > ARENA_MAX_ASPECT) width -= 20;
+  const base: ArenaDef = { shape, width, height, cornerRadius: 0, obstacles: [], spawnPoint: { x: 0, y: 0 } };
+  if (shape !== 'rectObstacles') return base;
+  const n = Math.min(TROUGH_MAX_OBSTACLES, rngInt(r, b.obstacleCount.min, b.obstacleCount.max));
+  const obstacles = placeObstacles(r, troughFloorArena(base), n);
+  return obstacles.length === 0 ? { ...base, shape: 'rect' } : { ...base, obstacles };
+}
+
+/** Trough spawn point test after the pull (flat rules: edge margin, spawn clearance, obstacles). */
+export function troughSpawnOk(arena: ArenaDef): (p: Vec2) => boolean {
+  return (p) => spawnPointOk(arena, p, false);
 }
 
 /** docs/02 section 6.2. Per attempt draws: orientation, length, cx, cy. Stops at the first exhausted obstacle. */
@@ -1132,10 +1180,12 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const objTable = short ? (bossLevel ? shortBossTable(band) : shortObjectiveTable(band, lengthSec)) : r3 ? r3ObjectiveTable(band, bossLevel) : LONG_BANDS[band];
   const b = short ? { ...BANDS[band], surviveSec: objTable.surviveSec, scoreTimeSec: objTable.scoreTimeSec, rampSec: objTable.rampSec } : r3 ? r3BandParams(band, bossLevel) : long ? longBandParams(band) : BANDS[band];
   // D13: the surface stream is separate, so drawing it here moves no draw of any flat level.
-  const surface = pickSurface(seed, levelIndex, cfg);
+  // Trough wave: a trough is drawn only on a flat candidate, from its own stream (no other draw moves).
+  const trough = isTroughLevel(runSeed, levelIndex, cfg);
+  const surface: SurfaceKind = trough ? 'trough' : pickSurface(seed, levelIndex, cfg);
   const cyl = surface === 'cylinder';
   const taste = drumTaste(levelIndex, cfg);
-  const arena = cyl ? cylinderArena(seed, levelIndex, cfg, stream(s, SALT.arena), band) : generateArena(stream(s, SALT.arena), band);
+  const arena = cyl ? cylinderArena(seed, levelIndex, cfg, stream(s, SALT.arena), band) : trough ? generateTroughArena(stream(s, SALT.arena), band) : generateArena(stream(s, SALT.arena), band);
   // Drum taste: the gentle band 1 roster (grunt, wanderer, pinwheel) from the same stream.
   const v1Roster = generateRoster(stream(s, SALT.roster), taste ? 1 : band, cfg);
   const loadout = stream(s, SALT.loadout);
@@ -1174,14 +1224,17 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const leaver = lw > 0 ? applyLeaver(stream(s, LEAVER_SALT), lw, arena, staged.roster, staged, cyl) : null;
   const { roster, waves: preBeat } = leaver ?? staged;
   // Version 11: formation beats join the waves last, on their own stream, from the final roster.
-  const list = beats !== null ? applyFormations(stream(s, SHORT_FORMATION_SALT), beats, arena, roster, preBeat, b, ramp, cyl) : preBeat;
+  const formed = beats !== null ? applyFormations(stream(s, SHORT_FORMATION_SALT), beats, arena, roster, preBeat, b, ramp, cyl) : preBeat;
+  // Trough: fixed spawn points pulled in from the rims toward the floor, no draw (trough.ts).
+  const list = trough ? troughWaves(formed, troughSpawnOk(arena)) : formed;
   const loop = loopFields(list, scheduleSec, b.intervalEndSec, long ? LONG_MIN_REPEAT_SEC : 0);
-  const version = short ? GENERATOR_VERSION_V11 : t10 ? GENERATOR_VERSION_V10 : t3 ? GENERATOR_VERSION_V9 : r3 ? GENERATOR_VERSION_V8 : r1 ? GENERATOR_VERSION_V6 : long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION;
+  const version = trough ? GENERATOR_VERSION_V12 : short ? GENERATOR_VERSION_V11 : t10 ? GENERATOR_VERSION_V10 : t3 ? GENERATOR_VERSION_V9 : r3 ? GENERATOR_VERSION_V8 : r1 ? GENERATOR_VERSION_V6 : long ? GENERATOR_VERSION_V5 : cyl ? GENERATOR_VERSION_V4 : v2 ? GENERATOR_VERSION_V2 : GENERATOR_VERSION;
   const waves = scheduleOf(b, list, loop.from, loop.period, 0, levelMaxLive(band, levelIndex, version));
   if (longObjective !== null && objective.kind === 'destroy') objective = { kind: 'destroy', count: destroyCountFor(waves, longObjective.clearSec) };
   const drawn = generateHazards(stream(s, SALT.hazards), arena, b, cfg, objective, cyl);
   // Drum taste: at most one well and no spawners (the boss rule 12 step, no draw).
-  const hazards = taste ? bossHazards(drawn) : drawn;
+  // Trough: at most one well, on the floor band; spawners inside the spawn band (no draw).
+  const hazards = taste ? bossHazards(drawn) : trough ? troughHazards(drawn, arena.width) : drawn;
   const whole = r3
     ? bossLevel
       ? bossLevelPar(waves, objective, bossLevelAtSec(cfg), t10 ? V10_COLLECT_RATE : undefined)
@@ -1353,7 +1406,7 @@ export interface LevelBeat {
  * on its attempt seed). Empty for any other version. Pure; for tests, reports and the HUD.
  */
 export function levelBeats(def: LevelDef): LevelBeat[] {
-  if (def.generatorVersion !== GENERATOR_VERSION_V11) return [];
+  if (!isShortVersion(def.generatorVersion)) return [];
   const s = attemptSeed(def.seed, def.retries ?? 0);
   const boss = def.boss !== undefined;
   const lengthSec = boss ? 0 : shortLevelSec(def.runSeed, def.levelIndex);
