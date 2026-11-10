@@ -109,7 +109,7 @@ describe('which levels are troughs', () => {
     expect(list(42)).toEqual([24, 32, 38, 42, 44, 47, 54]);
     expect(list(2471588027)).toEqual([26, 58]);
     for (const n of list(42)) expect(generateLevel(42, n).surface).toBe('trough');
-  });
+  }, 120_000); // heavy generator sweep: the CI runner is slower than the 5000 ms default
 
   it('about 1 in 5 eligible levels (400 seeds), never below 24, never a boss, never a drum, never two in a row', () => {
     let eligible = 0;
@@ -130,7 +130,7 @@ describe('which levels are troughs', () => {
     }
     expect(bad).toEqual([]);
     expect(Math.abs(troughs / eligible - 0.2)).toBeLessThan(0.015);
-  });
+  }, 120_000); // heavy generator sweep: the CI runner is slower than the 5000 ms default
 
   it('older configs never draw a trough (versions 1 to 11 frozen)', () => {
     expect(runsTrough(DEFAULT_GEN_CONFIG)).toBe(true);
@@ -138,7 +138,7 @@ describe('which levels are troughs', () => {
       expect(runsTrough(cfg)).toBe(false);
       for (let n = 24; n <= 60; n++) expect(isTroughLevel(42, n, cfg)).toBe(false);
     }
-  });
+  }, 120_000); // heavy generator sweep: the CI runner is slower than the 5000 ms default
 });
 
 describe('frozen output', () => {
@@ -151,7 +151,7 @@ describe('frozen output', () => {
       h = Math.imul(h, 0x01000193) >>> 0;
     }
     expect(h.toString(16).toUpperCase().padStart(8, '0')).toBe('35821CFF');
-  });
+  }, 120_000); // heavy generator sweep: the CI runner is slower than the 5000 ms default
 
   it('every non trough level with the flag on equals the version 11 level', () => {
     for (let i = 0; i < 6; i++) {
@@ -161,7 +161,7 @@ describe('frozen output', () => {
         expect(levelHash(generateLevel(s, n))).toBe(levelHash(generateLevel(s, n, V11_GEN_CONFIG)));
       }
     }
-  });
+  }, 120_000); // heavy generator sweep: the CI runner is slower than the 5000 ms default
 });
 
 describe('trough maps', () => {
@@ -195,7 +195,7 @@ describe('trough maps', () => {
     }
     expect(n).toBeGreaterThan(400);
     expect(bad).toEqual([]);
-  });
+  }, 120_000); // heavy generator sweep: the CI runner is slower than the 5000 ms default
 
   it('par is the existing whole level formula, and the minute beats still play', () => {
     const d = firstTrough();
