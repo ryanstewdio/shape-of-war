@@ -16,17 +16,40 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - name: Classify changes
+        id: classify
+        run: |
+          docs_only=false
+          if [ -n "${{ github.base_ref }}" ]; then
+            files=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+            if [ -n "$files" ]; then
+              docs_only=true
+              while IFS= read -r f; do
+                case "$f" in
+                  docs/*|*.md) ;;
+                  *) docs_only=false ;;
+                esac
+              done <<< "$files"
+            fi
+          fi
+          echo "docs_only=$docs_only"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+      - if: steps.classify.outputs.docs_only != 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - name: Install dependencies
+        if: steps.classify.outputs.docs_only != 'true'
         run: npm ci
       - name: Tests
+        if: steps.classify.outputs.docs_only != 'true'
         run: npm test
       - name: Build
+        if: steps.classify.outputs.docs_only != 'true'
         run: npm run build
       - name: No PixiJS v7 API
+        if: steps.classify.outputs.docs_only != 'true'
         run: |
           hits=$(grep -rnE "beginFill|endFill|lineStyle|drawRect|drawCircle|drawEllipse|drawPolygon|drawRoundedRect|drawStar|app\.view|cacheAsBitmap|getChildByName|\.interactive\b|\.name\s*=|BLEND_MODES|PIXI\." src/ tests/ || true)
           if [ -n "$hits" ]; then
