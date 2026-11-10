@@ -9,7 +9,8 @@ import {
   DEFAULT_GEN_CONFIG,
   GENERATOR_VERSION_V8,
   GENERATOR_VERSION_V9,
-  GENERATOR_VERSION_V10,
+  GENERATOR_VERSION_V11,
+  V10_GEN_CONFIG,
   V1_GEN_CONFIG,
   V2_GEN_CONFIG,
   V3_GEN_CONFIG,
@@ -96,13 +97,14 @@ describe('T3 boss order and first fight', () => {
   it('generated, 20 seeds: level 5 Brood at 0.75 and level 10 Warden under V9; Warden and Brood at 1 under V8', () => {
     for (let i = 0; i < 20; i++) {
       const seed = seedAt(i);
-      const l5 = generateLevel(seed, 5);
-      const l10 = generateLevel(seed, 10);
+      // foundry-short-levels: pinned on version 10, whose entrance is AT (version 11 enters at 85 s).
+      const l5 = generateLevel(seed, 5, V10_GEN_CONFIG);
+      const l10 = generateLevel(seed, 10, V10_GEN_CONFIG);
       expect(l5.boss).toEqual({ id: 'brood', tier: 1, atSec: AT, hpMul: 0.75 });
       expect(l10.boss).toEqual({ id: 'warden', tier: 1, atSec: AT, hpMul: 1 });
-      for (const n of [15, 20, 50, 55]) expect(generateLevel(seed, n).boss, `level ${n}`).toEqual(bossForLevel(n, AT));
-      expect(validateLevel(l5, DEFAULT_GEN_CONFIG).errors).toEqual([]);
-      expect(validateLevel(l10, DEFAULT_GEN_CONFIG).errors).toEqual([]);
+      for (const n of [15, 20, 50, 55]) expect(generateLevel(seed, n, V10_GEN_CONFIG).boss, `level ${n}`).toEqual(bossForLevel(n, AT));
+      expect(validateLevel(l5, V10_GEN_CONFIG).errors).toEqual([]);
+      expect(validateLevel(l10, V10_GEN_CONFIG).errors).toEqual([]);
       expect(generateLevel(seed, 5, V8_GEN_CONFIG).boss).toEqual({ id: 'warden', tier: 1, atSec: AT, hpMul: 1 });
       expect(generateLevel(seed, 10, V8_GEN_CONFIG).boss).toEqual({ id: 'brood', tier: 1, atSec: AT, hpMul: 1 });
     }
@@ -129,7 +131,8 @@ describe('T3 boss order and first fight', () => {
 function expectTaste(d: LevelDef): void {
   const at = `seed ${d.runSeed}`;
   // Par ramp: version 10 keeps the drum taste.
-  expect(d.generatorVersion, at).toBe(GENERATOR_VERSION_V10);
+  // foundry-short-levels: the default config builds version 11; the taste is unchanged.
+  expect(d.generatorVersion, at).toBe(GENERATOR_VERSION_V11);
   expect(d.surface, at).toBe('cylinder');
   expect(d.arena.shape, at).toBe('rect');
   expect(d.arena.obstacles, at).toEqual([]);

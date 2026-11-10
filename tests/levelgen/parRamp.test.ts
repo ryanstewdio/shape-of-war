@@ -1,5 +1,7 @@
 // Tester Tom par ramp (generator version 10, Ryan 2026-11-09): quarter geom pickup par and the
 // gentler early ramp on levels 1 to 14. Version 9 stays frozen under V9_GEN_CONFIG.
+// foundry-short-levels: the default now builds version 11, so every version 10 pin here runs on
+// V10_GEN_CONFIG (version 10 is frozen there, byte for byte).
 import { describe, expect, it } from 'vitest';
 import { PAR_RAMP_LATE_BUDGET, R5_LATE_BUDGET, generateLevel, levelHash, wholeLevelTarget } from '../../src/levelgen/generator';
 import {
@@ -17,6 +19,7 @@ import {
   V6_GEN_CONFIG,
   V8_GEN_CONFIG,
   V9_GEN_CONFIG,
+  V10_GEN_CONFIG,
   bandOf,
   fmix32,
   isLongVersion,
@@ -46,10 +49,10 @@ describe('par ramp config and version', () => {
     expect({ ...V9_GEN_CONFIG, enableParRamp: true }).toEqual(DEFAULT_GEN_CONFIG);
   });
 
-  it('version 10 is long, R3 and T3; every default level is version 10, V9_GEN_CONFIG version 9', () => {
+  it('version 10 is long, R3 and T3; every V10_GEN_CONFIG level is version 10, V9_GEN_CONFIG version 9', () => {
     expect(isLongVersion(GENERATOR_VERSION_V10) && isR3Version(GENERATOR_VERSION_V10) && isT3Version(GENERATOR_VERSION_V10)).toBe(true);
     for (const n of [1, 5, 8, 10, 14, 15, 30]) {
-      expect(generateLevel(42, n).generatorVersion, `level ${n}`).toBe(GENERATOR_VERSION_V10);
+      expect(generateLevel(42, n, V10_GEN_CONFIG).generatorVersion, `level ${n}`).toBe(GENERATOR_VERSION_V10);
       expect(generateLevel(42, n, V9_GEN_CONFIG).generatorVersion, `level ${n}`).toBe(GENERATOR_VERSION_V9);
     }
   });
@@ -62,12 +65,12 @@ describe('par ramp config and version', () => {
   }, 60_000);
 
   it('J11 and J12 tie version 9 and 10 to the flag', () => {
-    const v10 = generateLevel(42, 6);
-    expect(validateLevel(v10, DEFAULT_GEN_CONFIG).errors).toEqual([]);
+    const v10 = generateLevel(42, 6, V10_GEN_CONFIG);
+    expect(validateLevel(v10, V10_GEN_CONFIG).errors).toEqual([]);
     expect(ids(validateLevel(v10, V9_GEN_CONFIG).errors)).toContain('J12');
     const v9 = generateLevel(42, 6, V9_GEN_CONFIG);
     expect(validateLevel(v9, V9_GEN_CONFIG).errors).toEqual([]);
-    expect(ids(validateLevel(v9, DEFAULT_GEN_CONFIG).errors)).toContain('J11');
+    expect(ids(validateLevel(v9, V10_GEN_CONFIG).errors)).toContain('J11');
   });
 });
 
@@ -98,11 +101,11 @@ describe('par ramp levels', () => {
     const late: [number, number] = [0, 0];
     for (const seed of seeds) {
       for (let n = 1; n <= 20; n++) {
-        const a = generateLevel(seed, n);
+        const a = generateLevel(seed, n, V10_GEN_CONFIG);
         const b = generateLevel(seed, n, V9_GEN_CONFIG);
         const at = `seed ${seed} level ${n}`;
         expect(a.objective.kind, at).toBe(b.objective.kind);
-        expect(validateLevel(a, DEFAULT_GEN_CONFIG).errors, at).toEqual([]);
+        expect(validateLevel(a, V10_GEN_CONFIG).errors, at).toEqual([]);
         expect(a.waves.maxLiveEnemies, at).toBe(Math.round(b.waves.maxLiveEnemies * parRampScale(n)));
         // 11 to 14 ramp by 0.93 to 0.98: the R1_MIN_WAVE floor and the shifted v2 stage can cancel
         // that on one level, so those count only in the total below.
@@ -120,7 +123,7 @@ describe('par ramp levels', () => {
   it('boss levels keep the boss timing and every wave time (the ramp moves only wave sizes)', () => {
     for (const seed of seeds) {
       for (const n of [5, 10, 15]) {
-        const a = generateLevel(seed, n);
+        const a = generateLevel(seed, n, V10_GEN_CONFIG);
         const b = generateLevel(seed, n, V9_GEN_CONFIG);
         expect(a.boss).toEqual(b.boss);
         expect(a.boss?.atSec).toBe(BOSS_R3_LEVEL_AT_SEC);
@@ -136,7 +139,7 @@ describe('par ramp levels', () => {
     expect(R1_STAR_MULS).toEqual([1, 1.25, 1.5]);
     for (const seed of seeds) {
       for (let n = 1; n <= 20; n++) {
-        const d = generateLevel(seed, n);
+        const d = generateLevel(seed, n, V10_GEN_CONFIG);
         const want = d.boss === undefined ? wholeLevelPar(d.waves, d.objective, V10_COLLECT_RATE) : bossLevelPar(d.waves, d.objective, d.boss.atSec, V10_COLLECT_RATE);
         expect(d.par, `seed ${seed} level ${n}`).toBe(want.par);
         expect(d.stars).toEqual(want.stars);
@@ -148,7 +151,7 @@ describe('par ramp levels', () => {
   it('levels 1 to 10: par at most 0.6 of the version 9 par (Tom: a clean aggressive run reaches 1 star)', () => {
     for (const seed of seeds) {
       for (let n = 1; n <= 10; n++) {
-        const ratio = generateLevel(seed, n).par / generateLevel(seed, n, V9_GEN_CONFIG).par;
+        const ratio = generateLevel(seed, n, V10_GEN_CONFIG).par / generateLevel(seed, n, V9_GEN_CONFIG).par;
         expect(ratio, `seed ${seed} level ${n}`).toBeLessThan(0.6);
         expect(ratio, `seed ${seed} level ${n}`).toBeGreaterThan(0.25);
       }
@@ -156,10 +159,10 @@ describe('par ramp levels', () => {
   });
 
   it('report pins: seed 2471588027 level 6 and seed 42 level 1 at Normal', () => {
-    const l6 = generateLevel(2471588027, 6);
+    const l6 = generateLevel(2471588027, 6, V10_GEN_CONFIG);
     expect(l6.par).toBe(1_273_500);
     expect(l6.objective).toEqual({ kind: 'destroy', count: 395 });
-    const l1 = generateLevel(42, 1);
+    const l1 = generateLevel(42, 1, V10_GEN_CONFIG);
     expect(l1.par).toBe(338_000);
     expect(l1.objective).toEqual({ kind: 'survive', durationSec: 205 });
   });

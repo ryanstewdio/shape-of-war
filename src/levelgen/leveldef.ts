@@ -64,6 +64,14 @@ export const GENERATOR_VERSION_V9 = 9;
  * the live cap, levels 1 to 14). Versions 1 to 9 are unchanged, byte for byte (V9_GEN_CONFIG builds 9).
  */
 export const GENERATOR_VERSION_V10 = 10;
+/**
+ * Short levels (Ryan, 2026-11-10). Generator version of every level built with the version 10
+ * config plus GenConfig.enableShortLevels (the default config): level 1 about 90 s, levels 2 to 4
+ * ramping, from level 5 each non boss level drawing 120 to 180 s (SHORT_LENGTHS, short.ts), the
+ * boss entrance at BOSS_SHORT_LEVEL_AT_SEC, regular score races and a beat every minute with a
+ * final rush. Versions 1 to 10 are unchanged, byte for byte (V10_GEN_CONFIG builds 10).
+ */
+export const GENERATOR_VERSION_V11 = 11;
 
 /**
  * Version 6 star thresholds as multiples of par, each rounded to the 500 grid: a strong player
@@ -71,15 +79,18 @@ export const GENERATOR_VERSION_V10 = 10;
  */
 export const R1_STAR_MULS: readonly [number, number, number] = [1, 1.25, 1.5];
 
-/** True when a def carries the long level pacing (version 5 to 10). */
+/** True when a def carries the long level pacing (version 5 to 11). */
 export const isLongVersion = (v: number): boolean =>
   v === GENERATOR_VERSION_V5 || v === GENERATOR_VERSION_V6 || v === GENERATOR_VERSION_V7 || isR3Version(v);
 
-/** True when a def carries the R3 length tables and boss entrance (version 8, 9 or 10). */
+/** True when a def carries the R3 tables (version 8 to 11; version 11 swaps in the short lengths). */
 export const isR3Version = (v: number): boolean => v === GENERATOR_VERSION_V8 || isT3Version(v);
 
-/** True when a def carries the Tester 3 boss order and drum taste (version 9 or 10). */
-export const isT3Version = (v: number): boolean => v === GENERATOR_VERSION_V9 || v === GENERATOR_VERSION_V10;
+/** True when a def carries the Tester 3 boss order and drum taste (version 9, 10 or 11). */
+export const isT3Version = (v: number): boolean => v === GENERATOR_VERSION_V9 || hasParRamp(v);
+
+/** True when a def carries the Tester Tom par ramp (version 10 or 11). */
+export const hasParRamp = (v: number): boolean => v === GENERATOR_VERSION_V10 || v === GENERATOR_VERSION_V11;
 
 /**
  * Tester Tom par ramp (version 10): multiplier on the wave budget and on maxLiveEnemies of level n,
@@ -93,13 +104,13 @@ export function parRampScale(levelIndex: number): number {
   return PAR_RAMP_SCALE[levelIndex - 1] ?? 1;
 }
 
-/** Pure: maxLiveEnemies of a level: the band value, times the ramp on a version 10 level. */
+/** Pure: maxLiveEnemies of a level: the band value, times the ramp on a version 10 or 11 level. */
 export function levelMaxLive(band: Band, levelIndex: number, generatorVersion: number): number {
   const base = BANDS[band].maxLiveEnemies;
-  return generatorVersion === GENERATOR_VERSION_V10 ? Math.round(base * parRampScale(levelIndex)) : base;
+  return hasParRamp(generatorVersion) ? Math.round(base * parRampScale(levelIndex)) : base;
 }
 
-/** True when a def's stars sit at R1_STAR_MULS x par (version 6, 8, 9 or 10); else 1, 2 and 4 x par. */
+/** True when a def's stars sit at R1_STAR_MULS x par (version 6, 8 to 11); else 1, 2 and 4 x par. */
 export const hasR1Stars = (v: number): boolean => v === GENERATOR_VERSION_V6 || isR3Version(v);
 
 /** V3 boss ids, in schedule order (docs/13). A BossView id is the index in this list. */
@@ -364,6 +375,14 @@ export interface GenConfig {
    * and Free Play never read it.
    */
   enableParRamp?: boolean;
+  /**
+   * Short levels (Ryan, 2026-11-10). On together with the version 10 flags: the SHORT_LENGTHS
+   * level lengths, the shorter boss entrance, regular score races and the minute beats (short.ts);
+   * reports GENERATOR_VERSION_V11. Optional; only true turns it on, so absent or false builds
+   * version 10 byte for byte. Default on. Endless and Free Play never read it. Older V*_GEN_CONFIG
+   * literals inherit true but never meet it: runsShort needs enableParRamp too.
+   */
+  enableShortLevels?: boolean;
 }
 
 export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
@@ -380,6 +399,7 @@ export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>(
   enableLeaver: true,
   enableT3: true,
   enableParRamp: true,
+  enableShortLevels: true,
 });
 
 /** DEFAULT_GEN_CONFIG with the v2 enemies, bosses and cylinder off: the v1 generator, byte for byte. */
@@ -436,6 +456,9 @@ export const V8_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...
 /** DEFAULT_GEN_CONFIG with the par ramp off: the version 9 generator (T3 on), byte for byte. */
 export const V9_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableParRamp: false });
 
+/** DEFAULT_GEN_CONFIG with the short levels off: the version 10 generator (par ramp on), byte for byte. */
+export const V10_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableShortLevels: false });
+
 /** True when a config builds R1 paced levels (long levels and R1 pacing both on). */
 export const runsR1 = (cfg: Readonly<GenConfig>): boolean => cfg.enableLongLevels === true && cfg.enableR1Pacing === true;
 
@@ -447,6 +470,9 @@ export const runsT3 = (cfg: Readonly<GenConfig>): boolean => runsR3(cfg) && cfg.
 
 /** True when a config builds par ramp levels (version 10): the T3 config plus enableParRamp. */
 export const runsParRamp = (cfg: Readonly<GenConfig>): boolean => runsT3(cfg) && cfg.enableParRamp === true;
+
+/** True when a config builds short levels (version 11): the par ramp config plus enableShortLevels. */
+export const runsShort = (cfg: Readonly<GenConfig>): boolean => runsParRamp(cfg) && cfg.enableShortLevels === true;
 
 export interface ValidationResult {
   ok: boolean;
