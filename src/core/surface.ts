@@ -2,9 +2,12 @@
 // wrap and the bounds; toXYZ is for render and camera. V3-H C0 (D13) adds the cylinder: u wraps,
 // v is bounded by the rims at plus or minus H/2. Pure: no PRNG, no DOM, no allocation in delta or wrap.
 
+import { troughHeight } from './trough';
+
 /** v1 has a single kind. v2 adds 'cylinder' | 'torus' | 'sphere' | 'capsule' | 'twistedBand'. */
 /** V3-H (D13) contract stub by Fable: 'cylinder' wraps u (docs/09 section 2.2). Forge implements it. */
-export type SurfaceKind = 'flat' | 'cylinder';
+/** Trough wave contract stub by Morpheus (2026-11-10): 'trough' is a valley across the width, no wrap (src/core/trough.ts). */
+export type SurfaceKind = 'flat' | 'cylinder' | 'trough';
 
 export interface Vec3 {
   x: number;
@@ -109,7 +112,38 @@ export function cylinderSurface(width: number, height: number): Surface {
   });
 }
 
+const TROUGH_TOPOLOGY: Readonly<Topology> = Object.freeze({ wrapU: false, wrapV: false, flipVOnWrapU: false });
+
+/**
+ * Trough (stub): flat delta and wrap (nothing wraps; the rims are arena walls), z from the shared
+ * profile in src/core/trough.ts. Forge adds the pull; Glow owns how it is drawn.
+ */
+export function troughSurface(width: number, height: number): Surface {
+  return Object.freeze({
+    kind: 'trough',
+    topology: TROUGH_TOPOLOGY,
+    width,
+    height,
+    delta(ax: number, ay: number, bx: number, by: number, out: { x: number; y: number }): { x: number; y: number } {
+      out.x = bx - ax;
+      out.y = by - ay;
+      return out;
+    },
+    wrap(): boolean {
+      return false;
+    },
+    toXYZ(u: number, v: number, out: Vec3): Vec3 {
+      out.x = u;
+      out.y = v;
+      out.z = troughHeight(u, width);
+      return out;
+    },
+  });
+}
+
 /** Build the surface for a level. Unknown kinds fall back to flat. */
 export function makeSurface(kind: SurfaceKind, width: number, height: number): Surface {
-  return kind === 'cylinder' ? cylinderSurface(width, height) : flatSurface(width, height);
+  if (kind === 'cylinder') return cylinderSurface(width, height);
+  if (kind === 'trough') return troughSurface(width, height);
+  return flatSurface(width, height);
 }

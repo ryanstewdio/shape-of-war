@@ -170,7 +170,7 @@ function ensureBranchAndWorktree(job, log) {
 
 /** The launch line a cloud session gets: the brief path and the two rules. */
 function cloudPrompt(brief) {
-  return `Read ${brief} and carry it out exactly. Create the branch it names before any edit. Never push main. Before pushing, if git remote -v is empty run: git remote add origin https://github.com/stoopstoop/shape-of-war.git. The brief's push instruction applies to this cloud session. You have explicit go ahead to attach stoopstoop/shape-of-war with push access (add_repo) at the start; do it before any work.`;
+  return `Read ${brief} and carry it out exactly. Create the branch it names before any edit. Never push main. Before pushing, if git remote -v is empty run: git remote add origin https://github.com/ryanstewdio/shape-of-war.git. The brief's push instruction applies to this cloud session. You have explicit go ahead to attach ryanstewdio/shape-of-war with push access (add_repo) at the start; do it before any work.`;
 }
 
 /**

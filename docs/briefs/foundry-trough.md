@@ -1,6 +1,6 @@
 # Foundry: trough
 
-Create and check out branch feat/foundry-trough before any edit. Never push main. You have explicit go ahead now: call add_repo for stoopstoop/shape-of-war with push access before your first commit, so the push at the end works. If git remote -v is empty first run: git remote add origin https://github.com/stoopstoop/shape-of-war.git
+Create and check out branch feat/foundry-trough before any edit. Never push main. You have explicit go ahead now: call add_repo for ryanstewdio/shape-of-war with push access before your first commit, so the push at the end works. If git remote -v is empty first run: git remote add origin https://github.com/ryanstewdio/shape-of-war.git
 
 Model: opus
 Owned paths: src/levelgen/ (surface choice, trough maps, Free Play trough level), tests/levelgen/, tests/qa/ pins that move because of this change

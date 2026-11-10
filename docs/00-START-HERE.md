@@ -3,7 +3,7 @@
 Orientation for any Claude session in the Shape of War project. Written by Fable 2026-11-08 at build 585f174. Current state lives in docs/STATUS.md; this file is the map. If the two disagree, STATUS.md wins and this file needs a fix.
 
 ## What the game is
-A twin-stick neon arena shooter, touch only, built as a PWA. First target device: Samsung Galaxy Z Fold 7 (cover and inner screen, landscape). Testers also play on Android phones and iPhones from one link. Name: Shape Legend (ruled 2026-11-09, formerly Shapes of War). The repo, the GitHub Pages path and storage keys keep `shape-of-war` and `sow`. Public phase plan: docs/16-public-plan.md.
+A twin-stick neon arena shooter, touch only, built as a PWA. First target device: Samsung Galaxy Z Fold 7 (cover and inner screen, landscape). Testers also play on Android phones and iPhones from one link. Name: Shape Legend (ruled 2026-11-09, formerly Shapes of War). The repo is github.com/ryanstewdio/shape-of-war (public, moved 2026-11-10); the live game is https://play.shapelegend.com/ (Pages custom domain); storage keys keep `sow`. Public phase plan: docs/16-public-plan.md.
 
 - Modes: Adventure (numbered levels, generated from a run seed, 1 to 3 stars, plus an iridescent 4th star on Insane), Endless (segments, a boss every 6 segments), Free Play (setup screen: enemies and density, lives, length or timed score attack, loadout, bosses, wells, drift, arena size).
 - Difficulty: Easy, Normal, Hard, Insane, picked on each level intro (src/core/difficulty.ts). Normal must stay bit identical to the pre difficulty game (tests/qa/normalDifficulty.test.ts).

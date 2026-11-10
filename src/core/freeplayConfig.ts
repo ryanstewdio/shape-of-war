@@ -13,6 +13,8 @@ export type FreePlayBosses = 'off' | 'every3' | BossId;
 export type FreePlayWells = 'off' | 'normal' | 'many';
 export type FreePlayDrift = 'off' | 'low' | 'high';
 export type FreePlaySize = 'small' | 'medium' | 'large';
+/** Trough wave stub (Morpheus 2026-11-10): Free Play arena surface. Absent means flat. */
+export type FreePlaySurface = 'flat' | 'trough';
 
 export interface FreePlayConfig {
   /** Enemy kinds allowed; empty means the normal Endless roster. */
@@ -29,6 +31,8 @@ export interface FreePlayConfig {
   readonly wells: FreePlayWells;
   readonly drift: FreePlayDrift;
   readonly size: FreePlaySize;
+  /** Trough wave stub: absent or 'flat' is a flat arena (old saves have no field). */
+  readonly surface?: FreePlaySurface;
 }
 
 export const DEFAULT_FREE_PLAY: FreePlayConfig = Object.freeze({
