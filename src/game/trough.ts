@@ -16,10 +16,10 @@ import type { World } from './world';
 
 /**
  * Pull speed (u/s) per unit of profile slope at normal difficulty. The rim slope is
- * 2 x TROUGH_DEPTH_SHARE x TROUGH_POWER (about 1.66), so the rim pull is about 160 u/s, the drum
- * burst speed, well under SHIP_SPEED (420) even at insane (x 1.6).
+ * 2 x TROUGH_DEPTH_SHARE x TROUGH_POWER (about 1.66), so the rim pull is about 240 u/s at normal and
+ * about 382 u/s at insane (x 1.6), still under SHIP_SPEED (420), so the rim stays reachable by thrust.
  */
-export const TROUGH_PULL = 96;
+export const TROUGH_PULL = 144;
 
 /** Pure: true when the level plays on the trough surface. */
 export function isTrough(level: LevelDef): boolean {
