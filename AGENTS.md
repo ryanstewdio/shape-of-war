@@ -41,7 +41,7 @@ Never change these paths, even if an issue seems to ask you to:
 Outside this list, a path may change only if it is on the issue's allowed list. A path that is on neither list stays untouched.
 
 ## 5. Branch and pull request
-- Name the branch `cx/<issue number>-<slug>` and cut it from current main.
+- Name the branch `cx/<issue number>-<slug>`. Cut it from the commit Codex checks out for you (the local branch may be named `work`), and record that commit's sha as the start sha before any change. Do not fetch: the sandbox has no network beyond what the issue names. Put the start sha in the pull request body.
 - Open one pull request against main. Its body holds, in this order: the bad news first; the exact output of `git diff --stat`; what you left out; each command you ran with the exact tail of its output; risks; and the model name exactly as the Codex model control shows it.
 - Post a verdict in the task thread in under 40 lines. Its last line is either `Verdict: ready for review` or `Verdict: blocked: <reason>`.
 - You get at most three revision rounds on one pull request. After the third, stop and report.
@@ -61,7 +61,7 @@ Run these in order and report each result:
 4. The PixiJS v7 grep, exactly as .github/workflows/ci.yml runs it. It must print nothing:
    `grep -rnE "beginFill|endFill|lineStyle|drawRect|drawCircle|drawEllipse|drawPolygon|drawRoundedRect|drawStar|app\.view|cacheAsBitmap|getChildByName|\.interactive\b|\.name\s*=|BLEND_MODES|PIXI\." src/ tests/`
 5. The dash check, exactly as .github/workflows/ci.yml runs it, over the files your branch changed against main:
-   `git diff --name-only --diff-filter=AMR origin/main...HEAD | tr '\n' '\0' | xargs -0 perl -CSD -ne 'if (/[\x{2013}\x{2014}]/) { print "$ARGV:$.: $_"; $f=1 } END { exit($f ? 1 : 0) }'`
+   `git diff --name-only --diff-filter=AMR <start sha>...HEAD | tr '\n' '\0' | xargs -0 perl -CSD -ne 'if (/[\x{2013}\x{2014}]/) { print "$ARGV:$.: $_"; $f=1 } END { exit($f ? 1 : 0) }'`
 
 If a test fails only because it ran over its time budget, report it as a timing only failure and keep it separate from real failures.
 
