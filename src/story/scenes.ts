@@ -20,6 +20,9 @@ export type Visual =
   | 'ship' // the pilot ship at centre with a glow pulse
   | 'shipName' // the call sign above the ship, the grid brightens once
   | 'gridDrain' // wide grid, colour drains from the far corners
+  | 'gridFull' // wide grid in full colour, slowly turning
+  | 'dimSpread' // colour drains from the far corners as the Dim spreads inward, grey static creeping along the lattice
+  | 'dimSwarm' // wide grid; grey swarms gather where Geoms once glowed
   | 'torus' // Torus beside the ship
   | 'foe' // one or more enemy icons
   | 'foeAction' // the ship with enemy icons and action strokes
@@ -112,16 +115,19 @@ export const OPENING_ID = 'opening';
 const LIST: readonly Scene[] = [
   scene(OPENING_ID, 'opening', 1, [
     { visual: 'lattice', note: 'black screen; one grid dot glows, then the lattice draws out from it', lines: [n('You wake in the dark. No sky. No ground.'), n('Only lines of light, and one small ship.')] },
-    { visual: 'ship', note: 'pilot ship at centre, glow pulse; call sign picker opens after the text', picker: true, lines: [n('The ship is yours. It waits for a name.'), n('What will Vertane call you?')] },
-    { visual: 'shipName', note: 'the call sign types out above the ship; the grid brightens once', lines: [n('{callsign}. The grid hums it back,'), n('as if it waited a long time to hear it.')] },
-    { visual: 'gridDrain', note: 'wide grid; colour drains from the far corners in a slow dim', lines: [n('This is Vertane, a world of shapes.'), n('Once it sang. Now the dim is spreading.')] },
-    { visual: 'torus', note: 'Torus fades in beside the ship, nested shapes turning', lines: [n('Vertane called you here, on purpose.'), t('You heard it. Good. Now, the trials.')] },
+    { visual: 'ship', note: 'pilot ship at centre, glow pulse; call sign picker opens after the text', picker: true, lines: [n('The ship is yours. It waits for a name.'), n('What will the Vertane galaxy call you?')] },
+    { visual: 'shipName', note: 'the call sign types out above the ship; the grid brightens once', lines: [n('{callsign}, the Shape Legend.'), n('The grid prayers have been answered.')] },
+    { visual: 'gridFull', note: 'wide grid in full colour, slowly turning', lines: [n('Welcome to Vertane, a once peaceful'), n('and brilliant galaxy.')] },
+    { visual: 'dimSpread', note: 'colour drains from the far corners as the Dim spreads inward, grey static creeping along the lattice', lines: [n('Until the Dim arrived, an ancient plague'), n('spreading to extinguish our brightness.')] },
+    { visual: 'torus', note: 'Torus fades in beside the ship, nested shapes turning', lines: [n('Vertane called you here... to save us.'), t('Good, you can hear the Voice of Vertane.')] },
+    { visual: 'torus', note: 'Torus turns brighter; the ship glow pulses once', lines: [t("Let's prepare you for battle.")] },
   ]),
 
   scene(foeId('grunt'), 'briefing', 1, [
-    { visual: 'foe', foes: ['grunt'], marks: ['static'], note: 'Grunt icon, blue, pulsing; grey static flickers on it', lines: [n('The first dim shapes are small squares.'), n('Grunts. They come straight at you.')] },
-    { visual: 'foeAction', foes: ['grunt'], marks: ['shots'], note: 'ship circling, shots leading the Grunt', lines: [n('Keep moving and shoot where they go.'), n('A touch costs a life, so stay clear.')] },
-    { visual: 'foeAction', foes: ['grunt'], marks: ['shards'], note: 'a Grunt breaks into shards of light', lines: [n('Break one and it turns to light again.'), t('Every shape here was good, once.')] },
+    { visual: 'foe', foes: ['grunt'], marks: ['static'], note: 'Grunt icon, blue, pulsing; grey static flickers on it', lines: [n('The first Dim shapes are small squares.'), n('Grunts. They come straight at you.')] },
+    { visual: 'foeAction', foes: ['grunt'], marks: ['shots'], note: 'ship circling, shots leading the Grunt', lines: [n('Shoot the Dim before it reaches you.')] },
+    { visual: 'foeAction', foes: ['grunt'], marks: ['shards'], note: 'a Grunt breaks into shards of light, the shards brighten into small Geoms', lines: [n('Break the Dim to free the captured'), n('citizens of Vertane, called Geoms.')] },
+    { visual: 'dimSwarm', note: 'wide grid; grey swarms gather where Geoms once glowed', lines: [n('The Dim spreads through Vertane,'), n('turning Geoms into the swarms you face.')] },
   ]),
   scene(foeId('wanderer'), 'briefing', 2, [
     { visual: 'foe', foes: ['wanderer'], note: 'Wanderer icon, violet bow tie, spinning', lines: [n('Wanderers drift and do not hunt you.'), n('They bounce off walls like lost birds.')] },
