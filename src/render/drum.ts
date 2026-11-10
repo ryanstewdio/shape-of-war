@@ -19,6 +19,7 @@
 // the shared profile of src/core/trough.ts, recessed so the rims stay in the arena plane.
 import { wrapCoord, wrapDelta } from '../core/surface';
 import { TROUGH_DEPTH_SHARE, troughHeight } from '../core/trough';
+import { depthScaleAt } from './troughDepth';
 import { fitArena, FIT_MARGIN, type Fit, type PlayRect } from './layout';
 import { FOCAL_MUL, MAX_TILT_DEG, MIN_DEN_FRAC, type Affine, type Box, type Camera } from './project';
 
@@ -110,9 +111,13 @@ export function troughLift(u: number, z: number, d: Drum): number {
 /**
  * Project arena (u, v) with lift z on a trough into out: the 3D point (u, v, troughLift) through
  * the always on camera (project.ts formula). Front only: a 1, m 1. No allocation.
+ * Glow trough-depth: the depth scale s also carries the slope cue of troughDepth.ts (1 on the
+ * floor to TROUGH_DEPTH_SCALE at the rim, from the ground height under u), so every billboard,
+ * particle and drum pen mark grows as it climbs. Positions (x, y) are the plain projection.
  */
 export function troughProject(u: number, v: number, z: number, d: Drum, out: DrumPoint): DrumPoint {
-  const lift = troughLift(u, z, d);
+  const h = troughHeight(u, d.width);
+  const lift = h - d.depth + z;
   const cam = d.cam;
   const D = cam.focal;
   const den = D - v * cam.sin - lift * cam.cos;
@@ -120,7 +125,7 @@ export function troughProject(u: number, v: number, z: number, d: Drum, out: Dru
   const f = D / (den > lo ? den : lo);
   out.x = u * f;
   out.y = (v * cam.cos - lift * cam.sin) * f;
-  out.s = f;
+  out.s = f * depthScaleAt(d.depth > 0 ? h / d.depth : 0);
   out.a = 1;
   out.m = 1;
   return out;

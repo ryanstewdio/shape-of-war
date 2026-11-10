@@ -57,6 +57,8 @@ import {
   drawWalls,
   drawDrumGrid,
   drawDrumWalls,
+  drawTroughGrid,
+  drawTroughWalls,
   drawWallsProjected,
   gridLineWidth,
   WALL_GLOW_PX,
@@ -119,7 +121,7 @@ import { createVolumeView } from './volumeView';
 // D13 phase C1: cylinder levels draw as a neon drum (drum.ts). Flat levels never touch it.
 import { BACK_ALPHA, drumCamBucket, drumCamera, drumProject, projectPhi, drumProjectNodes, drumRectSegsInto, drumULines, fitDrum, followCamU, interpWrap, makeDrum, makeTroughDrum, ringArcs, unwrapNear, type Drum, type DrumPoint } from './drum';
 // Trough wave: a trough level draws through the drum's trough projection (no wrap, no turn).
-import { parseTroughKnob, troughGridSegs, troughOutline, troughShadeBands } from './troughGeom';
+import { parseTroughKnob, polyEdges, rimBuckets, troughRimSegs, troughShadeBands } from './troughGeom';
 import {
   backingSize,
   bloomResolution,
@@ -1325,8 +1327,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let drumRims: DrumArcs[] = [];
   let drumRings: DrumArcs[] = [];
   const drumUFront: number[] = [];
-  // Trough wave: the projected low tier grid segments (static per arena, tilt and fit).
-  const troughSegs: number[] = [];
+  // Trough wave: the projected low tier grid segments (static per arena, tilt and fit), sorted
+  // into rim height buckets (glow trough-depth), and the outline the same way.
+  const troughSegs: number[][] = rimBuckets();
+  let troughWallSegs: number[][] = rimBuckets();
   const drumUBack: number[] = [];
   const drumObsFront: number[] = [];
   const drumObsBack: number[] = [];
@@ -1897,9 +1901,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     // Standard and high draw the lattice instead; the v1 grid stays empty and hidden.
     if (latticeActive) return;
     if (drum && drum.trough) {
-      // Trough on the low tier: the clipped v1 grid bent along u onto the valley (static).
-      troughGridSegs(drum, gridSegs, troughSegs);
-      drawGrid(grid, troughSegs, palette.grid, fit.scale);
+      // Trough on the low tier: the clipped v1 grid bent along u onto the valley (static), wider
+      // and brighter toward the rims (glow trough-depth).
+      troughRimSegs(drum, gridSegs, troughSegs);
+      drawTroughGrid(grid, troughSegs, palette.grid, fit.scale);
       gridRippling = false;
       return;
     }
@@ -1937,7 +1942,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
 
   /** Walls flat (off) or projected on the CPU (tilt), so they meet the projected lattice ends. */
   function wallsTo(g: Graphics, colour: number, passes: readonly WallPass[]): void {
-    if (drum) drawDrumWalls(g, drumRims, colour, passes, BACK_ALPHA);
+    if (drum && drum.trough) drawTroughWalls(g, troughWallSegs, colour, passes);
+    else if (drum) drawDrumWalls(g, drumRims, colour, passes, BACK_ALPHA);
     else if (cam.on) drawWallsProjected(g, arena, colour, passes, cam);
     else drawWalls(g, arena, colour, passes);
   }
@@ -2264,8 +2270,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   function rebuildDrumArcs(d: Drum): void {
     if (d.trough) {
       // Trough: the arena outline bent onto the valley is the one rim (front only); no rings.
-      drumRims = [{ front: troughOutline(d, outlinePoints(arena)), back: [] }];
+      // Glow trough-depth: it is drawn from rim height buckets (drawTroughWalls), not drumRims.
+      drumRims = [];
       drumRings = [];
+      troughWallSegs = rimBuckets();
+      troughRimSegs(d, polyEdges(outlinePoints(arena)), troughWallSegs);
       return;
     }
     const hh = d.height / 2;
