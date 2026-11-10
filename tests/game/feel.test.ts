@@ -185,7 +185,8 @@ describe('B9 no Swarm state slows an unhit ship', () => {
   it('generated levels of every band: 420 u/s with wells and obstacles removed and the spawner running', () => {
     for (let level = 1; level <= 40; level++) {
       const def: LevelDef = generateLevel(0x5eed, level);
-      const flat: LevelDef = { ...def, arena: { ...def.arena, obstacles: [] }, hazards: { ...def.hazards, wells: [] } };
+      // Trough levels (generator V12) are drawn flat here: the slope pull is surface state, not Swarm state (trough.test.ts).
+      const flat: LevelDef = { ...def, ...(def.surface === 'trough' ? { surface: 'flat' as const } : {}), arena: { ...def.arena, obstacles: [] }, hazards: { ...def.hazards, wells: [] } };
       const w = createGame(flat, { vibrate: () => undefined });
       setInvulnerable(w, true);
       w.drift.active = false; // obstacles removed makes drum levels open: drift is not Swarm state (drift.test.ts)

@@ -3,7 +3,7 @@
 Create and check out branch feat/ledger-trough-option before any edit. Never push main. You have explicit go ahead now: call add_repo for ryanstewdio/shape-of-war with push access before your first commit, so the push at the end works. If git remote -v is empty first run: git remote add origin https://github.com/ryanstewdio/shape-of-war.git
 
 Model: sonnet
-Owned paths: src/ui/freePlay.ts, src/ui/intro.ts (arena name line only), src/core/settings.ts or the Free Play setup storage (the new field only), tests/ui/
+Owned paths: src/ui/freePlay.ts, src/ui/intro.ts (arena name and Details only), src/ui/devGate.ts (DEV_KNOBS only), src/core/settings.ts or the Free Play setup storage (the new field only), tests/ui/
 Do not touch: src/core/surface.ts, src/core/trough.ts, src/core/freeplayConfig.ts (stub, read only), src/game/, src/levelgen/, src/render/, src/ui/menu.ts, docs/ other than your hand off
 Read first: src/core/freeplayConfig.ts (surface field), src/ui/freePlay.ts (setup rows), src/ui/intro.ts (arena name)
 
@@ -13,6 +13,9 @@ Tester 3 asked for a "half drum": a curved surface that does not connect like th
 ## Acceptance
 - Free Play setup gets an "Arena surface" row with Flat and Trough, saved with the rest of the setup (old saves default to Flat).
 - The intro card names the arena "Trough" on trough levels in Adventure and Free Play, with one plain hint line: "The ground slopes. Your ship slides toward the valley."
+- Hide or disable the arena shape picker while Surface is Trough (Foundry builds a rect trough whatever shape is picked) and say so in the row hint.
+- Add 'trough' to DEV_KNOBS in src/ui/devGate.ts (Glow's ?dev=1&trough=1 render knob).
+- Intro card: the trough hint goes in Details on the new focused stack card (merged from ledger-start-card), not as an extra line on the face of the card.
 - Tests: row, persistence and default, intro label. npm test and npm run build pass on the branch (accepted generator perf exception aside). Hand off at docs/handoffs/ledger-trough-option.md under 10 lines. Commit and push the branch. Stop.
 
 ## Rules
