@@ -21,6 +21,10 @@ import type { ShapeLayer, ShapePrim, ShapeSpec } from '../src/render/shapeSpecs'
 type ShapeSpecsModule = typeof import('../src/render/shapeSpecs');
 type NeonModule = typeof import('../src/render/neon');
 type WeaponsModule = typeof import('../src/game/weapons');
+type BossUiModule = typeof import('../src/ui/boss');
+type BossShapesModule = typeof import('../src/render/bossShapes');
+type LevelDefModule = typeof import('../src/levelgen/leveldef');
+type EnemyIntroModule = typeof import('../src/ui/enemyIntro');
 
 /** Image size in px. Every glyph image and every contact sheet cell is this square. */
 export const CANVAS = 256;
@@ -36,6 +40,9 @@ const SCALE_STEPS_PER_UNIT = 20;
 const LABEL_Y = 246;
 const LABEL_SIZE = 13;
 const SHEET_COLUMNS = 6;
+const BOSS_SHEET_COLUMNS = 5;
+/** Registry kinds drawn on the boss sheet or not worth a guide image: they stay off _all.svg. */
+const BOSS_KIND_KEYS: ReadonlySet<string> = new Set(['Boss', 'BossPart', 'BossHazard']);
 /** Where the images go, relative to the repo root. */
 const OUT_DIR = join('docs', 'player-guide', 'img', 'shapes');
 
@@ -312,6 +319,10 @@ export interface Loaded {
   readonly specs: ShapeSpecsModule;
   readonly neon: NeonModule;
   readonly weapons: WeaponsModule;
+  readonly bossUi: BossUiModule;
+  readonly bossShapes: BossShapesModule;
+  readonly levelDef: LevelDefModule;
+  readonly enemyIntro: EnemyIntroModule;
   /** Kind enum value to enum key, from the runtime Kind object (src/game/world.ts). */
   readonly kindNames: ReadonlyMap<number, string>;
 }
@@ -354,10 +365,18 @@ async function loadAll(root: string): Promise<Loaded> {
     const neon = await load(server, '/src/render/neon.ts', ['NEON_DEFAULT', 'computePalette', 'neonParams', 'neonRender']);
     const weapons = await load(server, '/src/game/weapons.ts', ['WEAPON_KINDS']);
     const world = await load(server, '/src/game/world.ts', ['Kind']);
+    const bossUi = await load(server, '/src/ui/boss.ts', ['BOSS_NAMES', 'BOSS_PALETTE_KEY']);
+    const bossShapes = await load(server, '/src/render/bossShapes.ts', ['BOSS_SPECS']);
+    const levelDef = await load(server, '/src/levelgen/leveldef.ts', ['BOSS_IDS']);
+    const enemyIntro = await load(server, '/src/ui/enemyIntro.ts', ['FOE_INFO']);
     return {
       specs: specs as ShapeSpecsModule,
       neon: neon as NeonModule,
       weapons: weapons as WeaponsModule,
+      bossUi: bossUi as BossUiModule,
+      bossShapes: bossShapes as BossShapesModule,
+      levelDef: levelDef as LevelDefModule,
+      enemyIntro: enemyIntro as EnemyIntroModule,
       kindNames: enumNames(world.Kind),
     };
   } finally {
@@ -395,6 +414,7 @@ export function buildGlyphs(l: Loaded): Glyph[] {
     if (key === undefined) throw new Error(`no Kind key for value ${kind}`);
     const spec = specs.specFor(kind);
     if (spec === specs.UNKNOWN_SPEC) throw new Error(`Kind ${key} has no registry entry`);
+    if (BOSS_KIND_KEYS.has(key)) continue;
     glyphs.push({ file: `${key.toLowerCase()}.svg`, label: displayName(key), spec });
     if (key === 'WeaponPickup') {
       for (let w = 1; w <= specs.PICKUP_VARIANTS; w += 1) {
@@ -414,6 +434,35 @@ export function buildGlyphs(l: Loaded): Glyph[] {
   const files = new Set(glyphs.map((g) => g.file));
   if (files.size !== glyphs.length) throw new Error('duplicate output file names');
   return glyphs;
+}
+
+/**
+ * Pure: the kinds FOE_INFO names whose file name (kind lower case) is not already a registry
+ * glyph: snake (the head) and well (the gravity well). They get an alias file with the FOE_INFO
+ * name, drawn from the same spec, and stay off the contact sheet so nothing shows twice.
+ */
+export function buildAliasGlyphs(l: Loaded, base: readonly Glyph[]): Glyph[] {
+  const byFile = new Map(base.map((g) => [g.file, g]));
+  const targetFor: Readonly<Record<string, string>> = { snake: 'snakehead.svg', well: 'gravitywell.svg' };
+  const out: Glyph[] = [];
+  for (const [kind, info] of Object.entries(l.enemyIntro.FOE_INFO)) {
+    const file = `${kind}.svg`;
+    if (byFile.has(file)) continue;
+    const target = byFile.get(targetFor[kind] ?? '');
+    if (target === undefined) throw new Error(`FOE_INFO kind ${kind} has no registry glyph`);
+    out.push({ file, label: info.name, spec: target.spec });
+  }
+  return out;
+}
+
+/** Pure: one glyph per boss id in BOSS_IDS order (level order), the shut body, in its own colour. */
+export function buildBossGlyphs(l: Loaded): Glyph[] {
+  const { levelDef, bossUi, bossShapes } = l;
+  return levelDef.BOSS_IDS.map((id, i) => {
+    const spec = bossShapes.BOSS_SPECS[i * (bossShapes.BOSS_SPECS.length / levelDef.BOSS_IDS.length)];
+    if (spec === undefined) throw new Error(`no boss spec for ${id}`);
+    return { file: `boss-${id}.svg`, label: bossUi.BOSS_NAMES[id], spec };
+  });
 }
 
 async function main(): Promise<void> {
@@ -437,6 +486,25 @@ async function main(): Promise<void> {
   }
   writeFileSync(join(outDir, '_all.svg'), sheetSvg(glyphs, scale, style, SHEET_COLUMNS));
   console.log(`wrote ${join(OUT_DIR, '_all.svg')}  contact sheet, ${glyphs.length} cells, ${SHEET_COLUMNS} columns`);
+  for (const g of buildAliasGlyphs(loaded, glyphs)) {
+    writeFileSync(join(outDir, g.file), glyphSvg(g, scale, style));
+    console.log(`wrote ${join(OUT_DIR, g.file)}  alias, same shape as the registry glyph`);
+  }
+  // Bosses are big (up to 106 u), so they share their own scale, separate from the enemy scale.
+  const bosses = buildBossGlyphs(loaded);
+  const bossScale = chooseScale(
+    bosses.map((g) => glyphExtent(g.spec, style)),
+    bosses.map((g) => g.spec.radius),
+    FIT_HALF,
+    MIN_RADIUS_PX,
+  );
+  console.log(`boss scale ${fmt(bossScale)} px per arena unit`);
+  for (const g of bosses) {
+    writeFileSync(join(outDir, g.file), glyphSvg(g, bossScale, style));
+    console.log(`wrote ${join(OUT_DIR, g.file)}  ${colourList(g.spec, style.palette).join(' ')}`);
+  }
+  writeFileSync(join(outDir, '_bosses.svg'), sheetSvg(bosses, bossScale, style, BOSS_SHEET_COLUMNS));
+  console.log(`wrote ${join(OUT_DIR, '_bosses.svg')}  boss sheet, ${bosses.length} cells, ${BOSS_SHEET_COLUMNS} columns`);
 }
 
 // Run only when started as a script, so tests can import the pure functions above.

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+<rect width="256" height="256" fill="#000000"/>
+<g transform="translate(128.00 120.00) scale(2.10)">
+  <g fill="none" stroke="#f2f2f2" stroke-opacity="0.19" stroke-width="10.50" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="13.77,2.51 13.24,4.55 12.40,6.50 11.28,8.29 9.90,9.90 8.29,11.28 6.50,12.40 4.55,13.24 2.51,13.77"/>
+    <polyline points="-2.51,13.77 -4.55,13.24 -6.50,12.40 -8.29,11.28 -9.90,9.90 -11.28,8.29 -12.40,6.50 -13.24,4.55 -13.77,2.51"/>
+    <polyline points="-13.77,-2.51 -13.24,-4.55 -12.40,-6.50 -11.28,-8.29 -9.90,-9.90 -8.29,-11.28 -6.50,-12.40 -4.55,-13.24 -2.51,-13.77"/>
+    <polyline points="2.51,-13.77 4.55,-13.24 6.50,-12.40 8.29,-11.28 9.90,-9.90 11.28,-8.29 12.40,-6.50 13.24,-4.55 13.77,-2.51"/>
+  </g>
+  <g fill="none" stroke="#f2f2f2" stroke-opacity="0.44" stroke-width="4.80" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="13.77,2.51 13.24,4.55 12.40,6.50 11.28,8.29 9.90,9.90 8.29,11.28 6.50,12.40 4.55,13.24 2.51,13.77"/>
+    <polyline points="-2.51,13.77 -4.55,13.24 -6.50,12.40 -8.29,11.28 -9.90,9.90 -11.28,8.29 -12.40,6.50 -13.24,4.55 -13.77,2.51"/>
+    <polyline points="-13.77,-2.51 -13.24,-4.55 -12.40,-6.50 -11.28,-8.29 -9.90,-9.90 -8.29,-11.28 -6.50,-12.40 -4.55,-13.24 -2.51,-13.77"/>
+    <polyline points="2.51,-13.77 4.55,-13.24 6.50,-12.40 8.29,-11.28 9.90,-9.90 11.28,-8.29 12.40,-6.50 13.24,-4.55 13.77,-2.51"/>
+  </g>
+  <g fill="none" stroke="#34d6e5" stroke-opacity="0.19" stroke-width="9.45" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="8.12,2.51 7.51,3.98 6.64,5.30 5.54,6.44 4.25,7.36 2.81,8.02 1.27,8.40 -0.31,8.49 -1.88,8.29"/>
+    <polyline points="-6.24,5.78 -7.20,4.52 -7.91,3.10 -8.35,1.58 -8.50,0.00 -8.35,-1.58 -7.91,-3.10 -7.20,-4.52 -6.24,-5.78"/>
+    <polyline points="-1.88,-8.29 -0.31,-8.49 1.27,-8.40 2.81,-8.02 4.25,-7.36 5.54,-6.44 6.64,-5.30 7.51,-3.98 8.12,-2.51"/>
+  </g>
+  <g fill="none" stroke="#34d6e5" stroke-opacity="0.44" stroke-width="4.32" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="8.12,2.51 7.51,3.98 6.64,5.30 5.54,6.44 4.25,7.36 2.81,8.02 1.27,8.40 -0.31,8.49 -1.88,8.29"/>
+    <polyline points="-6.24,5.78 -7.20,4.52 -7.91,3.10 -8.35,1.58 -8.50,0.00 -8.35,-1.58 -7.91,-3.10 -7.20,-4.52 -6.24,-5.78"/>
+    <polyline points="-1.88,-8.29 -0.31,-8.49 1.27,-8.40 2.81,-8.02 4.25,-7.36 5.54,-6.44 6.64,-5.30 7.51,-3.98 8.12,-2.51"/>
+  </g>
+  <g fill="none" stroke="#f2f2f2" stroke-opacity="0.19" stroke-width="8.40" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="11.00,0.00 17.00,0.00"/>
+  </g>
+  <g fill="none" stroke="#f2f2f2" stroke-opacity="0.44" stroke-width="3.84" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="11.00,0.00 17.00,0.00"/>
+  </g>
+  <g fill="none" stroke="#f2f2f2" stroke-opacity="1.00" stroke-width="3.36" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="13.77,2.51 13.24,4.55 12.40,6.50 11.28,8.29 9.90,9.90 8.29,11.28 6.50,12.40 4.55,13.24 2.51,13.77"/>
+    <polyline points="-2.51,13.77 -4.55,13.24 -6.50,12.40 -8.29,11.28 -9.90,9.90 -11.28,8.29 -12.40,6.50 -13.24,4.55 -13.77,2.51"/>
+    <polyline points="-13.77,-2.51 -13.24,-4.55 -12.40,-6.50 -11.28,-8.29 -9.90,-9.90 -8.29,-11.28 -6.50,-12.40 -4.55,-13.24 -2.51,-13.77"/>
+    <polyline points="2.51,-13.77 4.55,-13.24 6.50,-12.40 8.29,-11.28 9.90,-9.90 11.28,-8.29 12.40,-6.50 13.24,-4.55 13.77,-2.51"/>
+  </g>
+  <g fill="none" stroke="#34d6e5" stroke-opacity="1.00" stroke-width="3.02" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="8.12,2.51 7.51,3.98 6.64,5.30 5.54,6.44 4.25,7.36 2.81,8.02 1.27,8.40 -0.31,8.49 -1.88,8.29"/>
+    <polyline points="-6.24,5.78 -7.20,4.52 -7.91,3.10 -8.35,1.58 -8.50,0.00 -8.35,-1.58 -7.91,-3.10 -7.20,-4.52 -6.24,-5.78"/>
+    <polyline points="-1.88,-8.29 -0.31,-8.49 1.27,-8.40 2.81,-8.02 4.25,-7.36 5.54,-6.44 6.64,-5.30 7.51,-3.98 8.12,-2.51"/>
+  </g>
+  <g fill="#34d6e5" fill-opacity="1.00" stroke="none">
+    <circle cx="0.00" cy="0.00" r="2.60"/>
+  </g>
+  <g fill="none" stroke="#f2f2f2" stroke-opacity="1.00" stroke-width="2.69" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="11.00,0.00 17.00,0.00"/>
+  </g>
+</g>
+<text x="128.00" y="246.00" fill="#34d6e5" font-family="sans-serif" font-size="13" text-anchor="middle">Drone Pickup</text>
+</svg>

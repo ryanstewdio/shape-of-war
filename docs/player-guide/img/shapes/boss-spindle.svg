@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+<rect width="256" height="256" fill="#000000"/>
+<g transform="translate(128.00 120.00) scale(0.90)">
+  <g fill="none" stroke="#ffcc33" stroke-opacity="0.19" stroke-width="21.00" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="50.00,0.00 8.49,8.49 0.00,50.00 -8.49,8.49 -50.00,0.00 -8.49,-8.49 0.00,-50.00 8.49,-8.49"/>
+  </g>
+  <g fill="none" stroke="#ffcc33" stroke-opacity="0.44" stroke-width="9.60" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="50.00,0.00 8.49,8.49 0.00,50.00 -8.49,8.49 -50.00,0.00 -8.49,-8.49 0.00,-50.00 8.49,-8.49"/>
+  </g>
+  <g fill="none" stroke="#ffcc33" stroke-opacity="0.19" stroke-width="12.60" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="0.00" cy="0.00" r="15.00"/>
+  </g>
+  <g fill="none" stroke="#ffcc33" stroke-opacity="0.44" stroke-width="5.76" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="0.00" cy="0.00" r="15.00"/>
+  </g>
+  <g fill="none" stroke="#ffcc33" stroke-opacity="0.11" stroke-width="12.60" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="0.00" cy="0.00" r="59.00"/>
+  </g>
+  <g fill="none" stroke="#ffcc33" stroke-opacity="0.26" stroke-width="5.76" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="0.00" cy="0.00" r="59.00"/>
+  </g>
+  <g fill="#ffcc33" fill-opacity="0.08" stroke="none">
+    <polygon points="50.00,0.00 8.49,8.49 0.00,50.00 -8.49,8.49 -50.00,0.00 -8.49,-8.49 0.00,-50.00 8.49,-8.49"/>
+  </g>
+  <g fill="none" stroke="#ffcc33" stroke-opacity="1.00" stroke-width="6.72" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="50.00,0.00 8.49,8.49 0.00,50.00 -8.49,8.49 -50.00,0.00 -8.49,-8.49 0.00,-50.00 8.49,-8.49"/>
+  </g>
+  <g fill="none" stroke="#ffcc33" stroke-opacity="1.00" stroke-width="4.03" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="0.00" cy="0.00" r="15.00"/>
+  </g>
+  <g fill="#f2f2f2" fill-opacity="0.20" stroke="none">
+    <circle cx="0.00" cy="0.00" r="6.00"/>
+  </g>
+  <g fill="none" stroke="#f2f2f2" stroke-opacity="1.00" stroke-width="3.36" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="0.00" cy="0.00" r="6.00"/>
+  </g>
+  <g fill="none" stroke="#ffcc33" stroke-opacity="0.60" stroke-width="4.03" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="0.00" cy="0.00" r="59.00"/>
+  </g>
+</g>
+<text x="128.00" y="246.00" fill="#ffcc33" font-family="sans-serif" font-size="13" text-anchor="middle">Spindle</text>
+</svg>
