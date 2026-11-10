@@ -33,6 +33,7 @@ import {
   type SpaceLevelSetting,
 } from './core/settings';
 import { loadCallsign, loadStorySeen, recordStorySeen, saveCallsign } from './core/settings';
+import { resizePauseAllowed, stepInput } from './story/hold';
 import { bossWinScenes, levelStartScenes, replayScenes, storyLevels } from './story/triggers';
 import { createStoryPlayer } from './ui/story/player';
 import { capDpr, fmt3, readInsets, viewportLine } from './core/viewport';
@@ -933,8 +934,10 @@ async function boot(): Promise<void> {
   const loop: Loop = createLoop({
     step(dt) {
       if (!simRunning(flow)) return;
-      if (story.active()) return; // a story scene holds the sim (the level start card holds it too)
-      const input = touch !== null ? touch.poll() : idle;
+      // A story scene holds the sim (the level start card holds it too). stepInput still polls, so
+      // presses made while a scene is open (Skip is under the pause button) are dropped, not queued.
+      const input = stepInput(story.active(), () => (touch !== null ? touch.poll() : idle), idle);
+      if (story.active()) return;
       if (input.pause) {
         bus.emit('game:pause');
         return;
@@ -1086,7 +1089,7 @@ async function boot(): Promise<void> {
     const insets = f.insets;
     const fit = { scale: f.fit.scale, x: f.fit.x, y: f.fit.y };
     // Auto pause on aspect class change, that is a fold or unfold (docs/01 section 10).
-    if (appliedClass !== null && cls !== appliedClass) requestPause(); // through the bus, so the music suspends
+    if (appliedClass !== null && cls !== appliedClass && resizePauseAllowed(story.active())) requestPause(); // through the bus, so the music suspends
     appliedClass = cls;
     const payload: ViewportInfo = { cssW: last.cssW, cssH: last.cssH, dpr: last.renderDpr, insets, fit };
     bus.emit('viewport:changed', payload);

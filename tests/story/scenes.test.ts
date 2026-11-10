@@ -48,9 +48,14 @@ describe('story scene data', () => {
     expect(countedLength(`a ${CALLSIGN_TOKEN}`)).toBe(12);
   });
 
-  it('has 1 or 2 lines per panel and at most one Torus line per scene', () => {
+  it('has 1 or 2 lines per panel and at most one Torus line per scene, except the opening', () => {
+    const opening = SCENES.opening as Scene;
+    expect(opening.panels).toHaveLength(7);
+    expect(opening.panels.flatMap((p) => p.lines).filter((l) => l.who === 'torus')).toHaveLength(2);
     for (const s of all) {
-      expect(s.panels.length, s.id).toBeGreaterThan(0);
+      if (s.id === 'opening') continue; // the opening exception (docs/19, Ryan 2026-11-10)
+      expect(s.panels.length, s.id).toBeGreaterThanOrEqual(1);
+      expect(s.panels.length, s.id).toBeLessThanOrEqual(4);
       for (const p of s.panels) {
         expect(p.lines.length, s.id).toBeGreaterThanOrEqual(1);
         expect(p.lines.length, s.id).toBeLessThanOrEqual(2);
