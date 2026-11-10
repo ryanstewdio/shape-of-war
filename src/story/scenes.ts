@@ -267,36 +267,36 @@ const LIST: readonly Scene[] = [
 
   scene(bossId('bastion'), 'guardian', 35, [
     { visual: 'boss', boss: 'bastion', marks: ['turrets'], note: 'Bastion silhouette, grey red, a square fort with four corner towers', lines: [n('Bastion, the Last Wall.'), n('It gave every shape shelter from storms.')] },
-    { visual: 'bossTouched', boss: 'bastion', marks: ['turrets'], note: "Vecta's outline; the towers turn outward", lines: [n('Vecta turned its towers outward.'), n('Now it shuts everyone out.')] },
+    { visual: 'bossTouched', boss: 'bastion', marks: ['turrets'], note: "Vecta's outline; the towers turn outward around a circling storm", lines: [n('Now it serves Tempest, Vecta\'s herald.'), n('Its towers wall the storm in for him.')] },
     { visual: 'bossAttack', boss: 'bastion', marks: ['turrets', 'lane', 'shield'], note: 'corner turrets glow in turn; two break; the core opens; a Bulwark arrives', lines: [n('Its four towers fire lanes. Break two'), n('and the core opens. Watch for Bulwarks.')] },
     { visual: 'torus', note: 'Torus beside the ship', lines: [t('He is angry. So you are close.')] },
   ]),
   scene(freedId('bastion'), 'freed', 35, [
-    { visual: 'bossFreed', boss: 'bastion', marks: ['turrets'], stars: 7, note: 'red returns; the towers face inward like arms; a seventh star lights', lines: [n('Red light returns. The Wall shelters.'), n('Your ship shines brighter than before.')] },
+    { visual: 'bossFreed', boss: 'bastion', marks: ['turrets'], stars: 7, note: 'red returns; the towers face inward like arms; a seventh star lights', lines: [n('Red light returns. The Wall shelters.'), n('The storm\'s wall falls. Tempest is open.')] },
   ]),
 
   scene(bossId('tempest'), 'guardian', 40, [
     { visual: 'boss', boss: 'tempest', marks: ['trail'], note: 'Tempest silhouette, grey red, racing round the arena edge', lines: [n('Tempest, Rider of the Rim.'), n('Its winds carried light to every corner.')] },
-    { visual: 'bossTouched', boss: 'tempest', marks: ['trail'], note: "Vecta watching from the rim; Tempest's trail turns dim", lines: [n('Vecta turned its wind into a storm.'), n('He watches from the rim as it rages.')] },
+    { visual: 'bossTouched', boss: 'tempest', marks: ['trail'], note: "Vecta watching from the rim through the storm; Tempest's trail turns dim", lines: [n('Vecta made it his herald and his eyes.'), n('He watches you through its storm.')] },
     { visual: 'bossAttack', boss: 'tempest', marks: ['slime', 'lane'], note: 'slime trail along the wall; a dash line across the floor', lines: [n('It races the walls and leaves slime.'), n('Step off its dash. Bombs clear slime.')] },
     { visual: 'torus', note: 'Torus, glow pulse', lines: [t('Be the calm. The storm will follow.')] },
   ]),
   scene(freedId('tempest'), 'freed', 40, [
-    { visual: 'bossFreed', boss: 'tempest', marks: ['trail'], stars: 8, note: 'red returns; light flows around the rim; an eighth star lights', lines: [n('Light rides the wind again.'), n('Vecta is gone from the rim. Two remain.')] },
+    { visual: 'bossFreed', boss: 'tempest', marks: ['trail'], stars: 8, note: 'red returns; light flows around the rim; an eighth star lights', lines: [n('Light rides the wind again.'), n('Vecta\'s grey light leaves. Two remain.')] },
   ]),
 
   scene(bossId('twins'), 'guardian', 45, [
     { visual: 'boss', boss: 'twins', marks: ['bar'], note: 'two silhouettes, grey red, a bright bar between them', lines: [n('The Twins, the Bound Stars.'), n('Two friends who never left each other.')] },
-    { visual: 'bossTouched', boss: 'twins', marks: ['bar'], note: "Vecta's outline; the bond between them turns into a blade of light", lines: [n('Vecta turned their bond into a bar.'), n('It sweeps the floor as they turn.')] },
+    { visual: 'bossTouched', boss: 'twins', marks: ['bar'], note: "Vecta's outline above a crown; the bond between the Twins turns into a blade of light", lines: [n('Vecta set them to guard his crown.'), n('Their bond became a bar of light.')] },
     { visual: 'bossAttack', boss: 'twins', marks: ['bar', 'ring'], note: 'the bar sweeps; rings with gaps; one twin dims, the other speeds up', lines: [n('Keep clear of the bar between them.'), n('When one falls, the other gets fast.')] },
     { visual: 'torus', note: 'Torus beside the ship', lines: [t('Free them both. A bond can heal.')] },
   ]),
   scene(freedId('twins'), 'freed', 45, [
-    { visual: 'bossFreed', boss: 'twins', marks: ['bar'], stars: 9, note: 'both twins glow red and gold, the bar becomes a soft ribbon; a ninth star lights', lines: [n('The bond is light again, not a bar.'), n('Nine stars shine. One crown is left.')] },
+    { visual: 'bossFreed', boss: 'twins', marks: ['bar'], stars: 9, note: 'both twins glow red and gold, the bar becomes a soft ribbon; a ninth star lights', lines: [n('The bond is light again, not a bar.'), n('Nine stars shine. The crown is open.')] },
   ]),
 
   scene(bossId('prism'), 'guardian', 50, [
-    { visual: 'boss', boss: 'prism', note: 'Prism silhouette, all grey, the outline of a crown', lines: [n('Prism, Crown of All Colours.'), n('It shared every colour with the world.')] },
+    { visual: 'boss', boss: 'prism', note: 'Prism silhouette, all grey, the outline of a crown', lines: [n('Prism, Crown of All Colours.'), n('Its guards are free. It stands alone.')] },
     { visual: 'bossTouched', boss: 'prism', note: "Vecta's grey outline above Prism, Prism holding colours locked inside", lines: [n('Vecta made it his throne.'), n('It holds every colour in, for him alone.')] },
     { visual: 'bossAttack', boss: 'prism', marks: ['flash'], note: "Prism cycles through each guardian's attack as small icons; it flashes white", lines: [n("It uses every guardian's trick in turn."), n('Strike hard when it flashes white.')] },
     { visual: 'torus', note: 'Torus, full size, every shape in it glowing', lines: [t('Every legend began like you, {callsign}.')] },
