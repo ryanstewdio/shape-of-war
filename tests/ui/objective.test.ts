@@ -47,8 +47,8 @@ describe('objectives', () => {
   });
 
   it('progress labels and fractions', () => {
-    expect(objectiveProgress(sit, snap({ score: 2500, elapsedSec: 30 }))).toEqual({ label: 'Score 2,500 / 5,000  1:00', fraction: 0.5, stars: null, starMarks: [] });
-    expect(objectiveProgress(surv, snap({ elapsedSec: 15 }))).toEqual({ label: 'Survive 0:45', fraction: 0.25, stars: null, starMarks: [] });
+    expect(objectiveProgress(sit, snap({ score: 2500, elapsedSec: 30 }))).toEqual({ label: 'Score 2,500 / 5,000', fraction: 0.5, stars: null, starMarks: [] });
+    expect(objectiveProgress(surv, snap({ elapsedSec: 15 }))).toEqual({ label: 'Survive', fraction: 0.25, stars: null, starMarks: [] });
     expect(objectiveProgress(destroy, snap({ kills: 50 }))).toEqual({ label: 'Destroy 40 / 40', fraction: 1, stars: null, starMarks: [] });
     expect(objectiveText(destroy)).toBe('Destroy 40 enemies');
   });
@@ -95,14 +95,13 @@ describe('boss hold label', () => {
     expect(bossHolds(sit, snap({ score: 6000, elapsedSec: 90, lives: 0 }), true)).toBe(false);
   });
 
-  it('the timer label of a survive or scoreInTime level never shows a negative clock under the hold', () => {
-    // The HUD label is replaced, but the unheld label must still clamp at 0:00 if the boss dies late.
-    expect(objectiveProgress(surv, snap({ elapsedSec: 75 })).label).toBe('Survive 0:00');
-    expect(objectiveProgress(sit, snap({ score: 6000, elapsedSec: 120 })).label).toBe('Score 6,000 / 5,000  0:00');
+  it('the label of a survive or scoreInTime level carries no clock, even past the time limit (hud-clock)', () => {
+    expect(objectiveProgress(surv, snap({ elapsedSec: 75 })).label).toBe('Survive');
+    expect(objectiveProgress(sit, snap({ score: 6000, elapsedSec: 120 })).label).toBe('Score 6,000 / 5,000');
   });
 
   it('boss absent is the default, so every existing call is unchanged', () => {
-    expect(objectiveProgress(surv, snap({ elapsedSec: 15 }))).toEqual({ label: 'Survive 0:45', fraction: 0.25, stars: null, starMarks: [] });
+    expect(objectiveProgress(surv, snap({ elapsedSec: 15 }))).toEqual({ label: 'Survive', fraction: 0.25, stars: null, starMarks: [] });
     expect(objectiveProgress(destroy, snap({ kills: 50 }))).toEqual({ label: 'Destroy 40 / 40', fraction: 1, stars: null, starMarks: [] });
   });
 });
@@ -197,9 +196,9 @@ describe('R2 objective bar', () => {
   const destroy: ObjectiveDef = { kind: 'destroy', count: 530 };
   const stars = [1000, 2000, 4000] as const;
 
-  it('survive: "Survive 4:12", fills with time survived', () => {
+  it('survive: "Survive" (the clock shows the time), fills with time survived', () => {
     const p = objectiveProgress(surv, snap({ elapsedSec: 48 }), false, stars);
-    expect(p.label).toBe('Survive 4:12');
+    expect(p.label).toBe('Survive');
     expect(p.fraction).toBeCloseTo(48 / 300);
   });
 
@@ -212,9 +211,9 @@ describe('R2 objective bar', () => {
     expect(objectiveProgress(destroy, snap({ kills: 1312 })).label).toBe('Destroy 530 / 530');
   });
 
-  it('score: "Score 1.2M / 3.3M" with the time left, fills with the score only, never with time', () => {
+  it('score: "Score 1.2M / 3.3M" with no time (the clock shows it), fills with the score only, never with time', () => {
     const a = objectiveProgress(sit, snap({ score: 1_234_567, elapsedSec: 19 }), false, stars);
-    expect(a.label).toBe('Score 1.2M / 3.3M  2:41');
+    expect(a.label).toBe('Score 1.2M / 3.3M');
     expect(a.fraction).toBeCloseTo(1_234_567 / 3_300_000);
     // The old bar switched to a timer once the target was met; the new one stays on the score.
     const met = objectiveProgress(sit, snap({ score: 4_000_000, elapsedSec: 20 }));
