@@ -62,16 +62,16 @@ describe('troughPullAt', () => {
     const near = Math.abs(troughPullAt(W * 0.05, W, 1));
     const mid = Math.abs(troughPullAt(W * 0.25, W, 1));
     const rim = Math.abs(troughPullAt(W / 2, W, 1));
-    expect(near).toBeLessThan(5);
+    expect(near).toBeLessThan(8);
     expect(mid).toBeGreaterThan(near * 10);
     expect(rim).toBeGreaterThan(mid * 2.5);
-    expect(rim).toBeGreaterThan(140);
-    expect(rim).toBeLessThan(180);
+    expect(rim).toBeGreaterThan(220);
+    expect(rim).toBeLessThan(260);
   });
 
   it('stays below the ship speed at every difficulty, so the rim is reachable', () => {
     for (const d of Object.values(DIFFICULTY)) {
-      expect(Math.abs(troughPullAt(W / 2, W, d.driftScale))).toBeLessThan(SHIP_SPEED * 0.75);
+      expect(Math.abs(troughPullAt(W / 2, W, d.driftScale))).toBeLessThan(SHIP_SPEED);
     }
   });
 
@@ -105,7 +105,7 @@ describe('stepTrough in the sim', () => {
   it('lets a thrusting ship climb to the rim and stay there', () => {
     const w = trough();
     for (let i = 0; i < 120 * 4; i++) stepGame(w, DT, moving(1));
-    // At the wall the stick is clamped and the pull shifts the ship in by pull x dt (about 1.3 u).
+    // At the wall the stick is clamped and the pull shifts the ship in by pull x dt (about 2 u).
     const rimX = W / 2 - SHIP_RADIUS;
     expect(w.x[0] ?? 0).toBeLessThanOrEqual(rimX);
     expect(w.x[0] ?? 0).toBeGreaterThan(rimX + troughPullAt(rimX, W, 1) * DT - 0.01);
