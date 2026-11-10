@@ -3,7 +3,8 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { currentBuildId } from './scripts/build-id.ts';
 
-export default defineConfig({
+// Native (Capacitor) build: `vite build --mode native`. Files ship inside the app, so no service worker.
+export default defineConfig(({ mode }) => ({
   base: process.env.SOW_BASE || '/shape-of-war/', // from Pages in CI (deploy.yml); Capacitor build overrides with --base=./
   define: {
     // Visible on device in a corner label so a stale service worker cache is detectable.
@@ -13,6 +14,7 @@ export default defineConfig({
   server: { host: true, port: 5173 },
   plugins: [
     VitePWA({
+      disable: mode === 'native',
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       manifest: false, // we ship public/manifest.webmanifest ourselves (doc 04)
@@ -29,4 +31,4 @@ export default defineConfig({
     }),
   ],
   test: { environment: 'node', include: ['tests/**/*.test.ts'] },
-});
+}));
