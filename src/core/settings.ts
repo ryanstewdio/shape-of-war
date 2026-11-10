@@ -668,6 +668,8 @@ export function parseFreePlayConfig(v: unknown): FreePlayConfig {
     wells: oneOf(g('wells'), ['off', 'normal', 'many'] as const, d.wells),
     drift: oneOf(g('drift'), ['off', 'low', 'high'] as const, d.drift),
     size: oneOf(g('size'), ['small', 'medium', 'large'] as const, d.size),
+    // Trough option: only 'trough' is stored, so a flat setup keeps its bytes and old saves read Flat.
+    ...(g('surface') === 'trough' ? { surface: 'trough' as const } : {}),
   };
 }
 

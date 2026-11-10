@@ -14,6 +14,7 @@ export const DEV_KNOBS: readonly string[] = [
   'level',
   'debug',
   'surface',
+  'trough',
   'glow',
   'stress',
   'particles',
