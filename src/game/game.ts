@@ -25,6 +25,7 @@ import { stepPond } from './pondRipple';
 import { stepPresence } from './presence';
 import { stepSpawner } from './spawner';
 import { endlessLevel, startEndless, stepEndlessAwards } from './endless';
+import { stepFreePlayGuardians } from './fpGuardians';
 import { currentMultiplier, gs, syncMultiplier, type GameMode, type GameState, type ScoringPort, type SegmentSource } from './state';
 import { stepSupers, triggerSuper } from './supers';
 import { resetWellState, stepWellArrivals } from './wellArrival';
@@ -253,6 +254,7 @@ export function stepGame(w: World, dt: number, input: InputState): void {
   stepDrone(w, dt);
   if (input.superPressed) triggerSuper(w);
   stepSupers(w, dt);
+  stepFreePlayGuardians(w); // Free Play guardian option: the next guardian after a kill (before the clock moves)
   stepSpawner(w, dt);
   stepBossSchedule(w, dt); // V3: boss entrance at boss.atSec, view mode, hud:boss
   stepEndlessAwards(w);

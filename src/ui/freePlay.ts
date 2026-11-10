@@ -118,10 +118,10 @@ export function kindLabel(v: DroneKind | SuperKind): string {
   return cap(v);
 }
 
-/** Pure: Off, Every 3 min, or the chosen boss's name. */
+/** Pure: Off, Every 2 min (the timed guardian option, stored as 'every3'), or the chosen boss's name. */
 export function bossesLabel(v: FreePlayBosses): string {
   if (v === 'off') return 'Off';
-  if (v === 'every3') return 'Every 3 min';
+  if (v === 'every3') return 'Every 2 min';
   return bossName(v);
 }
 
