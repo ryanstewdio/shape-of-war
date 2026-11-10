@@ -8,7 +8,8 @@ import { stepGame, type GameOptions } from '../../src/game/game';
 import { gs } from '../../src/game/state';
 import { Kind, type World } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
-import { BOSS_LEVEL_AT_SEC, BOSS_R3_LEVEL_AT_SEC } from '../../src/levelgen/boss';
+import { BOSS_LEVEL_AT_SEC } from '../../src/levelgen/boss';
+import { BOSS_SHORT_LEVEL_AT_SEC } from '../../src/levelgen/short';
 import type { BossId, LevelDef } from '../../src/levelgen/leveldef';
 import { DT, idle, makeGame, quietLevel } from './helpers';
 
@@ -145,6 +146,6 @@ export function park(w: World, x: number, y: number): void {
  */
 export function earlyBoss(def: LevelDef): LevelDef {
   if (def.boss === undefined) throw new Error('not a boss level');
-  expect(def.boss.atSec).toBe(BOSS_R3_LEVEL_AT_SEC);
+  expect(def.boss.atSec).toBe(BOSS_SHORT_LEVEL_AT_SEC); // generator V11 (short levels)
   return { ...def, boss: { ...def.boss, atSec: BOSS_LEVEL_AT_SEC } };
 }
