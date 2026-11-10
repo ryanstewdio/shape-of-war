@@ -372,7 +372,7 @@ export function createLatticeView(dotTexture: Texture): LatticeView {
   /** Drum only: lift and project the frame just written, and pick each node's texel. */
   function drumFrame(s: LatticeSim, g: Gpu, d: Drum): void {
     writeLift(s, lift, latticeAlpha(s));
-    addPondToNodes(g.positions, s.layout.restX, s.layout.restY, s.layout.free, pond, lift, pondGlowBuf, d.width);
+    addPondToNodes(g.positions, s.layout.restX, s.layout.restY, s.layout.free, pond, lift, pondGlowBuf, d.period);
     const uv = g.uvBuf.data;
     drumProjectNodes(g.positions, lift, s.layout.count, d, uv instanceof Float32Array ? uv : null);
     g.uvBuf.update();

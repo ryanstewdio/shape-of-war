@@ -13,8 +13,7 @@
 // Graphics keep going through the tilt scene pass as before.
 // No pixi.js import: it draws into anything with the Graphics path methods it uses. No PRNG. No
 // allocation per call: style objects are scratch, reused.
-import { wrapDelta } from '../core/surface';
-import { BACK_ALPHA, drumProject, type Drum, type DrumPoint } from './drum';
+import { BACK_ALPHA, drumDu, drumProject, type Drum, type DrumPoint } from './drum';
 
 export type PenCap = 'round' | 'butt' | 'square';
 export type PenJoin = 'round' | 'miter' | 'bevel';
@@ -134,7 +133,7 @@ export function penOwner(p: DrumPen, u: number, v: number): DrumPen {
  * owner still sits next to it.
  */
 export function penX(p: DrumPen, x: number): number {
-  const dx = p.drum ? wrapDelta(x - p.ownU, p.drum.width) : x - p.ownU;
+  const dx = p.drum ? drumDu(p.drum, x - p.ownU) : x - p.ownU;
   return p.own.x + dx * p.own.s * p.own.m;
 }
 
@@ -276,7 +275,7 @@ export function traceRay(p: DrumPen, t: PenTrace, x: number, y: number, dx: numb
  * delta (surface.delta on a cylinder), so a segment drawn across the seam stays short.
  */
 export function traceLine(p: DrumPen, t: PenTrace, x0: number, y0: number, x1: number, y1: number, step: number = DRUM_SAMPLE_U): void {
-  const dx = p.drum ? wrapDelta(x1 - x0, p.drum.width) : x1 - x0;
+  const dx = p.drum ? drumDu(p.drum, x1 - x0) : x1 - x0;
   const dy = y1 - y0;
   const len = Math.hypot(dx, dy);
   if (!(len > 0)) {

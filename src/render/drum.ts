@@ -14,7 +14,11 @@
 //   glass at BACK_ALPHA and mirrored (x runs the other way there, and shapes flip).
 // Screen axes stay the arena axes (screen right is plus u at the front), so input never changes.
 // A lift z (lattice kills) pushes a point radially out of the drum.
+// Trough wave: a trough level reuses the drum as its projection (makeTroughDrum). The drum code
+// paths branch on trough: no wrap (period 0), no camera follow, no back half, and a point sits on
+// the shared profile of src/core/trough.ts, recessed so the rims stay in the arena plane.
 import { wrapCoord, wrapDelta } from '../core/surface';
+import { TROUGH_DEPTH_SHARE, troughHeight } from '../core/trough';
 import { fitArena, FIT_MARGIN, type Fit, type PlayRect } from './layout';
 import { FOCAL_MUL, MAX_TILT_DEG, MIN_DEN_FRAC, type Affine, type Box, type Camera } from './project';
 
@@ -43,8 +47,14 @@ export interface Drum {
   readonly k: number;
   /** Projection camera, always on. */
   cam: Camera;
-  /** Camera centre u, canonical in [-W/2, W/2). */
+  /** Camera centre u, canonical in [-W/2, W/2). Always 0 on a trough. */
   camU: number;
+  /** Trough wave: true for a trough level (the valley), false for a cylinder. */
+  readonly trough: boolean;
+  /** u period for short deltas: W on a cylinder, 0 on a trough (nothing wraps). */
+  readonly period: number;
+  /** Trough only: rim height in arena units (TROUGH_DEPTH_SHARE x W), 0 on a cylinder. */
+  readonly depth: number;
 }
 
 /** A drum projected point: screen position, depth scale, alpha multiplier and mirror sign. */
@@ -70,7 +80,50 @@ export function drumCamera(deg: number, arenaH: number): Camera {
 export function makeDrum(width: number, height: number, tiltDeg: number): Drum {
   const w = Number.isFinite(width) && width > 0 ? width : 1;
   const h = Number.isFinite(height) && height > 0 ? height : 1;
-  return { width: w, height: h, rs: (FACE_FILL * w) / 2, k: (2 * Math.PI) / w, cam: drumCamera(tiltDeg, h), camU: 0 };
+  return { width: w, height: h, rs: (FACE_FILL * w) / 2, k: (2 * Math.PI) / w, cam: drumCamera(tiltDeg, h), camU: 0, trough: false, period: w, depth: 0 };
+}
+
+/**
+ * Pure: the projection of a trough level of width W and height H, at a tilt in degrees. The same
+ * always on camera as the drum, so the valley reads by perspective at tilt off and leans with tilt.
+ */
+export function makeTroughDrum(width: number, height: number, tiltDeg: number): Drum {
+  const w = Number.isFinite(width) && width > 0 ? width : 1;
+  const h = Number.isFinite(height) && height > 0 ? height : 1;
+  return { width: w, height: h, rs: w / 2, k: (2 * Math.PI) / w, cam: drumCamera(tiltDeg, h), camU: 0, trough: true, period: 0, depth: TROUGH_DEPTH_SHARE * w };
+}
+
+/** Pure: the short u offset du on this drum's surface (wrapped on a cylinder, as is on a trough). */
+export function drumDu(d: Drum, du: number): number {
+  return d.period > 0 ? wrapDelta(du, d.period) : du;
+}
+
+/**
+ * Pure: the lift toward the viewer of trough ground at u, plus z: the shared profile height
+ * (src/core/trough.ts) minus the rim depth, so the floor sits depth behind the arena plane and the
+ * rims in it. The profile is never redefined here.
+ */
+export function troughLift(u: number, z: number, d: Drum): number {
+  return troughHeight(u, d.width) - d.depth + z;
+}
+
+/**
+ * Project arena (u, v) with lift z on a trough into out: the 3D point (u, v, troughLift) through
+ * the always on camera (project.ts formula). Front only: a 1, m 1. No allocation.
+ */
+export function troughProject(u: number, v: number, z: number, d: Drum, out: DrumPoint): DrumPoint {
+  const lift = troughLift(u, z, d);
+  const cam = d.cam;
+  const D = cam.focal;
+  const den = D - v * cam.sin - lift * cam.cos;
+  const lo = D * MIN_DEN_FRAC;
+  const f = D / (den > lo ? den : lo);
+  out.x = u * f;
+  out.y = (v * cam.cos - lift * cam.sin) * f;
+  out.s = f;
+  out.a = 1;
+  out.m = 1;
+  return out;
 }
 
 /** Pure: the drum angle of u for a camera centre, in [-pi, pi). */
@@ -83,7 +136,7 @@ export function drumPhi(u: number, camU: number, width: number): number {
  * when that is shorter) by 1 minus exp(-dt / DRUM_TAU) of the gap; result canonical.
  */
 export function followCamU(camU: number, target: number, dt: number, width: number): number {
-  if (!(dt > 0) || !Number.isFinite(target)) return camU;
+  if (!(dt > 0) || !Number.isFinite(target) || !(width > 0)) return camU;
   const k = 1 - Math.exp(-dt / DRUM_TAU);
   return wrapCoord(camU + wrapDelta(target - camU, width) * k, width);
 }
@@ -127,6 +180,7 @@ export function projectPhi(phi: number, v: number, z: number, d: Drum, out: Drum
 
 /** Project arena (u, v) with radial lift z through the drum into out. No allocation. */
 export function drumProject(u: number, v: number, z: number, d: Drum, out: DrumPoint): DrumPoint {
+  if (d.trough) return troughProject(u, v, z, d, out);
   return projectPhi(drumPhi(u, d.camU, d.width), v, z, d, out);
 }
 
@@ -196,6 +250,20 @@ export function ringArcs(d: Drum, v: number, steps: number = RING_STEPS): { fron
 export function drumBounds(d: Drum): Box {
   const p: DrumPoint = { x: 0, y: 0, s: 1, a: 1, m: 1 };
   const box: Box = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  if (d.trough) {
+    // Trough: sample the whole arena rectangle (the floor recedes, so the rims bound it).
+    for (let j = 0; j <= 8; j++) {
+      const v = -d.height / 2 + (j / 8) * d.height;
+      for (let i = 0; i <= RING_STEPS; i++) {
+        troughProject(-d.width / 2 + (i / RING_STEPS) * d.width, v, 0, d, p);
+        if (p.x < box.minX) box.minX = p.x;
+        if (p.x > box.maxX) box.maxX = p.x;
+        if (p.y < box.minY) box.minY = p.y;
+        if (p.y > box.maxY) box.maxY = p.y;
+      }
+    }
+    return box;
+  }
   for (const v of [-d.height / 2, d.height / 2]) {
     for (let i = 0; i < RING_STEPS; i++) {
       projectPhi((i / RING_STEPS) * 2 * Math.PI - Math.PI, v, 0, d, p);
