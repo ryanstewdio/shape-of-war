@@ -24,6 +24,12 @@ You are a headless Claude Code builder for Shape of War, a personal-use twin-sti
 ## Definition of done
 `npm test` and `npm run build` pass in your worktree. `tsc` accepts deprecated v7 shims, so this grep must print nothing before your hand-off: `grep -rnE "beginFill|endFill|lineStyle|drawRect|drawCircle|drawEllipse|drawPolygon|drawRoundedRect|drawStar|app\.view|cacheAsBitmap|getChildByName|\.interactive\b|\.name\s*=|BLEND_MODES|PIXI\." src/ tests/`. All tests your brief requires exist and pass. Commit on your branch with a conventional message (`feat(forge): world store`). Do not merge.
 
+## Furiosa (Codex lane)
+- Furiosa, the OpenAI Codex lane, works single GitHub issues under the rules in AGENTS.md.
+- Claude builders never edit AGENTS.md or docs/runbooks/furiosa-templates.md.
+- Claude writes Furiosa issues on Template 1 and reviews Furiosa PRs on Template 2 of docs/runbooks/furiosa-templates.md.
+- Ryan alone merges Furiosa PRs.
+
 ## Hand-off format (your final message, verbatim structure)
 ```
 HAND-OFF <nickname>: <slug>
