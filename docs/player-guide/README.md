@@ -1,38 +1,101 @@
-# Shape of War player guide
+# Shape Legend player guide
 
-Describes main at 91c49c84d1a90baa12a99b01df5ab1213b483466 (version v3), written 2026-11-02. Sections other than "Changed in this version" and the changelog still describe v2.0.0 (13b7d96) and are not yet rewritten for v3.
+Describes main at 96dcc2a6f82be801797281c8cbdd30075afdf3d3 (version tester-1+96dcc2a), written 2026-11-10.
 
 ## Changed in this version
 
-v3 since v2.0.0. Numbers for the new items are in the game, not yet in the sections below.
+This edition is a full rewrite. The last full edition described v2.0.0 (13b7d96). Over that edition, this one adds:
 
-- **Bosses, every 5th level (5 to 50), one per level.** Warden (5): a shell blocks shots until the core opens after each ring. Brood (10): destroy its three pods, then the core opens. Spindle (15): two sweep arms with gaps, fires pellets. Ember (20): fires fans, hittable only when stunned or resting. Mirage (25): shots count only through its turning open arc. Gravitas (30): destroy three anchors to stop the pull and open it. Bastion (35): four corner turrets, kill two to hit the core. Tempest (40): laps the arena, hittable on its lap and rest. Twins (45): two bodies joined by a lethal tether. Prism (50): shield with a white damage window. A bomb staggers a boss.
-- **Weapon combining.** Pick up a second weapon type and the two merge for the pair's effect. The six pairs: Hail (spread and rapid), Trident (spread and pierce), Halo (spread and orbit), Needle (rapid and pierce), Whirl (rapid and orbit), Eclipse (pierce and orbit).
-- **Drone pickups.** A teal ring arms your drone for 20 s in one of four modes: homing shots, detach (the drone holds a post as a decoy), rapid fire, or double (a second drone joins).
-- **Chainsaw.** With orbit, hold your aim and the blade bar extends into a spinning saw.
-- **Wells and nova snakes.** Gravity wells now arrive during play, not only at the start. Snakes can go nova with a multicolour burst.
-- **Settings additions.** 3D tilt (Off, Low, High), Effects and Music sliders and tiers as in v2, with more level tunes, boss battle tracks and three rotating menu themes.
-- **Cylinder levels.** From level 11, non boss levels may be a cylinder: the arena wraps left to right and is drawn as a neon drum.
+- **The legend.** The story, its names and how story scenes play (section 1). The story was not in any earlier edition.
+- **Guardians.** Ten bosses, every 5th Adventure level, each with its own rules (section 13).
+- **Difficulty.** Easy, Normal, Hard and Insane, chosen on each level's start card, and the fourth star for an Insane win (section 6).
+- **Shorter levels and new pacing.** Level 1 is 90 s. Later levels run 2 to 3 minutes, with a beat every minute and a final rush (section 5).
+- **The clock.** A separate clock box with time warnings at 1:00, 0:30 and the last 10 s (section 5).
+- **Start card and results redesign**, par rewards (a life, a bomb or a starting weapon) and new star targets of 1, 1.25 and 1.5 times par (sections 4 and 5).
+- **Free Play.** A setup screen for your own run (section 14).
+- **Endless changes.** A guardian every 3 minutes and a growing extra life schedule (section 14).
+- **Leaver**, a new enemy that splits into shards (section 10).
+- **Hazards.** Gravity wells that arrive during play, go super nova, release nova snakes and send a pond ripple when destroyed; membranes (section 11).
+- **Weapons.** Six combos from any two weapons, orbit with a chainsaw bar, drone pickups with four drone modes, and a stronger Turbo (sections 8 and 9).
+- **Controls.** Floating sticks that follow your thumb, and the bomb and super buttons stacked high on the right edge (section 3).
+- **Drum levels.** A cylinder arena that wraps left to right, with four drum maps and drift (section 12).
+- **3D tilt**, menu music, boss music, Turbo music and story sounds (sections 16 and 17).
+- **How to**, a paged guide on the main menu.
+- **The game address** https://play.shapelegend.com and play on Android phones and iPhones (section 18).
 
 ![Every shape in the game](img/shapes/_all.svg)
 
-Items marked (v2) arrived after tag v1.1.0. Distances are in arena units (u). The arena is always shown whole, so 1 u is a fixed share of the screen for a given arena. Your ship's hitbox has a radius of 10 u.
+Distances are in arena units (u). The arena is always shown whole, so 1 u is a fixed share of the screen for a given arena. Your ship's hitbox has a radius of 10 u. Enemy speeds and hit points in this guide are for Normal difficulty; section 6 lists how the other difficulties change them.
 
-## 1. Quick start
+## 1. The legend
 
-- **Goal.** Each Adventure level has one objective: score a target in a time limit, survive a time, or destroy a number of enemies. Endless has no objective: survive as long as you can.
-- **Left thumb moves.** Put your thumb down anywhere in the left half of the screen. That spot becomes the stick centre. Slide to move.
-- **Right thumb aims and fires.** Put your thumb down anywhere in the right half. Slide in a direction and the ship fires that way, nonstop, while you hold.
-- **Bomb.** Tap the round button with the number in it. It wipes every enemy off the arena. You get 3 per level. Bombed enemies give no points.
-- **Collect geoms.** Dead enemies drop small lime green diamonds called geoms. Fly near them and they fly to you. Each geom adds 1 to your multiplier and 1 to your super charge.
-- **Do not touch anything.** Any enemy, a gravity well core or an armed mine kills you. You have 3 lives per level.
-- **Super.** When the yellow ring above the bomb button is full (60 geoms), tap it.
+Shape Legend has a story. It plays in Adventure only, as short scenes between levels. Endless and Free Play have no scenes.
 
-## 2. Controls
+### The premise
 
-The controls are the same on both screens. Only the button positions move. The game picks the layout from the screen shape: if the width is at least 1.8 times the height it uses the cover layout, otherwise the main layout.
+You are a pilot who wakes in Vertane, a galaxy made of shapes and lines of light. A plague called the Dim is draining its colour. Vertane called you to save it.
 
-### Cover screen (21:9)
+| Name | Who or what |
+|---|---|
+| Vertane | The galaxy. Its grid of light is the arena you fly in. |
+| The Dim | The ancient plague. It turns shapes grey and hostile. Every enemy you fight is a Dim shape. |
+| Geoms | The captured citizens of Vertane. Breaking a Dim shape frees them as the small green diamonds you collect. |
+| Torus | The old guide, a being of nested shapes. Torus speaks to you in scenes. |
+| Vecta | The Grey Legend, a legend who came before you. The story reveals what he did as you free the guardians. |
+| Guardians | The ten bosses. The Dim took their colour. Beating one frees it. |
+| You | The pilot. You pick a call sign at the start. The pilot never speaks. |
+
+### How scenes work
+
+- **The opening** plays once, before level 1.
+- **Call sign.** During the opening a picker asks for your call sign. It suggests a name made of two words (for example NovaFox). Tap "New name" for another, or type your own in the "Or type one" box: letters and digits only, 3 to 10 characters. Tap "Done". An empty box takes the suggestion. If you skip the opening, the suggestion becomes your call sign. The call sign is kept on your phone only. In scene text it replaces the token {callsign}.
+- **Briefings.** Before the first level where a new enemy kind is in play, a short briefing names it and gives one tip. At most two briefings play before one level; the rest wait for the next level. A combo briefing plays when two kinds that work together first share a level.
+- **Guardian intro.** Before each boss level a scene introduces the guardian and says what to watch for.
+- **Freeing.** After you beat a guardian, a short scene shows it freed, before the results.
+- **Order at a level start:** the opening (once), then up to two briefings, then one combo briefing, then the guardian intro.
+- **Reading.** Text types out at 40 characters a second. Tap to finish the line, tap again for the next panel. "Tap to continue" shows when a panel is done.
+- **Skip.** The large Skip button at top right ends the scene in one tap. The next queued scene still opens. A skipped scene counts as seen.
+- **Once per save.** Each scene plays once. While a scene is open the game is held, and folding the phone does not pause it.
+- **Replay.** On Level select, tap "Replay story", then tap a level to see again the scenes you first saw on it. Tap "Play levels" to go back to normal level select.
+- Every difficulty shows the same scenes.
+
+### The opening
+
+Copied word for word from the game. {callsign} is your call sign. Lines marked Torus are spoken by Torus.
+
+1. "You wake in the dark. No sky. No ground." / "Only lines of light, and one small ship."
+2. "The ship is yours. It waits for a name." / "What will the Vertane galaxy call you?" (the call sign picker opens here)
+3. "{callsign}, the Shape Legend." / "The grid prayers have been answered."
+4. "Welcome to Vertane, a once peaceful" / "and brilliant galaxy."
+5. "Until the Dim arrived, an ancient plague" / "spreading to extinguish our brightness."
+6. "Vertane called you here... to save us." / Torus: "Good, you can hear the Voice of Vertane."
+7. Torus: "Let's prepare you for battle."
+
+### Combo briefings
+
+Each enemy's own briefing is in its entry in section 10. Each guardian's intro and freeing are in section 13. Two combo briefings play up to level 30:
+
+- **Charger with Splime.** "Slime slows you, and Chargers dash fast." / "Slow feet cannot step off a dash line." Then: "Keep to clean floor when Chargers come," / "so you can always step aside."
+- **Gravity well with Snake.** "Wells pull you, and Snakes are long." / "A pull can drag you into a tail." Then: "Break the well first, then the Snake." / "Then the floor is yours again."
+
+This guide quotes the story only up to level 30.
+
+## 2. Quick start
+
+- **Goal.** Each Adventure level has one goal: score a target before the clock runs out, survive a time, or destroy a number of enemies. Every 5th level is a guardian level: survive until the guardian arrives, then defeat it.
+- **Left thumb moves.** Put your thumb down anywhere on the left half of the screen. That spot becomes the stick centre. Slide to fly.
+- **Right thumb aims and fires.** Put your thumb down anywhere on the right half. Slide in a direction and the ship fires that way, nonstop, while you hold.
+- **Bomb.** Tap the BOMB button on the right edge. It wipes every enemy off the arena, with no points. You get 3 per level.
+- **Collect geoms.** Broken enemies drop small lime green diamonds called geoms. Fly near them and they fly to you. Each geom adds 1 to your multiplier and 1 to your super charge.
+- **Do not touch anything.** An enemy, a gravity well, an armed mine or a guardian's attack costs a life. On Normal you have 3 lives per level.
+- **Super.** The super button sits just above the bomb. It fills as you collect geoms (60 to fill). When it reads READY, tap it.
+- **Difficulty.** Pick Easy, Normal, Hard or Insane on the start card, then tap Start.
+
+## 3. Controls
+
+The controls are the same on every screen. Only the button positions move. The game picks the layout from the screen shape: if the width is at least 1.8 times the height it uses the wide layout (the Fold's cover screen), otherwise the main layout (the Fold's inner screen and most phones).
+
+### Wide screen (cover, 21:9)
 
 ![Cover screen controls](img/diagrams/controls-cover.svg)
 
@@ -43,13 +106,14 @@ The controls are the same on both screens. Only the button positions move. The g
 | 3 | Move stick | Appears where your thumb lands. Only a faint knob is drawn under your thumb. |
 | 4 | Aim stick | Same as the move stick. The ship turns to face the aim direction. |
 | 5 | Centre line | Splits move from aim. The split is the middle of the whole screen, HUD columns included. |
-| 6 | Edge strips, 24 px each side | A touch that starts here is ignored, so the phone's back swipe does not grab a stick. |
+| 6 | Edge strips, 24 px each side | A touch that starts here is ignored, so the phone's back swipe does not grab a stick. Buttons still work there. |
 | 7 | Pause (top right) | Opens the pause screen. Hit area 56 px square. |
-| 8 | Super ring (right column) | Tap when full to fire your super. Hit circle 76 px across. |
-| 9 | Bomb ring (right column, bottom) | Tap to bomb. Shows bombs left. Hit circle 88 px across. |
-| 10 | HUD columns | Display only. Touches here still count as stick starts (left or right half). |
+| 8 | Super button | Right edge, on top. Hit area 64 px square. Labelled with the super's name, or READY when full. |
+| 9 | Bomb button | Right under the super, 12 px below it. Hit area 64 px square. Labelled BOMB, with the bombs left inside it. |
+| 10 | HUD columns | Display only (left column 160 px, right column 112 px). Touches here still start sticks. |
+| 11 | Thumb rest area | Where the right thumb usually rests. Not a touch zone. The button stack is placed as low as it can sit while staying clear of an aim stick started here. |
 
-### Main screen (10:9)
+### Main screen (10:9 and most phones)
 
 ![Main screen controls](img/diagrams/controls-main.svg)
 
@@ -60,47 +124,53 @@ The controls are the same on both screens. Only the button positions move. The g
 | 3 | Move stick | Floating, faint knob only. |
 | 4 | Aim stick | Floating, fires past the dead zone. |
 | 5 | Centre line | Middle of the whole screen. |
-| 6 | Edge strips, 24 px | Starts here are ignored. |
+| 6 | Edge strips, 24 px | Stick starts here are ignored. |
 | 7 | Pause (top right) | Opens the pause screen. Hit area 56 px. |
-| 8 | Super ring | Right column, above the bomb. Hit circle 76 px. |
-| 9 | Bomb ring | Right column, bottom. Hit circle 88 px. |
-| 10 | Top band, 60 px | Score and status text. Display only. |
-| 11 | Bottom band layout | Some arenas fit better with the buttons at the bottom. Then the super and bomb rings sit at bottom centre with the super label to their left. The game picks whichever layout gives the bigger arena. |
+| 8 | Super button | Right column, on top. Hit area 64 px. |
+| 9 | Bomb button | Under the super. Hit area 64 px. |
+| 10 | Top band, 60 px | Score, clock and status. Display only. |
+| 11 | Right column, 68 px | Holds the buttons. Display only apart from the buttons. |
+| 12 | Thumb rest area | Not a touch zone. The buttons sit above it. |
+
+There is no bottom band layout any more. The game always uses one of the two layouts above.
 
 ### Stick behaviour
 
 | Property | Value |
 |---|---|
 | Origin | Wherever your thumb first touches. Not a fixed spot. |
-| Reach | 120 CSS px from the origin. Moving further does nothing more. |
+| Reach | 120 CSS px from the origin. |
+| Follow | Slide past the reach and the stick centre is dragged along, so your thumb stays on the edge of the ring. |
 | Dead zone | 12 percent of the reach (14.4 px), on both sticks. Inside it the stick reads zero: no movement, no fire. |
-| Response | Linear. Past the dead zone the output rises evenly from 0 to full at 120 px. |
-| Move speed | Full deflection is 420 u/s. Half deflection is half speed. With space physics on, see section 4. |
-| Aim | Past the dead zone the aim angle is the stick angle and the ship fires. |
-| Visual | A small filled knob (21.6 px radius, 30 percent alpha) under each thumb. No ring. It vanishes when you lift. |
+| Response | Linear. Past the dead zone the output rises evenly to full at the reach. |
+| Move speed | Full deflection is 420 u/s with space physics off. See section 7. |
+| Aim | Past the dead zone the aim angle is the stick angle and the ship fires. With no aim, the ship faces where it moves. |
+| Visual | A small faint knob (21.6 px radius, 30 percent alpha) under each thumb. No ring. It vanishes when you lift. |
 | Extra fingers | One finger per stick. A second finger in the same half is ignored. |
 
 ### Buttons
 
 - Buttons are checked before sticks, so a thumb that lands on a button never becomes a stick.
-- Bomb and super hit circles overlap a little. The nearer centre wins.
-- A press counts once. Hold it and nothing repeats. Lift and tap again for another press.
+- A button reacts only to a new touch that starts on it. Sliding a stick over a button does nothing.
+- A press counts once. Lift and tap again for another press.
 - Bomb: fires if you have a bomb, you are alive, and 1.0 s has passed since the last bomb.
-- Super: fires only when the ring is full and you are alive.
+- Super: fires only when it is full and you are alive. Detonate also needs your drone to be there.
+- Button look: a charging super fills cyan from the bottom. A full super pulses once a second and reads READY. An empty bomb button goes dim.
 
-### Pause, fold and landscape
+### Pause, fold and back
 
-- The pause button, the phone's back gesture (first press) and switching away from the app all pause the game.
-- Folding or unfolding mid game pauses it. The HUD and buttons move to the new layout. A stick whose start point is now off screen is dropped. Tap Resume when ready.
+- The pause button, switching away from the app and folding or unfolding the phone all pause the game.
+- On a fold the HUD and buttons move to the new layout. A stick whose start point is now off screen is dropped. Tap Resume when ready.
+- In a browser, the first back gesture pauses the game instead of leaving the page.
 - A fold can drop fullscreen. Your next tap asks for fullscreen again.
 - The game asks for landscape. If the phone refuses, it still plays in portrait.
-- The pause screen has Resume, Restart, Settings and Quit.
+- The pause screen ("Paused") has Resume, Restart, Settings and Quit.
 
-## 3. Core loop and scoring
+## 4. Core loop and scoring
 
-**Kill an enemy, it drops geoms, geoms raise the multiplier, so later kills score more.**
+**Break an enemy, it drops geoms, geoms raise the multiplier, so later kills score more.**
 
-### HUD on the cover screen
+### HUD on the wide screen
 
 ![Cover screen HUD](img/diagrams/hud-cover.svg)
 
@@ -108,17 +178,18 @@ The controls are the same on both screens. Only the button positions move. The g
 |---|---|---|
 | 1 | Score | Points this level, with thousands separators. |
 | 2 | Multiplier | Lime green "x" number. Starts at x1. |
-| 3 | Weapon (v2) | Pickup weapon name and a bar that drains over 20 s. Hidden while you have the default spread. |
-| 4 | Objective bar | Fills toward the objective. |
-| 5 | Objective label | For example "Destroy 23 / 60", "Survive 1:12", "4,200 / 5,000  0:45", then "Target met  0:20". Endless shows "Endless". |
-| 6 | Level line | Level number, par and level hash, for example "L7  Par 6,500  #a1b2c3d4". Endless shows "Endless  Seed N  m:ss". |
-| 7 | Lives | One ▲ per life, up to 5, then "▲ x N". |
-| 8 | Bombs | One ● per bomb, up to 5, then "● x N". |
-| 9 | Pause | Two bars. |
-| 10 | Super label and hint | "SUPER: HOMING", "SUPER: DETONATE" or "SUPER: TURBO", then "charges with geoms" or "ready: tap ring". |
-| 11 | Super ring | Fills clockwise in yellow as you collect geoms. |
-| 12 | Bomb ring | Number of bombs left. |
-| 13 | Arena | Always fully visible between the HUD columns. |
+| 3 | Weapon | Pickup weapon or combo name and a bar that drains over 20 s. Hidden while you have spread. |
+| 4 | Drone mode | Shown while a drone pickup is active (Homing, Detach, Rapid or Double), with its own bar. |
+| 5 | Clock | Time left on timed goals, time played on others. See section 5. |
+| 6 | Goal bar | Fills toward the goal. |
+| 7 | Goal label | For example "Survive", "Destroy 23 / 60", "Score 3,200 / 5,000", "BOSS IN 1:05", then the guardian's name. |
+| 8 | Level line | Level number, par and level code, for example "L7  Par 6,500  #a1b2c3d4". |
+| 9 | Lives | Under the buttons. One ▲ per life, up to 5, then "▲ x N". |
+| 10 | Bombs | One ● per bomb, up to 5, then "● x N". |
+| 11 | Pause | Two bars. |
+| 12 | Super button | Name above it, cyan fill rising as you collect geoms. |
+| 13 | Bomb button | BOMB above it, bombs left inside. |
+| 14 | Arena | Always fully visible between the HUD columns. On guardian and Endless runs a 20 px boss strip sits at the top. |
 
 ### HUD on the main screen
 
@@ -128,47 +199,52 @@ The controls are the same on both screens. Only the button positions move. The g
 |---|---|---|
 | 1 | Score | Top left. |
 | 2 | Multiplier | Under the score. |
-| 3 | Weapon (v2) | Right of the multiplier, with its countdown bar. |
-| 4 | Objective | Bar and label, top centre. |
-| 5 | Level line | Under the objective. |
-| 6 | Lives | Top right. |
-| 7 | Bombs | Under lives. |
-| 8 | Pause | Top right corner. |
-| 9 | Super label and hint | Wrapped over two lines above the super ring. |
-| 10 | Super ring | Fills clockwise. |
-| 11 | Bomb ring | Bombs left. |
-| 12 | Arena | Below the top band, left of the column. |
+| 3 | Weapon | Right of the multiplier, with its bar. |
+| 4 | Drone mode | Right of the weapon, while a drone pickup is active. |
+| 5 | Clock | Its own box in the top band. |
+| 6 | Goal bar and label | Top centre. |
+| 7 | Level line | Under the goal. Hidden while a guardian is on the field. |
+| 8 | Lives | Top right, left of pause. |
+| 9 | Bombs | Under lives. |
+| 10 | Pause | Top right corner. |
+| 11 | Super button | Right column. On this screen the Detonate super is labelled BOOM. |
+| 12 | Bomb button | Under the super. |
+| 13 | Arena | Below the top band, left of the column. |
 
 ### Where points come from
 
-Points for a kill are the enemy's base value times your multiplier at that moment. The geoms from that kill do not count for that kill.
+Points for a kill are the enemy's base value times your multiplier at that moment.
 
 | Source | Base value | Geoms dropped |
 |---|---|---|
 | Wanderer | 10 | 1 |
 | Pinwheel | 25 | 1 |
+| Leaver shard | 25 | 0 |
 | Dart | 30 | 1 |
 | Grunt | 50 | 1 |
-| Swirl (v2) | 80 | 1 |
+| Swirl | 80 | 1 |
 | Weaver | 100 | 2 |
-| Charger (v2) | 120 | 2 |
-| Blink (v2) | 130 | 2 |
-| Splime (v2) | 140 | 2 |
-| Bulwark (v2) | 150 | 3 |
+| Leaver | 100 | 2 |
+| Charger | 120 | 2 |
+| Blink | 130 | 2 |
+| Splime | 140 | 2 |
+| Bulwark | 150 | 3 |
 | Spawner | 150 | 3 |
-| Sower (v2) | 180 | 3 |
+| Sower | 180 | 3 |
 | Snake head | 200 | 4 |
 | Gravity well, shot down | 250 | 5 |
-| Snake body, Mine (v2), Slime (v2) | 0 | 0 |
+| Snake body, Mine, Slime | 0 | 0 |
+| Guardian | A fixed bonus, see section 13 | 20 |
 
-These kills score: your bullets, drone shots, the Ram drone, orbit blades and the Detonate super. These remove enemies with no points and no geoms: bombs, your death, a gravity well eating an enemy, and a gravity well exploding.
+These kills score: your bullets, orbit spikes, drone shots, the Ram drone, and the Detonate super. These remove enemies with no points and no geoms: bombs, your death, a gravity well eating an enemy, and a gravity well exploding.
 
-### The multiplier
+### The multiplier and geoms
 
-- Starts at x1 each level.
+- The multiplier starts at x1 each level.
 - Plus 1 per geom collected. Cap x999.
-- Goes back to x1 only when you die. Nothing else lowers it.
-- Geoms last 4 s. They pull toward you from 90 u away at 600 u/s and are collected within 28 u.
+- It goes back to x1 only when you die.
+- Geoms burst out from a kill, last 4 s, fly to you from 90 u away at 600 u/s and are collected within 28 u.
+- At most 280 geoms lie on the field; the oldest go first.
 - When you die every geom on the field vanishes.
 
 ### Worked examples
@@ -182,17 +258,145 @@ These kills score: your bullets, drone shots, the Ram drone, orbit blades and th
 | At the cap | x999 | Sower | 180 x 999 = 179,820 |
 | Just after a death | x1 | Grunt | 50 again |
 
-The lesson: early on, collecting geoms matters more than killing fast. One death wipes the multiplier you built.
+Collecting geoms early matters more than killing fast. One death wipes the multiplier you built.
 
 ### Par and stars
 
-- Each Adventure level has a par score: at least 1,000 and always a multiple of 500.
-- Stars: ★ at par, ★★ at 2 x par, ★★★ at 4 x par. For par 6,500 that is 6,500, 13,000 and 26,000.
-- Stars are given only when you complete the objective. A failed level gives 0 stars.
-- The intro card shows par and all three thresholds before the level starts.
+- Each Adventure level has a par score: the score a strong player reaches. It is at least 1,000 and a multiple of 500 on Normal.
+- Star targets: 1 star at par, 2 stars at 1.25 x par, 3 stars at 1.5 x par (each rounded to 500).
+- Par and the star targets change with difficulty: x0.8 on Easy, x1 on Normal, x1.15 on Hard, x1.3 on Insane.
+- Stars from score are capped by difficulty: Easy at most 1 star, Normal at most 2, Hard and Insane at most 3.
+- Stars are given only when you complete the goal. A failed level gives 0 stars.
+- The start card shows the three star targets and the cap for the chosen difficulty, for example "Normal: up to 2 stars".
 - Your best score and best stars per level are kept separately: a later run can raise either.
 
-## 4. Your ship
+### The fourth star
+
+Complete a level on Insane and you get 4 stars, whatever your score. The start card says "Insane: up to 3 stars, plus a 4th for a win". The fourth star is drawn as an iridescent star that shifts colour and spins once every 6 s, on the results screen and in Level select.
+
+### Par rewards
+
+Win an Adventure level with a score at or above par (par for your difficulty) and the results screen says "Par reached" and "Choose a reward for the next level". Pick one:
+
+| Reward | Choices | Effect on the next level |
+|---|---|---|
+| Extra life | Life | Start with 1 more life |
+| Extra bomb | Bomb | Start with 1 more bomb |
+| Start with a weapon | Spread, Rapid, Pierce or Orbit | Start holding that weapon for its normal 20 s |
+
+After you pick, the screen confirms it, for example "Extra life ready for level 7". The reward is for the next level only. A typed seed run saves no reward.
+
+## 5. Levels and missions
+
+### Adventure
+
+- A sequence of generated levels. On the menu the button reads "Adventure", or "Continue  L<n>" once you have unlocked more than level 1.
+- Each level comes from your run seed plus the level number. Your run seed is made once on first launch and kept. Retry replays the identical level.
+- Completing the goal unlocks the next level, whatever your stars.
+- Level select shows unlocked levels in pages of 12, newest page first, each with its best stars. It has Prev, Next, "Replay story" and Back.
+- Each level: 3 lives (changed by difficulty), 3 bombs, one drone and one super, fixed by the level.
+
+### The start card
+
+Before each Adventure level a card holds the game until you tap Start. Top to bottom:
+
+- **Title**: "Level N".
+- **Goal** and **Victory**: one line each (see the table below).
+- **Star targets**: "1 star", "2 stars", "3 stars" with their scores, and the cap line for the difficulty.
+- **New enemies**: an icon, name and type for each kind new to your run.
+- **Difficulty chips**: Easy, Normal, Hard, Insane. Your last choice is picked. Tapping a chip rebuilds the level at that difficulty.
+- **Start**.
+- **Details**, closed by default: the arena (for example "Circle 900 x 900"), the drone, the super with what it does, a held par reward, and the seed.
+
+### Mission types
+
+| Mission | Goal line on the card | Victory line | Win | Lose |
+|---|---|---|---|---|
+| Score | "Score X in m:ss" | "X points when the m:ss clock runs out with a life left" | Your score is at or above the target when the clock runs out. The level always runs its full time, so you can keep climbing | Below target at time out, or out of lives |
+| Survive | "Survive m:ss" | "m:ss survived with a life left" | The clock counts down to 0 with a life left | Out of lives |
+| Destroy | "Destroy N enemies before your lives run out" | "N kills with a life left" | Kill the number shown. The level ends the moment you reach it | Out of lives |
+| Guardian | "Survive until <name> arrives, then defeat it (1:25)" | "<name> destroyed, with a life left" | The guardian is destroyed | Out of lives. There is no time out |
+
+- Scores on the card use a short form above 9,999, for example "12.3K".
+- The score target is 60 percent of par, on the 500 grid, at least 1,000 and never above par, then scaled by difficulty like par.
+- Destroy counts every scoring kill of a real enemy: each Dart, Snake head and Leaver counts 1. Snake segments, wells, Mines, Slime and Leaver shards do not count. Bomb and death clears do not count. A guardian counts 1.
+- Levels 1 to 5 draw survive or destroy more often (score 20, survive 40, destroy 40 percent); later levels about a third each. From level 3, if the last three non guardian levels had no score mission, the next one is a score mission.
+
+### Level length and pacing
+
+| Level | Clock |
+|---|---|
+| 1 | 1:30 |
+| 2 | 1:45 |
+| 3 | 2:00 |
+| 4 | 2:15 |
+| 5 and up (not guardian) | One of 2:00, 2:15, 2:30, 2:45 or 3:00, drawn per level, never the same as the level before |
+| Guardian levels | The guardian arrives at 1:25; the fight runs until it falls |
+
+- On a destroy level the clock length is the time the enemy count is planned around.
+- The first wave arrives 2.5 s in. Each level opens calm, then builds to its end.
+- **A beat every minute.** At each full minute a formation (an extra group of one kind in a new pattern, at least 4 enemies) or a 10 s surge arrives. The first is either, then they take turns.
+- **Final rush.** The last 20 s of a non guardian level bring more enemies.
+- The wave schedule loops its harder half, so destroy levels never run out of enemies.
+- Levels 1 to 14 are gentler: fewer enemies per wave, rising to the full amount by level 15.
+
+### The clock
+
+| Goal | Clock shows |
+|---|---|
+| Survive, Score | Time left, counting down |
+| Destroy, Guardian | Time played, small and white |
+
+On a countdown the clock changes as time runs out:
+
+| Time left | Colour |
+|---|---|
+| Over 1:00 | Cyan |
+| 1:00 or less | Yellow |
+| 0:30 or less | Orange |
+| 0:10 or less | Red and large |
+
+Time warnings: at 1:00 a soft chime, at 0:30 a second soft chime, and from 0:10 the clock pulses once a second. From 0:05 a low tick sounds each second, rising in pitch, a little louder at 3, 2 and 1. A level that starts under a mark skips that warning.
+
+The clock runs on the wave clock, which stops while you are dead.
+
+### Results screen
+
+| Item | Shows |
+|---|---|
+| Headline | "Victory" or "Defeated" |
+| Level line | "Level N  <arena> arena" and a difficulty chip |
+| Score block | Score, par, a bar with 1★ 2★ 3★ marks, stars earned and the cap line |
+| Best | Your best score and stars, with "New best" when beaten |
+| Par reward | The reward choice, when earned |
+| Buttons | Next (after a win) or Retry, and Menu |
+| Details | Time, kills, geoms, best multiplier, guardian bonus, space physics, seed, level code, build |
+
+## 6. Difficulty
+
+Pick a difficulty on each Adventure and Endless start card. Free Play picks it on its own setup screen. The last choice is remembered. The default is Normal.
+
+| Effect | Easy | Normal | Hard | Insane |
+|---|---|---|---|---|
+| Lives per level | 5 | 3 | 2 | 2 |
+| Enemy speed | x0.8 | x1 | x1.15 | x1.38 |
+| Enemy hit points | x0.75 | x1 | x1.3 | x1.56 |
+| Enemies per wave | x0.87 | x1 | x1.15 | x1.32 |
+| Most enemies alive at once | x0.9 | x1 | x1.15 | x1.6 |
+| Guardian hit points and attack speed | x0.55 | x1 | x1.35 | x1.62 |
+| Guardian minions | x0.75 | x1 | x1.25 | x1.6 |
+| Guardian warning time | x1 | x1 | x1 | x0.85 |
+| Drift and pond ripple push | x0.7 | x1 | x1.3 | x1.6 |
+| Par and star targets | x0.8 | x1 | x1.15 | x1.3 |
+| Most stars | 1 | 2 | 3 | 3, or 4 for any win |
+| Space physics | Off | Low | Medium | High |
+
+- Bombs stay at 3 on every difficulty.
+- Hit points are rounded, never below 1, so a 1 hit enemy stays 1 hit.
+- Space physics now follows difficulty (section 7).
+- No difficulty is locked.
+
+## 7. Your ship
 
 ![Ship](img/shapes/ship.svg)
 
@@ -200,28 +404,26 @@ The lesson: early on, collecting geoms matters more than killing fast. One death
 |---|---|
 | Shape | White arrowhead. The nose points where you aim, or where you move when not aiming |
 | Hitbox | Radius 10 u |
-| Top speed | 420 u/s (space physics Off and Low) |
-| Lives | 3 per Adventure level. Endless: 3 at start, see section 9 |
-| Respawn | 1.5 s after death, at the arena centre |
-| Invulnerability | 2.0 s after spawning and after each respawn. The visual cue for it is unknown (see the note below) |
+| Top speed | 420 u/s (space physics Off and Low), 460 (Medium), 520 (High) |
+| Lives | 3 per Adventure level on Normal (section 6) |
+| Respawn | 1.5 s after death, at the arena centre, standing still |
+| Invulnerability | 2.0 s after spawning and after each respawn. The ship blinks 6 times a second while it lasts |
 | Walls | You slide along walls and obstacles. No bounce, no damage |
 
 When you die:
 - Lives drop by 1 and the multiplier goes to x1.
-- Every enemy, segment, Mine and Slime is removed with no score. Gravity wells, Spawners and a weapon pickup on the floor stay.
-- All geoms vanish. Your weapon goes back to spread. Your drone disappears until you respawn.
-- The phone vibrates once for 60 ms.
-- The wave clock stops until you are back, so you do not miss spawns or lose objective time.
+- Every enemy, segment, Mine and Slime is removed with no score. Gravity wells, Spawners, a guardian and its parts, and any pickup on the floor stay.
+- All geoms and enemy bullets vanish. Your weapon goes back to spread. Your drone disappears until you respawn and its drone mode ends.
+- The phone vibrates once for 60 ms, where the phone supports it.
+- The wave clock stops until you are back, so you do not miss spawns or lose goal time.
 - Bombs are not refunded. Super charge is kept.
 
-Note: the game gives you 2.0 s of invulnerability, but no blink or flash for it could be found in the drawing code. Treat the first 2 s after a respawn as safe, but do not expect a visual cue.
+### Space physics
 
-### Space physics (v2)
+Space physics is set by difficulty: Easy Off, Normal Low, Hard Medium, Insane High. It is no longer a settings row.
 
-Settings has a Space physics row: Off, Low, Medium, High. Default Off.
-
-- **Off.** Your speed follows the stick exactly and instantly. This is the original game.
-- **Low, Medium, High.** The stick is a thruster. The longer you hold it, the harder you accelerate, up to a ceiling. Let go and you drift, slowing under drag, and stop dead below 3 u/s. Pushing against your drift brakes harder. Walls still slide, no bounce.
+- **Off.** Your speed follows the stick exactly and instantly.
+- **Low, Medium, High.** The stick is a thruster. The longer you hold it, the harder you push, up to a ceiling. Let go and you drift, slowing under drag, and stop dead below 3 u/s. Pushing against your drift brakes harder. Walls still slide.
 
 | Level | Start push (u/s²) | Push ceiling (u/s²) | Push growth time (s) | Top speed (u/s) | Drag when released (per s) | Brake boost |
 |---|---|---|---|---|---|---|
@@ -230,631 +432,939 @@ Settings has a Space physics row: Off, Low, Medium, High. Default Off.
 | Medium | 800 | 2000 | 0.8 | 460 | 2.5 | x2.0 |
 | High | 500 | 1800 | 1.0 | 520 | 1.2 | x1.6 |
 
-What that feels like (figures computed from the table, not measured):
-
-| Level | Rest to top speed | Glide after letting go at top speed | Time to slow to 10 percent | Feel |
-|---|---|---|---|---|
-| Low | 0.28 s | 105 u | 0.58 s | Almost Off. A short slide when you let go. |
-| Medium | 0.43 s | 184 u | 0.92 s | A clear glide. Plan your stops. |
-| High | 0.71 s | 433 u | 1.92 s | Floaty. A long coast, about half an arena height. Fastest top speed. |
-
-More rules:
-- Hold time only resets when you lift your thumb. Changing direction does not reset it.
 - Half deflection gives half push, but the top speed stays the same.
 - Respawning zeroes your speed.
-- You can change the setting from the pause screen. It takes effect on the next step.
-- Slime halves your top speed under any setting (section 8).
+- Slime halves your top speed. Turbo raises it by 35 percent.
 
-## 5. Weapons
+## 8. Weapons
 
-You always start a level with spread. Kills drop weapon pickups (v2) that swap your weapon for 20 s.
+You start each level with spread. Kills drop weapon pickups that give you a weapon for 20 s. Two different weapons combine.
 
-### Spread (default)
-
-| Property | Value |
-|---|---|
-| Pattern | 3 bullets at minus 6, 0 and plus 6 degrees from your aim |
-| Rate | 12 volleys a second |
-| Bullet | 1400 u/s plus your speed along the aim, capped at 1600. Radius 4 u. Life 1.2 s |
-| Damage | 1 per bullet. A bullet stops on the first thing it hits |
-
-### Pickup weapons (v2)
+### The four weapons
 
 | Image | Weapon | How it fires | Rate | Bullet |
 |---|---|---|---|---|
-| ![Rapid pickup](img/shapes/weaponpickup-rapid.svg) | Rapid | 2 parallel bullets, 5 u either side of your aim line | 26 volleys a second | 1500 u/s plus your speed, cap 1600. Radius 3 u. Life 1.0 s. Stops on first hit |
-| ![Pierce pickup](img/shapes/weaponpickup-pierce.svg) | Pierce | 1 heavy bullet | 8 a second | 1600 u/s. Radius 6 u. Life 1.0 s. Hits up to 4 different enemies (the first plus 3 more) |
-| ![Orbit pickup](img/shapes/weaponpickup-orbit.svg) | Orbit | 4 blades circle you at 80 u, 2.4 turns a second, plus 1 forward bullet while aiming | Forward bullet 6 a second | Blade radius 7 u. Each blade does 1 damage, then rests 0.12 s. Blades are never used up |
+| | Spread (default) | 3 bullets at minus 6, 0 and plus 6 degrees from your aim | 12 volleys a second | 1400 u/s, radius 4 u, life 1.2 s. Stops on the first hit |
+| ![Rapid pickup](img/shapes/weaponpickup-rapid.svg) | Rapid | 2 parallel bullets, 5 u either side of your aim line | 26 volleys a second | 1500 u/s, radius 3 u, life 1.0 s. Stops on the first hit |
+| ![Pierce pickup](img/shapes/weaponpickup-pierce.svg) | Pierce | 1 heavy bullet | 8 a second | 1600 u/s, radius 6 u, life 1.0 s. Hits up to 4 different enemies |
+| ![Orbit pickup](img/shapes/weaponpickup-orbit.svg) | Orbit | Spikes circle you. No forward bullets | none | See below |
 
-Pierce bullets are stopped by walls, Snake body segments, gravity well cores and a Bulwark shield. Orbit blades pass through Snake body segments, can damage a gravity well, and are absorbed by a Bulwark shield (the blade rests with no damage).
+- Your speed along the aim is added to bullet speed, up to 1600 u/s.
+- Every bullet hit does 1 damage.
+- Snake body segments stop a pierce bullet. A Bulwark's shield absorbs any bullet. A guardian's body stops every bullet, pierce included.
+- Gravity wells bend your bullets, and a bullet that touches a well's core is used up on it. Bullets vanish on walls.
 
-All bullets except orbit blades are pulled by gravity wells. Bullets vanish on walls and obstacles.
+### Orbit and the chainsaw
 
-### Pickups (v2)
+- 8 spikes in two rings of 4: an inner ring at 80 u turning forward, an outer ring at 100 u turning back. They spin 2.4 times a second.
+- A spike does 1 damage to the first enemy it touches, then rests 0.12 s. Spikes are never used up. They pass through Snake body segments and can hurt gravity wells. A Bulwark shield blocks them.
+- **Chainsaw.** Hold the aim stick and the spikes facing your aim stretch out into a saw bar over 0.25 s. At full stretch the outer tip reaches 320 u and the inner 208 u. The bar is longest straight ahead and fades out 70 degrees to either side.
+- Spikes on the bar hit every enemy along their sweep. Once the saw is more than half out, hits alternate 1 and 2 damage and spikes rest 30 percent less.
+- Orbit makes no shot sound. The saw buzzes while it runs.
+
+### Combos
+
+Pick up a different weapon while you hold one and the two join into a combo for a fresh 20 s.
+
+| Combo | Pair | Rate | How it fires |
+|---|---|---|---|
+| Hail | Spread and Rapid | 22 a second | A 3 way fan at 5 degrees of small fast bullets (1500 u/s, life 0.9 s) |
+| Trident | Spread and Pierce | 10 a second | A 3 way fan at 8 degrees of pierce bullets (radius 5 u) that hit 2 enemies each |
+| Halo | Spread and Orbit | 10 a second | The spread fan plus the orbit spikes |
+| Needle | Rapid and Pierce | 14 a second | 2 parallel pierce bullets (radius 4 u) that hit 3 enemies each |
+| Whirl | Rapid and Orbit | 18 a second | Rapid's twin bullets plus spikes spinning 3 times a second |
+| Eclipse | Pierce and Orbit | 8 a second | A pierce bullet that hits 3 enemies, plus spikes spinning 2 times a second that each hit up to 3 enemies at rest |
+
+### Pickups
+
+![Weapon pickup](img/shapes/weaponpickup.svg)
 
 | Rule | Value |
 |---|---|
-| Look | ![Weapon pickup](img/shapes/weaponpickup.svg) A spinning five sided outline with a weapon mark: two bars (rapid, pale ice blue), an arrow (pierce, pale violet), a ring round a dot (orbit, mint) |
-| When | Counted on scoring kills. The first is due at kill 15, then every 25 (40, 65, 90 and so on). The count restarts each level |
-| Where | At the position of the kill that made it due |
-| How many | One at a time. If one is already on the floor, the next waits for the first kill after it is gone |
-| Life | 8 s on the floor. Blinks in the last 2 s |
+| Look | A spinning outline with a mark for its weapon (see the images above) |
+| When | Counted on scoring kills. The first is due at kill 15, then every 25 (40, 65, 90 and so on). While you hold a pickup weapon the next one is due within 12 kills, so combos come quickly |
+| Where | At the kill that made it due |
+| How many | One on the floor at a time |
+| Life | 8 s on the floor. It blinks in the last 2 s |
 | Pick up | Fly within 28 u of it |
 | Duration | 20 s. The HUD bar drains over that time |
-| Same again | Picking up the weapon you hold refills it to 20 s |
-| Different | Replaces your current weapon |
-| On death | You go back to spread. A pickup lying on the floor stays |
-| Bombs | Leave the pickup alone. The end of a level removes it |
+| Same again | The same weapon, or either half of your combo, refills the 20 s |
+| Different | With one weapon: forms the combo. With a combo: the older half is replaced by the new weapon |
+| On death | You go back to spread. A pickup on the floor stays |
+| Bombs | Leave pickups alone. The end of a level removes them |
 
-Which weapons can drop depends on the level band: levels 1 to 5 drop rapid only, levels 6 to 15 drop rapid or pierce, level 16 and up and Endless drop all three. The same weapon never drops twice in a row when there is a choice. The choice comes from the level seed, so a replay of a level drops the same weapons in the same order.
+Which weapons drop depends on the level: levels 1 to 5 drop rapid only, levels 6 to 15 rapid or pierce, level 16 and up and Endless all three. While you hold a pickup weapon, spread can also drop (to build Hail, Trident or Halo). The same weapon never drops twice in a row when there is a choice. The choice comes from the level seed, so a replay drops the same weapons in the same order.
 
-The HUD label colours differ from the pickup colours: the label reads RAPID in teal, PIERCE in orange and ORBIT in violet.
+HUD colours: RAPID light blue, PIERCE violet, ORBIT green. A combo takes the colour of its later half. The HUD shows combos in capitals: HAIL, TRIDENT, HALO, NEEDLE, WHIRL, ECLIPSE.
+
+### Weapon sounds and cues
+
+- **Combine.** A rising three note chime in the music's key. The weapon label flashes for 0.6 s and shows "combined" for 1.5 s.
+- **Expiry.** A falling two note chime. The weapon label and bar disappear.
+- **Single pickup.** A burst of sparks in the weapon's colour.
 
 ### Settings toggle
 
-Settings, Weapon pickups: On (default) or Off. Off means no pickups drop and the kill count does not run. Turning it off mid level cancels a waiting drop. A weapon you already hold runs out normally.
+Settings, Weapon pickups: On (default) or Off. Off means no weapon pickups and no drone pickups drop, and the kill count stops. A weapon you already hold runs out normally.
 
-## 6. Bombs, drones and supers
+## 9. Bombs, drones and supers
 
 ### Bombs
 
 | Rule | Value |
 |---|---|
-| Stock | 3 per Adventure level. Endless: 3 at start, plus 1 every 150,000 points, at most 9 |
+| Stock | 3 per level (plus 1 from a par reward). Endless: 3 at start, plus 1 every 150,000 points, at most 9 |
 | Cooldown | 1.0 s between bombs |
-| Effect | Removes every enemy, every spawning enemy, every Snake segment, every Mine, every Spawner and every Slime puddle. Gravity wells are not destroyed: they go back to their starting size, mass and health |
+| Effect | Removes every enemy, every spawning enemy, every Snake segment, every Mine, every Spawner, every Slime puddle and every enemy bullet. Gravity wells are not destroyed: they shrink back to their starting size and health |
+| Guardians | A bomb clears a guardian's attacks and minions and stuns it for 1.5 s. It does no damage and does not remove its pods, anchors or turrets |
 | Score | None for anything removed, and no geoms. Geoms already on the floor stay |
-| Not affected | Weapon pickups. The Bulwark shield does not stop a bomb |
-| On death | Not refunded |
+| Not affected | Pickups. The Bulwark shield does not stop a bomb |
 
-Tips: a bomb is a life saver, not a score tool. Use it the moment you are boxed in. A bomb also deflates a fat gravity well before it explodes.
+A bomb is a life saver, not a score tool. Use it the moment you are boxed in.
 
 ### Drones
 
-One drone per level, shown on the intro card. Drones cannot be hurt, are not pulled by wells and vanish while you are dead.
-
 ![Drone](img/shapes/drone.svg)
+
+One drone per level, named in the start card's Details. Drones cannot be hurt, are not pulled by wells and vanish while you are dead.
 
 | Drone | Behaviour | Numbers |
 |---|---|---|
-| Attack | Circles you and shoots the nearest enemy | Circle radius 60 u at 1.5 turns a second. Range 450 u. 4 shots a second, normal bullets, 1 damage |
-| Collect | Sits behind your nose and vacuums geoms | 50 u behind you. Pulls geoms within 260 u at 900 u/s. Collects within 28 u of the drone |
-| Ram | Circles you, then charges the nearest enemy | Range 400 u. Charge 700 u/s. 2 damage on contact, then 1.2 s rest and a return at 900 u/s |
+| Attack | Circles you and shoots the nearest enemy or guardian | Circle radius 60 u at 1.5 turns a second. Range 450 u. 4 shots a second |
+| Collect | Follows behind you and pulls in geoms | 50 u behind you. Pulls geoms within 260 u at 900 u/s |
+| Ram | Circles you, then charges the nearest enemy | Range 400 u. Charge 700 u/s. 2 damage, then a return at 900 u/s and a 1.2 s rest |
 
-The drone is a small white circle with a cross. Drones never target Snake body segments or gravity wells. The Ram drone ignores the Bulwark shield.
+Which drone you get: levels 1 to 5 always Attack. Levels 6 to 15: Attack 50, Collect 30, Ram 20 (weights). Level 16 and up: about a third each. Endless: always Attack. Free Play: your choice.
 
-Which drone you get: levels 1 to 5 always Attack. Levels 6 to 15: Attack 50, Collect 30, Ram 20 (weights). Level 16 and up: about a third each. Endless: always Attack.
+### Drone pickups
+
+![Drone pickup](img/shapes/dronepickup.svg)
+
+A spinning ring pickup arms your drone for 20 s in one of four modes. While armed, every drone type also shoots the nearest target within 450 u.
+
+| Mode | Effect |
+|---|---|
+| Homing | The drone fires 4 shots a second that home on enemies |
+| Detach | The drone flies 280 u ahead along your aim and holds that post as a decoy. Enemies near it chase it, and aimed guardian shots aim at it. It fires 4 a second |
+| Rapid | The drone fires 10 shots a second |
+| Double | A second drone joins on the far side of your orbit. Each fires 4 a second |
+
+- Drops at scoring kill 30, then every 40 (70, 110 and so on). Life 8 s on the floor. Fly within 28 u to take it.
+- The mode is picked from the level seed and never repeats the previous one.
+- A new drone pickup replaces the mode and restarts the 20 s.
+- The mode ends early if you die. The HUD shows the mode name and a bar while it lasts.
+- Drone pickups drop only while Weapon pickups is On.
 
 ### Supers
 
-One super type per level, named on the intro card and on the super label.
+One super type per level, named on the super button and in the start card's Details.
 
 | Rule | Value |
 |---|---|
 | Charge | 1 per geom collected, full at 60 |
-| Use | Tap the super ring when full. Charge empties and refills from new geoms, so you can use it more than once |
+| Use | Tap the super button when it reads READY. Charge empties and refills from new geoms, so you can use it more than once |
 | On death | Charge is kept. You cannot fire it while dead |
 
 | Super | Effect | Numbers |
 |---|---|---|
-| Homing | Every bullet on screen, and every bullet you fire in the window, turns toward the nearest enemy. Homing bullets turn hot pink | 5.0 s window. Seeks within 300 u. Turns up to 540 degrees a second. Bullets keep homing until they expire. Ignores Snake body segments and gravity wells |
-| Detonate | Your drone explodes and kills every enemy within 260 u of it, for full score and geoms | Snake heads die and their segments go with them. Gravity wells are not hurt. The drone is gone for 3.0 s, then returns. Needs the drone to be present |
-| Turbo | Doubles the fire rate of whatever weapon you hold | 5.0 s. Spread goes to 24 volleys a second. Orbit blades keep their speed |
+| Homing | Every bullet you fire turns toward the nearest target | 5 s. Seeks within 300 u. Turns up to 540 degrees a second. Bullets fired in the window keep homing until they expire. Spikes do not home |
+| Detonate | Your drone explodes and destroys every enemy within 260 u of it, for full score and geoms | Snake heads die and their segments go with them. Gravity wells are not hurt. A guardian in range loses 10 percent of its full health. The drone is gone for 3 s. Needs the drone to be there |
+| Turbo | Faster fire, a faster ship and bullets that pass through enemies | 10 s. Fire rate x2.5, top speed x1.35. Bullets pass through 2 enemies and stop on the third. Each scoring kill adds 0.25 s, up to 15 s in all. Turbo has its own music and engine hum |
 
-Which super you get: levels 1 to 5 Homing 34 or Turbo 66 (weights). Level 6 and up: about a third each. Endless: always Turbo.
+Which super you get: levels 1 to 5 Homing 34 or Turbo 66 (weights). Level 6 and up: about a third each. Endless: always Turbo. Free Play: your choice.
 
-Tips: Detonate is best when you fly into a crowd with the drone close. Homing steers every bullet, so more bullets means more homing hits: rapid fires 52 bullets a second, spread 36. Turbo doubles those: spread to 72 a second, rapid to 104.
-
-## 7. Enemies
+## 10. Enemies
 
 ### Rules for every enemy
 
-- **Telegraph.** Every wave enemy appears as a flashing outline at half brightness for 0.6 s before it is live. During that time it cannot hurt you and cannot be hit. Darts from a Spawner telegraph for 0.4 s.
-- **Contact kills.** Touching any live enemy kills you unless you are invulnerable.
-- **Walls.** Enemies slide along walls. Wanderers and Pinwheels bounce instead.
-- **Crowding.** Enemies of the same kind push gently apart, so they do not stack into one blob.
-- **Speed.** Enemy speed rises with the level: x1.00 for levels 1 to 5, x1.05 for 6 to 15, x1.10 for 16 to 30, x1.20 at 31 rising 0.005 a level to x1.40 at level 71. Small arenas slow enemies a little (down to x0.88 on the smallest), so the cover screen stays fair.
-- **Safe spawns.** A fixed spawn point within 180 u of you is mirrored to the other side of the arena. Ring spawns appear 260 to 340 u from you.
-- **Cap.** Each level has a maximum number of live enemies: 60 in levels 1 to 5, 90 in 6 to 15, 120 in 16 to 30, 160 from 31. Extra spawns wait in a queue.
+- **Telegraph.** Every wave enemy appears as a flashing outline for 0.6 s before it is live. During that time it cannot hurt you and cannot be hit. Darts from a Spawner telegraph for 0.4 s.
+- **Contact kills.** Touching any live enemy costs a life unless you are invulnerable.
+- **Walls.** Enemies slide along walls. Wanderers and Pinwheels bounce.
+- **Crowding.** Enemies of the same kind push gently apart.
+- **Speed by level.** x1.00 for levels 1 to 5, x1.05 for 6 to 15, x1.10 for 16 to 30, x1.20 at 31 rising 0.005 a level to x1.40. Small arenas slow enemies a little (down to x0.88).
+- **Safe spawns.** A fixed spawn point within 180 u of you is moved to the mirrored point; if that is close too, the spawn waits 0.5 s.
+- **Cap.** Each level has a most enemies alive at once: 60 in levels 1 to 5, 90 in 6 to 15, 120 in 16 to 30, 160 from 31, lower in levels 1 to 14, and changed by difficulty. Extra spawns wait.
+- **Decoys.** Enemies within 640 u of a detached drone chase it instead of you.
+- **Membranes** make enemies that cross them angry: see section 11.
+- **No ordinary enemy shoots.** Only guardians fire bullets.
 
-Bands: levels 1 to 5 are band 1, 6 to 15 band 2, 16 to 30 band 3, 31 and up band 4. "Weight" below is the share used to pick each level's roster (3 to 6 kinds, Grunt always included).
+Bands: levels 1 to 5 are band 1, 6 to 15 band 2, 16 to 30 band 3, 31 and up band 4. Each level picks a roster of 3 to 6 kinds, Grunt always included. The weights below are the chance shares for that pick. The briefing lines are copied word for word from the game.
 
-### Tier 1: v1 basics, from level 1
-
-Levels 1 to 5 always have exactly Grunt, Wanderer and Pinwheel.
-
-#### Grunt
+### Grunt
 
 ![Grunt](img/shapes/grunt.svg)
 
 | Field | Detail |
 |---|---|
-| Colour and shape | Blue square with a diamond inside, "the box" |
+| Type on the card | Chaser |
+| Colour and shape | Blue square with a diamond inside |
 | Size | Radius 14 u |
-| Behaviour | Flies straight at you at 150 u/s. 1 HP |
-| Tells | Pulses in size twice a second (looks only, the hitbox does not change). Always heads straight for you |
-| Threat | Low alone, high in a crowd |
-| Counter | Back away while firing. Any weapon kills it in one hit |
+| Behaviour | Flies straight at you at 150 u/s. 1 hit point |
+| Tells | Pulses in size twice a second (looks only) |
+| Counter | Back away while firing. One hit kills it |
 | Score and geoms | 50, 1 geom |
-| First appears | Level 1. In every roster. Weight 40, 30, 25, 20 by band |
-| Notes | The most common enemy. Its music motif is a steady low pulse |
+| First appears | Level 1. Weight 40, 30, 25, 20 by band. In every roster |
+| Briefing | "The first Dim shapes are small squares." / "Grunts. They come straight at you." / "Shoot the Dim before it reaches you." / "Break the Dim to free the captured" / "citizens of Vertane, called Geoms." / "The Dim spreads through Vertane," / "turning Geoms into the swarms you face." |
 
-#### Wanderer
+### Wanderer
 
 ![Wanderer](img/shapes/wanderer.svg)
 
 | Field | Detail |
 |---|---|
-| Colour and shape | Purple crossed bow tie, "the bow tie" |
+| Type on the card | Hazard |
+| Colour and shape | Purple crossed bow tie |
 | Size | Radius 13 u |
-| Behaviour | Drifts in a straight line at 110 u/s and bounces off walls. Ignores you. Spins half a turn a second. 1 HP |
-| Tells | Its path is a straight line until it hits a wall |
-| Threat | Low. It only kills you if you fly into it |
-| Counter | Shoot it when convenient. Watch the bounce angle near walls |
+| Behaviour | Drifts in a straight line at 110 u/s and bounces off walls. Ignores you. Spins half a turn a second. 1 hit point |
+| Counter | Shoot it when convenient. Watch the bounce near walls |
 | Score and geoms | 10, 1 geom |
 | First appears | Level 1. Weight 35, 20, 12, 8 by band |
-| Notes | Cheap points, but every geom counts for the multiplier |
+| Briefing | "Wanderers drift and do not hunt you." / "They bounce off walls like lost birds." / "Read their path and step out of it." / "Do not let one drift into you." |
 
-#### Pinwheel
+### Pinwheel
 
 ![Pinwheel](img/shapes/pinwheel.svg)
 
 | Field | Detail |
 |---|---|
+| Type on the card | Tank |
 | Colour and shape | Magenta four blade pinwheel |
 | Size | Radius 20 u, a big target |
-| Behaviour | Drifts slowly at 60 u/s and bounces off walls. Spins a quarter turn a second. 2 HP |
-| Tells | Slow straight drift |
-| Threat | Low, but its size blocks lanes |
+| Behaviour | Drifts slowly at 60 u/s and bounces off walls. Spins a quarter turn a second. 2 hit points |
 | Counter | Two hits. Easy to hit from range |
 | Score and geoms | 25, 1 geom |
 | First appears | Level 1. Weight 25, 15, 10, 8 by band |
-| Notes | The large hitbox makes it an easy geom source when the arena is quiet |
+| Briefing | "Pinwheels turn slow and drift wide." / "They are tough. One hit is not enough." / "Hit each one twice to set it free." / "Slow does not mean safe. Keep space." |
 
-### Tier 2: v1 advanced, from level 6
-
-#### Weaver
+### Weaver
 
 ![Weaver](img/shapes/weaver.svg)
 
 | Field | Detail |
 |---|---|
-| Colour and shape | Green diamond with a small square inside, "the dodger" |
+| Type on the card | Chaser |
+| Colour and shape | Green diamond with a small square inside |
 | Size | Radius 14 u |
-| Behaviour | Seeks you at 190 u/s. When any bullet within 140 u is heading at it, it sidesteps away from the bullet's line at 320 u/s for 0.25 s, then cannot dodge for 0.4 s. 1 HP |
+| Behaviour | Seeks you at 190 u/s. When a bullet within 140 u is heading at it, it sidesteps at 320 u/s for 0.25 s, then cannot dodge for 0.4 s. 1 hit point |
 | Tells | A sudden sideways jink means it just used its dodge |
-| Threat | Medium. Fast and hard to hit head on |
-| Counter | Fire, let it dodge, then fire again within 0.4 s. A wide spread or rapid stream catches the sidestep. Homing bullets turn after it |
+| Counter | Fire, let it dodge, then fire again within 0.4 s. A wide spread or rapid stream catches the sidestep |
 | Score and geoms | 100, 2 geoms |
-| First appears | Level 6. Weight 0, 20, 20, 18 by band |
-| Notes | It dodges drone shots too |
+| First appears | Level 6. Weight 20, 20, 18 in bands 2 to 4 |
+| Briefing | "Weavers are quick. They see your shots" / "and slip aside at the last moment." / "Shoot wide, or let it come close." / "Then it has no room to slip away." |
 
-#### Dart
+### Dart
 
 ![Dart](img/shapes/dart.svg)
 
 | Field | Detail |
 |---|---|
+| Type on the card | Swarm |
 | Colour and shape | Orange thin arrowhead |
 | Size | Radius 9 u, the smallest enemy |
-| Behaviour | Homes on you at 260 u/s but turns at most 140 degrees a second. Comes in clusters of 5 to 8. 1 HP |
-| Tells | Clusters appear together. Their nose shows where they are turning |
-| Threat | Medium. Fast, but cannot turn sharply |
-| Counter | Strafe across their path: a sharp sidestep at the last moment makes them overshoot. Spread clears a cluster |
+| Behaviour | Homes on you at 260 u/s but turns at most 140 degrees a second. 1 hit point |
+| Counter | Sidestep late so they overshoot. Spread clears a cluster |
 | Score and geoms | 30, 1 geom |
-| First appears | Level 6. Weight 0, 15, 18, 20 by band. Spawners also emit them from level 16 |
-| Notes | Fast high runs in the music mark their presence |
+| First appears | Level 6. Weight 15, 18, 20 in bands 2 to 4. Spawners emit them from level 16 |
+| Briefing | "Darts fly in flocks of five or more." / "Fast and thin, they turn to follow you." / "Circle wide so they bunch up behind you," / "then turn and sweep the flock away." |
 
-#### Snake
-
-![Snake head](img/shapes/snakehead.svg) ![Snake body](img/shapes/snakebody.svg)
-
-| Field | Detail |
-|---|---|
-| Colour and shape | Cyan hexagon head with a dot, trailing 12 cyan circles |
-| Size | Head radius 13 u. Body segments radius 9 u, 18 u apart |
-| Behaviour | The head seeks you at 170 u/s, turning at most 120 degrees a second, with a side to side weave. Only the head can be hurt: 6 HP. Body segments block bullets and kill you on contact |
-| Tells | The weave swings 40 degrees either side, 1.2 times a second |
-| Threat | High. The body is a moving wall |
-| Counter | Get in front of the head and fire at it. Orbit blades pass through the body and hit the head. Killing the head destroys the whole body |
-| Score and geoms | Head 200 and 4 geoms. Body segments 0 |
-| First appears | Level 16. Weight 0, 0, 15, 16 by band. At most 2 new snakes per 30 s of schedule in band 3, 3 in band 4 |
-| Notes | Gravity wells do not pull snakes. A snake kill makes the big kill sound and a chord in the music |
-
-#### Spawner
-
-![Spawner](img/shapes/spawner.svg)
-
-| Field | Detail |
-|---|---|
-| Colour and shape | Yellow octagon with a square inside |
-| Size | Radius 24 u |
-| Behaviour | Placed by the level. Appears 20 to 40 s in (band 3) or 10 to 30 s in (band 4). Creeps toward you at 50 u/s. 2.0 s after it appears it emits 5 Darts in a ring around itself, then again every 6.0 s (band 3) or 5.0 s (band 4). It skips an emit while 16 of its Darts are alive. 12 HP |
-| Tells | Its Darts flash on a small ring around it for 0.4 s before they launch |
-| Threat | High if ignored |
-| Counter | Kill it early. Focus fire: it takes 12 hits. A bomb destroys it |
-| Score and geoms | 150, 3 geoms |
-| First appears | Level 16: 0 to 1 per level in band 3, 1 to 2 in band 4. Never in Endless |
-| Notes | Survives your death. Not pulled by wells |
-
-### Tier 3: v2 advanced enemies (v2)
-
-The level generator swaps some groups for these kinds: 1 new kind per roster in band 2, 2 in band 3, 3 in band 4. Band 1 never has them. "Share" is the target share of each band's enemy groups.
-
-#### Charger (v2)
+### Charger
 
 ![Charger](img/shapes/charger.svg)
 
 | Field | Detail |
 |---|---|
-| Colour and shape | Vermilion (red orange) heavy arrow |
+| Type on the card | Chaser |
+| Colour and shape | Red orange heavy arrow |
 | Size | Radius 15 u |
-| Behaviour | Repeats a 2.7 s cycle: winds up for 1.0 s while turning toward you at up to 120 degrees a second, dashes 0.5 s straight ahead at 720 u/s, rests 1.2 s. A wall ends the dash. 2 HP |
-| Tells | During the wind up it draws a lane ahead of it, 600 u long and as wide as its body, with chevrons. The lane brightens through the wind up and flickers in the last 0.2 s before the dash. A streak trails the dash |
-| Threat | High. The fastest thing in the game |
-| Counter | Step sideways out of the lane before it flickers. It cannot steer once dashing. Shoot it during the 1.2 s rest |
+| Behaviour | Repeats a 2.7 s cycle: winds up for 1.0 s while turning toward you at up to 120 degrees a second, dashes 0.5 s straight ahead at 720 u/s, rests 1.2 s. A wall ends the dash. 2 hit points |
+| Tells | During the wind up it draws a lane 600 u long ahead of it |
+| Counter | Step out of the lane. It cannot steer once dashing. Shoot it during the rest |
 | Score and geoms | 120, 2 geoms |
-| First appears | Level 6. Share 12, 16, 18 in bands 2 to 4 |
-| Notes | Not pulled by wells while dashing. Its music motif is a rising wind up, then silence |
+| First appears | Level 6. Weight 12, 16, 18 in bands 2 to 4 |
+| Briefing | "Chargers draw a line before they dash." / "The line shows exactly where they go." / "When you see the line, step off it." / "Then hit it while it rests." |
 
-#### Bulwark (v2)
-
-![Bulwark](img/shapes/bulwark.svg)
-
-| Field | Detail |
-|---|---|
-| Colour and shape | Indigo square behind a white curved shield |
-| Size | Body radius 18 u. Shield arc at 26 u, 60 degrees either side of its heading |
-| Behaviour | Moves forward at 90 u/s and turns toward you at only 70 degrees a second. 3 HP |
-| Tells | The white shield shows the blocking side. End ticks mark where the open flank begins. A blocked shot makes a bright arc and sparks on the shield (Standard and High effects) and a metallic ping |
-| Threat | Medium. Slow, but it soaks your fire |
-| Counter | Circle it and shoot the sides or rear. It turns slowly, so keep moving round it. Bombs, Detonate and the Ram drone ignore the shield |
-| Score and geoms | 150, 3 geoms |
-| First appears | Level 16. Share 12 in band 3, 16 in band 4 |
-| Notes | The shield blocks your bullets, pierce bullets, drone shots and orbit blades |
-
-#### Blink (v2)
-
-![Blink](img/shapes/blink.svg)
-
-| Field | Detail |
-|---|---|
-| Colour and shape | Rose broken ring with a bright centre dot. The gap faces where it is heading |
-| Size | Radius 13 u |
-| Behaviour | Drifts toward you at 100 u/s for 2.2 s, then warps for 0.4 s, then jumps to a point 180 to 260 u from you. If you are moving faster than 40 u/s the landing point is ahead of you along your path. 1 HP |
-| Tells | During the warp a ghost fades at the old spot and a ring closes onto the landing spot. A flash and a streak mark the arrival |
-| Threat | Medium to high. It lands where you are going |
-| Counter | When the ring appears, change direction or stop. It is harmless and cannot be hit during the warp; shoot it right after it lands |
-| Score and geoms | 130, 2 geoms |
-| First appears | Level 16. Share 10 in band 3, 14 in band 4 |
-| Notes | Landing spots are kept inside the arena |
-
-#### Swirl (v2)
+### Swirl
 
 ![Swirl](img/shapes/swirl.svg)
 
 | Field | Detail |
 |---|---|
+| Type on the card | Chaser |
 | Colour and shape | Jade open spiral with a centre dot |
 | Size | Radius 12 u |
-| Behaviour | Spirals in from afar at 144 u/s, then circles you at 240 u while closing 20 u/s. Within 90 u it dives straight at the spot you were in, at 300 u/s, for up to 1.5 s. A wall or the time limit ends the dive and it circles again. 1 HP |
-| Tells | It circles before it strikes. The dive is a straight line |
-| Threat | Medium |
-| Counter | Shoot it while it circles. If it gets close, sidestep across the dive line |
+| Behaviour | Closes in at 144 u/s, then circles you at 240 u while closing 20 u/s. Within 90 u it dives straight at you at 300 u/s for up to 1.5 s. A wall ends the dive. 1 hit point |
+| Counter | Shoot it while it circles. Sidestep across the dive line |
 | Score and geoms | 80, 1 geom |
-| First appears | Level 6. Share 10, 12, 12 in bands 2 to 4 |
-| Notes | Each Swirl circles one way, clockwise or anticlockwise, fixed for its life |
+| First appears | Level 6. Weight 10, 12, 12 in bands 2 to 4 |
+| Briefing | "Swirls circle you, closer and closer." / "Then they dive straight in." / "When it turns toward you, sidestep." / "Its dive only goes in a straight line." |
 
-#### Sower and Mine (v2)
-
-![Sower](img/shapes/sower.svg) ![Mine](img/shapes/mine.svg)
-
-| Field | Detail |
-|---|---|
-| Colour and shape | Sower: chartreuse (yellow green) hexagon with a notch cut in its tail. Mine: small chartreuse diamond with spikes |
-| Size | Sower radius 16 u. Mine radius 9 u |
-| Behaviour | The Sower heads for the nearest wall, then runs along it clockwise at 70 u/s and drops a Mine every 3.0 s. 4 HP. Mines do not move. A Mine is harmless for 0.8 s after it drops, then kills on contact. It lasts 12 s. 1 HP |
-| Tells | Mines are dim until armed, then solid, then blink in their last 2 s |
-| Threat | Medium. Over time the walls fill with Mines |
-| Counter | Stay off the walls near a Sower and kill it early. Shoot Mines from range; they pop in one hit |
-| Score and geoms | Sower 180 and 3 geoms. Mine 0 and 0, and it is not a kill |
-| First appears | Level 31. Share 10 in band 4 |
-| Notes | At most 6 live Mines per Sower and 24 in total. Mines are not pulled by wells. Drones and Homing do target Mines |
-
-#### Splime and Slime (v2)
+### Splime and Slime
 
 ![Splime](img/shapes/splime.svg) ![Slime](img/shapes/slime.svg)
 
 | Field | Detail |
 |---|---|
-| Colour and shape | Splime: orchid round blob with a drip at the back. Slime: a soft, dark orchid, see through puddle |
+| Type on the card | Splitter |
+| Colour and shape | Splime: orchid blob with a drip. Slime: a soft see through puddle |
 | Size | Splime radius 16 u. Slime radius 40 u |
-| Behaviour | The Splime walks straight at you at 147 u/s (0.35 of your speed) and drops a Slime puddle every 2 s. 3 HP. Slime is harmless but slows you (section 8). It lasts 8 s |
-| Tells | 0.6 s before a drop the Splime swells to 1.25 times its size and a ring grows round it to the puddle size, showing where the Slime will land. A new puddle grows from half to full size in 0.3 s and blinks softly in its last 2 s |
-| Threat | Medium. The Splime itself kills on contact; the Slime makes everything else harder to dodge |
+| Behaviour | The Splime walks straight at you at 147 u/s and drops a Slime puddle every 2 s. 3 hit points. Slime is harmless but slows you (section 11). It lasts 8 s |
 | Counter | You are much faster: kite it and kill it in 3 hits. Steer around puddles. A bomb clears all Slime |
-| Score and geoms | Splime 140 and 2 geoms. Slime 0 and 0, never a kill |
-| First appears | Level 6. Share 8, 10, 10 in bands 2 to 4 |
-| Notes | At most 3 puddles per Splime and 12 in total. Bullets, drones and blades pass through Slime. Wells do not pull it |
+| Score and geoms | Splime 140 and 2 geoms. Slime 0 |
+| First appears | Level 6. Weight 8, 10, 10 in bands 2 to 4 |
+| Notes | At most 3 puddles per Splime and 12 in all |
+| Briefing | "Splimes ooze slow and leave slime." / "Slime does not hurt, but it slows you." / "Fly around the puddles. Keep your speed." / "A bomb clears all the slime at once." |
 
-### Hazard: gravity well
+### Snake
+
+![Snake head](img/shapes/snakehead.svg) ![Snake body](img/shapes/snakebody.svg)
+
+| Field | Detail |
+|---|---|
+| Type on the card | Tank |
+| Colour and shape | Cyan hexagon head with a dot, trailing 12 cyan circles |
+| Size | Head radius 13 u. Body segments radius 9 u, 18 u apart |
+| Behaviour | The head seeks you at 170 u/s, turning at most 120 degrees a second, with a weave of 40 degrees either side. Only the head can be hurt: 6 hit points. Body segments block bullets and kill on contact |
+| Counter | Get in front of the head and fire. Orbit spikes pass through the body. Killing the head destroys the body |
+| Score and geoms | Head 200 and 4 geoms. Body 0 |
+| First appears | Level 16. Weight 15, 16 in bands 3 and 4. At most 2 new snakes per 30 s in band 3, 3 in band 4. Nova snakes can come out of a gravity well on any level that has one (section 11) |
+| Notes | Gravity wells do not pull snakes |
+| Briefing | "Snakes weave at you, long and bright." / "Only the head can be hurt." / "Their bodies block shots. Do not touch." / "Aim at the head, never at the tail." |
+
+### Bulwark
+
+![Bulwark](img/shapes/bulwark.svg)
+
+| Field | Detail |
+|---|---|
+| Type on the card | Tank |
+| Colour and shape | Indigo square behind a white curved shield |
+| Size | Body radius 18 u. Shield 60 degrees either side of its heading |
+| Behaviour | Moves forward at 90 u/s and turns toward you at only 70 degrees a second. 3 hit points |
+| Tells | A blocked shot makes sparks and a metallic ping |
+| Counter | Circle it and shoot the sides or rear. Bombs and Detonate ignore the shield |
+| Score and geoms | 150, 3 geoms |
+| First appears | Level 16. Weight 12, 16 in bands 3 and 4. Bastion also calls them in |
+| Notes | The shield blocks bullets, pierce bullets, drone shots and orbit spikes |
+| Briefing | "Bulwarks carry a shield on their front." / "Shots from the front just bounce away." / "Fly around it and hit it from behind." / "A bomb ignores the shield." |
+
+### Blink
+
+![Blink](img/shapes/blink.svg)
+
+| Field | Detail |
+|---|---|
+| Type on the card | Chaser |
+| Colour and shape | Rose broken ring with a bright centre dot. The gap faces where it is heading |
+| Size | Radius 13 u |
+| Behaviour | Drifts toward you at 100 u/s for 2.2 s, warps for 0.4 s, then jumps to a point 180 to 260 u from you. If you are moving faster than 40 u/s it lands ahead of you. 1 hit point |
+| Tells | A ghost fades at the old spot and a ring marks the landing spot |
+| Counter | When the ring appears, change direction or stop. It is harmless and cannot be hit during the warp; shoot it right after it lands |
+| Score and geoms | 130, 2 geoms |
+| First appears | Level 16. Weight 10, 14 in bands 3 and 4 |
+| Briefing | "Blinks vanish and pop up near you." / "A ring shows where one will land." / "When you see a ring, move away from it." / "Then turn and hit the Blink." |
+
+### Leaver
+
+![Leaver](img/shapes/leaver.svg) ![Leaver shard](img/shapes/leavershard.svg)
+
+| Field | Detail |
+|---|---|
+| Type on the card | Splitter |
+| Colour and shape | Nested squares: a green frame turned at an angle over a yellow square, with a red square inside. Its shards are small yellow, green and red pieces |
+| Size | Leaver radius 14 u. Shard radius 7 u |
+| Behaviour | Moves like a Weaver (190 u/s, dodges bullets). 2 hit points. When you destroy it, it splits into up to 6 shards. Each shard is flung out 40 u, holds still for 0.5 s, then chases you at about 201 u/s. Shards have 1 hit point |
+| Tells | The shards pause before they chase |
+| Counter | After the split, back away at once and shoot the shards as they come |
+| Score and geoms | Leaver 100 and 2 geoms. Shard 25 and no geoms |
+| First appears | Level 21, on about 60 percent of levels. Endless from 3:00. Weight 20, 18 in bands 3 and 4 |
+| Notes | A Leaver removed by a bomb, your death or a well does not split. Shards do not count for destroy goals |
+| Briefing | "Leavers look like Weavers, but split." / "Break one and its shards chase you." / "After you break one, back away at once." / "Shards are quick, so shoot as they come." |
+
+### Sower and Mine
+
+![Sower](img/shapes/sower.svg) ![Mine](img/shapes/mine.svg)
+
+| Field | Detail |
+|---|---|
+| Type on the card | Hazard |
+| Colour and shape | Sower: chartreuse notched hexagon. Mine: small chartreuse diamond with spikes |
+| Size | Sower radius 16 u. Mine radius 9 u |
+| Behaviour | The Sower heads for the nearest wall, then runs along it clockwise at 70 u/s and drops a Mine every 3.0 s. Now and then it dives toward the middle of the arena at a faster speed, still dropping Mines, then goes back to the wall. 4 hit points. A Mine is harmless for 0.8 s after it drops, then kills on contact. It lasts 12 s. 1 hit point |
+| Tells | Mines are dim until armed |
+| Counter | Hold the middle and kill the Sower early. Shoot Mines from range |
+| Score and geoms | Sower 180 and 3 geoms. Mine 0, and it is not a kill |
+| First appears | Level 31. Weight 10 in band 4. Ember also drops Mines |
+| Notes | At most 6 live Mines per Sower and 24 in all. Mines are not pulled by wells |
+
+### Spawner
+
+![Spawner](img/shapes/spawner.svg)
+
+| Field | Detail |
+|---|---|
+| Type on the card | Swarm |
+| Colour and shape | Yellow octagon with a square inside |
+| Size | Radius 24 u |
+| Behaviour | Placed by the level. Creeps toward you at 50 u/s. 12 hit points. Emits Darts (section 11) |
+| Counter | Kill it early. A bomb destroys it |
+| Score and geoms | 150, 3 geoms |
+| First appears | Level 16 |
+| Briefing | "Spawners make Darts, again and again." / "They drift slowly after you." / "Break the Spawner before the flock." / "Then the Darts stop coming." |
+
+### Gravity well
 
 ![Gravity well](img/shapes/gravitywell.svg)
 
 | Field | Detail |
 |---|---|
-| Colour and shape | Red ring around a white filled core |
+| Type on the card | Hazard |
+| Colour and shape | Red rings around a white core |
 | Size | Radius 24 u, plus 2 u for each enemy it has eaten |
-| Behaviour | Fixed in place from the start of the level. Pulls you, your bullets and most enemies within 320 u. Eats enemies whose centre enters it. At 20 meals it explodes. 40 HP, plus 2 per meal |
-| Tells | It grows as it eats. A big well is close to exploding |
-| Threat | High. Touching the core kills you. The explosion kills every enemy within 220 u (no score) and you too unless invulnerable |
-| Counter | Keep moving away: even at the core you still make at least 260 u/s directly away with physics Off. Shoot it down for big points. A bomb resets it to its starting size and health |
+| Behaviour | See section 11 |
 | Score and geoms | Shot down: 250 and 5 geoms. Exploding or bombed: nothing |
-| First appears | Band 2: 0 to 1 per level. Band 3: 1 to 2. Band 4: 1 to 3. Never in Endless |
-| Notes | Pull on you: 160 u/s at the core, fading to 0 at the rim. The pull stops within about 0.1 s of leaving the 320 u radius. It does not pull Snakes, Spawners, Mines, Slime, drones, geoms, orbit blades or a dashing Charger. Survives your death and bombs |
+| First appears | Level 6 (0 to 1 per level in band 2) |
+| Briefing | "Gravity wells pull you and shapes in." / "Left alone, they swell and burst bright." / "Shoot a well down early, from far away." / "When a big one breaks, a wave rolls out." |
 
-### Pickups and geoms
+### Geoms
 
-![Geom](img/shapes/geom.svg) A geom: small lime green diamond, radius 6 u. See section 3. Weapon pickups: see section 5.
+![Geom](img/shapes/geom.svg) A geom: small lime green diamond. See section 4.
 
-## 8. Hazards and arena
-
-### Arena shapes and size
-
-- The arena is always shown whole, centred, with no scrolling.
-- Shapes: rectangle, rounded rectangle, circle, hexagon, and rectangle with wall obstacles.
-- Size grows with the band. Height ranges: 700 to 760 u (band 1), 760 to 880 u (band 2), 860 to 1000 u (band 3), 940 to 1100 u (band 4). Width is 1.3 to 1.8 times the height.
-- Obstacle walls are 24 u thick. None in band 1, 1 in band 2 (obstacle shape only), 1 to 2 in band 3, 1 to 3 in band 4.
-- Endless always uses a 1600 by 1000 u rectangle with no obstacles.
-
-### Walls
-
-- You slide along walls and obstacles. They never hurt you.
-- Bullets vanish when they hit a wall or obstacle.
-- Wanderers and Pinwheels bounce. Other enemies slide.
-- A wall ends a Charger dash and a Swirl dive early.
-- A Sower runs along walls clockwise.
+## 11. Hazards
 
 ### Gravity wells
 
-See the full entry at the end of section 7. In short: pull within 320 u, kill on contact, eat enemies, explode at 20 meals, shoot down for 250.
+| Rule | Value |
+|---|---|
+| At level start | Band 1: none. Band 2: 0 to 1. Band 3: 1 to 2. Band 4: 1 to 3. Guardian levels: at most 1. Endless: none |
+| Arrivals | On a level that starts with a well, more arrive during play: the first 20 to 30 s in, then one every 25 to 35 s. An arriving well shows a 1.5 s warning, during which it is harmless, and lands at least 300 u from you. At most 2 more than the level started with, and never more than 4 at once |
+| Pull | Within 320 u it pulls you, your bullets and most enemies. Strongest at the core (160 u/s on you), fading to nothing at the edge |
+| Contact | Touching the core costs a life |
+| Eating | An enemy whose centre enters the well is eaten (no score). Each meal adds 2 u of size and 2 hit points |
+| Health | 40 hit points (changed by difficulty), plus 2 per meal. Any bullet that touches the core does 1 damage and is used up |
+| Explosion | At 20 meals it explodes. Every enemy within 220 u is removed (no score), and you lose a life if you are in range and not invulnerable |
+| Bomb | Shrinks it back to its starting size and health |
+| Your death | Wells stay |
+| Not pulled | Snakes, Spawners, Mines, Slime, drones, geoms, orbit spikes, a dashing Charger, a diving Sower, and anything still telegraphing |
 
-### Slime (v2)
+### Super nova
 
-- Touching Slime slows you to 50 percent for 2 s.
-- The 2 s restarts every moment you stay on a puddle, so it lasts until 2 s after you leave.
+5 to 7 s after a well goes live it erupts into a white whirlpool and stays that way until destroyed. Its pull reaches 400 u and is 30 percent stronger (208 u/s on you at the core). You can still escape it. A bomb shrinks it but does not end the nova.
+
+### Nova snakes
+
+3 to 4 s after a well goes super nova, a Snake crawls out of its centre, then another every 6 s, at most 2 alive per well. They are normal Snakes (200 points, 4 geoms) drawn with a white core line and a prism glint. When the well explodes it takes its nova snakes with it.
+
+### Pond ripple
+
+Destroy a well while it is in super nova (by shooting it, cutting it with orbit spikes, or letting it explode) and a ripple rolls out across the floor. There is no warning: you hear a deep thump and a watery whoosh. The wave travels out at 360 u/s for 3.2 s and pushes you and enemies outward as it passes. The push is stronger from a bigger well and changed by difficulty. Walls block it. Guardians, Spawners, Snake bodies, Mines and Slime are not pushed. A well destroyed before its nova makes no ripple.
+
+### Spawners
+
+| Rule | Value |
+|---|---|
+| How many | Band 3: 0 to 1 per level. Band 4: 1 to 2. None in bands 1 and 2, on guardian levels or in Endless |
+| When | Appears 20 to 40 s in (band 3) or 10 to 30 s in (band 4) |
+| Emit | 2.0 s after it appears it emits 5 Darts in a ring, then again every 6.0 s (band 3) or 5.0 s (band 4). It skips an emit while 16 of its Darts are alive |
+| Survives | Your death. A bomb destroys it. Not pulled by wells |
+
+### Membranes
+
+Glowing bars that block you and your shots, found only in the rings map of drum levels (section 12): each ring of bars has 1 to 2 membrane pieces, 120 to 200 u wide. Enemies squeeze through slowly, at about a third of their speed. An enemy that crosses all the way through becomes enraged for the rest of its life: it turns hot red, moves 50 percent faster and turns 30 percent faster. Its attack timings do not change. Snake bodies, Mines and Slime are not affected. Wells, drones and guardians cannot pass.
+
+### Slime
+
+- Touching Slime slows you to 50 percent, and the slow lasts until 2 s after you leave the puddle.
 - It does not stack: two puddles are still 50 percent.
-- With space physics Off your speed is halved. With Low, Medium or High your top speed is halved.
+- Bullets, drones and spikes pass through Slime. Wells do not pull it.
 - A bomb clears every puddle. Your death clears them too.
+- Splimes, Brood and Tempest leave Slime.
+
+### Mines
+
+Dropped by Sowers and by Ember. Harmless for 0.8 s, then deadly to touch. They last 12 s. One hit pops a Mine, for no score. A bomb clears them.
 
 ### Visual cues
 
-These are looks only. They never change the game, but they tell you things.
-
 | Cue | Meaning |
 |---|---|
-| Flashing half bright outline | An enemy is about to spawn there (0.6 s) |
-| Grid ripples and bends (v2 lattice on Standard and High) | A kill, a death, a bomb or a super. Gravity wells pull a dimple into the grid. Moving faster than 120 u/s leaves a wake |
-| Coloured ring through the grid | A kill, in that enemy's colour |
-| Walls pulse (v2, Standard and High) | Faster and warmer as the threat rises. A slow breath means a quiet arena |
-| Wall flash (v2, Standard and High) | A kill within 120 u of a wall |
-| Throbbing field round the ship | A timed super (Homing or Turbo) is running |
-| Low effects tier | The original static grid with a ripple. No trails, no wall pulse |
+| Flashing outline | An enemy is about to spawn there |
+| Grid ripples and bends | A kill, a death, a bomb or a super. Gravity wells pull a dimple into the grid |
+| Walls pulse | Faster and warmer as the danger rises (Standard and High effects) |
+| Hot red enemy | Enraged by a membrane |
+| White whirlpool | A super nova well |
+| Streaks across a drum | Drift is about to burst (section 12) |
 
-## 9. Modes
+## 12. Arenas and surfaces
 
-### Adventure
+### Flat arenas
 
-- An endless sequence of generated levels. The menu button reads "Adventure", or "Continue  L<n>" once you have unlocked more than level 1.
-- Each level comes from your run seed plus the level number. Your run seed is made once on first launch and kept. Retry replays the identical level.
-- Completing the objective unlocks the next level, whatever your stars.
-- Level select shows unlocked levels in pages of 12, newest page first, each with its best stars.
-- Each level: 3 lives, 3 bombs, one drone and one super, fixed by the level.
+- The arena is always shown whole, centred, with no scrolling.
+- Shapes: rectangle, rounded rectangle, circle, hexagon, and a rectangle with wall bars (shown as "Pillars").
+- Size grows with the band. Heights: 700 to 760 u (band 1), 760 to 880 u (band 2), 860 to 1000 u (band 3), 940 to 1100 u (band 4). Width is 1.3 to 1.8 times the height.
+- Wall bars are 24 u thick: none in band 1, 1 in band 2, 1 to 2 in band 3, 1 to 3 in band 4 (on the wall bar shape only).
+- Guardian levels are always flat.
 
-**Intro card.** Before each level a card shows the level number and your seed, the objective, par with the three star thresholds, and the drone and super names. It holds the game for 1.5 s. Tap to skip. Pausing freezes it.
+### Drum levels (cylinder)
 
-**Objectives.**
+- The arena is drawn as a neon drum. It wraps left to right: fly off one side and you come back on the other. There are no side walls, only the top and bottom rims.
+- **Level 8** is always a gentle open drum: only band 1 enemies, no drift, at most 1 well, no Spawners.
+- **From level 11**, any non guardian level has a 40 percent chance to be a drum.
 
-| Objective | Win | Lose | Range by band (1 / 2 / 3 / 4) |
-|---|---|---|---|
-| Score in time | Your score is at or above the target when the timer runs out. The level always runs its full time, so you can keep climbing past par | Below target at time out, or out of lives | 60 / 75 to 90 / 90 to 105 / 105 to 120 s |
-| Survive | The timer counts down to 0 with a life left | Out of lives | 45 to 60 / 60 to 90 / 75 to 105 / 90 to 120 s |
-| Destroy | Kill the number of enemies shown. The level ends the moment you reach it | Out of lives | 30 to 50 / 60 to 100 / 100 to 150 / 150 to 220 kills |
+| Drum map | Share | What it is |
+|---|---|---|
+| Open | 30 | A plain drum with no bars. Has drift |
+| Rings | 25 | 2 to 3 rings of bars round the drum, each with 1 to 2 gaps of 160 to 240 u and 1 to 2 membranes |
+| Pillars | 25 | 6 to 10 staggered short pillars |
+| Narrow | 20 | A drum about as wide as it is tall, with no bars. Has drift |
 
-- The score target is 80 percent of par rounded to 500, at least 1,000 and never above par. For par 6,500 the target is 5,000.
-- Destroy counts every scoring kill of a real enemy: each Dart and Snake head counts 1. Snake segments, wells, Mines and Slime do not count. Bomb and death clears do not count.
-- Objective weights: band 1 is 20 score, 40 survive, 40 destroy. Later bands are about a third each.
-- Timers use the wave clock, which stops while you are dead.
-- The first wave arrives 2.5 s in. The wave schedule loops its harder second half, so destroy levels never run out of enemies.
+### Drift
 
-**Typed seed.** Settings has a seed box and "Play seed". It plays level 1 of any seed from 0 to 4294967295. This is a session only run: it does not unlock levels or record bests. The line under the box shows the level 1 hash. Level select always goes back to your own seed.
+On drums with no bars (open and narrow, but not level 8) the floor flows. A steady current of 40 u/s runs round the drum. Every 9 to 14 s it bursts to 160 u/s for 1.5 s. 0.6 s before a burst you hear a warning sound and streaks run across the floor in the burst direction. You feel the full current, your bullets half and enemies a quarter. Push against it. Drift is stronger on harder difficulties (section 6).
+
+### 3D tilt
+
+Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts the view of the arena, and the angle you see a drum from. It changes nothing in play.
+
+## 13. Guardians
+
+![The ten guardians](img/shapes/_bosses.svg)
+
+### Guardian levels
+
+- Every 5th Adventure level is a guardian level.
+- **Goal.** Survive until the guardian arrives at 1:25 on the wave clock, then defeat it. Before it arrives the goal bar reads "BOSS IN m:ss". After it arrives the bar shows its name and drains with its health. A banner with its name fades in as it enters.
+- **Win and lose.** You win the moment the guardian falls. You lose only when you run out of lives. There is no time out.
+- **Entrance.** The guardian slides in from the far wall over 2 s. It is harmless and cannot be hit while it slides in.
+- **Waves keep coming** while the guardian lives, at 60 percent of the usual rate.
+- **Holding out.** If the fight drags on to the level's hidden time limit (5:00 to 6:00 of wave clock), waves stop, the goal bar reads "Defeat the boss" and the guardian enrages. A guardian also enrages after 240 s alive. Enraged, it attacks 30 percent faster.
+- **The arena** is flat, with no Spawners and at most 1 gravity well. Lives and bombs are as on any level.
+- **Your death.** The guardian keeps its damage and its parts. Its attacks, minions and bullets are cleared, and its attack cycle restarts.
+- **Reward.** A guardian kill gives a bonus of a quarter of the level's par (rounded to 500), not multiplied, plus 20 geoms. It counts as 1 kill. The results screen shows "Boss bonus N (<name> defeated)".
+- **Easy and Insane.** On Easy a guardian has 0.55 times the health and attacks at 0.55 times the speed, with 0.75 times the minions. On Insane it has 1.62 times the health and attack speed, 1.6 times the minions, and its warnings are 15 percent shorter. Hard is between (section 6).
+- **Getting stronger.** Guardians attack slower early on: x0.75 at level 5, rising to x1.0 at level 20 and x1.15 at level 50. The first guardian of a run (level 5) also has three quarters of its health.
+- **After level 50.** The list starts again from Ember, with 25 percent more health each time round: Ember 55, Mirage 60, Gravitas 65, Bastion 70, Tempest 75, Twins 80, Prism 85, then Ember again at 90 with 50 percent more, and so on. These loops attack at the x1.15 rate.
+
+### Rules for every guardian
+
+- **Damage.** Guardians take damage in tenths of a hit: a spread or drone bullet 1 hit, rapid 0.7, pierce 4, an orbit spike 1.5 (then that spike rests 0.25 s), the Ram drone 2. Any bullet stops on a guardian's body.
+- **Armour.** Very tough guardians spread their health over armour, so their bar drops more slowly per hit. Detonate ignores armour.
+- **Phases.** A 2 phase guardian changes at half health; a 3 phase one at two thirds and one third; Prism at 75, 50 and 25 percent. Each change pauses its attacks for 1 s.
+- **Cracks.** Below 66 percent health its outline cracks; below 33 percent it cracks further and a piece breaks off. Brood, Gravitas and Tempest split into smaller parts at the second crack.
+- **Warnings.** Every attack shows a warning first (1.0 s on early guardians, 0.8 s on Ember, Mirage and Gravitas, 0.6 s on the rest), during which it is harmless. An attack that would appear right on you waits 0.3 s.
+- **Shots.** Every guardian also fires a volley every 5 to 6.5 s, cycling an aimed fan, a ring burst and a pincer, more bullets each phase. Guardian bullets fly straight, at most 240 u/s, and are only fired while you are at least 300 u away.
+- **Contact.** Touching a guardian's body, its split parts or its Hornets costs a life. Pods, anchors, turrets and Mirrors are safe to touch.
+- **Bomb.** Clears its attacks, minions and bullets and stuns it for 1.5 s. While stunned it does not move or attack, and its weak state stays as it was. No damage.
+- **Detonate.** If the drone is within 260 u of its body, it loses 10 percent of its full health, through any shield. Detonate cannot hit split parts or pods.
+- **Homing.** Your bullets home on the guardian's body and on every part, pods and Hornets included.
+- **Turbo.** Bullets pass through parts but still stop on the body. Killing parts does not extend Turbo; killing ordinary enemies does.
+
+### Brood, Keeper of the Nest (level 5)
+
+![Brood](img/shapes/boss-brood.svg)
+
+| Field | Detail |
+|---|---|
+| Health | 4,060 hits on Normal. Three quarters of that on its first fight at level 5 |
+| Phases | 2 (phase 2 below half health) |
+| Movement | Prowls toward you at 75 u/s (90 in phase 2) for 3 s (2.2 s in phase 2), then charges |
+| Attacks | Charge: a lane warning for 1.0 s, then a charge at 320 u/s (360 in phase 2) for up to 1.8 s or until it hits a wall, then a 0.6 s recovery. Darts: 3 every 6 s (4 every 5 s in phase 2) |
+| Weak state | Immune while any of its 3 pods lives. The pods circle at 90 u and pop in 1 hit. Break all three and its core opens for 5 s: it flees and never charges. Pods regrow 9 s after the last one broke |
+| Split | At the second crack its body and pods vanish and 3 Broodlings appear, 60 hits each. One chases you, one circles you and lays Slime, one keeps away and fires 2 Darts every 4 s. Touching any Broodling costs a life. The fight ends with the third |
+| Counter | Break the pods fast, then pour fire into the core. Step off the charge lane |
+| Intro | "Brood, Keeper of the Nest, wakes." / "It kept small shapes safe and warm." / "A fallen legend took its green light." / "Now it guards its nest from everyone." / "Three pods shield it. Break all three," / "then strike. Step off its charge line." / Torus: "It is not cruel, {callsign}. It is lost." |
+| Freed | "Green light returns. Brood is free." / "One star wakes. Vertane remembers you." |
+
+### Warden, Keeper of the Old Gate (level 10)
+
+![Warden](img/shapes/boss-warden.svg)
+
+| Field | Detail |
+|---|---|
+| Health | 2,576 hits on Normal |
+| Phases | 2 |
+| Movement | Seeks you at 55 u/s |
+| Attacks | Rings: every 3.7 s (2.8 s in phase 2) it sends out a ring with a 70 degree gap facing you, growing at 300 u/s. In phase 2 each ring has a second gap on the far side. Shield and swarm: 10 s into the fight and every 14 s after, it stops, raises a shield for 4 s and releases 10 Hornets in two bursts. In phase 2 the dropping shield also fires a ring of 12 bullets |
+| Hornets | Small, 1 hit, 300 u/s. They fly straight for 0.35 s, become deadly at 0.6 s and fade at about 5.4 s. 8 on Easy, 13 on Hard, 16 on Insane |
+| Weak state | Its core is shut except for 2.0 s after each ring's warning ends, and 2.0 s after the shield drops |
+| Counter | Fly through the gap in each ring, then shoot during the 2 s opening. Clear Hornets with spread or a bomb |
+| Intro | "Warden, Keeper of the Old Gate." / "It once opened the ways between places." / "The fallen legend broke its trust." / "Now it shuts every way, for everyone." / "Fly through the gap in its rings." / "Its shell opens just after each ring." / Torus: "A closed gate still remembers the key." |
+| Freed | "Blue light returns. The Old Gate opens." / "Far off, a grey shape watches, and goes." |
+
+### Spindle, Turner of Days (level 15)
+
+![Spindle](img/shapes/boss-spindle.svg)
+
+| Field | Detail |
+|---|---|
+| Health | 5,918 hits on Normal (with armour) |
+| Phases | 2 |
+| Movement | Circles the arena centre at 200 u |
+| Attacks | Sweep arms: 2 arms (3 in phase 2), 380 u long, turning round it. Every 5 s the arms freeze thin and dim for the warning, then turn the other way. Pellet: 1 bullet every 3.0 s (3.6 s in phase 2), never during an arm warning |
+| Weak state | Always open |
+| Counter | Stay in the open space between the arms. When they go dim, get ready for them to turn back |
+| Intro | "Spindle, Turner of Days." / "It turned the hours of Vertane gently." / "The fallen legend tangled its turning." / "Now its arms sweep only to push away." / "Stay in the open space between its arms." / "When the arms go dim, they turn back." / Torus: "A legend came before you. Remember that." |
+| Freed | "Yellow light returns. Days turn again." / "Somewhere, a grey legend loses a little." |
+
+### Ember, the Hearth Flame (level 20)
+
+![Ember](img/shapes/boss-ember.svg)
+
+| Field | Detail |
+|---|---|
+| Health | 3,205 hits on Normal |
+| Phases | 3, each faster than the last |
+| Attacks | Dash: it winds up behind a lane warning, then dashes at 760 u/s (faster each phase), dropping a Mine every 120 u. It bounces off up to 2 walls; a third wall stuns it. Fan: after a dash that ends in open floor it fires 3 bullets 14 degrees apart |
+| Weak state | Can be hit only while it rests or is stunned. A dash that touched a wall ends in a 2.0 s stun. A dash that ends in open floor ends in a rest of 1.8 s (shorter each phase) |
+| Counter | Stand near a wall so it dashes into one, then hit it during the stun. Shoot the Mines it leaves |
+| Intro | "Ember, the Hearth Flame." / "It kept all of Vertane warm." / "The fallen legend fed on its fire." / "Now it burns wild and cannot rest." / "It dashes and drops mines on the way." / "Hit it when it stops after a wall." / Torus: "Help it rest, and it will warm you." |
+| Freed | "Orange light returns. Vertane is warm." / "Two acts of the trial are done." |
+
+### Mirage, Keeper of True Sight (level 25)
+
+![Mirage](img/shapes/boss-mirage.svg)
+
+| Field | Detail |
+|---|---|
+| Health | 5,932 hits on Normal (with armour) |
+| Phases | 3 |
+| Attacks | Warp: every 3.0 s (2.5 s, then 2.0 s by phase) it warps to a spot 200 to 300 u from you. A ring marks the spot 0.5 s early. It will not land while you are close to the spot. Lanes: on landing it fires 8 lanes outward, 600 u long, each with a 0.8 s warning |
+| Weak state | Its shield lets hits through only a 70 degree open arc that turns slowly round it. Shots that land elsewhere do nothing |
+| Mirrors | At the second crack it leaves 2 Mirror copies on its last two landing spots. They pop in 1 hit, are safe to touch and come back every 6 s |
+| Counter | Move off the ring, step between the lanes, and time shots into the open arc |
+| Intro | "Mirage, Keeper of True Sight." / "It showed Vertane what was real." / "The fallen legend taught it to trick." / "Now it shows only what is not there." / "A ring shows where it will land. Move." / "Shoot through the gap in its shield." / Torus: "When it sees true, you will see too." |
+| Freed | "Magenta light returns. Mirage sees true." / "And it shows you what really happened." / "A legend named Vecta took their light." / "He wanted all of it for himself." |
+
+### Gravitas, Heart of the Deep (level 30)
+
+![Gravitas](img/shapes/boss-gravitas.svg)
+
+| Field | Detail |
+|---|---|
+| Health | 7,602 hits on Normal (with armour) |
+| Phases | 3 |
+| Movement | Seeks you at 45 u/s and pulls you toward it within 300 u (up to 100 u/s). The pull never kills by itself |
+| Attacks | Collapsing rings: a ring starts at 480 u and closes in at 220 u/s with a 60 degree gap facing you, every 5 s (4 s, then 3 s by phase) |
+| Weak state | It takes no damage until all 3 anchors are gone. Anchors circle it at 140 u and take 6 hits each. Each lost anchor weakens the pull by a third. Anchors never regrow, even after you die. Then the core stays open |
+| Split | At the second crack it splits into 2 Gravitants, 160 hits each, circling a shared centre that follows you. Each has its own pull. The rings keep closing on them. Touching a Gravitant costs a life |
+| Counter | Shoot the anchors first. Fly out through each ring's gap. Fight the pull by moving away |
+| Intro | "Gravitas, Heart of the Deep." / "Its pull held all of Vertane together." / "Vecta made its pull too strong." / "Now it pulls everything to itself." / "Break its three anchors to weaken it." / "Fly out through the gap in each ring." / Torus: "No more riddles. I am with you." |
+| Freed | "Violet light returns. The heart is calm." / "Vertane holds together again." / "And now you see him, far on the rim." / "Vecta, the Grey Legend, sees you too." |
+
+### Bastion, the Last Wall (level 35)
+
+![Bastion](img/shapes/boss-bastion.svg)
+
+| Field | Detail |
+|---|---|
+| Health | 5,222 hits on Normal (with armour) |
+| Phases | 3, set by its turrets, not its health |
+| Movement | Holds the centre and turns slowly |
+| Attacks | 4 corner turrets (30 hits each) act in turn, one every 1.125 s, each firing a lane (600 u long) or a bullet, alternately. Bulwarks: 1 every 12 s (2 on Insane) |
+| Weak state | With 3 or 4 turrets standing the core is shut. With 1 or 2 left it is phase 2 and the core opens. Each turret you destroy also takes 5 percent off its health bar, and shields the others for 1.5 s. A fallen turret rebuilds at half health 12 s later, one at a time, while the core is above a third of its health |
+| Woken (no turrets left) | It drifts toward you at 50 u/s with a 230 u sweep arm and charges every 5 s (3.5 s after the second crack). Every 10 s it raises a 3 s shield and releases 8 Hornets (6 on Easy, 10 on Hard, 13 on Insane), then holds still with its core open for 2 s. Otherwise the woken core is open |
+| Counter | Break two turrets fast and hit the core before they rebuild. Kill the Bulwarks from behind |
+
+### Tempest, Rider of the Rim (level 40)
+
+![Tempest](img/shapes/boss-tempest.svg)
+
+| Field | Detail |
+|---|---|
+| Health | 5,020 hits on Normal (with armour) |
+| Phases | 3 |
+| Movement | Laps the arena close to the wall at 140 u/s, laying Slime every 1 s |
+| Attacks | Dash: every 5.0 s (4.2, then 3.3 by phase) a 0.6 s lane warning across the floor, then a dash at 600 u/s to the far wall, then a 1.5 s rest |
+| Weak state | Open while it laps and rests. Shut during the wind up and the dash |
+| Split | At the second crack it splits into 2 Tempestlings that share its remaining health. They take flanking spots 260 u from you, then dash at you from two sides every 2.6 s, and after each dash fire a fan of 6 bullets back along the path. They lay Slime. Touching one costs a life |
+| Counter | Step off the dash lane, shoot while it laps, and bomb to clear the Slime |
+
+### The Twins, the Bound Stars (level 45)
+
+![The Twins](img/shapes/boss-twins.svg)
+
+| Field | Detail |
+|---|---|
+| Health | 5,918 hits on Normal (with armour), shared by both bodies on one bar |
+| Phases | 2 |
+| Movement | Two bodies circle the centre on opposite sides. The space between them breathes from 300 to 500 u |
+| Attacks | Tether: a deadly bar joins them whenever they are at least 250 u apart. Rings: one every 3.5 s, from each body in turn, with a 60 degree gap facing you |
+| Weak state | Both bodies can always be hit |
+| Phase 2 | When the first body falls the tether breaks. The survivor moves 40 percent faster and fires a ring every 4 s |
+| Counter | Never cross the bar. Focus one body to break the tether early |
+
+### Prism, Crown of All Colours (level 50)
+
+![Prism](img/shapes/boss-prism.svg)
+
+| Field | Detail |
+|---|---|
+| Health | 1,840 hits on Normal |
+| Phases | 4 (at 75, 50 and 25 percent) |
+| Movement | Drifts between 4 points on the diagonals at 90 u/s |
+| Weak state | It cycles every 4 s: 2.3 s guarded in colour, 0.5 s turning white, then 1.2 s white. While white it takes full damage; otherwise only a quarter of each hit gets through |
+| Attacks | Phase 1: rings with a 60 degree gap every 3.5 s, plus 3 small pods. Phase 2: 2 sweep arms and a lane at you every 2.5 s. Phase 3: a pull, and a warp every 3.5 s with a ring marker, then 4 lanes. Phase 4: 4 turrets firing lanes in turn and a tether from its body to the arena centre. Each phase change clears the last phase's attacks |
+| Counter | Save your heaviest fire for the white window. Each phase uses another guardian's trick, so read it the same way |
+
+### Guardians in Endless and Free Play
+
+- **Endless.** A guardian arrives every 3 minutes of play (segments 6, 12, 18 and so on), 10 s into the segment. The order is Warden, Brood, Spindle, Ember, Mirage, Gravitas, Bastion, Tempest, Twins, Prism, then from Ember again with more health. The wave clock stops while the guardian lives. The HUD label reads "Boss". A kill gives 5,000 points per guardian tier (Warden, Brood and Spindle tier 1; Ember, Mirage and Gravitas tier 2; Bastion, Tempest and Twins tier 3; Prism tier 4), plus 20 geoms.
+- **Free Play.** The Bosses row offers Off (default), "Every 3 min" (the Endless order) or one guardian by name. The first arrives at 1:40 of wave clock, then one every 5 minutes. Every guardian can fight on a drum in Free Play. Kill bonuses are as in Endless.
+
+## 14. Endless and Free Play
 
 ### Endless
 
-- Fixed 1600 by 1000 u rectangle. No gravity wells, no Spawners. Attack drone and Turbo super, always.
-- A fresh seed every game, shown on the results screen so the run can be reproduced.
-- A 1.5 s "Ready" text, which you cannot skip, lets your thumbs settle.
-- 3 lives and 3 bombs at start. Plus 1 life every 100,000 points and plus 1 bomb every 150,000 points, each capped at 9.
-- The game ends when your last life is gone.
+- A fixed 1600 by 1000 u flat rectangle. No gravity wells, no Spawners. Attack drone and Turbo super, always.
+- Pick a difficulty on the start card. The card reads "Endless" and "Survive as long as you can". Then a 1.5 s "Ready" lets your thumbs settle.
+- A fresh seed every game, shown on the HUD line ("Endless  Seed N  m:ss") and the results.
+- 3 lives at start (changed by difficulty) and 3 bombs, each capped at 9.
+- **Extra lives** at 200,000 points, then 600,000, 1.4 million, 3.0 million, 6.2 million and so on: each gap is double the last.
+- **Extra bombs**: 1 every 150,000 points.
+- The game ends when your last life is gone. The results show "Game over", your score and "New high score" or "Top 10: #n" when it makes your table. The table keeps your top 10.
 
 **The ramp.** Every 30 s of wave clock a new segment starts with its own roster and waves. Segment s plays like Adventure level 1 + 2s.
 
 | Wave clock | Plays like | What changes |
 |---|---|---|
 | 0:00 | Level 1 | Grunt, Wanderer, Pinwheel |
-| 1:30 | Level 7 (band 2) | Weaver, Dart and the first v2 kinds can appear. Speed x1.05 |
+| 1:30 | Level 7 (band 2) | Weaver, Dart, Charger, Swirl and Splime can appear. Speed x1.05 |
+| 3:00 | Level 13 | Leavers can appear from here. The first guardian arrives at 3:10 |
 | 4:00 | Level 17 (band 3) | Snake, Bulwark and Blink can appear. Speed x1.10 |
-| 7:30 | Level 31 (band 4) | Sower can appear. Speed x1.20. From here every segment adds one more spawn unit per wave, with no limit |
+| 7:30 | Level 31 (band 4) | Sower can appear. Speed x1.20. From here every segment adds one more enemy per wave, with no limit |
 | 17:30 | Level 71 | Speed reaches its cap of x1.40 |
 
-### Results screen
+The music changes tune every 90 s.
 
-| Mode | Shows | Buttons |
-|---|---|---|
-| Adventure | "Level N complete" or "Level N failed", score, stars (★ earned, ☆ not), par, best (with "New best"), level hash | Next (only after a win), Retry, Menu |
-| Endless | "Game over", score, "New high score" or "Top 10: #n" when it makes the table, best, the Endless seed | Retry, Menu |
+### Free Play
 
-The Endless table keeps your top 10 scores.
+Free Play is on the main menu. It opens a setup screen: "Endless waves on your rules. No stars, no bests." Your last setup is remembered.
 
-## 10. Strategy
+| Section | Row | Choices | Default |
+|---|---|---|---|
+| Difficulty | | Easy, Normal, Hard, Insane | Normal |
+| Arena | Arena | Rectangle, Circle, Drum | Rectangle |
+| Arena | Size | Small, Medium, Large | Medium |
+| Arena | Barriers | On, Off | Off |
+| Enemies | Kinds | A button for each of the 13 enemy kinds, plus All and None | None picked, which plays every enemy (the normal Endless mix) |
+| Enemies | Density | Low, Normal, Swarm | Normal |
+| Rules | Lives | 1, 3, 5, ∞ | 3 |
+| Rules | Length | Endless, 3 min, 5 min, 10 min | Endless |
+| Loadout | Weapon | None, Spread, Rapid, Pierce, Orbit | None |
+| Loadout | Pickups | On, Off | On |
+| Loadout | Drone | Attack, Collect, Ram | Attack |
+| Loadout | Super | Homing, Detonate, Turbo | Turbo |
+| Hazards | Bosses | Off, Every 3 min, or one guardian | Off |
+| Hazards | Wells | Off, Normal, Many | Normal |
+| Hazards | Drum drift | Off, Low, High (shown only for Drum) | Low |
+
+- **Size.** Small is 0.75 times and Large 1.3 times Medium. The Medium rectangle is 1600 by 1000 u.
+- **Barriers.** 2 to 3 bars on a rectangle or circle. A drum gets rings or pillars.
+- **Density.** Low 0.6 times, Swarm 1.95 times the enemies (and a higher cap).
+- **Lives.** Exactly as picked; difficulty does not change them. With ∞ the run never ends, but deaths still reset the multiplier.
+- **Length.** A timed run ends at its time with "Time up". Endless runs until your lives are gone.
+- **Weapon.** Start holding that weapon for 20 s. With Pickups Off it lasts the whole run.
+- **Wells.** Normal places 1 to 2, Many places 2 to 4, and more arrive twice as often.
+- **Drum drift.** High is twice Low. Drift runs only on a drum without barriers.
+- Snakes, when allowed, come at least 3 per segment.
+- Free Play starts with a 1.5 s "Ready". It saves no scores, stars or bests.
+
+## 15. Strategy
 
 ### Beginner
 
-1. **Keep your thumbs down.** The sticks float, so you never need to look for them. Lifting the right thumb stops fire.
-2. **Back away while firing.** Grunts and Weavers fly straight at you. Moving away while shooting keeps them in your stream.
-3. **Grab geoms.** Each one is plus 1 multiplier and they vanish after 4 s. Fly through the drops; they pull in from 90 u.
-4. **Bomb early, not late.** You get 3 per level and they do not carry over. A bomb you die holding is wasted, and death costs your multiplier.
-5. **Watch the flashing outlines.** An enemy goes live there in 0.6 s. Do not park on one.
-6. **Use the 2 s after respawn.** You are invulnerable. Clear space and collect.
+1. **Keep your thumbs down.** The sticks float and follow, so you never need to look for them. Lifting the right thumb stops fire.
+2. **Back away while firing.** Grunts and Weavers fly straight at you.
+3. **Grab geoms.** Each one is plus 1 multiplier and plus 1 super charge. They vanish after 4 s.
+4. **Bomb early, not late.** You get 3 per level and they do not carry over.
+5. **Watch the flashing outlines.** An enemy goes live there in 0.6 s.
+6. **Use the 2 s after a respawn.** You blink and are invulnerable.
+7. **Try Easy first.** You get 5 lives. Move up when a level feels easy.
 
 ### Intermediate
 
-1. **Protect the multiplier.** Only death resets it. A careful run that reaches x80 beats a reckless one that dies twice.
-2. **Pick up weapons.** The first drops at kill 15, then every 25. A pickup lasts only 8 s on the floor.
-3. **Match weapon to enemy.** Pierce hits up to 4 enemies in a line. Rapid's dense stream catches Weaver sidesteps. Orbit blades hit anything that comes within 80 u.
-4. **Read the Charger lane.** Step out sideways, then punish the 1.2 s rest.
+1. **Protect the multiplier.** Only death resets it.
+2. **Build combos.** After your first pickup the next one is due within 12 kills. Two weapons make a combo for a fresh 20 s.
+3. **Match weapon to enemy.** Pierce, Trident and Needle cut lines of enemies. Rapid and Hail catch Weaver sidesteps. Orbit's chainsaw shreds anything in front of you.
+4. **Read the Charger lane.** Step out sideways, then punish the rest.
 5. **Flank the Bulwark.** Its shield covers 120 degrees at the front and it turns only 70 degrees a second.
-6. **Turn when a Blink ring appears.** It lands ahead of you if you keep moving straight.
-7. **Make Darts overshoot.** They turn at most 140 degrees a second. A late sidestep beats them.
-8. **Kill Spawners first.** It takes 12 hits, and it emits 5 Darts every 5 to 6 s until it dies.
+6. **Back off from a Leaver kill.** Its shards wait 0.5 s, then chase.
+7. **Kill Spawners first.** It takes 12 hits, and it emits 5 Darts every 5 to 6 s until it dies.
+8. **Watch the clock colours.** Yellow is one minute left, red is ten seconds.
 
 ### Advanced
 
-1. **Shoot wells for 250 times your multiplier.** At x100 that is 25,000 plus 5 geoms. Bullets bend toward the well, so fire at the core from close in.
-2. **Let wells eat, carefully.** A well removes enemies for free (no score), but at 20 meals it explodes across 220 u. A bomb deflates it.
-3. **Save Detonate for a crowd.** It scores every kill within 260 u of the drone at your multiplier and drops all their geoms.
-4. **Stack Turbo with a pickup.** Turbo doubles any weapon's rate: rapid goes to 52 volleys a second.
-5. **Pace Endless.** The ramp turns hard at 7:30 (band 4) and keeps adding enemies every 30 s. Extra lives come every 100,000 points, so a high multiplier also buys lives.
-6. **Score in time levels run the full clock.** Hitting the target early does not end the level. Keep scoring for stars.
-7. **Space physics High for speed.** Top speed is 520 u/s, but you coast 433 u after letting go. Thrust against your drift to stop fast (brake boost x1.6).
+1. **Shoot wells for 250 times your multiplier.** At x100 that is 25,000 plus 5 geoms. Shoot them before they go super nova, or be ready for the ripple.
+2. **Use the ripple.** A super nova well's ripple pushes enemies twice as hard as it pushes you.
+3. **Save Detonate for a crowd or a guardian.** It scores every kill within 260 u of the drone and takes 10 percent off a guardian.
+4. **Chain Turbo.** Every kill adds 0.25 s, up to 15 s. Its bullets pass through 2 enemies.
+5. **Beat par for a reward.** An extra life on the next level is worth a lot before a guardian.
+6. **Score missions run the full clock.** Hitting the target early does not end the level.
+7. **Go for the fourth star.** Any Insane win gives 4 stars, whatever your score.
 
-## 11. Settings reference
+## 16. Settings reference
 
-Settings opens from the menu and from the pause screen. Opened from the menu it shows a live preview arena beside the panel.
+Settings opens from the menu and from the pause screen. The panel sits on the left; opened from the menu, a live demo arena runs on the right.
 
 | Setting | Range | Default | Effect | Notes |
 |---|---|---|---|---|
 | Neon | 0 to 100 slider | 70 | Glow and colour strength: bloom strength 0 to 2, bloom threshold 0.8 to 0.2, colour saturation 0.4 to 1.3, glow width 0 to 0.9, grid brightness 0.1 to 0.6 | Changes live while you drag. Saved when you lift your finger |
-| Volume | 0 to 100 slider | 70 | Master volume for all sound | Music also passes through it |
-| Music (v2) | 0 to 100 slider | 50 | Music level. 0 is off | Music never exceeds 35 percent of the master. Plays in levels only, never in menus |
-| Space physics (v2) | Off, Low, Medium, High | Off | Ship movement model, section 4 | Takes effect on the next step |
-| Weapon pickups (v2) | On, Off | On | Whether kills drop weapons, section 5 | |
-| Effects (v2) | Low, Standard, High | Standard | Low: original static grid and ripple, no trails, no wall effects, no hit flashes, 2048 particles. Standard: deforming grid at 25 u spacing, trails, wall effects, dust, 2048 particles. High: finer grid at 16 u, denser bursts, 4096 particles | The main frame rate knob |
-| Show FPS | On, Off | Off | Shows a frame rate readout | Use it to check the other settings |
+| Volume | 0 to 100 slider | 70 | Master volume for all sound | Changes live |
+| Music | 0 to 100 slider | 50 | Music level. 0 is off | Music never goes above 35 percent of the master |
+| Weapon pickups | On, Off | On | Whether kills drop weapon and drone pickups, section 8 | |
+| Effects | Low, Standard, High | Standard | Low: no trails, no wall effects, 2048 particles. Standard: trails and wall effects, 2048 particles. High: 4096 particles | The main frame rate setting |
+| 3D tilt | Off, Low, High | Off | Tilts the arena view by 0, 7 or 13 degrees, section 12 | Looks only |
+| Show FPS | On, Off | Off | Shows a frame rate readout at the top | Use it to check the other settings |
 | Glow | Bloom, Fallback | Bloom | Bloom uses a full screen glow pass. Fallback uses glow sprites instead | Neon works on both |
-| Play seed | Run seed 0 to 4294967295 | empty | Plays level 1 of the typed seed, session only | Section 9 |
-| Reset progress | Two taps within 3 s | none | Unlocked level back to 1 and Adventure bests cleared | Settings, the Endless top 10 and your run seed are kept |
-| Build label | Five taps within 3 s | hidden | Shows a stress test button | A developer test. It starts a level |
+| Run seed and Play seed | 0 to 4294967295 | empty | Plays level 1 of the typed seed | Session only: it unlocks nothing, records no bests and saves no reward. The line under the box says "Type a run seed (0 to 4294967295)", "Not a valid seed", or the seed and its level 1 code |
+| Reset progress | Two taps within 3 s | | The first tap reads "Tap again to reset", the second "Progress reset". Sets the unlocked level back to 1, clears Adventure bests and stars, and drops a held par reward | Keeps your settings, run seed, Endless top 10, Free Play setup, last difficulty, call sign and the record of story scenes seen |
+| Back | | | Closes Settings | |
 
-**Frame rate advice.** On device, gate GD recorded (Ryan's paste, verbatim): "fps low 50/59, standard 59/59, high 59". Standard stayed the default because it held 59 fps on the main screen; High also held 59 but is opt in. The reason for the low tier reading of 50 is unknown. If the game stutters: turn Show FPS on, try Effects Standard or Low, then try Glow Fallback.
+At the bottom a small label shows the build. Difficulty and space physics are not settings: difficulty is picked on each start card, and space physics follows it.
 
-## 12. Music and sound
+If the game stutters: turn Show FPS on, try Effects Standard or Low, then try Glow Fallback.
+
+## 17. Music and sound
+
+All sound is made live by the game. There are no recordings.
 
 ### Sound effects
 
 | Sound | When |
 |---|---|
-| Short square blip | You fire (at most 12 a second) |
-| Noise burst | An enemy dies, or a Mine pops |
+| Short blip | You fire (at most 12 a second) |
+| Noise burst | An enemy dies |
 | Deep crash | A big kill: Snake head, Spawner or gravity well |
 | High chirp | A geom is collected (at most 20 a second) |
+| Spawn tick | An enemy starts to telegraph, and a drift burst warning |
 | Long rumble | A bomb or a Detonate |
 | Falling saw and noise | You die |
+| Respawn tone | You come back |
+| Super sounds | Your super is full, and when you fire it |
 | Rising tone | A level starts |
+| Win and lose stings | On the results screen |
+| Tap | Menu buttons |
+| Saw buzz | The orbit chainsaw |
+| Whirlpool roar | A super nova well |
+| Whoosh and thud | A gravity well arriving; a slither when a well releases snakes |
+| Thump and watery whoosh | A pond ripple |
+| Shield hum, chord and pings | A guardian's shield going up and shattering |
+| Guardian rumble, hits, shots and death | A guardian enters, is hit, fires and falls |
+| Scroll blip | Scrolling Settings, How to and other panels |
 
-### Generative music (v2)
+### Level music
 
-The music is built live from what is in the arena, so you can read the game by ear. It plays only during a level. It starts with the level and stops on quit or game over. Pause, switching apps and folding hold it, and it resumes on the next bar. The level seed shapes the melody line, so a level sounds the same each time.
+- Ten tunes, each in its own key, speed and mode. A level always gets the same tune. Back to back levels never share one, and a run hears every tune once every 10 levels.
+- The first breakdown comes 30 to 45 s into a tune, then every 90 to 120 s, 4 bars long.
+- In Endless the tune changes every 90 s.
 
-**Base track.** A minor, 120 beats a minute, an 8 bar loop of Am, F, C, G (two bars each).
+### Threat music
 
-**Threat.** Every live enemy adds weight. Threat is the total divided by 40, capped at 1. Enemies still telegraphing do not count. The music follows a smoothed threat that rises over about 0.5 s and falls over about 3 s.
-
-| Enemy | Weight | Enemy | Weight |
-|---|---|---|---|
-| Mine (v2) | 0.2 | Charger (v2) | 2 |
-| Dart | 0.4 | Blink (v2) | 2 |
-| Wanderer | 0.5 | Splime (v2) | 2 |
-| Gravity well | 0.5 | Bulwark (v2) | 2.5 |
-| Pinwheel | 0.8 | Snake head | 3 |
-| Grunt | 1 | Sower (v2) | 3 |
-| Spawner | 1 | Weaver | 1.5 |
-| Swirl (v2) | 1.5 | Slime (v2), Snake body | 0 |
-
-**What you hear as threat rises.**
+The music follows what is in the arena, so you can read the game by ear. Every live enemy adds weight; threat is the total divided by 40, capped at 1. It rises over about 0.5 s and falls over about 3 s.
 
 | Threat | Layer that enters |
 |---|---|
 | 0 | Soft pad only, filter dark |
-| 0.06 | Sub bass |
-| 0.15 | Kick |
-| 0.28 | Hi hat |
-| 0.42 | Arpeggio |
-| 0.7 and up | The lift: hi hat doubles to sixteenths, a backbeat clap joins, the arpeggio jumps an octave and the filter opens wide. It drops out again below 0.6 |
+| 0.06 | Bass |
+| 0.12 | Arpeggio |
+| 0.20 | Kick |
+| 0.32 | Hi hat |
+| 0.7 and up | The lift: hi hat doubles, a clap joins, the arpeggio jumps an octave and the filter opens wide. It drops out again below 0.6 |
 
-The filter opens from 450 Hz on an empty arena to 5.5 kHz at full threat, and further during the lift. A bright, busy mix means a crowded arena. For example, 10 Grunts is threat 0.25: pad, bass and kick, no hi hat yet.
+### Enemy motifs and kill notes
 
-**Enemy layers.** When a kind enters the arena you hear a short stinger on the next sixteenth note. Its motif joins on the next bar, fading in over one bar. It leaves 2 bars after the last one of that kind is gone. Hazards (wells, Spawners, Mines, Slime) have no layer.
+- When a kind enters the arena you hear a short stinger, then its two bar motif joins on the next bar. It leaves 2 bars after the last of that kind is gone.
+- Motifs: Grunt a steady low pulse; Wanderer a drifting walk; Weaver off beat steps; Pinwheel a rotating four note cycle; Dart fast high runs; Snake long sliding notes; Charger a rising wind up; Bulwark a heavy low pair; Blink bright staccato pairs; Swirl a looping spiral; Sower sparse high ticks; Splime a slow wobbling glide; Leaver off beat steps, then a falling three note break.
+- Kills answer the beat with notes from the current chord: up to 3 a bar when calm, up to 6 when crowded. Three kills in one beat, a big kill or a bomb plays a full chord.
+- A hit that does not kill plays a quiet tick. A shot blocked by a Bulwark shield plays a metallic ping: move to its side.
 
-| Enemy | Motif |
-|---|---|
-| Grunt | Steady quarter note pulse, low |
-| Wanderer | Drifting random walk |
-| Weaver | Off beat steps up and down |
-| Pinwheel | Rotating four note bell cycle |
-| Dart | Fast high runs |
-| Snake | Long low sliding notes |
-| Charger (v2) | Rising wind up, then silence |
-| Bulwark (v2) | Heavy low pair, the lowest motif |
-| Blink (v2) | Bright staccato pairs with gaps |
-| Swirl (v2) | Looping spiral arpeggio |
-| Sower (v2) | Sparse high ticks, the highest motif |
-| Splime (v2) | Slow wobbling glide between two low notes |
+### Guardian music
 
-**Kill notes (v2).** Each kind has its own kill note, placed on the beat grid. Not every kill sounds: 2 notes a bar when calm, up to 6 when crowded, at least an eighth note apart, and about 7 in 10 of the rest pass. Three kills in one beat, a big kill (Snake, Spawner, well) or a bomb plays one chord on the next beat instead.
+- Three battle tracks. A fight never uses the same track as the fight before it in your run.
+- The music crossfades into the battle track as the guardian enters. Each guardian has its own motif, which gains a voice each phase and loses one at each crack.
+- A rising cue sounds as its weak window opens, with a shimmer while it stays open.
+- When it falls, a victory stinger plays and the level tune returns 2 bars later.
 
-**Hit sounds (v2).** A hit that does not kill plays a quiet tick an octave above that kind's kill note, at most 8 a second per kind. A shot blocked by a Bulwark shield plays a metallic ping, at most 4 a second. If you hear pings, you are hitting the shield: move to its side.
+### Turbo music
 
-## 13. Install and device
+Turbo starts with a 0.4 s rising sweep, then a double time layer (fast arpeggio, pumping bass, light hat) plays over the tune with an engine hum. A falling sweep ends it.
 
-- **Install.** Open the game's web address in Chrome on the Fold, wait about 10 s, then use the menu's "Add to Home screen" or "Install app". Launch it from the home screen icon. Full steps are in [docs/07-install-runbook.md](../07-install-runbook.md), section F.
-- **Fullscreen.** The first screen says "Tap to start". That tap asks for fullscreen and landscape and turns on sound. A fold can drop fullscreen; the next tap asks again.
-- **Offline.** After the first load the game is cached and runs with no connection. Updates install on the launch after they download.
-- **Where progress lives.** Everything is stored on the phone, in the browser's storage for the game: your run seed, unlocked level, Adventure bests and stars, the Endless top 10 and every setting. Nothing is sent anywhere.
-- **Resetting.** Settings, Reset progress (tap twice) sets the unlocked level to 1 and clears Adventure bests. To wipe everything, including settings and the Endless table, clear the site's data in the browser (runbook section I.3).
+### Weapon and drone cues
 
-## 14. Glossary
+Combining weapons plays a rising three note chime; a weapon running out plays a falling one. Drone pickups use the same shapes, higher and softer.
+
+### Menu music
+
+Three menu themes play in turn: a new one each time the game starts and each time you come back to the menu from a level. They play on the title, the menu, Level select and the Free Play screen. Settings keeps whatever is playing. Set Music to 0 to silence them.
+
+### Story sounds
+
+A soft rising tone opens the opening and briefings. A low drone plays under a guardian intro. A warm chord blooms when a guardian is freed. Each new panel makes a quiet shimmer. Skip fades the sound out.
+
+### Time warnings
+
+A soft chime at 1:00, another at 0:30, and a low tick each second from 0:05, slightly louder at 3, 2 and 1 (section 5).
+
+## 18. Install and device
+
+- **Where to play.** Open https://play.shapelegend.com in your phone's browser. The game is played from this web address. It works on Android phones and iPhones as well as the Galaxy Z Fold.
+- **Add it to your home screen** from the browser's menu (for example "Add to Home screen" or "Install app"), then launch it from the icon. It runs fullscreen in landscape.
+- **Start.** A 1.2 s splash shows the title (tap to skip), then "Tap to start". That tap turns on sound and asks for fullscreen and landscape. If the phone will not lock landscape, the game still plays.
+- **Offline.** After the first load the game is stored on the phone and runs with no connection. Updates install themselves.
+- **Where progress lives.** Everything is stored on the phone, in the browser's storage for the game: your run seed, unlocked level, Adventure bests and stars, the Endless top 10, the Free Play setup, your call sign, the story scenes you have seen, and every setting. Nothing is sent anywhere.
+- **Old address.** If you open the game at its old address, a strip on the menu points you to play.shapelegend.com. Progress at the old address does not carry over.
+- **Resetting.** Settings, Reset progress (tap twice) sets the unlocked level to 1 and clears Adventure bests (section 16). To wipe everything, clear the site's data in your browser settings.
+
+### For testers
+
+These are left in the game for testing:
+
+- The HUD level line ends with the level code ("#" and 8 characters). The same code is "Level code" on the results Details, and the start card Details show the seed. Two players on the same seed and level get the same code.
+- A two finger long press of 1 s near the top left corner opens a small debug panel with Show FPS and Glow toggles.
+- Tapping the build label at the bottom of Settings 5 times within 3 s shows a stress test button. It starts a test level.
+
+## 19. Glossary
 
 | Term | Meaning |
 |---|---|
 | Arena unit (u) | The game's distance unit. The ship's hitbox radius is 10 u |
 | Band | A level range: 1 to 5, 6 to 15, 16 to 30, 31 and up. Sets enemies, arena size and speed |
 | Bomb | Clears the arena with no score. 3 per level |
-| Cover screen | The Fold's outer 21:9 screen |
+| Call sign | Your pilot's name, picked in the opening |
+| Combo | Two weapons joined into one, for example Hail |
+| Cover screen | The Fold's outer, wide screen |
+| Drift | The flowing floor of an open drum |
 | Drone | Your helper: Attack, Collect or Ram |
+| Drone pickup | A ring that gives your drone a mode for 20 s |
+| Drum | A cylinder arena that wraps left to right |
+| Enraged | Faster after crossing a membrane (enemies) or after a long fight (guardians) |
 | Geom | Lime green diamond dropped by kills. Plus 1 multiplier, plus 1 super charge |
-| Hash | The 8 character code after "#" that identifies a level. Same seed and level, same hash |
-| Lift | The music's high threat state |
-| Main screen | The Fold's inner 10:9 screen |
-| Motif | An enemy kind's two bar melody |
+| Guardian | A boss. Every 5th Adventure level |
+| Level code | The 8 character code after "#" that identifies a level. Same seed and level, same code |
+| Main screen | The Fold's inner screen; also most phones |
+| Membrane | A glowing bar that blocks you but lets enemies squeeze through |
 | Multiplier | Score factor, x1 to x999, reset by death |
-| Par | A level's reference score. Stars at par, 2 x par, 4 x par |
-| Pickup (v2) | A spinning pentagon that gives a weapon for 20 s |
+| Nova snake | A Snake that crawls out of a super nova well |
+| Par | A level's reference score. Stars at par, 1.25 x par, 1.5 x par |
+| Pickup | A spinning outline that gives a weapon for 20 s |
+| Pond ripple | The push wave from a destroyed super nova well |
 | Roster | The enemy kinds a level can spawn, 3 to 6, always with Grunt |
 | Run seed | The number your Adventure levels are built from |
 | Segment | 30 s of Endless with its own roster and waves |
-| Space physics (v2) | Optional thrust and drift movement |
-| Stinger | The short note when an enemy kind first enters |
 | Super | Homing, Detonate or Turbo. Charged by 60 geoms |
+| Super nova | A gravity well's whirlpool state, with a wider, stronger pull |
 | Telegraph | The 0.6 s flashing outline before an enemy goes live |
-| Threat | How dangerous the arena is right now, 0 to 1. Drives the music and the wall pulse |
+| Threat | How dangerous the arena is right now, 0 to 1. Drives the music |
 | Wave clock | The level timer. It stops while you are dead |
 
-## 15. Changelog
+## 20. Changelog
 
 | Version or sha | Date | What changed in the game | What changed in the guide |
 |---|---|---|---|
-| v1.0.0 (4fbdaf7) | 2026-10-28 | First release: Adventure and Endless; Grunt, Wanderer, Weaver, Pinwheel, Dart, Snake, Spawner and gravity wells; three drones and three supers; neon slider and settings; results and high scores; installable and offline. Device gate G4 passed | No guide yet |
-| v1.1.0 (e231b6d) | 2026-10-28 | Gravity well pull retuned (zero at the rim, up to 160 u/s at the core, fades fast on leaving). Main screen HUD bands measured so the arena is larger. Device gate G5 passed | No guide yet |
-| 13b7d96 (v2.0.0) | 2026-10-29 | v2: space physics; weapon pickups (rapid, pierce, orbit); Charger, Bulwark, Blink, Swirl, Sower and Splime, plus Mine and Slime; deforming grid, trails, wall effects and effects tiers; generative music with enemy layers, kill notes, hit ticks and the shield deflect sound and spark | First edition |
+| tester-1+96dcc2a | 2026-11-10 | The game is Shape Legend. Story scenes and call sign; guardian order Brood then Warden; difficulty and the fourth star; shorter levels with minute beats, a final rush and a clock with warnings; par rewards; Free Play; Leaver; arriving wells, super nova, nova snakes and pond ripples; membranes; drum maps and drift; menu, boss and Turbo music; How to; play.shapelegend.com | Full rewrite of every section against the code; new sections for the legend, guardians, difficulty, levels and missions, surfaces and Free Play; all four diagrams redrawn |
+| tester-1 (d9bfb54) | 2026-11-05 | Tester release 1 (then named Shape of War) | No guide change |
 | v3 (91c49c8) | 2026-11-02 | Ten bosses every 5th level; weapon combos; drone pickups; chainsaw; wells arriving in play; nova snakes; 3D tilt setting; more music and menu themes; cylinder levels | Changed in this version rewritten; header updated |
+| v3.0.0 (e26fd68) | 2026-10-31 | Ten bosses, boss music, enemy bullets, readability | No guide change |
+| v2.1.0 (ee8397f) | 2026-10-29 | Stick follow, button reach, melody and tunes, bug fixes | No guide change |
+| 13b7d96 (v2.0.0) | 2026-10-29 | v2: space physics; weapon pickups (rapid, pierce, orbit); Charger, Bulwark, Blink, Swirl, Sower and Splime, plus Mine and Slime; deforming grid, trails, wall effects and effects tiers; generative music with enemy layers, kill notes, hit ticks and the shield deflect sound and spark | First edition |
+| v1.1.0 (e231b6d) | 2026-10-28 | Gravity well pull retuned (zero at the rim, up to 160 u/s at the core, fades fast on leaving). Main screen HUD bands measured so the arena is larger. Device gate G5 passed | No guide yet |
+| v1.0.0 (4fbdaf7) | 2026-10-28 | First release: Adventure and Endless; Grunt, Wanderer, Weaver, Pinwheel, Dart, Snake, Spawner and gravity wells; three drones and three supers; neon slider and settings; results and high scores; installable and offline. Device gate G4 passed | No guide yet |
