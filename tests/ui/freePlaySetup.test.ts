@@ -268,3 +268,36 @@ describe('timed results and infinite lives', () => {
     expect(root.all().some((e) => e.textContent === INFINITE_LIVES_TEXT)).toBe(false);
   });
 });
+
+describe('Free Play arena surface (trough option)', () => {
+  it('has an Arena surface row, Flat and Trough, defaulting to Flat', async () => {
+    const ui = await import('../../src/ui/freePlay');
+    const { root, started, current } = open();
+    expect(groupButtons(root, ui.SURFACE_ROW_LABEL).map((b) => b.textContent)).toEqual(['Flat', 'Trough']);
+    expect(current().config.surface ?? 'flat').toBe('flat');
+    groupButtons(root, ui.SURFACE_ROW_LABEL)[1]?.tap();
+    expect(current().config.surface).toBe('trough');
+    expect(started).toHaveLength(0);
+  });
+
+  it('disables the arena shape picker while Trough is on and explains why', async () => {
+    const ui = await import('../../src/ui/freePlay');
+    const { root } = open();
+    const shapes = (): boolean[] => groupButtons(root, ui.ARENA_ROW_LABEL).map((b) => (b as unknown as { disabled?: boolean }).disabled === true);
+    expect(shapes()).toEqual([false, false, false]);
+    groupButtons(root, ui.SURFACE_ROW_LABEL)[1]?.tap();
+    expect(shapes()).toEqual([true, true, true]);
+    expect(root.all().some((e) => e.textContent === ui.SURFACE_SHAPE_HINT && e.style.display === '')).toBe(true);
+    groupButtons(root, ui.SURFACE_ROW_LABEL)[0]?.tap();
+    expect(shapes()).toEqual([false, false, false]);
+  });
+
+  it('saves the surface with the setup and old saves default to Flat', async () => {
+    const s = await import('../../src/core/settings');
+    const trough = { ...s.DEFAULT_FREE_PLAY_SETUP, config: { ...s.DEFAULT_FREE_PLAY_SETUP.config, surface: 'trough' as const } };
+    expect(s.parseFreePlaySetup(s.encodeFreePlaySetup(trough)).config.surface).toBe('trough');
+    expect(s.parseFreePlaySetup(JSON.stringify({ arena: 'circle', config: {} })).config.surface).toBeUndefined();
+    expect(s.parseFreePlaySetup(JSON.stringify({ config: { surface: 'wavy' } })).config.surface).toBeUndefined();
+    expect(s.encodeFreePlaySetup(s.DEFAULT_FREE_PLAY_SETUP)).not.toContain('surface');
+  });
+});

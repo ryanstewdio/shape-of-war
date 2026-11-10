@@ -101,6 +101,7 @@ export function superName(s: SuperKind): string {
 /** Pure: the arena's name for the title line. A cylinder surface reads as a drum. */
 export function arenaName(def: { arena?: LevelDef['arena']; surface?: LevelDef['surface'] }): string {
   if (def.surface === 'cylinder') return 'Drum';
+  if (def.surface === 'trough') return 'Trough';
   if (def.arena === undefined) return '';
   switch (def.arena.shape) {
     case 'rect':
@@ -129,6 +130,8 @@ export const ENEMIES_LABEL = 'New enemies';
 export const LOADOUT_LABEL = 'Loadout';
 export const SEED_LABEL = 'Seed';
 export const ARENA_LABEL = 'Arena';
+export const TROUGH_HINT = 'The ground slopes. Your ship slides toward the valley.';
+export const HINT_LABEL = 'Surface';
 export const NEW_LABEL = 'New:';
 export const STAR_CAP_LABEL = 'Star cap';
 
@@ -394,6 +397,7 @@ export function introDetails(
   for (const f of c.enemies ?? []) out.push({ label: f.name, value: f.type });
   out.push(...c.loadout);
   if (c.arena !== undefined && c.arena !== '') out.push({ label: ARENA_LABEL, value: c.arena });
+  if (c.arena !== undefined && c.arena.startsWith('Trough')) out.push({ label: HINT_LABEL, value: TROUGH_HINT });
   if (c.seed !== '') out.push({ label: SEED_LABEL, value: c.seed });
   return out;
 }

@@ -16,6 +16,7 @@ import type {
   FreePlayLength,
   FreePlayLives,
   FreePlaySize,
+  FreePlaySurface,
   FreePlayWells,
 } from '../core/freeplayConfig';
 import { DEFAULT_FREE_PLAY_SETUP, FREE_PLAY_ENEMY_KINDS } from '../core/settings';
@@ -32,6 +33,8 @@ import { attachScrollbar } from './scrollbar';
 
 export const FREE_PLAY_TITLE = 'Free Play';
 export const ARENA_ROW_LABEL = 'Arena';
+export const SURFACE_ROW_LABEL = 'Arena surface';
+export const SURFACE_SHAPE_HINT = 'Trough is always a rectangle, so the shape is fixed.';
 export const BARRIERS_ROW_LABEL = 'Barriers';
 export const SIZE_ROW_LABEL = 'Size';
 export const ENEMIES_ROW_LABEL = 'Enemies';
@@ -48,6 +51,7 @@ export const DRIFT_ROW_LABEL = 'Drum drift';
 export const ENEMIES_NONE_NOTE = 'None picked plays every enemy (the normal Endless mix).';
 
 export const FREE_PLAY_ARENAS: readonly FreePlayArena[] = ['rect', 'circle', 'drum'];
+export const FREE_PLAY_SURFACES: readonly FreePlaySurface[] = ['flat', 'trough'];
 export const FREE_PLAY_SIZES: readonly FreePlaySize[] = ['small', 'medium', 'large'];
 export const FREE_PLAY_DENSITIES: readonly FreePlayDensity[] = ['low', 'normal', 'swarm'];
 export const FREE_PLAY_LIVES: readonly FreePlayLives[] = [1, 3, 5, 'infinite'];
@@ -77,6 +81,11 @@ function cap(s: string): string {
 /** Pure: the label on one arena button. */
 export function arenaLabel(a: FreePlayArena): string {
   return ARENA_LABELS[a];
+}
+
+/** Pure: Flat or Trough. */
+export function surfaceLabel(v: FreePlaySurface): string {
+  return cap(v);
 }
 
 /** Pure: the text on an on or off button (barriers, pickups). */
@@ -152,6 +161,7 @@ export interface FreePlayScreen extends Screen {
 interface Row<T> {
   readonly row: HTMLDivElement;
   mark(v: T): void;
+  disable(off: boolean): void;
 }
 
 function choiceRow<T>(label: string, values: readonly T[], text: (v: T) => string, pick: (v: T) => void, wrap = false): Row<T> {
@@ -164,6 +174,12 @@ function choiceRow<T>(label: string, values: readonly T[], text: (v: T) => strin
   row.append(el('div', 'sow-choice-label', label), btns);
   return {
     row,
+    disable(off) {
+      for (const b of buttons) {
+        b.disabled = off;
+        b.setAttribute('aria-disabled', String(off));
+      }
+    },
     mark(cur) {
       values.forEach((v, i) => {
         const b = buttons[i];
@@ -204,6 +220,7 @@ function enemyGrid(pick: (list: readonly EnemyKind[] | ((cur: readonly EnemyKind
   row.append(grid, shortcuts, note);
   return {
     row,
+    disable: () => undefined,
     mark(cur) {
       FREE_PLAY_ENEMY_KINDS.forEach((k, i) => {
         const b = toggles[i];
@@ -235,6 +252,12 @@ export function createFreePlayScreen(parent: HTMLElement, actions: FreePlayActio
   };
   const diff = choiceRow(DIFFICULTY_ROW_LABEL, DIFFICULTIES, difficultyLabel, (d) => set({ difficulty: d }));
   const arena = choiceRow(ARENA_ROW_LABEL, FREE_PLAY_ARENAS, arenaLabel, (a) => set({ arena: a }));
+  const surface = choiceRow(SURFACE_ROW_LABEL, FREE_PLAY_SURFACES, surfaceLabel, (v) => {
+    const { surface: _old, ...rest } = choice.config;
+    choice = { ...choice, config: v === 'trough' ? { ...rest, surface: 'trough' } : rest };
+    paint();
+  });
+  const surfaceHint = el('div', 'sow-small sow-fp-note', SURFACE_SHAPE_HINT);
   const size = choiceRow(SIZE_ROW_LABEL, FREE_PLAY_SIZES, wordLabel, (v) => setCfg({ size: v }));
   const barriers = choiceRow(BARRIERS_ROW_LABEL, [true, false], barriersLabel, (b) => set({ barriers: b }));
   const enemies = enemyGrid((v) => setCfg({ enemies: typeof v === 'function' ? v(choice.config.enemies) : v }));
@@ -258,6 +281,10 @@ export function createFreePlayScreen(parent: HTMLElement, actions: FreePlayActio
     const c = choice.config;
     diff.mark(choice.difficulty);
     arena.mark(choice.arena);
+    const trough = c.surface === 'trough';
+    surface.mark(c.surface ?? 'flat');
+    arena.disable(trough);
+    surfaceHint.style.display = trough ? '' : 'none';
     size.mark(c.size);
     barriers.mark(choice.barriers);
     enemies.mark(c.enemies);
@@ -278,7 +305,7 @@ export function createFreePlayScreen(parent: HTMLElement, actions: FreePlayActio
   body.append(
     note,
     section('Difficulty', diff.row),
-    section('Arena', arena.row, size.row, barriers.row),
+    section('Arena', surface.row, surfaceHint, arena.row, size.row, barriers.row),
     section('Enemies', enemies.row, density.row),
     section('Rules', lives.row, length.row),
     section('Loadout', weapon.row, pickups.row, drone.row, superRow.row),
