@@ -694,6 +694,12 @@ async function boot(): Promise<void> {
       if (d !== runDifficulty) startLevel(flow.mode, flow.levelIndex, true);
       paintIntro();
     },
+    () => {
+      // Ryan 2026-11-10: Return to Menu leaves the card for the main menu without starting the level.
+      if (flow.screen !== 'playing' || intro.kind !== 'card' || !introActive(intro)) return;
+      intro = NO_INTRO;
+      dispatch({ type: 'quit' });
+    },
   );
   // Story scenes (docs/19, brief ledger-story-scenes): a full screen overlay above every screen.
   // Level start scenes play over the intro card, which already holds the sim; a boss win's freeing

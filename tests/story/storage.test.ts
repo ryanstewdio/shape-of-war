@@ -63,12 +63,15 @@ describe('story storage', () => {
     expect(a).toEqual({ opening: 1 });
   });
 
-  it('Reset progress leaves the call sign and seen scenes alone', () => {
+  it('Reset progress clears the call sign and seen scenes (Ryan 2026-11-10), so the opening plays again', () => {
     const s = store();
     saveCallsign('Ace', s);
     recordStorySeen('opening', 1, s);
+    recordStorySeen('briefing:grunt', 2, s);
     resetProgress(s);
-    expect(loadCallsign(s)).toBe('Ace');
-    expect(loadStorySeen(s)).toEqual({ opening: 1 });
+    expect(loadCallsign(s)).toBeNull();
+    expect(loadStorySeen(s)).toEqual({});
+    expect(s.data.get(CALLSIGN_KEY)).toBe('');
+    expect(s.data.get(STORY_SEEN_KEY)).toBe('{}');
   });
 });

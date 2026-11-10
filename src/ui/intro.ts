@@ -17,6 +17,13 @@
 // Details; Goal and Victory sit in a two column label grid, labels left and statements right, one
 // baseline per row; the chips carry no "Difficulty" label; par and the star targets follow the
 // difficulty (core/stars.ts targetsFor).
+// Start card (Ryan's device check on ab5e14d, 2026-11-10, the "focused stack"): the card had become
+// crowded. Top to bottom, more padding: "LEVEL 6" small; the Mission type as the headline in a
+// neon pixel frame; one plain goal line; the three star targets in one compact row; "New:" with
+// enemy icons only (the story briefings introduce enemies); the difficulty chips; Start (primary,
+// larger) beside Return to Menu; a collapsed Details row with the victory text, the star cap, the
+// new enemies' short notes, loadout, arena and seed. Start and Return to Menu stick to the bottom
+// of the card when it scrolls (cover screen, small phones), so both are always visible.
 // The gate is pure and ticks on sim time, so a pause during Ready freezes it.
 import { DIFFICULTIES, DIFFICULTY, type Difficulty } from '../core/difficulty';
 import { INSANE_STARS, STAR_CAP, targetsFor, type ParScaleTable } from '../core/stars';
@@ -29,7 +36,7 @@ import { button, createScreen, el, type Screen } from './dom';
 import { foeLines, iconCanvas, type FoeKind, type FoeLine } from './enemyIntro';
 import { formatClock, formatCompact } from './format';
 import { DIFFICULTY_ROW_LABEL, difficultyButtonStates, difficultyLabel } from './settings';
-import { setVectorText } from './vectorFont';
+import { layoutPixels, runsPath, SHADOW_CELLS, VECTOR_CLASS, VECTOR_HOST_CLASS, setVectorText, type CellRun, type VectorTone } from './vectorFont';
 import { bus } from '../core/events';
 import { attachScrollbar } from './scrollbar';
 
@@ -37,6 +44,7 @@ import { attachScrollbar } from './scrollbar';
 export const INTRO_SEC = 1.5;
 export const READY_TEXT = 'Ready';
 export const START_LABEL = 'Start';
+export const MENU_LABEL = 'Return to Menu';
 
 /** Which run an intro is for. Matches flow Mode. */
 export type IntroMode = 'adventure' | 'endless' | 'freeplay';
@@ -121,10 +129,45 @@ export const ENEMIES_LABEL = 'New enemies';
 export const LOADOUT_LABEL = 'Loadout';
 export const SEED_LABEL = 'Seed';
 export const ARENA_LABEL = 'Arena';
+export const NEW_LABEL = 'New:';
+export const STAR_CAP_LABEL = 'Star cap';
+
+/** The four Adventure mission types (Ryan 2026-11-10), each drawn in its own palette tone. */
+export type MissionKind = 'rush' | 'hold' | 'seek' | 'guardian';
+
+export interface Mission {
+  readonly kind: MissionKind;
+  /** The headline in the pixel font. */
+  readonly label: string;
+  /** Pixel font tone: colours come from the palette at the saturation applyNeon set. */
+  readonly tone: VectorTone;
+}
+
+export const MISSIONS: Readonly<Record<MissionKind, Mission>> = {
+  rush: { kind: 'rush', label: 'RUSH & SCORE', tone: 'yellow' },
+  hold: { kind: 'hold', label: 'HOLD OUT', tone: 'cyan' },
+  seek: { kind: 'seek', label: 'SEEK & DESTROY', tone: 'red' },
+  guardian: { kind: 'guardian', label: 'GUARDIAN', tone: 'magenta' },
+};
+
+/** Pure: the mission type of an Adventure level. A boss level is a Guardian whatever its objective. */
+export function missionFor(def: { objective: ObjectiveDef; boss?: BossSpec }): Mission {
+  if (def.boss !== undefined) return MISSIONS.guardian;
+  switch (def.objective.kind) {
+    case 'scoreInTime':
+      return MISSIONS.rush;
+    case 'survive':
+      return MISSIONS.hold;
+    case 'destroy':
+      return MISSIONS.seek;
+  }
+}
 
 export interface IntroCard {
   /** "Level 6" or "Endless" (R6: the arena moved into Details). */
   title: string;
+  /** The mission type headline, null on Endless (its card keeps its current text). */
+  mission: Mission | null;
   /** The arena type and size for the Details row ("Circle 900 x 900"), '' when unknown. */
   arena: string;
   /** The goal in one plain sentence, no label ("Destroy 530 enemies before your lives run out"). */
@@ -298,6 +341,7 @@ export function introCard(
   const goal: GoalDef = { ...(def.boss === undefined ? {} : { boss: def.boss }), objective: objectiveFor(def.objective, difficulty, table) };
   return {
     title: `Level ${Math.max(1, Math.floor(levelIndex))}`,
+    mission: missionFor(goal),
     arena: arenaDetail(def),
     goal: goalSentence(goal),
     victory: victorySentence(goal),
@@ -322,6 +366,7 @@ export function endlessIntroCard(
 ): IntroCard {
   return {
     title: 'Endless',
+    mission: null,
     arena: arenaDetail(def),
     goal: ENDLESS_GOAL,
     victory: ENDLESS_VICTORY,
@@ -336,13 +381,126 @@ export function endlessIntroCard(
   };
 }
 
-/** Pure: the Details row of a card: "Arena Circle 900 x 900", the loadout rows, then "Seed 12345". */
-export function introDetails(c: Pick<IntroCard, 'loadout' | 'seed'> & { arena?: string }): LabelledValue[] {
+/**
+ * Pure: the Details row of a card, top to bottom: Victory, the star cap, the new enemies' short
+ * notes ("Grunt chaser"), the loadout rows, "Arena Circle 900 x 900", then "Seed 12345".
+ */
+export function introDetails(
+  c: Pick<IntroCard, 'loadout' | 'seed'> & { arena?: string; victory?: string; starCap?: string; enemies?: readonly FoeLine[] },
+): LabelledValue[] {
   const out: LabelledValue[] = [];
-  if (c.arena !== undefined && c.arena !== '') out.push({ label: ARENA_LABEL, value: c.arena });
+  if (c.victory !== undefined && c.victory !== '') out.push({ label: VICTORY_LABEL, value: c.victory });
+  if (c.starCap !== undefined && c.starCap !== '') out.push({ label: STAR_CAP_LABEL, value: c.starCap });
+  for (const f of c.enemies ?? []) out.push({ label: f.name, value: f.type });
   out.push(...c.loadout);
+  if (c.arena !== undefined && c.arena !== '') out.push({ label: ARENA_LABEL, value: c.arena });
   if (c.seed !== '') out.push({ label: SEED_LABEL, value: c.seed });
   return out;
+}
+
+/** Cells of space between the mission text and its frame, and the frame's thickness. */
+export const FRAME_PAD_X = 3;
+export const FRAME_PAD_Y = 2;
+export const FRAME_CELLS = 1;
+
+/** Pure: a pixel frame around `text`, in cells: the frame runs, the text runs inside it, the size. */
+export function framedPixels(text: string): { d: string; viewBox: string; wCells: number; hCells: number } {
+  const L = layoutPixels(text);
+  const inset = FRAME_CELLS + FRAME_PAD_X;
+  const top = FRAME_CELLS + FRAME_PAD_Y;
+  const w = L.width + 2 * inset;
+  const h = 7 + 2 * top;
+  const runs: CellRun[] = L.runs.map(([x, y, n]) => [x + inset, y + top, n]);
+  for (let t = 0; t < FRAME_CELLS; t++) {
+    runs.push([0, t, w], [0, h - 1 - t, w]);
+    for (let y = FRAME_CELLS; y < h - FRAME_CELLS; y++) runs.push([t, y, 1], [w - 1 - t, y, 1]);
+  }
+  const wCells = w + SHADOW_CELLS;
+  const hCells = h + SHADOW_CELLS;
+  return { d: runsPath(runs), viewBox: `0 0 ${wCells} ${hCells}`, wCells, hCells };
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/**
+ * DOM edge: the mission headline, its text and frame drawn as one pixel font SVG, so the shared
+ * pixel stylesheet (vectorFont, fed by applyNeon) colours and glows both in the mission's tone.
+ */
+function setFramedText(host: HTMLElement, m: Mission): void {
+  const box = framedPixels(m.label);
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', `${VECTOR_CLASS} ${VECTOR_CLASS}-${m.tone}`);
+  svg.setAttribute('viewBox', box.viewBox);
+  svg.setAttribute('shape-rendering', 'crispEdges');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  svg.setAttribute('style', `--sow-cw: ${box.wCells}; --sow-ch: ${box.hCells}`);
+  svg.setAttribute('data-vec', m.label);
+  const shadow = document.createElementNS(SVG_NS, 'path');
+  shadow.setAttribute('class', `${VECTOR_CLASS}-sh`);
+  shadow.setAttribute('d', box.d);
+  shadow.setAttribute('transform', `translate(${SHADOW_CELLS} ${SHADOW_CELLS})`);
+  const fg = document.createElementNS(SVG_NS, 'path');
+  fg.setAttribute('class', `${VECTOR_CLASS}-fg`);
+  fg.setAttribute('d', box.d);
+  svg.append(shadow, fg);
+  const sr = document.createElement('span');
+  sr.className = 'sow-sr';
+  sr.textContent = m.label;
+  host.classList.add(VECTOR_HOST_CLASS);
+  host.setAttribute('aria-label', m.label);
+  host.setAttribute('data-mission', m.kind);
+  host.replaceChildren(svg, sr);
+}
+
+/**
+ * The start card's own rules, injected once beside the shared sheet. More padding than R5; Start and
+ * Return to Menu stick to the bottom of the card when it scrolls, so both stay on screen.
+ */
+export const INTRO_CSS = `
+.sow-card.sow-intro.sow-focus { --sow-intro-pad: clamp(20px, 4.5vmin, 36px);
+  padding: var(--sow-intro-pad) clamp(22px, 5vmin, 40px); gap: clamp(10px, 2.2vmin, 18px); width: min(600px, 100%); }
+.sow-intro.sow-focus .sow-title.sow-kicker { font-size: 16px; opacity: 0.85; }
+.sow-intro-mission { font-size: clamp(20px, 4.2vmin, 30px); line-height: 1; padding: 2px 0; }
+.sow-intro-goal { font-size: clamp(15px, 3.4vmin, 20px); font-weight: 700; }
+.sow-intro-stars { display: flex; justify-content: center; gap: 8px; width: 100%; }
+.sow-intro-star { display: flex; align-items: baseline; gap: 6px; padding: 4px 10px; border-radius: 8px;
+  border: 1px solid hsla(55, 95%, 62%, 0.4); white-space: nowrap; }
+.sow-intro-star .sow-col-label { font-size: 12px; opacity: 0.75; }
+.sow-intro-star .sow-col-value { font-size: clamp(15px, 3.4vmin, 19px); font-weight: 700; color: hsl(55, 95%, 70%); }
+.sow-intro-new { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; }
+.sow-intro-icons { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.sow-intro-foe { display: inline-flex; }
+.sow-intro-new-label { font-size: 13px; letter-spacing: 0.08em; opacity: 0.75; }
+.sow-intro-actions { display: flex; gap: 10px; width: 100%; position: sticky; bottom: calc(-1 * var(--sow-intro-pad));
+  z-index: 1; padding: 6px 0; background: rgba(2, 6, 16, 0.94); }
+.sow-intro-actions .sow-btn.sow-big { min-height: 56px; }
+.sow-intro-actions .sow-btn.sow-big.sow-intro-start { flex: 1.4 1 0; min-height: 64px; font-size: 26px; }
+.sow-intro-actions .sow-btn.sow-big.sow-intro-menu { flex: 1 1 0; }
+@media (max-width: 440px) {
+  .sow-intro-actions { flex-wrap: wrap; }
+  .sow-intro-actions .sow-btn.sow-big.sow-intro-start, .sow-intro-actions .sow-btn.sow-big.sow-intro-menu { flex: 1 1 100%; }
+}
+@media (max-height: 520px) {
+  .sow-card.sow-intro.sow-focus { --sow-intro-pad: 10px; gap: 6px; }
+  .sow-intro-mission { font-size: 20px; padding: 0; }
+  .sow-intro-actions { padding: 2px 0; }
+  .sow-intro-actions .sow-btn.sow-big.sow-intro-start { min-height: 60px; }
+  .sow-intro .sow-btn.sow-big.sow-details-toggle { min-height: 44px; }
+}
+`;
+
+export const INTRO_STYLE_ID = 'sow-intro-style';
+
+/** DOM edge: add INTRO_CSS once. Skipped where the document has no head (node tests). */
+function ensureIntroStyle(): void {
+  const doc = typeof document === 'undefined' ? undefined : (document as Partial<Document>);
+  if (doc?.head === undefined || doc.getElementById === undefined || doc.createElement === undefined) return;
+  if (doc.getElementById(INTRO_STYLE_ID) !== null) return;
+  const st = doc.createElement('style');
+  st.id = INTRO_STYLE_ID;
+  st.textContent = INTRO_CSS;
+  doc.head.append(st);
 }
 
 export interface IntroScreen extends Screen {
@@ -350,41 +508,49 @@ export interface IntroScreen extends Screen {
   showReady(): void;
 }
 
-/** A card block: a small label over its body. */
-function block(name: string, label: string): { root: HTMLDivElement; body: HTMLDivElement } {
-  const root = el('div', 'sow-block');
-  root.setAttribute('data-intro', name);
-  const body = el('div', 'sow-block-body');
-  root.append(el('div', 'sow-block-label', label), body);
-  return { root, body };
+function mark(e: HTMLElement, name: string): void {
+  e.setAttribute('data-intro', name);
 }
 
 /**
- * DOM edge. `onStart` fires on the Start button. `onDifficulty` fires on a chip tap (Easy, Normal,
- * Hard, Insane). A tap anywhere else on the card does nothing: only Start leaves it.
+ * DOM edge. `onStart` fires on Start, `onMenu` on Return to Menu (back to the main menu without
+ * starting the level). `onDifficulty` fires on a chip tap (Easy, Normal, Hard, Insane). A tap
+ * anywhere else on the card does nothing: only Start and Return to Menu leave it.
  */
-export function createIntroScreen(parent: HTMLElement, onStart: () => void, onDifficulty: (d: Difficulty) => void = () => undefined): IntroScreen {
+export function createIntroScreen(
+  parent: HTMLElement,
+  onStart: () => void,
+  onDifficulty: (d: Difficulty) => void = () => undefined,
+  onMenu: () => void = () => undefined,
+): IntroScreen {
+  ensureIntroStyle();
   const s = createScreen(parent);
   s.root.classList.add('sow-card-screen');
   const card = el('div', 'sow-card sow-intro');
   const head = el('div', 'sow-title');
-  head.setAttribute('data-intro', 'title');
-  // R6: a two column label grid, "Goal" and "Victory" left, their statements right, one row each.
-  const goal = { root: el('div', 'sow-block sow-goal-grid') };
-  goal.root.setAttribute('data-intro', 'goal');
-  const goalText = el('div', 'sow-goal-v sow-goal');
-  goalText.setAttribute('data-intro', 'objective');
-  const victory = el('div', 'sow-goal-v');
-  victory.setAttribute('data-intro', 'victory');
-  goal.root.append(el('div', 'sow-goal-k', GOAL_LABEL), goalText, el('div', 'sow-goal-k', VICTORY_LABEL), victory);
-  const play = el('div', 'sow-block sow-play');
-  play.setAttribute('data-intro', 'play');
+  mark(head, 'title');
+  const mission = el('div', 'sow-intro-mission');
+  mark(mission, 'mission');
+  // One plain goal line; the victory text moved into Details.
+  const goal = el('div', 'sow-block');
+  mark(goal, 'goal');
+  const goalText = el('div', 'sow-intro-goal sow-goal');
+  mark(goalText, 'objective');
+  goal.append(goalText);
+  const stars = el('div', 'sow-intro-stars');
+  mark(stars, 'stars');
+  stars.setAttribute('aria-label', STARS_LABEL);
+  const foes = el('div', 'sow-intro-new');
+  mark(foes, 'enemies');
+  foes.setAttribute('aria-label', ENEMIES_LABEL);
+  const foeIcons = el('div', 'sow-intro-icons');
+  foes.append(el('span', 'sow-intro-new-label', NEW_LABEL), foeIcons);
   const diff = el('div', 'sow-chips');
-  diff.setAttribute('data-intro', 'difficulty');
+  mark(diff, 'difficulty');
   diff.setAttribute('role', 'group');
   diff.setAttribute('aria-label', DIFFICULTY_ROW_LABEL);
   let choice: Difficulty = 'normal';
-  const mark = (): void => {
+  const markChips = (): void => {
     difficultyButtonStates(choice).forEach((st, i) => {
       const b = chips[i];
       if (b === undefined) return;
@@ -395,39 +561,46 @@ export function createIntroScreen(parent: HTMLElement, onStart: () => void, onDi
   const chips = DIFFICULTIES.map((d) => {
     const b = button(difficultyLabel(d), () => {
       choice = d;
-      mark();
+      markChips();
       onDifficulty(d);
     });
     b.classList.add('sow-chip');
     if (d === 'insane') b.classList.add('sow-chip-insane');
     return b;
   });
-  diff.append(...chips);
+  diff.append(...chips); // R6: the chips alone, no "Difficulty" label
+  const play = el('div', 'sow-intro-actions');
+  mark(play, 'play');
   const start = button(START_LABEL, onStart);
-  start.classList.add('sow-big');
+  start.classList.add('sow-big', 'sow-intro-start');
   setVectorText(start, START_LABEL, { tone: 'white' });
-  start.setAttribute('data-intro', 'start');
-  play.append(diff, start); // R6: the chips alone, no "Difficulty" label
-  const stars = block('stars', STARS_LABEL);
-  const starCols = el('div', 'sow-cols');
-  const starCap = el('div', 'sow-small');
-  starCap.setAttribute('data-intro', 'starCap');
-  stars.body.append(starCols, starCap);
-  const foes = block('enemies', ENEMIES_LABEL);
+  mark(start, 'start');
+  const menu = button(MENU_LABEL, onMenu);
+  menu.classList.add('sow-big', 'sow-intro-menu');
+  setVectorText(menu, MENU_LABEL, { tone: 'white' });
+  mark(menu, 'menu');
+  play.append(start, menu);
   const details = createDetails('data-intro');
-  card.append(head, goal.root, stars.root, foes.root, play, details.root);
+  card.append(head, mission, goal, stars, foes, diff, play, details.root);
   s.root.append(card);
   attachScrollbar(card, bus);
-  let shown = { stars: false, foes: false, details: false };
+  let shown = { mission: false, stars: false, foes: false, details: false };
   const show = (ready: boolean): void => {
-    goal.root.style.display = ready ? 'none' : '';
-    play.style.display = ready ? 'none' : '';
-    diff.style.display = ready ? 'none' : '';
-    start.style.display = ready ? 'none' : '';
-    stars.root.style.display = ready || !shown.stars ? 'none' : '';
-    foes.root.style.display = ready || !shown.foes ? 'none' : '';
-    details.root.style.display = ready || !shown.details ? 'none' : '';
+    const vis = (e: HTMLElement, on: boolean): void => {
+      e.style.display = on ? '' : 'none';
+    };
+    vis(mission, !ready && shown.mission);
+    vis(goal, !ready);
+    vis(stars, !ready && shown.stars);
+    vis(foes, !ready && shown.foes);
+    vis(diff, !ready);
+    vis(play, !ready);
+    vis(start, !ready);
+    vis(menu, !ready);
+    vis(details.root, !ready && shown.details);
     card.classList.toggle('sow-card-bare', ready);
+    card.classList.toggle('sow-focus', !ready);
+    head.classList.toggle('sow-kicker', !ready);
     s.root.style.pointerEvents = ready ? 'none' : 'auto';
     s.root.style.background = ready ? 'transparent' : 'rgba(2, 4, 12, 0.55)';
     s.show();
@@ -436,30 +609,33 @@ export function createIntroScreen(parent: HTMLElement, onStart: () => void, onDi
     ...s,
     showCard(c) {
       setVectorText(head, c.title);
+      if (c.mission !== null) setFramedText(mission, c.mission);
+      else mission.replaceChildren();
       goalText.textContent = c.goal;
-      victory.textContent = c.victory;
-      starCols.replaceChildren(
+      stars.replaceChildren(
         ...c.stars.map((v) => {
-          const col = el('div', 'sow-col');
-          col.append(el('div', 'sow-col-label', v.label), el('div', 'sow-col-value', v.value));
+          const col = el('div', 'sow-intro-star');
+          col.append(el('span', 'sow-col-label', v.label), el('span', 'sow-col-value', v.value));
           return col;
         }),
       );
-      starCap.textContent = c.starCap;
-      foes.body.replaceChildren(
+      foeIcons.replaceChildren(
         ...c.enemies.map((f) => {
-          const row = el('div', 'sow-foe');
-          row.setAttribute('data-foe-row', f.kind);
-          row.append(iconCanvas(f.kind), el('span', 'sow-foe-name', f.name), el('span', 'sow-foe-type', f.type));
-          return row;
+          const icon = el('span', 'sow-intro-foe');
+          icon.setAttribute('data-foe-row', f.kind);
+          icon.setAttribute('role', 'img');
+          icon.setAttribute('aria-label', f.name);
+          icon.append(iconCanvas(f.kind));
+          return icon;
         }),
       );
       const items = introDetails(c);
       details.fill(items);
-      shown = { stars: c.stars.length > 0, foes: c.enemies.length > 0, details: items.length > 0 };
+      shown = { mission: c.mission !== null, stars: c.stars.length > 0, foes: c.enemies.length > 0, details: items.length > 0 };
       choice = c.choice;
-      mark();
+      markChips();
       show(false);
+      card.scrollTop = 0;
     },
     showReady() {
       setVectorText(head, READY_TEXT);

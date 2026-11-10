@@ -21,8 +21,12 @@ import {
   introDetails,
   introActive,
   introCard,
+  INTRO_CSS,
   labelled,
   LOADOUT_LABEL,
+  MENU_LABEL,
+  NEW_LABEL,
+  STAR_CAP_LABEL,
   loadoutItems,
   NO_INTRO,
   objectiveSentence,
@@ -180,7 +184,8 @@ describe('R3 intro card text', () => {
     const c = endlessIntroCard({ arena: { ...arena, shape: 'rect', obstacles: [] }, drone: 'attack', superType: 'turbo' }, 'hard', { seed: '9' });
     expect(c.title).toBe('Endless');
     expect(c.arena).toBe('Rectangle 900 x 900');
-    expect(introDetails(c).map(inlineV)).toEqual(['Arena Rectangle 900 x 900', 'Drone Attack', `Super Turbo (${turboText()})`, 'Seed 9']);
+    expect(introDetails(c).map(inlineV)).toEqual([`Victory ${ENDLESS_VICTORY}`, 'Drone Attack', `Super Turbo (${turboText()})`, 'Arena Rectangle 900 x 900', 'Seed 9']);
+    expect(c.mission).toBeNull();
     expect(c.goal).toBe(ENDLESS_GOAL);
     expect(c.victory).toBe(ENDLESS_VICTORY);
     expect(c.stars).toEqual([]);
@@ -207,32 +212,103 @@ describe('R3 intro card text', () => {
       expect(starts).toBe(1);
     });
 
-    it('R5 blocks top to bottom: title, goal, star targets, new enemies, difficulty and Start, Details last', () => {
+    it('focused stack top to bottom: level, mission, goal, star targets, new enemies, chips, Start and Return to Menu, Details last', () => {
       const root = installFakeDocument();
       const screen = createIntroScreen(asParent(root), () => undefined);
       screen.showCard(introCard(1, def, 'normal', { newFoes: ['grunt', 'dart'], seed: '77' }));
       const card = root.children[0]?.children[0];
       const order = (card?.children ?? []).map((e) => e.getAttribute('data-intro'));
-      expect(order).toEqual(['title', 'goal', 'stars', 'enemies', 'play', 'details']);
+      expect(order).toEqual(['title', 'mission', 'goal', 'stars', 'enemies', 'difficulty', 'play', 'details']);
       const text = (k: string): string => (byIntro(root, k)?.all() ?? [])
         .filter((e) => e.children.length === 0 && e.textContent !== '')
         .map((e) => e.textContent)
         .join('|');
-      expect(text('goal')).toBe(`${GOAL_LABEL}|Destroy 5 enemies before your lives run out|${VICTORY_LABEL}|5 kills with a life left`);
-      expect(text('stars')).toBe(`${STARS_LABEL}|1 star|10|2 stars|20|3 stars|40|Normal: up to 2 stars`);
-      expect(text('enemies')).toContain(ENEMIES_LABEL);
-      expect(text('enemies')).toContain('Grunt|chaser');
-      expect(text('enemies')).toContain('Dart|swarm');
+      expect(byIntro(root, 'mission')?.getAttribute('aria-label')).toBe('SEEK & DESTROY');
+      expect(text('goal')).toBe('Destroy 5 enemies before your lives run out');
+      expect(text('stars')).toBe('1 star|10|2 stars|20|3 stars|40');
+      // New: icons only, no names or types on the card (the story briefings introduce enemies).
+      expect(text('enemies')).toBe(NEW_LABEL);
       expect(byIntro(root, 'enemies')?.all().filter((e) => e.tag === 'canvas').map((e) => e.getAttribute('data-foe'))).toEqual(['grunt', 'dart']);
-      expect(text('play')).toBe(`Easy|Normal|Hard|Insane|${START_LABEL}`);
-      for (const k of ['goal', 'stars', 'enemies', 'play', 'details']) expect(byIntro(root, k)?.style.display, k).toBe('');
+      expect(byIntro(root, 'enemies')?.all().filter((e) => e.getAttribute('data-foe-row') !== null).map((e) => e.getAttribute('aria-label'))).toEqual(['Grunt', 'Dart']);
+      expect(text('difficulty')).toBe('Easy|Normal|Hard|Insane');
+      const play = byIntro(root, 'play');
+      expect((play?.children ?? []).map((e) => e.getAttribute('data-intro'))).toEqual(['start', 'menu']);
+      expect(byIntro(root, 'start')?.getAttribute('aria-label')).toBe(START_LABEL);
+      expect(byIntro(root, 'menu')?.getAttribute('aria-label')).toBe(MENU_LABEL);
+      for (const k of ['mission', 'goal', 'stars', 'enemies', 'difficulty', 'play', 'details']) expect(byIntro(root, k)?.style.display, k).toBe('');
+    });
+
+    it('Return to Menu fires its own action, not Start, and sits beside Start in the same big pixel style', () => {
+      const root = installFakeDocument();
+      let starts = 0;
+      let menus = 0;
+      const screen = createIntroScreen(asParent(root), () => void starts++, () => undefined, () => void menus++);
+      screen.showCard(introCard(3, def, 'normal'));
+      const menu = byIntro(root, 'menu');
+      const start = byIntro(root, 'start');
+      expect(menu?.tag).toBe('button');
+      expect(menu?.textContent).toBe(MENU_LABEL);
+      for (const b of [start, menu]) expect(b?.classList.contains('sow-big'), b?.textContent).toBe(true);
+      expect(menu?.all().some((e) => e.tag === 'svg')).toBe(true);
+      menu?.tap();
+      expect(menus).toBe(1);
+      expect(starts).toBe(0);
+      start?.tap();
+      expect(starts).toBe(1);
+      expect(menus).toBe(1);
+    });
+
+    it('Return to Menu goes to the main menu without starting the level (flow quit from the held card)', () => {
+      const main = readFileSync(fileURLToPath(new URL('../../src/main.ts', import.meta.url)), 'utf8');
+      const at = main.indexOf('Return to Menu leaves the card');
+      expect(at).toBeGreaterThan(main.indexOf('const introScreen = createIntroScreen('));
+      const body = main.slice(at, at + 400);
+      expect(body).toContain("intro.kind !== 'card'");
+      expect(body).toContain('intro = NO_INTRO;');
+      expect(body).toContain("dispatch({ type: 'quit' });");
+      const playing = reduceFlow(reduceFlow(bootFlow(), { type: 'tapStart' }), { type: 'start', mode: 'adventure', levelIndex: 4 });
+      expect(playing.screen).toBe('playing');
+      const back = reduceFlow(playing, { type: 'quit' });
+      expect(back.screen).toBe('menu');
+      expect(back.result).toBeNull();
+      expect(back.run).toBe(playing.run);
+      expect(simRunning(back)).toBe(false);
+    });
+
+    it('Return to Menu shows on the Endless card too and hides on Ready', () => {
+      const root = installFakeDocument();
+      const screen = createIntroScreen(asParent(root), () => undefined);
+      screen.showCard(endlessIntroCard({}, 'normal'));
+      expect(byIntro(root, 'menu')?.style.display).toBe('');
+      screen.showReady();
+      expect(byIntro(root, 'menu')?.style.display).toBe('none');
+    });
+
+    it('the mission headline is drawn in its tone with a pixel frame', () => {
+      const root = installFakeDocument();
+      const screen = createIntroScreen(asParent(root), () => undefined);
+      const cases = [
+        [{ kind: 'scoreInTime', target: 100, timeLimitSec: 90 }, 'RUSH & SCORE', 'yellow'],
+        [{ kind: 'survive', durationSec: 90 }, 'HOLD OUT', 'cyan'],
+        [{ kind: 'destroy', count: 5 }, 'SEEK & DESTROY', 'red'],
+      ] as const;
+      for (const [objective, label, tone] of cases) {
+        screen.showCard(introCard(2, { ...def, objective }, 'normal'));
+        const m = byIntro(root, 'mission');
+        expect(m?.getAttribute('aria-label')).toBe(label);
+        const svg = m?.children.find((e) => e.tag === 'svg');
+        expect(svg?.getAttribute('class')).toBe(`sow-vec sow-vec-${tone}`);
+        expect(svg?.getAttribute('data-vec')).toBe(label);
+      }
+      screen.showCard(introCard(2, { ...def, boss: { id: 'brood', tier: 1, atSec: 20, hpMul: 1 } }, 'normal'));
+      expect(byIntro(root, 'mission')?.children.find((e) => e.tag === 'svg')?.getAttribute('class')).toBe('sow-vec sow-vec-magenta');
     });
 
     it('R5 Details: loadout and seed, labelled, collapsed by default and closed again on the next card', () => {
       const root = installFakeDocument();
       const screen = createIntroScreen(asParent(root), () => undefined);
-      const c = introCard(1, def, 'normal', { seed: '77', reward: 'Extra life' });
-      expect(introDetails(c).map((v) => v.label)).toEqual(['Drone', 'Super', 'Reward', SEED_LABEL]);
+      const c = introCard(1, def, 'normal', { seed: '77', reward: 'Extra life', newFoes: ['grunt'] });
+      expect(introDetails(c).map((v) => v.label)).toEqual([VICTORY_LABEL, STAR_CAP_LABEL, 'Grunt', 'Drone', 'Super', 'Reward', SEED_LABEL]);
       screen.showCard(c);
       const toggle = byIntro(root, 'detailsToggle');
       const body = (): FakeEl | undefined => byIntro(root, 'detailsBody');
@@ -242,6 +318,9 @@ describe('R3 intro card text', () => {
       expect(body()?.style.display).toBe('');
       const rows = (body()?.children ?? []).map((r) => r.children.map((x) => x.textContent));
       expect(rows).toEqual([
+        ['Victory', '5 kills with a life left'],
+        ['Star cap', 'Normal: up to 2 stars'],
+        ['Grunt', 'chaser'],
         ['Drone', 'Attack'],
         ['Super', `Turbo (${turboText()})`],
         ['Reward', 'Extra life'],
@@ -275,8 +354,10 @@ describe('R3 intro card text', () => {
       const root = installFakeDocument();
       const screen = createIntroScreen(asParent(root), () => undefined);
       screen.showCard(endlessIntroCard({}, 'normal'));
-      for (const k of ['stars', 'enemies', 'details']) expect(byIntro(root, k)?.style.display, k).toBe('none');
+      for (const k of ['mission', 'stars', 'enemies']) expect(byIntro(root, k)?.style.display, k).toBe('none');
       expect(byIntro(root, 'goal')?.style.display).toBe('');
+      // The Endless victory text still has a home: the Details row.
+      expect(byIntro(root, 'details')?.style.display).toBe('');
     });
 
     it('the Ready text hides the chips, goal, stars and Start', () => {
@@ -284,13 +365,22 @@ describe('R3 intro card text', () => {
       const screen = createIntroScreen(asParent(root), () => undefined);
       screen.showCard(introCard(1, def, 'normal', { newFoes: ['grunt'], seed: '1' }));
       screen.showReady();
-      for (const k of ['difficulty', 'goal', 'stars', 'enemies', 'play', 'details', 'start']) expect(byIntro(root, k)?.style.display, k).toBe('none');
+      for (const k of ['mission', 'difficulty', 'goal', 'stars', 'enemies', 'play', 'details', 'start', 'menu']) expect(byIntro(root, k)?.style.display, k).toBe('none');
     });
 
     it('R5: the card is padded 24 px with 20 px between blocks; blocks never shrink into each other or the edges', () => {
       expect(UI_CSS).toContain('.sow-card.sow-intro { padding: 24px; gap: 20px; }');
       expect(UI_CSS).toContain('.sow-card > * { flex-shrink: 0; max-width: 100%; box-sizing: border-box; }');
       expect(UI_CSS).toContain('.sow-card-screen { justify-content: safe center; }');
+    });
+
+    it('focused stack: more padding than R5, and Start and Return to Menu stick to the bottom when the card scrolls', () => {
+      expect(INTRO_CSS).toMatch(/\.sow-card\.sow-intro\.sow-focus \{ --sow-intro-pad: clamp\(20px, [^)]+\);\s+padding: var\(--sow-intro-pad\) clamp\(22px, [^)]+\);/);
+      expect(INTRO_CSS).toContain('bottom: calc(-1 * var(--sow-intro-pad));');
+      expect(INTRO_CSS).toMatch(/\.sow-intro-actions \{[^}]*position: sticky;[^}]*bottom:/);
+      expect(INTRO_CSS).toMatch(/\.sow-intro-actions \.sow-btn\.sow-big \{ min-height: 56px; \}/);
+      expect(INTRO_CSS).toMatch(/\.sow-intro-start \{[^}]*min-height: 64px;/);
+      expect(INTRO_CSS).not.toMatch(/[\u2013\u2014]/);
     });
   });
 });
@@ -319,10 +409,11 @@ describe('V3-A intro card boss name', () => {
     expect(src).toContain('bossName');
   });
 
-  it('a boss changes only the goal and victory lines', () => {
+  it('a boss changes only the mission, goal and victory lines', () => {
     const plain = introCard(7, def);
     const withBoss = introCard(7, { ...def, boss: { id: 'brood', tier: 1, atSec: 20, hpMul: 1 } });
-    expect({ ...withBoss, goal: plain.goal, victory: plain.victory }).toEqual(plain);
+    expect(withBoss.mission?.label).toBe('GUARDIAN');
+    expect({ ...withBoss, goal: plain.goal, victory: plain.victory, mission: plain.mission }).toEqual(plain);
   });
 });
 

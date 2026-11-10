@@ -44,7 +44,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const REQUIRED = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,:!?-+/%#x ';
+const REQUIRED = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,:!?-+/%&#x ';
 const ZERO: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
 
 /** Parse hsla(h, s%, l%, a) into numbers. */
@@ -54,7 +54,7 @@ function hslaOf(css: string): [number, number, number, number] {
 }
 
 describe('glyph table on the 5 x 7 grid', () => {
-  it('covers A to Z, 0 to 9, the punctuation set, x and space', () => {
+  it('covers A to Z, 0 to 9, the punctuation set (with "&" for the mission types), x and space', () => {
     for (const ch of REQUIRED) expect(SUPPORTED_CHARS.includes(ch), JSON.stringify(ch)).toBe(true);
     expect(SUPPORTED_CHARS.length).toBe(REQUIRED.length);
   });

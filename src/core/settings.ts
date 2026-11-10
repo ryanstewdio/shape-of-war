@@ -586,11 +586,17 @@ export function ensureSchema(storage: StorageLike | null = defaultStorage()): nu
   return SCHEMA_VERSION;
 }
 
-/** Settings screen "Reset progress": unlocked back to 1, the Adventure table cleared and any held par reward dropped. */
+/**
+ * Settings screen "Reset progress": unlocked back to 1, the Adventure table cleared, any held par
+ * reward dropped, and (Ryan 2026-11-10) the story keys cleared too, so the next Adventure start
+ * plays the opening and asks for a call sign again.
+ */
 export function resetProgress(storage: StorageLike | null = defaultStorage()): void {
   writeRaw(storage, UNLOCKED_KEY, String(FIRST_LEVEL));
   writeRaw(storage, ADVENTURE_SCORES_KEY, '{}');
   writeRaw(storage, START_BONUS_KEY, '');
+  writeRaw(storage, STORY_SEEN_KEY, '{}');
+  writeRaw(storage, CALLSIGN_KEY, '');
 }
 
 /** Pure: a typed run seed, or null. Accepts 1 to 10 digits up to 4294967295. */
@@ -700,7 +706,7 @@ export function saveFreePlaySetup(s: FreePlaySetup, storage: StorageLike | null 
 
 // Story scenes (docs/19, brief ledger-story-scenes): two device only keys. The call sign is never
 // sent anywhere. Seen scenes map each trigger id to the Adventure level it was shown on, so level
-// select can offer "Replay story" for that level. Reset progress leaves both alone.
+// select can offer "Replay story" for that level. Reset progress clears both (Ryan 2026-11-10).
 
 export const CALLSIGN_KEY = 'sow.progress.callsign';
 export const STORY_SEEN_KEY = 'sow.progress.storySeen';
