@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+<rect width="256" height="256" fill="#000000"/>
+<g transform="translate(128.00 120.00) scale(0.90)">
+  <g fill="none" stroke="#fd3fbe" stroke-opacity="0.19" stroke-width="26.25" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="40.96,28.68 37.01,33.62 32.47,38.02 27.41,41.81 21.92,44.94 16.07,47.35 9.97,49.00 3.71,49.86 -2.62,49.93 -8.90,49.20 -15.04,47.69 -20.93,45.41 -26.50,42.40 -31.64,38.72 -36.27,34.42 -40.32,29.57 -43.73,24.24 -46.44,18.53 -48.41,12.52 -49.60,6.31 -50.00,0.00 -49.60,-6.31 -48.41,-12.52 -46.44,-18.53 -43.73,-24.24 -40.32,-29.57 -36.27,-34.42 -31.64,-38.72 -26.50,-42.40 -20.93,-45.41 -15.04,-47.69 -8.90,-49.20 -2.62,-49.93 3.71,-49.86 9.97,-49.00 16.07,-47.35 21.92,-44.94 27.41,-41.81 32.47,-38.02 37.01,-33.62 40.96,-28.68"/>
+  </g>
+  <g fill="none" stroke="#fd3fbe" stroke-opacity="0.44" stroke-width="12.00" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="40.96,28.68 37.01,33.62 32.47,38.02 27.41,41.81 21.92,44.94 16.07,47.35 9.97,49.00 3.71,49.86 -2.62,49.93 -8.90,49.20 -15.04,47.69 -20.93,45.41 -26.50,42.40 -31.64,38.72 -36.27,34.42 -40.32,29.57 -43.73,24.24 -46.44,18.53 -48.41,12.52 -49.60,6.31 -50.00,0.00 -49.60,-6.31 -48.41,-12.52 -46.44,-18.53 -43.73,-24.24 -40.32,-29.57 -36.27,-34.42 -31.64,-38.72 -26.50,-42.40 -20.93,-45.41 -15.04,-47.69 -8.90,-49.20 -2.62,-49.93 3.71,-49.86 9.97,-49.00 16.07,-47.35 21.92,-44.94 27.41,-41.81 32.47,-38.02 37.01,-33.62 40.96,-28.68"/>
+  </g>
+  <g fill="none" stroke="#fd3fbe" stroke-opacity="0.19" stroke-width="21.00" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="34.40,24.09 45.87,32.12"/>
+    <polyline points="34.40,-24.09 45.87,-32.12"/>
+  </g>
+  <g fill="none" stroke="#fd3fbe" stroke-opacity="0.44" stroke-width="9.60" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="34.40,24.09 45.87,32.12"/>
+    <polyline points="34.40,-24.09 45.87,-32.12"/>
+  </g>
+  <g fill="none" stroke="#fd3fbe" stroke-opacity="0.19" stroke-width="18.38" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="0.00,-27.50 -27.50,0.00 0.00,27.50 27.50,0.00"/>
+  </g>
+  <g fill="none" stroke="#fd3fbe" stroke-opacity="0.44" stroke-width="8.40" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="0.00,-27.50 -27.50,0.00 0.00,27.50 27.50,0.00"/>
+  </g>
+  <g fill="none" stroke="#fd3fbe" stroke-opacity="0.11" stroke-width="15.75" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="0.00" cy="0.00" r="59.00"/>
+  </g>
+  <g fill="none" stroke="#fd3fbe" stroke-opacity="0.26" stroke-width="7.20" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="0.00" cy="0.00" r="59.00"/>
+  </g>
+  <g fill="none" stroke="#fd3fbe" stroke-opacity="1.00" stroke-width="8.40" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="40.96,28.68 37.01,33.62 32.47,38.02 27.41,41.81 21.92,44.94 16.07,47.35 9.97,49.00 3.71,49.86 -2.62,49.93 -8.90,49.20 -15.04,47.69 -20.93,45.41 -26.50,42.40 -31.64,38.72 -36.27,34.42 -40.32,29.57 -43.73,24.24 -46.44,18.53 -48.41,12.52 -49.60,6.31 -50.00,0.00 -49.60,-6.31 -48.41,-12.52 -46.44,-18.53 -43.73,-24.24 -40.32,-29.57 -36.27,-34.42 -31.64,-38.72 -26.50,-42.40 -20.93,-45.41 -15.04,-47.69 -8.90,-49.20 -2.62,-49.93 3.71,-49.86 9.97,-49.00 16.07,-47.35 21.92,-44.94 27.41,-41.81 32.47,-38.02 37.01,-33.62 40.96,-28.68"/>
+  </g>
+  <g fill="none" stroke="#fd3fbe" stroke-opacity="1.00" stroke-width="6.72" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="34.40,24.09 45.87,32.12"/>
+    <polyline points="34.40,-24.09 45.87,-32.12"/>
+  </g>
+  <g fill="#fd3fbe" fill-opacity="0.06" stroke="none">
+    <polygon points="0.00,-27.50 -27.50,0.00 0.00,27.50 27.50,0.00"/>
+  </g>
+  <g fill="none" stroke="#fd3fbe" stroke-opacity="1.00" stroke-width="5.88" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="0.00,-27.50 -27.50,0.00 0.00,27.50 27.50,0.00"/>
+  </g>
+  <g fill="#f2f2f2" fill-opacity="0.20" stroke="none">
+    <circle cx="0.00" cy="0.00" r="8.00"/>
+  </g>
+  <g fill="none" stroke="#f2f2f2" stroke-opacity="1.00" stroke-width="4.20" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="0.00" cy="0.00" r="8.00"/>
+  </g>
+  <g fill="none" stroke="#fd3fbe" stroke-opacity="0.60" stroke-width="5.04" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="0.00" cy="0.00" r="59.00"/>
+  </g>
+</g>
+<text x="128.00" y="246.00" fill="#fd3fbe" font-family="sans-serif" font-size="13" text-anchor="middle">Mirage</text>
+</svg>
