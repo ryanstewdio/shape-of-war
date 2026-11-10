@@ -8,6 +8,8 @@ import { createGw2Backend } from './gw2Synth';
 import { installTurboSfx, type TurboController } from './turboSfx';
 import { installScrollTick, type ScrollTickController } from './scrollTick';
 import { createScrollTickBackend } from './scrollTickSynth';
+import { installTimeWarnSfx, type TimeWarnController } from './timeWarnSfx';
+import { createTimeWarnBackend } from './timeWarnSynth';
 import { createTurboBackend } from './turboSynth';
 import { installRippleSfx, type RippleController } from './rippleSfx';
 import { createRippleBackend } from './rippleSynth';
@@ -156,6 +158,7 @@ const gw2Backend = createGw2Backend({ graph: sfxGraph, noise: noiseBuffer, regis
 const turboBackend = createTurboBackend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
 const rippleBackend = createRippleBackend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
 const scrollTickBackend = createScrollTickBackend({ graph: sfxGraph });
+const timeWarnBackend = createTimeWarnBackend({ graph: sfxGraph });
 
 function stopVoice(vc: Voice, at: number): void {
   for (const s of vc.sources) {
@@ -282,11 +285,14 @@ export function installAudio(opts: AudioOptions): () => void {
   const scrollTick: ScrollTickController = installScrollTick(b, scrollTickBackend);
   // Tester 3: pond ripple thump and whoosh (rippleSfx.ts).
   const ripple: RippleController = installRippleSfx(b, rippleBackend);
+  // HUD clock warnings at 60, 30 and the last 10 seconds (timeWarnSfx.ts).
+  const timeWarn: TimeWarnController = installTimeWarnSfx(b, timeWarnBackend);
   const offs = [
     gw2.dispose,
     ripple.dispose,
     turbo.dispose,
     scrollTick.dispose,
+    timeWarn.dispose,
     // combat emits fx:kill then sfx explode, so the colour decides the explode sound.
     b.on('fx:kill', (p) => {
       bigKill = isBigKillColour(p.colour);
