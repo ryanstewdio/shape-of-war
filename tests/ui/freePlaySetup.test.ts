@@ -128,7 +128,7 @@ describe('Free Play setup screen controls', () => {
     expect(text(WEAPON_ROW_LABEL)).toEqual(['None', 'Spread', 'Rapid', 'Pierce', 'Orbit']);
     expect(text(DRONE_ROW_LABEL)).toEqual(['Attack', 'Collect', 'Ram']);
     expect(text(SUPER_ROW_LABEL)).toEqual(['Homing', 'Detonate', 'Turbo']);
-    expect(text(BOSSES_ROW_LABEL).slice(0, 2)).toEqual(['Off', 'Every 3 min']);
+    expect(text(BOSSES_ROW_LABEL).slice(0, 2)).toEqual(['Off', 'Every 2 min']);
     expect(text(WELLS_ROW_LABEL)).toEqual(['Off', 'Normal', 'Many']);
     expect(text(DRIFT_ROW_LABEL)).toEqual(['Off', 'Low', 'High']);
   });
