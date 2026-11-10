@@ -10,6 +10,7 @@
 // right, so four rows at the 44 px minimum still fit with room to spare.
 // How to (Ryan): a row in a yellow frame opens the How to guide. Polish r9: it sits directly above
 // Settings, and every row label is drawn in the pixel font.
+import pkg from '../../package.json';
 import type { Insets, Rect } from '../input/types';
 import { button, createScreen, el, MIN_HIT_PX, type Screen } from './dom';
 import { aspectClass } from './hudFrame';
@@ -50,7 +51,7 @@ export interface MenuScreen extends Screen {
   setInfo(text: string): void;
   /** Label on the Adventure button, for example "Continue  L3". */
   setContinue(text: string): void;
-  /** Footer line, for example "v3 build abc123 seed 42" (footerLine). */
+  /** Footer line, for example "Shape Legend v0.9.0 (build abc123)" (footerLine). */
   setFooter(text: string): void;
   /** Size the panel for the viewport and its safe area insets (resize, fold and unfold). */
   layout(cssW: number, cssH: number, insets: Insets): void;
@@ -58,8 +59,8 @@ export interface MenuScreen extends Screen {
   focused(): number;
 }
 
-/** The release line printed before the build sha in the menu footer. */
-export const FOOTER_VERSION = 'v3';
+/** The release version, read from package.json at build time. */
+export const FOOTER_VERSION: string = pkg.version;
 
 /**
  * Pure: the short sha from the build id define (vite.config.ts __BUILD_ID__, "<sha> <date>"), or
@@ -70,9 +71,9 @@ export function shortSha(buildId: string | undefined): string {
   return sha === '' || sha === 'nogit' || sha === 'unknown' ? 'dev' : sha;
 }
 
-/** Pure: the menu footer testers screenshot, "v3 build <short sha> seed <run seed>". */
-export function footerLine(buildId: string | undefined, runSeed: number): string {
-  return `${FOOTER_VERSION} build ${shortSha(buildId)} seed ${runSeed >>> 0}`;
+/** Pure: the menu footer testers screenshot, "Shape Legend v0.9.0 (build <short sha>)". */
+export function footerLine(buildId: string | undefined): string {
+  return `Shape Legend v${FOOTER_VERSION} (build ${shortSha(buildId)})`;
 }
 
 /** Pure: Adventure button label. */

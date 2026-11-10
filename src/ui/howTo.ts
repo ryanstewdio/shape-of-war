@@ -346,7 +346,7 @@ export function howToPages(): HowToPage[] {
       id: 'stars',
       title: 'Stars, par and rewards',
       sections: [
-        sec('Par', ['Par is the score to beat.', 'Reach par for 1 star.', 'Double par for 2. Four times par for 3.'], { t: 'draw', id: 'star' }),
+        sec('Par', ['Par is the score to beat.', 'Reach par for 1 star.', '1.25 times par for 2.', '1.5 times par for 3.'], { t: 'draw', id: 'star' }),
         sec('Stars by difficulty', starCapLines(), { t: 'draw', id: 'star4' }, [], { leads: difficultyLeads() }),
         sec(
           'Rewards',
@@ -364,7 +364,7 @@ export function howToPages(): HowToPage[] {
       id: 'modes',
       title: 'Difficulty and Free Play',
       sections: [
-        sec('Difficulty', [...difficultyLines(), 'Change it in Settings.'], undefined, [], { leads: difficultyLeads() }),
+        sec('Difficulty', [...difficultyLines(), 'Pick it on the level start card before each level.'], undefined, [], { leads: difficultyLeads() }),
         sec('Free Play', ['Pick the arena, enemies, weapons and rules.', 'Play as long as you like.', 'No stars here, just fun.']),
         sec('Endless', ['Waves never stop.', 'Beat your high score.']),
       ],

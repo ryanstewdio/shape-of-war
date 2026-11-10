@@ -417,6 +417,8 @@ export interface SettingsActions {
   /** Current neon value, read when the screen opens (the debug panel may have moved it). */
   currentNeon(): number;
   buildId: string;
+  /** True only with ?dev=1: the build label taps reveal the stress button. */
+  dev?: boolean;
 }
 
 export interface SettingsScreen extends Screen {
@@ -559,6 +561,7 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
   version.style.padding = '4px 0 0 12px';
   let taps: number[] = [];
   version.addEventListener('pointerup', () => {
+    if (a.dev !== true) return;
     const r = registerTap(taps, performance.now());
     taps = r.taps;
     if (r.fire) debugRow.style.display = debugRow.style.display === 'none' ? '' : 'none';

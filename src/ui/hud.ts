@@ -295,9 +295,9 @@ export function clockFramePx(text: string, size: ClockSize): { w: number; h: num
   return { w: box.wCells * cell + 2 * (CLOCK_PAD_X + CLOCK_BORDER), h: box.hCells * cell + 2 * (CLOCK_PAD_Y + CLOCK_BORDER) };
 }
 
-/** Pure: "L3  Par 1,000  #abcd1234". */
-export function levelLine(levelIndex: number, par: number, hash: string): string {
-  return `L${levelIndex}  Par ${formatInt(par)}  #${hash}`;
+/** Pure: "L3  Par 1,000", plus "  #abcd1234" only when showCode (the ?dev=1 build). */
+export function levelLine(levelIndex: number, par: number, hash: string, showCode = false): string {
+  return showCode ? `L${levelIndex}  Par ${formatInt(par)}  #${hash}` : `L${levelIndex}  Par ${formatInt(par)}`;
 }
 
 export interface Hud {
@@ -305,6 +305,8 @@ export interface Hud {
   hide(): void;
   update(p: HudScore): void;
   setLevel(levelIndex: number, par: number, hash: string): void;
+  /** Show the level code on the level line (?dev=1 only). Off by default. */
+  setDevCode(on: boolean): void;
   /** Free text in the level line slot (Endless seed and clock). */
   setLine(text: string): void;
   /** Free Play infinite lives: the lives slot shows the infinity sign until set off. */
@@ -507,6 +509,7 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   bannerEl.style.transition = 'opacity 120ms linear';
   bannerEl.setAttribute('data-hud', 'boss-banner');
   /** Seconds since the boss entered; BANNER_TOTAL_SEC means finished or never started. */
+  let showCode = false;
   let bannerT = BANNER_TOTAL_SEC;
   let bannerLastMs = 0;
   const paintBanner = (): void => {
@@ -803,7 +806,10 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
     },
     bannerShown: () => bannerT < BANNER_TOTAL_SEC,
     setLevel(levelIndex, parScore, hash) {
-      par.textContent = levelLine(levelIndex, parScore, hash);
+      par.textContent = levelLine(levelIndex, parScore, hash, showCode);
+    },
+    setDevCode(on) {
+      showCode = on;
     },
     setLine(text) {
       par.textContent = text;
