@@ -200,6 +200,8 @@ export interface HazardInput {
   tint: number;
   /** Render clock seconds (tether hum). */
   timeSec: number;
+  /** Optional alpha multiplier on sweep arms (glow-fury-two: the Spindle enraged pulse); 1 if absent. */
+  alphaMul?: number;
 }
 
 const form: HazardForm = { lethal: false, alpha: 0, thick: 0, flash: 0 };
@@ -263,13 +265,15 @@ function planSweep(h: HazardInput, b: SpriteBuf, halo: Readonly<FxHalo>, f: Haza
   const len = Math.max(0, h.vx);
   const arms = sweepArms(h.vy);
   const w = HAZARD_LINE * tierWeight(h.tier) * (f.lethal ? 2 : TELE_THICK * 2) * flashBoost(f);
+  const am = h.alphaMul !== undefined && Number.isFinite(h.alphaMul) ? Math.max(0, Math.min(1, h.alphaMul)) : 1;
+  const fa = f.alpha * am;
   let n = 0;
   for (let k = 0; k < arms; k++) {
     const a = sweepArmAngle(h.rot, k, arms);
     const x1 = h.x + Math.cos(a) * len;
     const y1 = h.y + Math.sin(a) * len;
-    n += pushBand(b, h.x, h.y, x1, y1, 2 * SWEEP_HALF, f.alpha * (f.lethal ? ZONE_FILL : ZONE_FILL_TELE), h.tint);
-    n += pushLine(b, h.x, h.y, x1, y1, w, f.alpha, h.tint, halo);
+    n += pushBand(b, h.x, h.y, x1, y1, 2 * SWEEP_HALF, fa * (f.lethal ? ZONE_FILL : ZONE_FILL_TELE), h.tint);
+    n += pushLine(b, h.x, h.y, x1, y1, w, fa, h.tint, halo);
   }
   return n;
 }
