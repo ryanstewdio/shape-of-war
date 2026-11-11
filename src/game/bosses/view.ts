@@ -6,6 +6,7 @@ import { Kind, type World } from '../world';
 import { barHpOf, barMaxOf } from './core';
 import { bossOf } from './state';
 import { dashAimOf, dashHeadingOf } from './warden';
+import { tideFlipInOf, tideOf } from './gravitas';
 
 /** One boss as render and HUD see it. No allocation: callers pass one reused object as out. */
 export interface BossView {
@@ -93,6 +94,10 @@ export function readBoss(w: World, out: BossView): BossView {
   out.dashHeading = warden && bs !== null ? dashHeadingOf(bs) : 0;
   // Hit feedback: seconds since the last landed hit, -1 before any (or with no boss alive).
   out.hitT = live && bs !== null ? bs.hitT : -1;
+  // Fury three: the Broodlings' frenzy (Brood's body has no fury), and Gravitas's enraged tide.
+  out.frenzy = live && bs !== null && bs.spec.id === 'brood' && bs.fury === 2;
+  out.tide = live && bs !== null ? tideOf(bs) : 0;
+  out.tideFlipIn = live && bs !== null ? tideFlipInOf(bs) : -1;
   if (bs === null || bs.status !== 'alive' || id <= 0 || w.alive[id] !== 1 || w.kind[id] !== Kind.Boss) {
     out.active = false;
     return out;

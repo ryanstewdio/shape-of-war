@@ -13,13 +13,24 @@
 // collapsing onto the pair centre. Contact with a Gravitant kills. The fight ends with the second,
 // once; the bar is the sum of the two. Split scratch: t0 ring clock, t1 and t2 pair centre, t3
 // orbit radius (opens from 0), angle orbit angle, n0 and n1 the pull ids of slots 0 and 1, retry.
+//
+// Fury (shared, fury.ts; fury three): at the stage 1 crack Gravitas breaks (stands still, pull and
+// rings gone, core closed, no damage, FURY_BREAK_SEC), phase 2 starts there, then it is enraged to its
+// death. Tide (GRAVITAS_FURY): enraged, every pull flips to a push and back every flipSec of furyT at
+// the same strength: while it pushes the core pull is held at 0 (hzRate; w.vx keeps the strength for
+// render) and the push goes into the ship pull channel with the same falloff and blend, so it never
+// moves the ship faster than the pull could. furyT runs on through the stage 2 split (the lead
+// Gravitant counts it), so the tide carries onto the pair. Anchors and rings are unchanged.
 import { bus } from '../../core/events';
+import { pullRetain } from '../enemies/gravitywell';
+import { gs } from '../state';
 import { angleBetween, distBetween, moveHeading, moveTo, targetOf } from '../steer';
 import { Kind, type World } from '../world';
-import { bossAdt, clearHazards, countParts, crackBody, HAZARD_OVERLAP, livePart, setPullStrength, spawnPart, spawnPull, spawnRing } from './core';
-import { angleToOn } from './kit';
+import { bossAdt, clearHazards, countParts, crackBody, HAZARD_OVERLAP, livePart, pullStrength, setPullStrength, spawnPart, spawnPull, spawnRing } from './core';
+import { emitFury, furyClampDamage, furyDue, furyOnPhase, furyPhaseOf, startFuryBreak, stepFury } from './fury';
+import { angleToOn, pullSpeed } from './kit';
 import { bossOf, type BossState } from './state';
-import { GRAVITANT, GRAVITAS, HAZARD_RECHECK_SEC, MAX_PARTS } from './table';
+import { FURY_BREAK_SEC, GRAVITANT, GRAVITAS, GRAVITAS_FURY, HAZARD_RECHECK_SEC, MAX_PARTS } from './table';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
 import { removeEntity } from '../remove';
 import { splitHp } from './tempest';
@@ -43,6 +54,57 @@ export function pullFor(anchors: number): number {
 /** Pure: the core takes damage only once every anchor is gone. */
 export function isOpen(anchors: number): boolean {
   return anchors <= 0;
+}
+
+/** Pure: the tide in a fury stage furyT seconds in: 1 pull, -1 push, 0 when not enraged. */
+export function tideAt(fury: number, furyT: number): -1 | 0 | 1 {
+  if (fury < 2) return 0;
+  const t = Number.isFinite(furyT) && furyT > 0 ? furyT : 0;
+  return Math.floor(t / GRAVITAS_FURY.flipSec + 1e-9) % 2 === 0 ? 1 : -1;
+}
+
+/** Pure: seconds to the next tide flip in a fury stage furyT seconds in, -1 when not enraged. */
+export function tideFlipInAt(fury: number, furyT: number): number {
+  if (fury < 2) return -1;
+  const t = Number.isFinite(furyT) && furyT > 0 ? furyT : 0;
+  const into = t - Math.floor(t / GRAVITAS_FURY.flipSec + 1e-9) * GRAVITAS_FURY.flipSec;
+  const left = GRAVITAS_FURY.flipSec - (into > 0 ? into : 0);
+  return left > 0 ? left : GRAVITAS_FURY.flipSec;
+}
+
+/** Pure: true while Glow should flash the flip ring (the last telegraphSec before a flip). */
+export function tideTelegraph(flipIn: number): boolean {
+  return flipIn >= 0 && flipIn <= GRAVITAS_FURY.telegraphSec + 1e-9;
+}
+
+/** The tide of Gravitas now (readBoss): 0 for any other guardian or before the fury. */
+export function tideOf(bs: BossState): -1 | 0 | 1 {
+  return bs.spec.id === 'gravitas' ? tideAt(bs.fury, bs.furyT) : 0;
+}
+
+/** Seconds to the next tide flip of Gravitas now (readBoss), -1 when none. */
+export function tideFlipInOf(bs: BossState): number {
+  return bs.spec.id === 'gravitas' ? tideFlipInAt(bs.fury, bs.furyT) : -1;
+}
+
+/** Push the ship out from pull p at strength s: the core pull's falloff and blend, reversed. */
+function pushShip(w: World, p: number, s: number, dt: number): void {
+  if (!w.ship.active) return;
+  const v = pullSpeed(distBetween(w, p, 0), w.radius[p] ?? 0, s);
+  if (v <= 0) return;
+  const a = angleBetween(w, 0, p);
+  const blend = 1 - pullRetain(dt);
+  const g = gs(w);
+  g.shipPullX -= Math.cos(a) * v * blend;
+  g.shipPullY -= Math.sin(a) * v * blend;
+}
+
+/** Set pull p to strength s under the tide: a pull as before, or held at 0 in the core while it pushes. */
+function holdPull(w: World, bs: BossState, p: number, s: number, dt: number): void {
+  setPullStrength(w, bs, p, s); // w.vx keeps the strength for render either way
+  if (tideAt(bs.fury, bs.furyT) >= 0) return;
+  bs.hzRate[p] = 0; // the core pull is off: the push replaces it
+  pushShip(w, p, pullStrength(s), dt);
 }
 
 /** The live pull id, or -1. */
@@ -78,7 +140,7 @@ function placeAnchors(w: World, id: number, bs: BossState): void {
 }
 
 /** Keep the pull matched to the anchors: weaker per lost anchor, removed with none left. */
-function syncPull(w: World, id: number, bs: BossState, anchors: number): void {
+function syncPull(w: World, id: number, bs: BossState, anchors: number, dt: number): void {
   const p = livePull(w, bs);
   const s = pullFor(anchors);
   if (s <= 0) {
@@ -87,10 +149,11 @@ function syncPull(w: World, id: number, bs: BossState, anchors: number): void {
     return;
   }
   if (p > 0) {
-    setPullStrength(w, bs, p, s);
+    holdPull(w, bs, p, s, dt);
     return;
   }
   bs.n0 = spawnPull(w, bs, w.x[id] ?? 0, w.y[id] ?? 0, GRAVITAS.pullRadius, -1, true, s);
+  if (bs.n0 > 0) holdPull(w, bs, bs.n0, s, dt);
 }
 
 function fireRing(w: World, id: number, bs: BossState, every: number): void {
@@ -122,7 +185,15 @@ export function reset(w: World, id: number, bs: BossState, first: boolean): void
   setWindow(bs, countParts(w, bs));
 }
 
+/** Gravitas's own break reset: the pull and any ring are gone (clearHazards). */
+function onBreak(w: World, id: number, bs: BossState): void {
+  bs.n0 = -1;
+  bs.retry = 0;
+}
+
 export function step(w: World, id: number, bs: BossState, dt: number, adt: number): void {
+  // The break: Gravitas stands still, no pull, no rings, core closed; then it is enraged.
+  if (stepFury(w, id, bs, dt, null)) return;
   const target = targetOf(w, id);
   const heading = angleBetween(w, id, target);
   w.rot[id] = heading;
@@ -130,7 +201,7 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
   bs.angle = (bs.angle + GRAVITAS.anchorSpin * dt) % TAU;
   placeAnchors(w, id, bs);
   const n = countParts(w, bs);
-  syncPull(w, id, bs, n);
+  syncPull(w, id, bs, n, dt);
   if (bs.retry > 0) {
     bs.retry = bs.retry - dt > 0 ? bs.retry - dt : 0;
   } else {
@@ -142,7 +213,23 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
 }
 
 export function onPhase(w: World, id: number, bs: BossState, phase: number): void {
-  // The ring interval reads bs.phase; keep the clock where it is.
+  // The ring interval reads bs.phase; keep the clock where it is. The break is the phase 2 pause.
+  furyOnPhase(bs, phase);
+}
+
+/** Hit hook: the break takes no damage, and the crossing hit stops at the stage 1 crack. */
+export function clampDamage(w: World, id: number, bs: BossState, amount: number): number {
+  return furyClampDamage(w, id, bs, amount);
+}
+
+/** After a hit Gravitas lived: the break starts the moment the stage 1 bar is empty. */
+export function afterDamage(w: World, id: number, bs: BossState): void {
+  if (furyDue(w, id, bs)) startFuryBreak(w, id, bs, onBreak);
+}
+
+/** Phase hook: phase 2 starts at the break, phase 3 from hit points. */
+export function phaseOf(w: World, id: number, bs: BossState, hp: number): number {
+  return furyPhaseOf(w, id, bs, hp);
 }
 
 export function entryHome(d: number): number {
@@ -208,7 +295,7 @@ export function cracks(w: World, id: number, bs: BossState): void {
 }
 
 /** Keep slot k's pull on its Gravitant at half strength, or remove it with the Gravitant gone. */
-function syncSplitPull(w: World, bs: BossState, k: number): void {
+function syncSplitPull(w: World, bs: BossState, k: number, dt: number): void {
   const p = livePart(w, bs, k);
   const cur = pullAt(w, k === 0 ? bs.n0 : bs.n1);
   if (p < 0) {
@@ -220,12 +307,13 @@ function syncSplitPull(w: World, bs: BossState, k: number): void {
   if (cur > 0) {
     w.x[cur] = w.x[p] ?? 0;
     w.y[cur] = w.y[p] ?? 0;
-    setPullStrength(w, bs, cur, GRAVITANT.pullMax);
+    holdPull(w, bs, cur, GRAVITANT.pullMax, dt);
     return;
   }
   const made = spawnPull(w, bs, w.x[p] ?? 0, w.y[p] ?? 0, GRAVITANT.pullRadius, -1, false, GRAVITANT.pullMax);
   if (k === 0) bs.n0 = made;
   else bs.n1 = made;
+  if (made > 0) holdPull(w, bs, made, GRAVITANT.pullMax, dt);
 }
 
 /** Scratch for surface deltas (read both fields before the next call). */
@@ -292,7 +380,18 @@ export function stepGravitant(w: World, id: number, dt: number): void {
     moveTo(w, p, bs.t1 + Math.cos(a) * bs.t3, bs.t2 + Math.sin(a) * bs.t3);
     w.rot[p] = a;
   }
-  for (let k = 0; k < GRAVITANT.count; k++) syncSplitPull(w, bs, k);
+  if (bs.fury === 1) {
+    // A split that lands in the break (only a hit past both cracks at once): the pair finishes it.
+    bs.furyT += dt;
+    if (bs.furyT >= FURY_BREAK_SEC - 1e-9) {
+      bs.fury = 2;
+      bs.furyT = 0;
+      emitFury(w, id, bs, 'on', 0);
+    }
+  } else if (bs.fury === 2) {
+    bs.furyT += dt; // the tide carries on through the split
+  }
+  for (let k = 0; k < GRAVITANT.count; k++) syncSplitPull(w, bs, k, dt);
   if (bs.retry > 0) {
     bs.retry = bs.retry - dt > 0 ? bs.retry - dt : 0;
   } else {
@@ -302,4 +401,4 @@ export function stepGravitant(w: World, id: number, dt: number): void {
   }
 }
 
-export const def: BossDef = { reset, step, onPhase, entryHome, cracks };
+export const def: BossDef = { reset, step, onPhase, entryHome, cracks, clampDamage, afterDamage, phaseOf, fury: true };
