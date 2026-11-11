@@ -165,13 +165,15 @@ export function waveClockHeld(w: World): boolean {
 }
 
 /**
- * Wave thinning (boss rule 4): while an Adventure boss lives the schedule keeps WAVE_BUDGET_WITH_BOSS
+ * Wave thinning (boss rule 4): while an Adventure boss lives the schedule keeps WAVE_BUDGET_WITH_BOSS[difficulty]
  * of its entries, chosen by an even accumulator (3 of every 5 at 0.6). No PRNG.
  */
 export function keepScheduledEntry(w: World): boolean {
   const bs = bossOf(w);
   if (bs === null || bs.status !== 'alive') return true;
-  bs.budgetAcc += WAVE_BUDGET_WITH_BOSS;
+  const share = WAVE_BUDGET_WITH_BOSS[w.difficulty];
+  if (share <= 0) return false;
+  bs.budgetAcc += share;
   if (bs.budgetAcc >= 1 - 1e-9) {
     bs.budgetAcc -= 1;
     return true;

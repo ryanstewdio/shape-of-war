@@ -35,10 +35,13 @@ export interface BossRow {
  * Warden fury, Brood first cut (Ryan 2026-11-11): Brood's body x0.44 (459 before) and BROODLING.hp
  * x0.31. These come from Ryan's device time (150 to 170 s, about half body and half Broodlings,
  * against a 60 s target: body about 35 s, Broodlings about 25 s at Normal level 5), not the bot.
+ * Brood calm pass (Ryan 2026-11-11, device check on ecde5b2): body 202 to 340 and BROODLING.hp
+ * 300 to 450. These bracket Ryan's two device fights: 22 s (body 16 s, Broodlings 6 s, rated too
+ * easy) against 150 to 170 s on the build before.
  */
 export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
   warden: { tier: 1, hp: 519, phases: 2, radius: 56, colour: 'bossBlue' },
-  brood: { tier: 1, hp: 202, phases: 2, radius: 52, colour: 'bossGreen' },
+  brood: { tier: 1, hp: 340, phases: 2, radius: 52, colour: 'bossGreen' },
   spindle: { tier: 1, hp: 1350, phases: 2, radius: 48, colour: 'bossYellow' },
   ember: { tier: 2, hp: 822, phases: 3, radius: 44, colour: 'bossOrange' },
   mirage: { tier: 2, hp: 1620, phases: 3, radius: 50, colour: 'bossMagenta' },
@@ -90,8 +93,17 @@ export const PHASE_CHANGE_SEC = 1.0;
 export const ENRAGE_AFTER_SEC = 240;
 /** Attack clock multiplier while enraged: 30 percent faster. */
 export const ENRAGE_RATE = 1.3;
-/** Share of the wave schedule kept while an Adventure boss lives (boss rule 4). */
-export const WAVE_BUDGET_WITH_BOSS = 0.6;
+/**
+ * Share of the wave schedule kept while a guardian lives, by difficulty (boss rule 4; Ryan
+ * 2026-11-11: regular enemies after the entrance scale by difficulty). Insane keeps the old 0.6.
+ * Before the entrance nothing changes. Free Play keeps its own setting.
+ */
+export const WAVE_BUDGET_WITH_BOSS: Readonly<Record<'easy' | 'normal' | 'hard' | 'insane', number>> = {
+  easy: 0,
+  normal: 0.25,
+  hard: 0.5,
+  insane: 0.6,
+};
 /** A lethal hazard that would overlap the ship waits this long and rechecks (fairness rule 5). */
 export const HAZARD_RECHECK_SEC = 0.3;
 /**
@@ -322,7 +334,7 @@ export const BROODLING = {
    * 30 spread hits each (the table dialect: HP in hits, stored as tenths). Ryan's device time, not
    * the bot: 600 to 190 in the Warden fury wave, then 190 to 300 (fury two: they died too fast).
    */
-  hp: 300,
+  hp: 450,
   /** Spawn ring around the dead body centre, u. */
   spawnRing: 40,
   /** Role 0: seeks the ship, turn limited. Contact kills (every Broodling does). */

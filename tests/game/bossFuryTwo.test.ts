@@ -327,8 +327,8 @@ describe('ember leavers and fury', () => {
 });
 
 describe('brood retune', () => {
-  it('Broodlings 300 (30 hits each), and they start full: barHp equals barMax at the split', () => {
-    expect(BROODLING.hp).toBe(300);
+  it('Broodlings 450 (45 hits each), and they start full: barHp equals barMax at the split', () => {
+    expect(BROODLING.hp).toBe(450);
     const w = bossGame('brood', { par: 1000 });
     park(w, 0, 0);
     const id = enter(w);
