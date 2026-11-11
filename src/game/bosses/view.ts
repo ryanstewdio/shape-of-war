@@ -61,6 +61,8 @@ export interface BossView {
   /** Dash charge aim: seconds of aim left (-1 when not aiming) and the dash heading in radians. */
   dashAim?: number;
   dashHeading?: number;
+  /** Hit feedback (contract stub): seconds since the last landed hit on this guardian, -1 before any. */
+  hitT?: number;
 }
 
 /** Fill out from the boss of the world and return it. No allocation: out is the caller's object. */
