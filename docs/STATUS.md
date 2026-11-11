@@ -10,7 +10,8 @@ History: docs/STATUS-ARCHIVE.md. Decisions: docs/DECISIONS.md (newest rows at th
 
 ## Open checks and items
 - Awaiting Ryan's device check on dev APK b79c954 (sent 2026-11-11): swarm-pierce-arms (PR 43: Pierce and its combos pass through Bulwark's front shield; the sim already built 4 Spindle arms), glow-ember-flame (PR 44: enraged Ember blue flame, crack width capped at 1.6x, sweep arm draw cap 3 raised to 8), proctor-par-audit (PR 45: docs/qa/par-audit.md, no game number changed).
-- Par audit finding: non guardian par is steady (Normal 0.49 of available score); every guardian level is out of reach on Easy, Normal and Hard (Normal 1.73 to 2.25) since the boss calm. Proposal (one par per difficulty on guardian levels, generator V14, V13 frozen) waits for Ryan's ruling.
+- Par audit finding: non guardian par is steady (Normal 0.49 of available score); every guardian level is out of reach on Easy, Normal and Hard (Normal 1.73 to 2.25) since the boss calm. Ryan approved the rule with a tiered fight (70, 90, 120, 150 s).
+- Running (launched 2026-11-11): foundry-guardian-par (Opus: V14 guardian par, tiered fight), swarm-pierce-bulwark (Sonnet: Pierce 2 damage to Bulwarks), chorus-tick-only (Sonnet: old boss hit cue removed). Review, merge, dev APK.
 - Next design pass for Ryan's approval: fury moves for the other seven guardians (Brood, Mirage, Gravitas, Bastion, Tempest, Twins, Prism); Ryan cleared membranes and boss abilities that change barriers for guardian arenas (membranes need the validator M1 rule widened beyond drums).
 - Fight lines (dev timer) not yet recorded by Ryan; hit points tuned from his ratings: Brood 3, Warden 4, Spindle 4, Ember 4 on 9c799e2.
 - Known: old fx:hit boss cue plays alongside the new tick (Ryan rated the sound good). Free Play shares the boss wave budget table.
