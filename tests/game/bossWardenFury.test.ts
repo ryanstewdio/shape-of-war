@@ -376,9 +376,9 @@ describe('warden fury: render contract', () => {
 });
 
 describe('brood first cut retune (Ryan device time)', () => {
-  it('Brood body 202 (x0.44 of 459) and Broodlings 190 (x0.31 of 600, 19 hits each)', () => {
+  it('Brood body 202 (x0.44 of 459); Broodlings 300 since fury two (190 before, 30 hits each)', () => {
     expect(BOSS_TABLE.brood.hp).toBe(202);
-    expect(BROODLING.hp).toBe(190);
-    expect(BROODLING.hp / 10).toBe(19);
+    expect(BROODLING.hp).toBe(300);
+    expect(BROODLING.hp / 10).toBe(30);
   });
 });

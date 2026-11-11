@@ -74,12 +74,17 @@ export function readBoss(w: World, out: BossView): BossView {
   out.barHp = on && bs !== null ? barHpOf(w, bs) : 0;
   out.barMax = on && bs !== null ? barMaxOf(bs) : 0;
   out.broodlings = on && bs !== null && bs.split && bs.splitMax > 0;
-  // Warden fury: written every frame (0, -1 and 0 for any other guardian or no boss).
-  const warden = bs !== null && bs.spec.id === 'warden' && bs.status === 'alive';
-  out.fury = warden && bs !== null ? bs.fury : 0;
-  out.furyT = warden && bs !== null ? bs.furyT : 0;
+  // Fury: written every frame for any guardian on the shared fury (0 for the others or no boss); the
+  // dash aim and heading stay Warden's own (-1 and 0 otherwise).
+  const live = bs !== null && bs.status === 'alive';
+  const fury = live && bs !== null && bs.def.fury === true;
+  out.fury = fury && bs !== null ? bs.fury : 0;
+  out.furyT = fury && bs !== null ? bs.furyT : 0;
+  const warden = live && bs !== null && bs.spec.id === 'warden';
   out.dashAim = warden && bs !== null ? dashAimOf(bs) : -1;
   out.dashHeading = warden && bs !== null ? dashHeadingOf(bs) : 0;
+  // Hit feedback: seconds since the last landed hit, -1 before any (or with no boss alive).
+  out.hitT = live && bs !== null ? bs.hitT : -1;
   if (bs === null || bs.status !== 'alive' || id <= 0 || w.alive[id] !== 1 || w.kind[id] !== Kind.Boss) {
     out.active = false;
     return out;
@@ -105,5 +110,5 @@ export function readBoss(w: World, out: BossView): BossView {
 
 /** A fresh BossView for a caller to keep and reuse (allocates once; call at setup, not per frame). */
 export function createBossView(): BossView {
-  return { active: false, id: 0, mode: 0, phase: 1, hp: 0, maxHp: 0, modeT: 0, x: 0, y: 0, rot: 0, radius: 0, exposed: false, exposedLeft: -1, exposedT: 0, shielded: false, shieldLeft: 0, barOn: false, barHp: 0, barMax: 0, broodlings: false, fury: 0, furyT: 0, dashAim: -1, dashHeading: 0 };
+  return { active: false, id: 0, mode: 0, phase: 1, hp: 0, maxHp: 0, modeT: 0, x: 0, y: 0, rot: 0, radius: 0, exposed: false, exposedLeft: -1, exposedT: 0, shielded: false, shieldLeft: 0, barOn: false, barHp: 0, barMax: 0, broodlings: false, fury: 0, furyT: 0, dashAim: -1, dashHeading: 0, hitT: -1 };
 }

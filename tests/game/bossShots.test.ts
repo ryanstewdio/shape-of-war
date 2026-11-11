@@ -9,7 +9,7 @@ import { damageBoss } from '../../src/game/bosses/core';
 import { EmberMove, speedFor } from '../../src/game/bosses/ember';
 import { hazardTelegraph } from '../../src/game/bosses/kit';
 import { fanHeading, inShotRange, shotSpeed, volleyCount } from '../../src/game/bosses/shots';
-import { armTelegraphNear, liveSweep, pelletEvery } from '../../src/game/bosses/spindle';
+import { armTelegraphNear, liveSweep, NEEDLE_CLOCK_SLOT, pelletEvery } from '../../src/game/bosses/spindle';
 import {
   BOSS_SHOTS,
   BOSS_TABLE,
@@ -76,6 +76,7 @@ function farSpindle(shield = true): World {
   const w = bossGame('spindle', { lives: 9 }, {}, shield);
   park(w, 650, 420);
   enter(w);
+  bs(w).abl[NEEDLE_CLOCK_SLOT] = -1e9; // fury two: needles held, the pellet alone
   return w;
 }
 
@@ -516,6 +517,7 @@ describe('fairness of the shots', () => {
     park(w, 650, 420);
     w.ship.invuln = 0;
     enter(w);
+    bs(w).abl[NEEDLE_CLOCK_SLOT] = -1e9; // fury two: needles held, the pellet alone
     let dodging = 0;
     let dir = 1;
     let shots = 0;

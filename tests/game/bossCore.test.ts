@@ -30,7 +30,7 @@ import { detonate } from '../../src/game/supers';
 import { equipWeapon, weaponState } from '../../src/game/weapons';
 import { Kind } from '../../src/game/world';
 import type { SpawnEntry, WaveSchedule } from '../../src/levelgen/leveldef';
-import { bs, bossGame, count, enter, first, park, run, legacyBossHp } from './bossHelpers';
+import { bs, bossGame, count, enter, first, park, run, legacyBossHp, slay } from './bossHelpers';
 import { DT, idle, makeGame } from './helpers';
 
 // Mechanics tuned on the GW6 hit points (release polish raised the rows; bossFightLength covers them).
@@ -341,7 +341,7 @@ describe('death and reward', () => {
     const score0 = g.score;
     const kills0 = g.kills;
     const mult0 = g.multiplier;
-    expect(damageBoss(w, 99999, 0, 0)).toBe(true);
+    expect(slay(w)).toBe(true); // fury two: the first hit stops at the break
     expect(downs).toEqual([{ id: 'spindle', x, y }]);
     expect(g.score - score0).toBe(2500);
     expect(g.multiplier).toBe(mult0); // never multiplied, no multiplier change from the kill itself
@@ -353,19 +353,22 @@ describe('death and reward', () => {
     expect(readBoss(w, createBossView()).active).toBe(false);
   });
 
-  it('crossing 50 percent emits sim:bossPhase once with the phase count', () => {
+  it('the fury break (stage 1 crack) emits sim:bossPhase once with the phase count', () => {
+    // Fury two: Spindle's phase 2 starts at its fury break (hp 3299 of 5000), not at 50 percent.
     const phases: Events['sim:bossPhase'][] = [];
     bus.on('sim:bossPhase', (p) => phases.push({ ...p }));
     const w = bossGame('spindle');
     const id = enter(w);
-    damageBoss(w, 2500, 0, 0);
-    expect(w.hp[id]).toBe(2500);
+    damageBoss(w, 1700, 0, 0);
+    expect(w.hp[id]).toBe(3300);
     expect(phases).toHaveLength(0);
     damageBoss(w, 1, 0, 0);
     expect(phases).toEqual([{ id: 'spindle', phase: 2, phases: 2 }]);
+    bs(w).fury = 2; // past the break: enraged, the core open again
+    bs(w).open = true;
     damageBoss(w, 10, 0, 0);
     expect(phases).toHaveLength(1);
-    expect(w.hp[id]).toBe(5000 - 2511);
+    expect(w.hp[id]).toBe(5000 - 1711);
   });
 });
 
