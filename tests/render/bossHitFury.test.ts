@@ -195,11 +195,12 @@ describe('glow-hit-feel helpers', () => {
     expect(crackPulse(undefined)).toBe(0);
     expect(crackPulse(Number.NaN)).toBe(0);
   });
-  it('crackStrength adds the pulse and crackWidthMul stays in 1 to 2.6', () => {
+  it('crackStrength adds the pulse and crackWidthMul stays in 1 to 1.6', () => {
     expect(crackStrength(1, 1)).toBeCloseTo(CRACK_GLOW_MIN + CRACK_PULSE_BOOST);
     expect(crackStrength(0.5, 5)).toBe(crackStrength(0.5, 1));
     expect(crackWidthMul(0)).toBe(1);
-    expect(crackWidthMul(99)).toBeCloseTo(2.6);
+    expect(crackWidthMul(99)).toBeCloseTo(1.6);
+    expect(crackWidthMul(99)).toBeLessThanOrEqual(1.6);
     expect(crackWidthMul(crackStrength(0.1, 0))).toBeGreaterThan(crackWidthMul(crackStrength(0.9, 0)));
   });
   it('hit constants are stronger than before and the flash cap is kept', () => {

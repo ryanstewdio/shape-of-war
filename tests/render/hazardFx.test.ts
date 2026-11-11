@@ -169,8 +169,8 @@ describe('the five primitives', () => {
     }
   });
 
-  it('sweep draws w.vy arms (1 to 3) evenly spaced from w.rot', () => {
-    expect([0, 1, 2, 3, 7].map(sweepArms)).toEqual([1, 1, 2, 3, 3]);
+  it('sweep draws w.vy arms (1 to 8) evenly spaced from w.rot', () => {
+    expect([0, 1, 2, 3, 4, 7, 20].map(sweepArms)).toEqual([1, 1, 2, 3, 4, 7, 8]);
     expect(sweepArmAngle(0.5, 0, 2)).toBe(0.5);
     expect(sweepArmAngle(0.5, 1, 2)).toBeCloseTo(0.5 + Math.PI, 9);
     for (const arms of [1, 2, 3]) {

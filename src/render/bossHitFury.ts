@@ -180,7 +180,10 @@ export function crackStrength(share: number, pulse: number): number {
   return crackGlow(share) + CRACK_PULSE_BOOST * Math.min(1, Math.max(0, fin(pulse, 0)));
 }
 
-/** Pure: width multiplier of the crack glow strokes (1 dim to 2.6 bright). */
+/** Widest a crack stroke grows, as a multiple of the full health width (glow-ember-flame). */
+export const CRACK_WIDTH_MAX = 1.6;
+
+/** Pure: width multiplier of the crack strokes (1 dim to CRACK_WIDTH_MAX bright); brightness grows more. */
 export function crackWidthMul(strength: number): number {
-  return 1 + (Math.min(1.8, Math.max(0, fin(strength, 0))) / 1.8) * 1.6;
+  return 1 + (Math.min(1.8, Math.max(0, fin(strength, 0))) / 1.8) * (CRACK_WIDTH_MAX - 1);
 }

@@ -147,9 +147,12 @@ export function sweepArmAngle(rot: number, k: number, n: number): number {
   return rot + (k * Math.PI * 2) / arms;
 }
 
-/** Pure: arm count from w.vy (1 to 3). */
+/** Most sweep arms drawn (glow-ember-flame: was 3, so an enraged Spindle's fourth arm vanished). */
+export const SWEEP_ARMS_MAX = 8;
+
+/** Pure: arm count from w.vy (1 to SWEEP_ARMS_MAX). */
 export function sweepArms(vy: number): number {
-  return clampNum(Math.round(Number.isFinite(vy) ? vy : 1), 1, 3);
+  return clampNum(Math.round(Number.isFinite(vy) ? vy : 1), 1, SWEEP_ARMS_MAX);
 }
 
 /** Pull ripples move inward this many times per second; two are on screen at once. */
