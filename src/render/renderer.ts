@@ -724,6 +724,25 @@ import {
   windowShare,
   type Shard,
 } from './bossShell';
+// Warden fury (glow-warden-fury): break shake and flash, hot red enraged form, spikes, dash aim.
+import {
+  AIM_DASH_U,
+  AIM_GAP_U,
+  AIM_WIDTH,
+  FURY_SPIKES,
+  aimBlink,
+  aimLength,
+  aimOn,
+  furyGlowMul,
+  furyHotRed,
+  furyPulseAlpha,
+  furyShake,
+  furySpike,
+  furySpikeLen,
+  furyStage,
+  furyTint,
+  whiteSpec,
+} from './wardenFury';
 import type { ShapePrim } from './shapeSpecs';
 import { createEnemyBulletLayer } from './enemyBullets';
 import type { EnemyBulletFrame, EnemyBulletsLike } from './enemyBulletFx';
@@ -1268,6 +1287,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   });
   const rings = new Graphics({ label: 'rings' });
   const ringGlow = new Graphics({ label: 'ringGlow' });
+  // Warden fury: the dash charge aim line (wardenFury.ts), drawn through the drum pen on a drum.
+  const dashAimG = new Graphics({ label: 'dashAim' });
   const sticks = new Graphics({ label: 'sticks' });
   // v2 wave C layers. The wall pulse geometry is drawn once in white per arena or neon change and
   // driven per frame by alpha and tint only; the others redraw only while they hold content.
@@ -1292,7 +1313,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const cueBuf = createSpriteBuf(EXPOSE_SPRITE_CAP);
 
   bloomLayer.addChild(lattice.glow, wallGlow, drumObsGlow, membraneGlowG, streakGlowG, wallPulse, wallFlash, comets, glowSprites, particles, trails, pulseLayer, enemyFxGlow, ringGlow);
-  lines.addChild(walls, drumObs, membraneG, streakG, floor, hazardLayer.container, enemyFx, entities, cueLayer.container, bullets, enemyBulletLayer.layer.container, rings);
+  lines.addChild(walls, drumObs, membraneG, streakG, floor, hazardLayer.container, enemyFx, entities, cueLayer.container, bullets, enemyBulletLayer.layer.container, rings, dashAimG);
   gridLayer.addChild(lattice.dust, troughShade, grid, lattice.lines);
   world.addChild(gridLayer, bloomLayer, lines);
   app.stage.addChild(world, sticks);
@@ -1570,10 +1591,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       { layer: cueLayer.container, scale: true },
       { layer: enemyBulletLayer.layer.container, scale: true },
     ],
-    freeform: [rings, ringGlow, enemyFx, enemyFxGlow, wallFlash, sawG, novaG, snakeG, stormG, shardG, droneFx, bossUnder, bossOver],
+    freeform: [rings, ringGlow, dashAimG, enemyFx, enemyFxGlow, wallFlash, sawG, novaG, snakeG, stormG, shardG, droneFx, bossUnder, bossOver],
     // G9 and G10: every free form layer draws through the drum itself (drumPen.ts), owner by owner
     // or sample by sample, so the drum pass never linearises one. The tilt pass still projects them.
-    drumDrawn: [sawG, novaG, snakeG, rings, ringGlow, enemyFx, enemyFxGlow, wallFlash, stormG, shardG, droneFx, bossUnder, bossOver],
+    drumDrawn: [sawG, novaG, snakeG, rings, ringGlow, dashAimG, enemyFx, enemyFxGlow, wallFlash, stormG, shardG, droneFx, bossUnder, bossOver],
   });
   // Look v33: the damaged boss body. A copy of the body context with the removed arcs cut out of
   // the geometry (bossDamage.ts damagedSpec), and its glow texture, rebuilt only when the slot, the
@@ -1582,6 +1603,19 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let dmgTex: Texture | null = null;
   let dmgKey = -1;
   let dmgTexKey = -1;
+  // Warden fury: the all white body (wardenFury.ts whiteSpec, cracks included) so the view tint
+  // carries blue to hot red, and its glow texture. Same keys and invalidation as the damaged body.
+  let furyCtx: GraphicsContext | null = null;
+  let furyTex: Texture | null = null;
+  let furyKey = -1;
+  let furyTexKey = -1;
+  /** Fury stage and seconds into it this frame (0 with no fury: everything draws as before). */
+  let furyNow: 0 | 1 | 2 = 0;
+  let furyTNow = 0;
+  const furyOff: Offset = { x: 0, y: 0 };
+  const furyPts = new Float32Array(6);
+  const aimPen = createDrumPen();
+  let dashAimShown = false;
   let levelSeed = 0;
   const dmgCol: DamageColours = { edge: 0xffffff, stub: 0xffffff, frag: 0xffffff };
   const DAMAGE_ACCENT_PARTS: readonly AccentPart[] = ['core', 'rim', 'tips', 'axis', 'tail', 'turrets', 'pods', 'sparks', 'split', 'centre', 'coreA', 'coreB'];
@@ -1894,6 +1928,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     if (dmgTex !== null) dmgTex.destroy(true);
     dmgTex = null;
     dmgTexKey = -1;
+    if (furyTex !== null) furyTex.destroy(true);
+    furyTex = null;
+    furyTexKey = -1;
     glowTexturesDirty = false;
   }
 
@@ -2413,6 +2450,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       if (dmgCtx !== null) retiredContexts.push(dmgCtx);
       dmgCtx = null;
       dmgKey = -1;
+      if (furyCtx !== null) retiredContexts.push(furyCtx);
+      furyCtx = null;
+      furyKey = -1;
       redrawWalls(r);
     },
     tint(): void {
@@ -2809,8 +2849,16 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       bossShake.x = 0;
       bossShake.y = 0;
       resetShellState(shell);
+      furyNow = 0;
+      furyTNow = 0;
+      furyOff.x = 0;
+      furyOff.y = 0;
       return;
     }
+    // Warden fury: stage and time from the view (absent or 0 means none, drawn as before).
+    furyNow = furyStage(bossView.fury);
+    furyTNow = furyNow === 0 ? 0 : (bossView.furyT ?? 0);
+    furyShake(furyNow, furyTNow, furyOff);
     // GW2: the shield shell follows the view flag or 'sim:bossShield'; the window uses exposedLeft.
     stepShell(shell, bossView.shielded === true, bossView.exposedLeft ?? -1, dt);
     bossIdx = bossIndex(bossView.id);
@@ -3781,6 +3829,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
    * the removed arcs cut out of the geometry. Rebuilt only when the slot or stage changes.
    */
   function bossBodyContext(slot: number): GraphicsContext {
+    if (furyNow !== 0) return furyContext(slot);
     if (bossCracks.stage < 1 || bossCracks.arcCount < 1) return contextForSlot(slot);
     const key = slot * 3 + bossCracks.stage;
     if (dmgCtx === null || dmgKey !== key) {
@@ -3791,8 +3840,38 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     return dmgCtx;
   }
 
+  /** Warden fury: the body spec (cracked or whole) with every colour white, for the fury tint. */
+  function furySpecFor(slot: number): ShapeSpec {
+    const cracked = bossCracks.stage >= 1 && bossCracks.arcCount >= 1;
+    return whiteSpec(cracked ? damagedSpecFor(slot) : specForSlot(slot));
+  }
+
+  /** Warden fury: the white body context, rebuilt only when the slot or crack stage changes. */
+  function furyContext(slot: number): GraphicsContext {
+    const key = slot * 3 + Math.max(0, Math.min(2, bossCracks.arcCount >= 1 ? bossCracks.stage : 0));
+    if (furyCtx === null || furyKey !== key) {
+      if (furyCtx !== null) retiredContexts.push(furyCtx);
+      furyCtx = buildContext(furySpecFor(slot), currentRender, palette);
+      furyKey = key;
+    }
+    return furyCtx;
+  }
+
+  /** Warden fury: the white body glow texture (tinted by the fury colour). */
+  function furyGlowTexture(slot: number): Texture {
+    const key = (slot * 3 + Math.max(0, Math.min(2, bossCracks.arcCount >= 1 ? bossCracks.stage : 0))) * 2 + (bloomOn ? 1 : 0);
+    if (furyTex === null || furyTexKey !== key) {
+      const old = furyTex;
+      furyTex = makeKindTexture(slot, !bloomOn, furySpecFor(slot));
+      furyTexKey = key;
+      if (old !== null) retiredTextures.push(old);
+    }
+    return furyTex;
+  }
+
   /** The boss glow texture for slot: shared before any crack, else the damaged copy's. */
   function bossGlowTexture(slot: number): Texture {
+    if (furyNow !== 0) return furyGlowTexture(slot);
     if (bossCracks.stage < 1 || bossCracks.arcCount < 1) return glowTextureFor(slot);
     const key = (slot * 3 + bossCracks.stage) * 2 + (bloomOn ? 1 : 0);
     if (dmgTex === null || dmgTexKey !== key) {
@@ -4705,6 +4784,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         }
       }
       drawShell(g, u, rs, lw, bodyA, timeSec);
+      if (furyNow !== 0) drawFurySpikes(g, rs, lw, bodyA);
       // Hit flash: a 60 ms white outline on every body.
       const fa = hitFlashAlpha(bossFlashAge) * bodyA;
       if (fa > 0) {
@@ -4748,6 +4828,69 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
   }
 
+  /** Warden fury: corner spikes grown out of the shell (length by stage), in the fury colour. */
+  function drawFurySpikes(g: Graphics, rs: number, lw: number, bodyA: number): void {
+    const len = furySpikeLen(furyNow, furyTNow);
+    if (len <= 0) return;
+    const col = furyTint(furyNow, furyTNow, palette[bossColourOf(bossIdx)], palette.red);
+    const a = bodyA * furyPulseAlpha(furyNow, furyTNow);
+    const x = bodyX[0] ?? 0;
+    const y = bodyY[0] ?? 0;
+    const rot = bodyRot[0] ?? 0;
+    for (let k = 0; k < FURY_SPIKES; k++) {
+      furySpike(k, rot, rs, len, furyPts);
+      g.moveTo(x + (furyPts[0] ?? 0), y + (furyPts[1] ?? 0))
+        .lineTo(x + (furyPts[2] ?? 0), y + (furyPts[3] ?? 0))
+        .lineTo(x + (furyPts[4] ?? 0), y + (furyPts[5] ?? 0))
+        .closePath();
+    }
+    g.fill({ color: col, alpha: 0.3 * a }).stroke({ width: lw * 1.2, color: col, alpha: a, join: 'miter' });
+  }
+
+  /**
+   * Warden fury: the dash charge aim, a thin red dashed line from the Warden along dashHeading to
+   * the arena edge, blinking, while dashAim is 0 or more. Flat and tilted levels draw arena units
+   * (the tilt pass projects the layer); a drum samples each dash through the drum pen.
+   */
+  function drawDashAim(timeSec: number): void {
+    const g = dashAimG;
+    const on = bossView.active && bossSeen && aimOn(bossView.dashAim);
+    if (!on) {
+      if (dashAimShown) {
+        g.clear();
+        dashAimShown = false;
+      }
+      return;
+    }
+    g.clear();
+    dashAimShown = true;
+    const heading = bossView.dashHeading ?? 0;
+    const dx = Math.cos(heading);
+    const dy = Math.sin(heading);
+    const x = bossDrawX;
+    const y = bossDrawY;
+    const wrapU = drum !== null && !drum.trough;
+    const len = aimLength(x, y, heading, arena, wrapU);
+    const d0 = bossBodyR(bossIdx) * (bodyScale[0] ?? 1) * 1.1;
+    if (len <= d0) return;
+    const col = furyHotRed(palette.red);
+    const a = aimBlink(timeSec);
+    const step = AIM_DASH_U + AIM_GAP_U;
+    if (drum) {
+      penBegin(aimPen, g, drum);
+      for (let d = d0; d < len; d += step) {
+        traceRay(aimPen, traceReset(fxTrace), x, y, dx, dy, d, Math.min(len, d + AIM_DASH_U));
+        penStrokeTrace(aimPen, fxTrace, AIM_WIDTH, col, a, 'round');
+      }
+      return;
+    }
+    for (let d = d0; d < len; d += step) {
+      const e = Math.min(len, d + AIM_DASH_U);
+      g.moveTo(x + dx * d, y + dy * d).lineTo(x + dx * e, y + dy * e);
+    }
+    g.stroke({ width: AIM_WIDTH, color: col, alpha: a, cap: 'round' });
+  }
+
   function drawEntities(w: World, alpha: number, timeSec: number, dt: number): void {
     growPools(w.cap);
     growEnrageTrack(enraged, w.cap);
@@ -4779,11 +4922,14 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     // ED1 cue: while exposed (or reassembling) the boss draws its coreless white shell, tinted the
     // tier colour or, in the flicker's on share while exposed, hot red.
     const coreless = bossCoreless();
+    const furyCol = furyNow !== 0 ? furyTint(furyNow, furyTNow, palette[bossColourOf(bossIdx)], palette.red) : 0xffffff;
     const bossTint = coreless
       ? exposed && shellHot(exposeAge)
         ? mixRgb(palette.red, 0xffffff, flickerRedWhite(bossTier))
-        : palette[bossColourOf(bossIdx)]
-      : 0xffffff;
+        : furyNow !== 0
+          ? furyCol
+          : palette[bossColourOf(bossIdx)]
+      : furyCol;
     let live = 0;
     prismDrawn = false;
     // G6 tilt-depth: volumes only while a flat level is tilted; Off (and the drum) never draw any.
@@ -4967,6 +5113,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         // Exposed shake: the drawn body and its glow move, bossDrawX and the sim stay put.
         ev.x += bossShake.x;
         ev.y += bossShake.y;
+        // Warden fury: the break shake moves the drawn body only; the enraged pulse dims it.
+        if (furyNow !== 0) {
+          ev.x += furyOff.x;
+          ev.y += furyOff.y;
+          ev.alpha *= furyPulseAlpha(furyNow, furyTNow);
+        }
         bossSeen = true;
         bodyX[0] = ev.x;
         bodyY[0] = ev.y;
@@ -4975,6 +5127,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const phaseEvent = bossPhaseAge < PHASE_FLASH_SEC ? 1 - bossPhaseAge / PHASE_FLASH_SEC : 0;
         const phaseMode = bossView.active ? bossPhaseFlash(bossView.mode, bossView.modeT) : 0;
         ev.glowMul = bossGlowMul(bossHitAge, phaseEvent > phaseMode ? phaseEvent : phaseMode);
+        if (furyNow !== 0) ev.glowMul *= furyGlowMul(furyNow, furyTNow);
         if (bossView.active) bossTier2Body(w, i, bossDrawX, bossDrawY, ev.rot, scale, dt);
         // Wave C: the Bastion keep burns hotter as turrets fall; a surviving twin is hot and fluttering.
         if (bossView.active && bossIdx === BOSS_BASTION) {
@@ -5123,6 +5276,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     drawShardShimmer(timeSec);
     drawNovaSnakes(w, alpha, timeSec);
     drawBossIdentity(timeSec);
+    drawDashAim(timeSec);
     drawDroneMode(arm.mode);
     drawWellFx();
     drawPond();
