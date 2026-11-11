@@ -1,35 +1,29 @@
 Kickoff: 2026-10-27T08:49:39Z
-History before 2026-11-08 (gate log, merged branches with spend, old bugs): docs/STATUS-ARCHIVE.md, frozen.
+History: docs/STATUS-ARCHIVE.md. Decisions: docs/DECISIONS.md (newest rows at the bottom).
 
-## Current position (2026-11-08)
-- Phase: tester release live, gathering feedback. Next phase being planned with Ryan: going public (wider audience, revenue). Nothing for that phase is approved yet.
-- Live build: 585f174 on main, deployed to https://stoopstoop.github.io/shape-of-war/ (GitHub Pages, Actions deploy.yml runs npm test then build). Tags: v1.0.0, v1.1.0, v2.0.0, v2.1.0, v3.0.0, tester-1 (d9bfb54).
-- Tests: 4852 pass, 1 skipped, 2 todo. Accepted exception: tests/levelgen/generator.test.ts "200 levels under 500 ms" flakes locally (CI budget 2500 ms).
-- Generator: GENERATOR_VERSION_V9 is the default (V1 to V8 configs frozen, bit identical).
-- Name: Shape Legend (ruled 2026-11-09). Rename wave in flight.
-- Builders: cloud sessions on Ryan's Max account (claude --cloud through the dispatcher). Console API credit about $5 left (valid to 2026-11-29), used only for tiny Sonnet jobs. Ryan's Max usage resets Tuesday; check headroom before large waves.
+## Current position (2026-11-11)
+- Game: Shape Legend. Repo ryanstewdio/shape-of-war (public). Live web: https://play.shapelegend.com (deploy on every merge to main). Android: Capacitor debug APKs built on the Mac by dispatcher shell jobs; Ryan's test APKs are dev builds (npm run build:cap:dev: dev items on, Settings "Unlock all levels", fight timer on results and as a 6 s toast).
+- Main is protected: PR only, required check "gate", branch up to date, merge commits only. Morpheus merges builder PRs with .agents/merge-pr.sh; only Ryan merges Furiosa cx/* PRs.
+- Generator: V13 is current for Adventure guardian levels from 10 (bigger arenas); V12 troughs from 24; V1 to V12 frozen.
+- Guardians: Shield (blue) over Health (red) bar, crack at the Shield end. Fury mid point (shared, src/game/bosses/fury.ts): 4.5 s invincible break, then enraged. Live for Warden (dash charge), Spindle (needle arms, 4 arms enraged), Ember (enraged Leavers on stun). Regular enemies after a guardian enters: Easy 0, Normal 25 percent, Hard 50 percent, Insane 60 percent. Pierce 1.5x on guardians. Hit feedback: flash, sparks, tick, crack glow.
+- Furiosa lane live: PR 15, 20 and 27 merged; publishes through the GitHub connector only (never git push); runs unattended ("Approve for me", ruled 2026-11-11); issues stay test only or isolated files; checkout starts at 8ba70ea, cause unknown.
 
 ## Open checks and items
-- Ripple tune on 585f174 (Ryan 2026-11-08): push 3.5, sound 3, audible only somewhat. His suggestion, not yet briefed: a "pixelated" sound with a short decay and release. Bosses never drowned out.
-- Half drum (curved trough that does not wrap, gravity grows on steeper ground, late levels only): planned after the Tuesday 2026-11-10 Max reset. A reminder fires in the orchestrator session at 10:00 Abu Dhabi.
-- Bombs reset Gravity wells and make no ripple (design, Ryan has not ruled).
+- Running (launched 2026-11-11): swarm-pierce-arms (Spindle 4th arm in the sim, Pierce through Bulwark shield), glow-ember-flame (blue flame enraged Ember, thinner cracks, Spindle arm drawing), proctor-par-audit (report and proposal only). Review, merge, dev APK, device check.
+- Next design pass for Ryan's approval: fury moves for the other seven guardians (Brood, Mirage, Gravitas, Bastion, Tempest, Twins, Prism); Ryan cleared membranes and boss abilities that change barriers for guardian arenas (membranes need the validator M1 rule widened beyond drums).
+- Fight lines (dev timer) not yet recorded by Ryan; hit points tuned from his ratings: Brood 3, Warden 4, Spindle 4, Ember 4 on 9c799e2.
+- Known: old fx:hit boss cue plays alongside the new tick (Ryan rated the sound good). Free Play shares the boss wave budget table.
+- Later queue: hunt objective, gems wiring to results and storage, native icons and splash, Dependabot alerts, Foundry clean up of the old 'every3' levelgen bosses, ripple "pixelated short decay" sound idea.
 - Not yet tested: iPhone Safari install and audio, small phone layout, fps at Insane plus Swarm.
-- Known gaps: low effects tier drum grid does not bend under a ripple; a How to page turn may tick once; MORE cue can sit over the last visible line.
-- HUD dev line (Par and level hash) stays visible by Ryan's choice (2026-11-07).
-- Codex lane: Ryan's separate setup under a different GitHub owner. Nothing from any Claude session goes into ChatGPT or Codex.
 
-## Recent gates (newest first; older ones in the archive)
+## Recent gates (newest first)
 | Gate | Date | Result | Evidence from Ryan |
 |---|---|---|---|
-| Ripple tune | 2026-11-08 | pass with note | 585f174: push 3.5, sound 3 (somewhat audible, wants a pixelated short decay), never louder than boss sounds |
-| T4 nova ripple | 2026-11-07 | partial | c7aa3be: ripple on nova kill, ship and enemies pushed, none before nova, look 4, sound 2 (too quiet), push 2, drum seam yes, 60 fps |
-| T3 | 2026-11-07 | partial | 1f1efb5: Brood at 5 (3 on Easy), boss goal intro, bar and results right, level 8 drum, Warden at 10; scheduled ripples underwhelming, dev pond 59 fps |
-| Scroll bar | 2026-11-07 | pass | 9bb4ebe: bar on all scrolling screens, drag and page, tick sound 4, look 4, nothing covered |
-| Score goal | 2026-11-07 | pass | a9cd3fe: goal under par, follows difficulty, score levels run the full timer by design |
-| Tester release | 2026-11-05 | pass | d9bfb54 tagged tester-1 |
-
-## Merged since the archive
-- 2026-11-07: ledger-scrollbar, chorus-scroll-tick (9bb4ebe); T3: foundry-t3, forge-ripple, glow-ripple, chorus-ripple, ledger-boss-goal, glue 1f1efb5; T4: forge-nova-ripple, foundry-ripple-off, glow-nova-ripple, chorus-nova-ripple, glue c7aa3be; forge-ripple-tune (Console Sonnet $0.25), glue 585f174.
+| Boss calm and arenas | 2026-11-11 | pass with notes | 9c799e2: Brood 3, Spindle 4, arena right, needles fair, enraged Spindle 3 arms (bug), Ember 4, Leavers yes, calmer waves yes, hits readable, cracks too thick in places, 59 fps |
+| Fury two | 2026-11-11 | partial | ecde5b2: Brood 0:22 rated 1, refill yes; levels after 10 too hard (swarm plus small arena); hits hard to read; 60 fps |
+| Warden fury | 2026-11-11 | pass | 1580146: unlock yes, one bar yes, Warden fun 4, break, enraged form and aim line clear |
+| Boss health | 2026-11-11 | partial | 1d724e3: footer right over the old app, bar on the wrong element, Brood 150 to 170 s, Warden 37 s, Pierce yes, trough 60 fps |
+| Trough and native | 2026-11-10 | pass | 6987c7c after clearing data: troughs, pull 3, 3D 4; Auto Backup cause found |
 
 ## Next action
-Main is protected (PR only, gate green, merge commits). Merged 2026-11-10 and 11 via PRs: forge-trough-tune (11), glow-trough-depth (12), shipwright-native-sw (13), boss bar stub and briefs (16). Android check on 6987c7c passed (pull 3, 3D 4); Android Auto Backup restored stale WebView data (fix: shipwright-backup-rules). Running: swarm-boss-health (fight lengths 60 s to 2.5 min, pierce 1.5x on guardians, Shield then Health bars, Broodlings bars), ledger-boss-bar, shipwright-backup-rules. Furiosa lane live: PR 15, 20 and 27 merged; publishes through the GitHub connector only (never git push); runs unattended ("Approve for me", ruled 2026-11-11); issues stay test only or isolated files; checkout starts at 8ba70ea, cause unknown. Next: hunt objective, gems wiring, native icons and splash. Game URL https://play.shapelegend.com; repo ryanstewdio/shape-of-war.
+Review and merge swarm-pierce-arms, glow-ember-flame and proctor-par-audit when Ryan says pushed; build a dev APK; device check (enraged Spindle 4 arms, Ember blue flame, crack width, Bulwark with Pierce, fight lines). Bring the par audit proposal and the seven guardian fury draft to Ryan for approval before any build.
