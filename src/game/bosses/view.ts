@@ -51,6 +51,15 @@ export interface BossView {
   barMax?: number;
   /** True after Brood split: the bar is the Broodlings' own, labelled "Broodlings". */
   broodlings?: boolean;
+  /**
+   * Warden fury (contract stub, Ryan 2026-11-11). 0 none, 1 the invincible break, 2 enraged. furyT is
+   * the seconds into the current stage. Optional so existing literals compile; Swarm writes them.
+   */
+  fury?: 0 | 1 | 2;
+  furyT?: number;
+  /** Dash charge aim: seconds of aim left (-1 when not aiming) and the dash heading in radians. */
+  dashAim?: number;
+  dashHeading?: number;
 }
 
 /** Fill out from the boss of the world and return it. No allocation: out is the caller's object. */
