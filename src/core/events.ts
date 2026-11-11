@@ -121,6 +121,13 @@ export interface Events {
   'sim:saw': { on: boolean };
   /** Swarm to Glow and Chorus (GW2 contract stub): a boss shield went up or down at (x, y). */
   'sim:bossShield': { id: BossId; up: boolean; x: number; y: number };
+  /**
+   * Swarm to Glow, Chorus and Ledger (Warden fury contract stub, Ryan 2026-11-11). 'break': the Shield
+   * bar emptied, the guardian is invincible for sec seconds while it shakes and transforms. 'on': the
+   * break ended, the guardian is enraged (faster, new ability) until it dies. Named fury so it never
+   * clashes with the old ENRAGE_AFTER_SEC enrage or the membrane 'sim:enrage'.
+   */
+  'sim:bossFury': { id: BossId; stage: 'break' | 'on'; sec: number; x: number; y: number };
   /** Forge to Glow and Chorus (R2 contract stub): an enemy passed through a membrane and is now enraged (hot red, faster). */
   'sim:enrage': { id: number; x: number; y: number };
   /** Forge to Glow and Chorus (R2 contract stub): an open drum drift burst starts in inSec seconds (telegraph). */
