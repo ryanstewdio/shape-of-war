@@ -215,7 +215,7 @@ describe('fx:hit payload', () => {
     expect(hits).toHaveLength(3);
   });
 
-  it('a pierce bullet reports a hit per enemy it damages and a block when the shield stops it', () => {
+  it('a pierce bullet reports a hit per enemy it damages; a Bulwark shield blocks a spread bullet but not Pierce', () => {
     const { w } = makeGame();
     const { hits } = record();
     const a = put(w, pinwheel.def, 200, 0);
@@ -232,10 +232,20 @@ describe('fx:hit payload', () => {
     const r2 = record();
     const shield = put(w2, bulwark.def, 300, 0);
     w2.rot[shield] = Math.PI;
-    const pb = spawnBullet(w2.bullets, 282, 0, 0, 0, 1);
-    armPierce(w2.bullets, pb);
+    const sb = spawnBullet(w2.bullets, 282, 0, 0, 0, 1);
     bulletHits(w2);
     expect(r2.hits).toEqual([{ x: 282, y: 0, kind: Kind.Bulwark, id: shield, blocked: true }]);
+
+    bus.clear();
+    const { w: w3 } = makeGame();
+    const r3 = record();
+    const shield3 = put(w3, bulwark.def, 300, 0);
+    w3.rot[shield3] = Math.PI;
+    const pb = spawnBullet(w3.bullets, 282, 0, 0, 0, 1);
+    armPierce(w3.bullets, pb);
+    bulletHits(w3);
+    expect(sb).toBeGreaterThanOrEqual(0);
+    expect(r3.hits).toEqual([{ x: 282, y: 0, kind: Kind.Bulwark, id: shield3, blocked: false }]);
   });
 
   it('an orbit blade on the shield is blocked at the blade; on the back it is a plain hit', () => {
