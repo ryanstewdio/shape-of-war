@@ -26,18 +26,24 @@ export interface BossRow {
  * Warden fight took about 150 s against the 3.5 minute target): every row 40 percent higher, damage
  * windows and patterns unchanged. Before R1: warden 1840, brood 2900, spindle 4227, ember 2289,
  * mirage 4237, gravitas 5430, bastion 3730, tempest 3586, twins 4227, prism 1314.
+ * Boss health (Ryan 2026-11-11: Brood took almost 5 minutes): each fight at Normal on its Adventure
+ * level lasts about 60 to 75 s at tier 1 (Brood, Warden, Spindle), 90 s at tier 2, 2 min at tier 3
+ * and 2.5 min for Prism on the fight bot (tests/game/bossFightBot.ts). Before: warden 2576, brood
+ * 4060, spindle 5918, ember 3205, mirage 5932, gravitas 7602, bastion 5222, tempest 5020, twins
+ * 5918, prism 1840 (every fight 315 to 345 s on the bot). Brood's row is its body only; its
+ * Broodlings add BROODLING.hp each.
  */
 export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
-  warden: { tier: 1, hp: 2576, phases: 2, radius: 56, colour: 'bossBlue' },
-  brood: { tier: 1, hp: 4060, phases: 2, radius: 52, colour: 'bossGreen' },
-  spindle: { tier: 1, hp: 5918, phases: 2, radius: 48, colour: 'bossYellow' },
-  ember: { tier: 2, hp: 3205, phases: 3, radius: 44, colour: 'bossOrange' },
-  mirage: { tier: 2, hp: 5932, phases: 3, radius: 50, colour: 'bossMagenta' },
-  gravitas: { tier: 2, hp: 7602, phases: 3, radius: 60, colour: 'bossViolet' },
-  bastion: { tier: 3, hp: 5222, phases: 3, radius: 70, colour: 'bossRed' },
-  tempest: { tier: 3, hp: 5020, phases: 3, radius: 46, colour: 'bossRed' },
-  twins: { tier: 3, hp: 5918, phases: 2, radius: 44, colour: 'bossRed' },
-  prism: { tier: 4, hp: 1840, phases: 4, radius: 90, colour: 'bossPrism' },
+  warden: { tier: 1, hp: 519, phases: 2, radius: 56, colour: 'bossBlue' },
+  brood: { tier: 1, hp: 459, phases: 2, radius: 52, colour: 'bossGreen' },
+  spindle: { tier: 1, hp: 1350, phases: 2, radius: 48, colour: 'bossYellow' },
+  ember: { tier: 2, hp: 822, phases: 3, radius: 44, colour: 'bossOrange' },
+  mirage: { tier: 2, hp: 1620, phases: 3, radius: 50, colour: 'bossMagenta' },
+  gravitas: { tier: 2, hp: 1704, phases: 3, radius: 60, colour: 'bossViolet' },
+  bastion: { tier: 3, hp: 1833, phases: 3, radius: 70, colour: 'bossRed' },
+  tempest: { tier: 3, hp: 1832, phases: 3, radius: 46, colour: 'bossRed' },
+  twins: { tier: 3, hp: 2250, phases: 2, radius: 44, colour: 'bossRed' },
+  prism: { tier: 4, hp: 844, phases: 4, radius: 90, colour: 'bossPrism' },
 };
 
 /** Damage per hit against a boss or a boss part, in tenths of a hit (boss rule 8). */
@@ -49,6 +55,13 @@ export const BOSS_DAMAGE = {
   drone: 10,
   ram: 20,
 } as const;
+
+/**
+ * Boss health (Ryan 2026-11-11): Pierce does this times its BOSS_DAMAGE to guardian bodies, cores
+ * and parts (Broodlings, pods, turrets, Hornets). Regular enemies are unchanged. Read only through
+ * bossDamageForStyle.
+ */
+export const PIERCE_GUARDIAN_MULT = 1.5;
 
 /** Orbit blade rest after hitting a boss body, s (0.12 s against everything else). */
 export const ORBIT_BOSS_COOLDOWN = 0.25;
@@ -182,8 +195,6 @@ export const HORNET = {
 export const GRAVITANT = {
   count: 2,
   radius: 28,
-  /** 160 hits each, stored as tenths. */
-  hp: 1600,
   /** Orbit radius around the pair centre, the speed the orbit opens at, and the spin, rad/s. */
   orbit: 70,
   orbitGrow: 60,

@@ -10,10 +10,12 @@
 // Scratch: t0 add clock, t1 open seconds left, t2 regrow countdown, n1 0 shielded or 1 broken,
 // angle pod orbit angle, n0 move state, t3 move state clock, dir locked charge heading, n2 marker id.
 //
-// Split (G3C): at the stage 2 crack (below 33 percent) the body and any pods vanish and three
-// Broodlings take over (Kind.BossPart, PartType.Broodling, 20 u, 60 hits each, slot = role): slot 0
-// chases the ship, slot 1 orbits it at 200 u and lays Slime every 2 s, slot 2 flees and launches
-// Darts every 4 s. Contact with any Broodling kills. The fight ends with the third one, once.
+// Split (G3C; boss health, Ryan 2026-11-11): once the body has emptied both its Shield and Health
+// bars (clampDamage holds it at SPLIT_HP, never a kill) the body and any pods vanish and three
+// Broodlings take over (Kind.BossPart, PartType.Broodling, 20 u, 60 hits each at Normal times hpMul
+// and bossScale, slot = role): slot 0 chases the ship, slot 1 orbits it at 200 u and lays Slime
+// every 2 s, slot 2 flees and launches Darts every 4 s. They carry their own bar (bs.splitMax).
+// Contact with any Broodling kills. The fight ends with the third one, once.
 // Split scratch: t0 slime clock, t1 dart clock, angle the orbiter's angle around the ship.
 import { bus } from '../../core/events';
 import * as dart from '../enemies/dart';
@@ -27,6 +29,7 @@ import { bossOf, type BossState } from './state';
 import { BROOD, BROODLING, MAX_ADDS, MAX_PARTS } from './table';
 import { BossMode, PartType, type BossDef } from './types';
 import { removeEntity } from '../remove';
+import { difficultyOf } from '../difficulty';
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
@@ -279,7 +282,29 @@ export function fleeHeading(away: number, toCentre: number, fromCentre: number):
   return wrapPi(away + side * k);
 }
 
-/** Split the body into three Broodlings. Called once, from the stage 2 crack. */
+/** Body hit points (tenths) Brood is held at when both its bars are empty: it splits there, never dies. */
+export const SPLIT_HP = 1;
+
+/**
+ * Pure: stored hit points of one Broodling for the boss's hpMul times bossScale (mul) and its armour:
+ * BROODLING.hp scaled like the body, at least 1. Armour already stretches every hit on a split
+ * part, so it is divided back out.
+ */
+export function broodlingHp(mul: number, armour: number): number {
+  const m = Number.isFinite(mul) && mul > 0 ? mul : 1;
+  const a = armour > 1 ? armour : 1;
+  const v = Math.round((BROODLING.hp * m) / a);
+  return v < 1 ? 1 : v;
+}
+
+/** A hit never takes the body below SPLIT_HP: the last tenth goes to the split, not a kill. */
+export function clampDamage(w: World, id: number, bs: BossState, amount: number): number {
+  if (bs.split) return amount;
+  const room = (w.hp[id] ?? 0) - SPLIT_HP;
+  return amount < room ? amount : room > 0 ? room : 0;
+}
+
+/** Split the body into three Broodlings. Called once, when the body's bars are empty. */
 function splitBody(w: World, id: number, bs: BossState): void {
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
@@ -299,23 +324,28 @@ function splitBody(w: World, id: number, bs: BossState): void {
   bs.mode = BossMode.Attacking;
   bs.t0 = BROODLING.firstDelay;
   bs.t1 = BROODLING.firstDelay;
+  const hp = broodlingHp(bs.spec.hpMul * difficultyOf(w).bossScale, bs.armour);
   let made = 0;
+  let sum = 0;
   for (let k = 0; k < BROODLING.count; k++) {
     const a = lead + (k * TAU) / BROODLING.count;
-    const p = spawnPart(w, bs, k, PartType.Broodling, x + Math.cos(a) * BROODLING.spawnRing, y + Math.sin(a) * BROODLING.spawnRing, BROODLING.hp, BROODLING.radius);
+    const p = spawnPart(w, bs, k, PartType.Broodling, x + Math.cos(a) * BROODLING.spawnRing, y + Math.sin(a) * BROODLING.spawnRing, hp, BROODLING.radius);
     if (p < 0) continue;
     w.rot[p] = a;
     made++;
+    sum += hp;
     if (k === BroodlingRole.Orbit) bs.angle = angleToOn(w.surface, w.x[0] ?? 0, w.y[0] ?? 0, w.x[p] ?? 0, w.y[p] ?? 0);
   }
+  bs.splitMax = sum > 0 ? sum : 1;
   bs.splitEv.parts = made;
   bus.emit('sim:bossSplit', bs.splitEv);
 }
 
-/** Core hook after the body took damage and lived: report the cracks, split once at stage 2. */
+/** Core hook after the body took damage and lived: report the cracks, split once both bars are empty. */
 export function cracks(w: World, id: number, bs: BossState): void {
-  crackBody(bs, 0, w.hp[id] ?? 0, bs.maxHp, w.x[id] ?? 0, w.y[id] ?? 0);
-  if (!bs.split && (bs.crack[0] ?? 0) >= 2) splitBody(w, id, bs);
+  const hp = w.hp[id] ?? 0;
+  crackBody(bs, 0, hp, bs.maxHp, w.x[id] ?? 0, w.y[id] ?? 0);
+  if (!bs.split && hp <= SPLIT_HP) splitBody(w, id, bs);
 }
 
 function slotOf(bs: BossState, id: number): number {
@@ -380,4 +410,4 @@ export function stepBroodling(w: World, id: number, dt: number): void {
   }
 }
 
-export const def: BossDef = { reset, step, onPhase, entryHome, cracks };
+export const def: BossDef = { reset, step, onPhase, entryHome, clampDamage, cracks };

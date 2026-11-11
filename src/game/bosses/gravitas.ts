@@ -7,7 +7,8 @@
 // retry the ring recheck.
 //
 // Split (boss abilities wave): at the stage 2 crack the body splits into two half mass wells
-// (Kind.BossPart, PartType.Gravitant, 28 u, 160 hits each, slots 0 and 1) that orbit each other
+// (Kind.BossPart, PartType.Gravitant, 28 u, slots 0 and 1; boss health: the body's remaining hit
+// points shared evenly, so the bar runs on without a drop) that orbit each other
 // round a pair centre seeking the target, each with its own pull at half strength. The rings keep
 // collapsing onto the pair centre. Contact with a Gravitant kills. The fight ends with the second,
 // once; the bar is the sum of the two. Split scratch: t0 ring clock, t1 and t2 pair centre, t3
@@ -21,6 +22,7 @@ import { bossOf, type BossState } from './state';
 import { GRAVITANT, GRAVITAS, HAZARD_RECHECK_SEC, MAX_PARTS } from './table';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
 import { removeEntity } from '../remove';
+import { splitHp } from './tempest';
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
@@ -166,6 +168,7 @@ function pullAt(w: World, id: number): number {
 function splitBody(w: World, id: number, bs: BossState): void {
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
+  const hp = w.hp[id] ?? 0;
   clearHazards(w); // the body pull and any ring go with the body
   for (let k = 0; k < MAX_PARTS; k++) {
     const p = livePart(w, bs, k);
@@ -189,7 +192,7 @@ function splitBody(w: World, id: number, bs: BossState): void {
   bs.retry = 0;
   let made = 0;
   for (let k = 0; k < GRAVITANT.count; k++) {
-    const p = spawnPart(w, bs, k, PartType.Gravitant, x, y, GRAVITANT.hp, GRAVITANT.radius);
+    const p = spawnPart(w, bs, k, PartType.Gravitant, x, y, Math.max(1, splitHp(hp, k, GRAVITANT.count)), GRAVITANT.radius);
     if (p < 0) continue;
     w.rot[p] = lead + k * Math.PI;
     made++;

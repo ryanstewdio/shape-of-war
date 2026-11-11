@@ -16,7 +16,7 @@ import {
   spawnLane,
 } from '../../src/game/bosses/core';
 import { bossOf } from '../../src/game/bosses/state';
-import { BOSS_DAMAGE, BOSS_REWARD_GEOMS, BOSS_TABLE, ENRAGE_AFTER_SEC, ORBIT_BOSS_COOLDOWN, STAGGER_SEC, maxHpFor } from '../../src/game/bosses/table';
+import { BOSS_DAMAGE, BOSS_REWARD_GEOMS, BOSS_TABLE, ENRAGE_AFTER_SEC, ORBIT_BOSS_COOLDOWN, PIERCE_GUARDIAN_MULT, STAGGER_SEC, maxHpFor } from '../../src/game/bosses/table';
 import { BossMode, HazardType } from '../../src/game/bosses/types';
 import { createBossView, readBoss } from '../../src/game/bosses/view';
 import { spawnBullet, STYLE_ORBIT, STYLE_PIERCE, STYLE_RAPID, STYLE_SPREAD, armPierce } from '../../src/game/bullets';
@@ -121,11 +121,12 @@ describe('damage table', () => {
     expect(BOSS_DAMAGE).toEqual({ spread: 10, rapid: 7, pierce: 40, orbit: 15, drone: 10, ram: 20 });
     expect(bossDamageForStyle(STYLE_SPREAD)).toBe(10);
     expect(bossDamageForStyle(STYLE_RAPID)).toBe(7);
-    expect(bossDamageForStyle(STYLE_PIERCE)).toBe(40);
+    expect(bossDamageForStyle(STYLE_PIERCE)).toBe(60); // boss health: 40 times PIERCE_GUARDIAN_MULT
+    expect(PIERCE_GUARDIAN_MULT).toBe(1.5);
     expect(bossDamageForStyle(STYLE_ORBIT)).toBe(15);
   });
 
-  it('spread, rapid and pierce bullets deal 10, 7 and 40, and a pierce bullet stops at the body', () => {
+  it('spread, rapid and pierce bullets deal 10, 7 and 60 (pierce 1.5x), and a pierce bullet stops at the body', () => {
     const w = bossGame('spindle');
     const id = enter(w);
     const p = w.bullets;
@@ -142,7 +143,7 @@ describe('damage table', () => {
     const pi = spawnBullet(p, bx, by, 0, 0, 1);
     armPierce(p, pi);
     bulletHits(w);
-    expect(w.hp[id]).toBe(hp0 - 57);
+    expect(w.hp[id]).toBe(hp0 - 77);
     expect(p.alive[pi]).toBe(0);
   });
 

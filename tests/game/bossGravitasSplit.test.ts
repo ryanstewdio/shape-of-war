@@ -1,5 +1,5 @@
-// Boss abilities wave: Gravitas splits at its stage 2 crack into two half mass wells (Gravitants, 28 u,
-// 160 hits each) that orbit each other round a centre seeking the ship, each pulling at half
+// Boss abilities wave: Gravitas splits at its stage 2 crack into two half mass wells (Gravitants, 28 u;
+// boss health: the body's remaining hit points shared evenly, so the bar never drops) that orbit each other round a centre seeking the ship, each pulling at half
 // strength. Contact kills. The bar is the sum of the two; killing both ends the fight and awards the
 // bonus once. 'sim:bossSplit' fires once.
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -29,11 +29,15 @@ function started(shield = true): { w: World; id: number } {
   return { w, id: enter(w) };
 }
 
-/** Push the body just under 33 percent with a Detonate style hit (ignores the anchors). */
-function crack(w: World, id: number): void {
+/** Push the body just under 33 percent with a Detonate style hit (ignores the anchors). Returns the body hit points left. */
+function crack(w: World, id: number): number {
   w.hp[id] = Math.floor(bs(w).maxHp * CRACK_AT[1]) + 5;
   damageBoss(w, 10, w.x[id] ?? 0, w.y[id] ?? 0, true);
+  return Math.floor(bs(w).maxHp * CRACK_AT[1]) - 5;
 }
+
+/** More than any well holds: a kill in one hit. */
+const KILL = 9999;
 
 function wells(w: World): [number, number] {
   const s = bs(w);
@@ -47,14 +51,14 @@ function pulls(w: World): number[] {
 }
 
 describe('gravitas split', () => {
-  it('splits once, at the stage 2 crack, into two Gravitants (28 u, 160 hits)', () => {
+  it('splits once, at the stage 2 crack, into two Gravitants (28 u) that share the body hit points left', () => {
     const { w, id } = started();
     const log: string[] = [];
     bus.on('sim:bossCrack', (e) => log.push(`crack${e.stage}`));
     bus.on('sim:bossSplit', (e) => log.push(`split:${e.id}:${e.parts}`));
     damageBoss(w, 10, 0, 0, true);
     expect(log).toEqual([]);
-    crack(w, id);
+    const left = crack(w, id);
     expect(log).toEqual(['crack1', 'crack2', 'split:gravitas:2']);
     expect(bs(w).split).toBe(true);
     expect(count(w, Kind.Boss)).toBe(0);
@@ -64,9 +68,10 @@ describe('gravitas split', () => {
       expect(p).toBeGreaterThan(0);
       expect(w.a[p]).toBe(PartType.Gravitant);
       expect(w.radius[p]).toBe(GRAVITANT.radius);
-      expect(w.hp[p]).toBe(GRAVITANT.hp);
+      expect(Math.abs((w.hp[p] ?? 0) - left / 2)).toBeLessThanOrEqual(1);
     }
-    expect(GRAVITANT.hp).toBe(1600);
+    const [a, b] = wells(w);
+    expect((w.hp[a] ?? 0) + (w.hp[b] ?? 0)).toBe(left);
     run(w, 5);
     damageBoss(w, 10, 0, 0, true);
     expect(log.filter((e) => e.startsWith('split')).length).toBe(1);
@@ -104,7 +109,7 @@ describe('gravitas split', () => {
       const onWell = [a, b].some((q) => Math.hypot((w.x[q] ?? 0) - (w.x[p] ?? 0), (w.y[q] ?? 0) - (w.y[p] ?? 0)) < 1e-6);
       expect(onWell).toBe(true);
     }
-    damageBossPart(w, a, GRAVITANT.hp, 0, 0);
+    damageBossPart(w, a, KILL, 0, 0);
     run(w, 0.1);
     expect(pulls(w).length).toBe(1);
     // The survivor closes onto the pair centre.
@@ -141,13 +146,13 @@ describe('gravitas split fight', () => {
     bus.on('hud:boss', (e) => {
       hp = e.hp;
     });
-    crack(w, id);
+    const left = crack(w, id);
     run(w, 0.3);
-    expect(hp).toBe(2 * GRAVITANT.hp);
+    expect(hp).toBe(left); // no drop at the split
     const [a] = wells(w);
     damageBossPart(w, a, 10, 0, 0);
     run(w, 0.3);
-    expect(hp).toBe(2 * GRAVITANT.hp - 10);
+    expect(hp).toBe(left - 10);
   });
 
   it('killing both ends the fight and awards the bonus once', () => {
@@ -162,11 +167,11 @@ describe('gravitas split fight', () => {
     const score0 = gs(w).score;
     const kills0 = gs(w).kills;
     const [a, b] = wells(w);
-    damageBossPart(w, a, GRAVITANT.hp, 0, 0);
+    damageBossPart(w, a, KILL, 0, 0);
     run(w, 0.3);
     expect(bs(w).status).toBe('alive');
     expect(bossSlain(w)).toBe(false);
-    damageBossPart(w, b, GRAVITANT.hp, 0, 0);
+    damageBossPart(w, b, KILL, 0, 0);
     expect(bs(w).status).toBe('defeated');
     expect(bossSlain(w)).toBe(true);
     expect(last).toEqual({ hp: 0, mode: BossMode.Dying });
