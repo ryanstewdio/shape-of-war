@@ -63,6 +63,14 @@ export interface BossView {
   dashHeading?: number;
   /** Hit feedback (contract stub): seconds since the last landed hit on this guardian, -1 before any. */
   hitT?: number;
+  /**
+   * Fury three (contract stub, Ryan 2026-11-11; Swarm writes, Glow reads). frenzy: true once the
+   * Broodlings are enraged (the first Broodling died); Brood's body has no fury. tide: Gravitas enraged,
+   * 1 while it pulls, -1 while it pushes, 0 otherwise. tideFlipIn: seconds until the next flip, -1 when none.
+   */
+  frenzy?: boolean;
+  tide?: -1 | 0 | 1;
+  tideFlipIn?: number;
 }
 
 /** Fill out from the boss of the world and return it. No allocation: out is the caller's object. */
