@@ -80,6 +80,12 @@ export interface BossState {
   furyT: number;
   /** 'sim:bossFury' payload, reused. */
   furyEv: { id: BossId; stage: 'break' | 'on'; sec: number; x: number; y: number };
+  /**
+   * Hit feedback (Ryan 2026-11-11): seconds since the last player hit that took hit points off this
+   * guardian (body, core or part), -1 before any. hitEv is the reused 'sim:bossHit' payload.
+   */
+  hitT: number;
+  hitEv: { id: BossId; x: number; y: number; landed: boolean };
   /** 'sim:bossShield' payload (GW2), reused: emitted when any boss shield goes up and when it drops. */
   shieldEv: { id: BossId; up: boolean; x: number; y: number };
 
@@ -227,6 +233,8 @@ function createState(w: World, spec: BossSpec, def: BossDef): BossState {
     fury: 0,
     furyT: 0,
     furyEv: { id: spec.id, stage: 'break', sec: 0, x: 0, y: 0 },
+    hitT: -1,
+    hitEv: { id: spec.id, x: 0, y: 0, landed: false },
     shotT: 0,
     shotWait: 0,
     shotId: -1,
@@ -325,6 +333,8 @@ export function armState(w: World, spec: BossSpec, def: BossDef, atSec: number):
   s.fury = 0;
   s.furyT = 0;
   s.furyEv.id = spec.id;
+  s.hitT = -1;
+  s.hitEv.id = spec.id;
   s.shotT = 0;
   s.shotWait = 0;
   s.shotId = -1;

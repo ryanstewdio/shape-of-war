@@ -124,8 +124,8 @@ export const HAZARD = {
   ringBand: 14,
   sweepHalfWidth: 12,
   sweepLength: 380,
-  /** A sweep leaves gaps of at least 90 deg, so at most 4 arms. Bosses use 1 to 3. */
-  sweepArmsMax: 3,
+  /** A sweep leaves gaps of at least 90 deg, so at most 4 arms (Spindle's fury fourth arm). */
+  sweepArmsMax: 4,
   tetherHalfWidth: 10,
   pullRadius: 300,
   pullMax: 100,
@@ -319,10 +319,10 @@ export const BROODLING = {
   count: 3,
   radius: 20,
   /**
-   * 19 spread hits each (the table dialect: HP in hits, stored as tenths). Ryan's device time, not
-   * the bot (Warden fury wave: x0.31 of 600, so the Broodlings take about 25 s of a 60 s fight).
+   * 30 spread hits each (the table dialect: HP in hits, stored as tenths). Ryan's device time, not
+   * the bot: 600 to 190 in the Warden fury wave, then 190 to 300 (fury two: they died too fast).
    */
-  hp: 190,
+  hp: 300,
   /** Spawn ring around the dead body centre, u. */
   spawnRing: 40,
   /** Role 0: seeks the ship, turn limited. Contact kills (every Broodling does). */
@@ -355,6 +355,53 @@ export const SPINDLE = {
   /** Arm rate without the pellet trade. The shot row below overrides it. */
   armRate: 0.5,
   reverseEvery: 5,
+} as const;
+
+/**
+ * Spindle fury (Ryan 2026-11-11, fury two). At the stage 1 crack Spindle breaks (FURY_BREAK_SEC, the
+ * shared fury), then is enraged to its death: a fourth arm, each sweep turning at a hashed rate in
+ * armRateMin to armRateMax, a reversal every reverseEvery (the arm telegraph is never shortened).
+ */
+export const SPINDLE_FURY = {
+  arms: 4,
+  armRateMin: 0.4,
+  armRateMax: 0.6,
+  reverseEvery: 3,
+} as const;
+
+/**
+ * Spindle needles (fury two: every arm fights). Each arm tip sheds one enemy bullet every every
+ * seconds of attack time (everyFury enraged), flung along the sweep tangent at speed u/s. A tip
+ * within shipClear u of the ship, or outside the arena, sheds nothing that time. Frozen arms (the
+ * telegraph) shed nothing.
+ */
+export const SPINDLE_NEEDLES = {
+  every: 1.2,
+  everyFury: 0.9,
+  speed: 170,
+  shipClear: 150,
+} as const;
+
+/**
+ * Ember fury (Ryan 2026-11-11, fury two). At the stage 1 crack Ember breaks (FURY_BREAK_SEC), then
+ * is enraged to its death: dash speed times dashSpeedMul (the dash time is kept, so the dash runs
+ * longer), up to bounces wall bounces, and leaversPerStun enraged Leavers per stun.
+ */
+export const EMBER_FURY = {
+  dashSpeedMul: 1.2,
+  bounces: 3,
+  leaversPerStun: 3,
+} as const;
+
+/**
+ * Ember Leavers (fury two): every stun releases perStun Leavers at the body, enraged as a membrane
+ * crossing would (World.enraged, 'sim:enrage'), at most cap Ember Leavers alive, inside the add
+ * slots and maxLiveEnemies. They spawn spawnPad u outside the body edge.
+ */
+export const EMBER_LEAVERS = {
+  perStun: 2,
+  cap: 4,
+  spawnPad: 14,
 } as const;
 
 /**

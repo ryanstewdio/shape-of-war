@@ -30,14 +30,13 @@ The Lead then corrects the issue number, branch name and end line if GitHub numb
 ## R3. Ryan: launch the task
 1. New chat. Never reuse an older thread.
 2. Environment chip: `furiosa-shape-legend`. Never "Default environment".
-3. Approval chip: "Ask for approval".
-4. Model: your choice; it is recorded in the PR body.
-5. Click "+", then GitHub, so the GitHub chip shows in the prompt box (the connector publishes the PR).
-6. In the prompt box type `Title: <issue title>`, a new line, then paste the rendered issue body copied from the GitHub page, from `Issue id:` to `--- end of issue <n> body ---`. Nothing else.
-7. Send. Approve only commands the issue lists. Approve GitHub connector calls only if they create the issue's branch, upload files on the allowed list to that branch, commit there, or open that one PR against main. Decline anything naming another file, main, a label, a merge or a deletion. Stop on any request for internet, another repository or wider access.
+3. Model: your choice; it is recorded in the PR body.
+4. Click "+", then GitHub, so the GitHub chip shows in the prompt box (the connector publishes the PR).
+5. In the prompt box type `Title: <issue title>`, a new line, then paste the rendered issue body copied from the GitHub page, from `Issue id:` to `--- end of issue <n> body ---`. Nothing else.
+6. Send. The task runs unattended (Codex sets the chip to Approve for me; ruled 2026-11-11). Do not use the Codex Push control. If the thread shows a request for internet, another repository or wider access, stop and paste.
 
 ## R4. Ryan: the verdict
-Wait for the task to finish. Paste back: the verdict lines verbatim, every prompt you answered with your answer, and the PR URL. If the verdict is blocked, open no PR and paste. If the only blocker is publishing, the Lead gives one follow up message for the same thread (the one exception to the one thread rule, because a new chat would not have the work); never use the Codex Push control.
+Wait for the task to finish. Paste back: the verdict lines verbatim and the PR URL. If the verdict is blocked, open no PR and paste. If the only blocker is publishing, the Lead gives one follow up message for the same thread (the one exception to the one thread rule, because a new chat would not have the work); never use the Codex Push control.
 
 ## R5. Lead: the review
 The Lead checks the PR's files against the allowed list, compares the start sha with main at launch, brings the branch up to date, reruns every command in a fresh worktree, posts a Template 2 review on the PR and gives Ryan a merge line with the reason. Up to three revision rounds, each a new chat.
