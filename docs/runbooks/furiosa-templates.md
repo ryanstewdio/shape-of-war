@@ -1,12 +1,13 @@
 # Furiosa templates
 
-Two templates for the Furiosa lane (see AGENTS.md at the repo root). Claude writes every Furiosa issue on Template 1 and every review of a Furiosa pull request on Template 2. Fill each field; write "none" rather than leaving one out. Quote only from this repository.
+Two templates for the Furiosa lane (see AGENTS.md at the repo root; task order in docs/runbooks/furiosa-runsheet.md). Claude writes every Furiosa issue on Template 1 and every review of a Furiosa pull request on Template 2. Fill each field; write "none" rather than leaving one out. Quote only from this repository.
 
 ## Template 1: the issue
 
 ```
 Title: <short imperative title>
 Issue id: #<n>
+Expected start sha: <main sha when the issue was created; the task may start older, see docs/runbooks/furiosa-runsheet.md>
 Gates: <which of (a) to (h) are confirmed, for example "a b c d e f g h confirmed" or "a c d confirmed; Preparation Mode on">
 
 ## Bad news and blockers
@@ -32,18 +33,18 @@ Gates: <which of (a) to (h) are confirmed, for example "a b c d e f g h confirme
 2. <testable item>
 
 ## Commands to run
-1. npm ci
+1. npm ci --cache /tmp/npm-cache
 2. CI=true npm test
 3. npm run build
 4. The PixiJS v7 grep from .github/workflows/ci.yml
-5. The dash check from .github/workflows/ci.yml
+5. The dash check from .github/workflows/ci.yml, against the start sha
 <plus any issue specific command>
 
 ## Out of bounds
 <work that is tempting but not part of this issue>
 
 ## PR requirements
-Branch cx/<n>-<slug> from current main. One PR against main. Body: bad news first, exact git diff --stat, what was left out, each command with its exact output tail, risks, the model name exactly as the Codex model control shows it.
+Work from the commit Codex checks out; record it as the start sha. Publish with the GitHub connector only: create branch cx/<n>-<slug> from current main on ryanstewdio/shape-of-war, upload only the allowed files as one commit on it, open one PR against main. Never git push. If an allowed file changed on main after the start sha, stop and report instead of uploading. Body: the start sha, bad news first, exact git diff --stat, what was left out, each command with its exact output tail, risks, the model name exactly as the Codex model control shows it.
 
 ## Expected verdict shape
 Under 40 lines in the task thread, last line "Verdict: ready for review" or "Verdict: blocked: <reason>".
@@ -55,6 +56,9 @@ Under 40 lines in the task thread, last line "Verdict: ready for review" or "Ver
 
 ```
 ## Review of PR #<pr> for issue #<n>
+
+### Start sha
+<start sha from the PR body>, <n> commits behind main at launch; branch brought up to date before review: yes or no
 
 ### Files against the allowed list
 <each changed file from git diff --stat, marked allowed or NOT ALLOWED>

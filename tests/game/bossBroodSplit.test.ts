@@ -1,10 +1,11 @@
-// G3C: Brood splits at its stage 2 crack (below 33 percent) into three Broodlings: slot 0 chases, slot
-// 1 orbits the ship at 200 u and lays Slime every 2 s, slot 2 flees and launches Darts every 4 s. The
-// body is gone, the boss bar is the sum of the three, the fight ends with the third and awards the
-// bonus once.
+// G3C, boss health (Ryan 2026-11-11): Brood splits once its body has emptied both its Shield and
+// Health bars (never at the stage 2 crack, never a kill) into three Broodlings: slot 0 chases, slot 1
+// orbits the ship at 200 u and lays Slime every 2 s, slot 2 flees and launches Darts every 4 s. The
+// body is gone, the boss bar is the sum of the three on their own full value (bs.splitMax), the
+// fight ends with the third and awards the bonus once.
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
-import { fleeHeading } from '../../src/game/bosses/brood';
+import { broodlingHp, fleeHeading, SPLIT_HP } from '../../src/game/bosses/brood';
 import { armouredTenths, bossBonusAwarded, bossOnBomb, bossSlain, damageBoss, damageBossPart, livePart } from '../../src/game/bosses/core';
 import { BROODLING, CRACK_AT, STAGGER_SEC } from '../../src/game/bosses/table';
 import { BossMode, PartType } from '../../src/game/bosses/types';
@@ -24,9 +25,9 @@ function started(shield = true): { w: World; id: number } {
   return { w, id: enter(w) };
 }
 
-/** Push the body just under 33 percent with a Detonate style hit (ignores the closed core). */
+/** Empty the body's bars with a Detonate style hit (ignores the closed core): the split. */
 function crack(w: World, id: number): void {
-  w.hp[id] = Math.floor(bs(w).maxHp * CRACK_AT[1]) + 5;
+  w.hp[id] = 5;
   damageBoss(w, 10, w.x[id] ?? 0, w.y[id] ?? 0, true);
 }
 
@@ -40,7 +41,7 @@ function dist(w: World, a: number, b: number): number {
 }
 
 describe('brood split', () => {
-  it('splits once, at the stage 2 crack, after the crack events', () => {
+  it('splits once, when both bars are empty, after the crack events; the stage 2 crack alone does not split', () => {
     const { w, id } = started();
     const log: string[] = [];
     bus.on('sim:bossCrack', (e) => log.push(`crack${e.stage}`));
@@ -50,8 +51,14 @@ describe('brood split', () => {
     expect(log).toEqual([]);
     expect(count(w, Kind.Boss)).toBe(1);
     expect(bs(w).split).toBe(false);
-    crack(w, id); // 5 under the 33 percent line
+    w.hp[id] = Math.floor(bs(w).maxHp * CRACK_AT[1]) + 5;
+    damageBoss(w, 10, 0, 0, true); // 5 under the 33 percent line: both cracks, still one body
+    expect(log).toEqual(['crack1', 'crack2']);
+    expect(bs(w).split).toBe(false);
+    expect(count(w, Kind.Boss)).toBe(1);
+    damageBoss(w, w.hp[id] ?? 0, 0, 0, true); // a hit for everything left: held at SPLIT_HP, then the split
     expect(log).toEqual(['crack1', 'crack2', 'split:brood:3']);
+    expect(bs(w).status).toBe('alive');
     expect(bs(w).split).toBe(true);
     run(w, 5);
     damageBoss(w, 10, 0, 0, true); // no body to hit any more
@@ -68,7 +75,7 @@ describe('brood split', () => {
     for (const p of broodlings(w)) {
       expect(p).toBeGreaterThan(0);
       expect(w.a[p]).toBe(PartType.Broodling);
-      expect(w.hp[p]).toBe(BROODLING.hp);
+      expect(w.hp[p]).toBe(BROODLING.hp); // hpMul 1, Normal, no armour
       expect(w.radius[p]).toBe(BROODLING.radius);
     }
     expect(bs(w).status).toBe('alive');
@@ -150,11 +157,13 @@ describe('brood split fight', () => {
     crack(w, id);
     run(w, 0.3);
     expect(hp).toBe(3 * BROODLING.hp);
-    expect(maxHp).toBe(bs(w).maxHp);
+    expect(maxHp).toBe(3 * BROODLING.hp); // the Broodlings' own bar, not the body's maxHp
+    expect(bs(w).splitMax).toBe(3 * BROODLING.hp);
     const [chase] = broodlings(w) as [number, number, number];
     damageBossPart(w, chase, 10, 0, 0);
     run(w, 0.3);
-    // R1: Brood's row is past the Int16 store, so hits on its parts pass through its armour.
+    // Boss health: Brood's row is under the Int16 store again (armour 1), so a hit lands in full.
+    expect(bs(w).armour).toBe(1);
     expect(hp).toBe(3 * BROODLING.hp - armouredTenths(10, bs(w).armour, 0));
   });
 
@@ -213,5 +222,17 @@ describe('brood split determinism', () => {
     const a = once();
     expect(a).toBe(once());
     expect(a.startsWith('split3|')).toBe(true);
+  });
+});
+
+describe('broodling hit points (boss health)', () => {
+  it('scale with hpMul times bossScale and divide out armour, at least 1', () => {
+    expect(SPLIT_HP).toBe(1);
+    expect(broodlingHp(1, 1)).toBe(BROODLING.hp);
+    expect(broodlingHp(0.75, 1)).toBe(Math.round(BROODLING.hp * 0.75));
+    expect(broodlingHp(1.62, 1)).toBe(Math.round(BROODLING.hp * 1.62));
+    expect(broodlingHp(2, 2)).toBe(BROODLING.hp);
+    expect(broodlingHp(Number.NaN, 1)).toBe(BROODLING.hp);
+    expect(broodlingHp(1e-9, 1)).toBe(1);
   });
 });

@@ -19,7 +19,7 @@ import { SHIP_RADIUS } from '../ship';
 import { gs } from '../state';
 import { angleBetween, distBetween, moveTo, stepToward } from '../steer';
 import { Kind, type World } from '../world';
-import { bossBurst, crackBody, HAZARD_OVERLAP, livePart, spawnPart, spawnRing, spawnTether } from './core';
+import { bossBurst, crackStage, crackTo, HAZARD_OVERLAP, livePart, spawnPart, spawnRing, spawnTether } from './core';
 import { circlesOverlapOn, wrapPi } from './kit';
 import { bossTele } from './scale';
 import type { BossState } from './state';
@@ -219,15 +219,25 @@ export function cracks(w: World, id: number, bs: BossState): void {
   const half = Math.floor(bs.maxHp / 2);
   const b = secondBody(w, bs);
   const hp = w.hp[id] ?? 0;
+  // Boss health: the Shield bar is the shared pool's, so no body cracks before it empties, and both
+  // live bodies crack (stage 1 at least) the moment it does.
+  const cracked = crackStage(hp, bs.maxHp) >= 1;
   if (b > 0) {
     const hb = w.hp[b] ?? 0;
-    crackBody(bs, 0, hp - hb, bs.maxHp - half, w.x[id] ?? 0, w.y[id] ?? 0);
-    crackBody(bs, 1, hb, half, w.x[b] ?? 0, w.y[b] ?? 0);
+    crackTo(bs, 0, twinStage(cracked, hp - hb, bs.maxHp - half), w.x[id] ?? 0, w.y[id] ?? 0);
+    crackTo(bs, 1, twinStage(cracked, hb, half), w.x[b] ?? 0, w.y[b] ?? 0);
     return;
   }
   if (bs.t2 !== 1) return;
   const slot = bs.dir === 2 ? 1 : 0;
-  crackBody(bs, slot, hp, slot === 1 ? half : bs.maxHp - half, w.x[id] ?? 0, w.y[id] ?? 0);
+  crackTo(bs, slot, twinStage(cracked, hp, slot === 1 ? half : bs.maxHp - half), w.x[id] ?? 0, w.y[id] ?? 0);
+}
+
+/** Pure: crack stage of one Twin body: 0 while the shared shield holds, then its own stage, at least 1. */
+export function twinStage(cracked: boolean, hp: number, max: number): number {
+  if (!cracked) return 0;
+  const st = crackStage(hp, max);
+  return st > 1 ? st : 1;
 }
 
 export const def: BossDef = { reset, step, onPhase, entryHome, phaseOf, clampDamage, afterDamage, onPartDamage, cracks };

@@ -129,7 +129,7 @@ describe('sim:bossCrack', () => {
     expect(log2.map((e) => e.stage)).toEqual([1, 2]);
   });
 
-  it('twins: each body cracks at its own 66 and 33 percent, once per stage', () => {
+  it('twins: no body cracks before the shared Shield bar empties, then both do; stage 2 at each body\'s own 33 percent', () => {
     const log = listenCrack();
     const w = bossGame('twins');
     park(w, 600, 400);
@@ -139,11 +139,11 @@ describe('sim:bossCrack', () => {
     const b = secondBody(w, s);
     expect(b).toBeGreaterThan(0);
     damageBossPart(w, b, Math.round(half * 0.4), 0, 0);
-    expect(log).toHaveLength(1);
-    expect(log[0]).toMatchObject({ id: 'twins', stage: 1, x: w.x[b], y: w.y[b] });
-    damageBoss(w, Math.round((s.maxHp - half) * 0.4), 0, 0);
+    expect(log).toHaveLength(0); // the shared pool is still above the shield line (80 percent)
+    damageBoss(w, Math.round((s.maxHp - half) * 0.4), 0, 0); // the shared pool falls to 60 percent
     expect(log).toHaveLength(2);
-    expect(log[1]).toMatchObject({ stage: 1, x: w.x[boss], y: w.y[boss] });
+    expect(log[0]).toMatchObject({ id: 'twins', stage: 1, x: w.x[boss], y: w.y[boss] });
+    expect(log[1]).toMatchObject({ stage: 1, x: w.x[b], y: w.y[b] });
     damageBossPart(w, b, Math.round(half * 0.3), 0, 0);
     damageBossPart(w, b, 10, 0, 0);
     expect(log.map((e) => e.stage)).toEqual([1, 1, 2]);

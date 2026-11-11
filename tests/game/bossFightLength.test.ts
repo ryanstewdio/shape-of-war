@@ -1,95 +1,91 @@
-// Fight length (docs/12 D5, G3A paste; release polish item 7). A scripted fight: a gunner who lands
-// the docs/13 open fire figure (18 spread hits a second, 180 tenths a second, half of 36 bullets)
-// whenever the core is exposed, pops one part every POD_REACTION seconds while a breakable part
-// lives (Brood pods, Gravitas anchors, Bastion turrets, Prism pods and nodes, Mirage mirrors), and
-// after a split keeps the same fire on the body parts one at a time. It measures the seconds from
-// the end of the entrance to the kill, windows included. Release polish: every boss at Normal on
-// its own campaign level (Warden 5 to Prism 50), attack rotation on, lasts 210 to 260 s (Ryan:
-// "at least 3.5 minutes of boss fighting"). Before it Warden ran about 60 s, Brood 37, Spindle 28.
-// R1: a skilled player beat Warden in about 150 s where this script said 210 to 260 s, so the
-// script is weaker than Ryan. Every row rose 40 percent and the band with it: 294 to 364 s (R1
-// script: warden 314.8, brood 330.0, spindle 328.8, ember 345.3, mirage 329.6, gravitas 325.7,
-// bastion 327.6, tempest 328.9, twins 328.8, prism 334.6).
+// Fight length (docs/12 D5; release polish item 7; boss health, Ryan 2026-11-11). The fight bot
+// (bossFightBot.ts: the default weapon's open fire figure whenever the core is exposed, one part
+// popped every 0.5 s, the body parts shot after a split) on each guardian at Normal on its Adventure
+// level (Brood 5, Warden 10, then 15 to 50), attack rotation on. Ryan's ruling: about 60 to 75 s
+// at tier 1 (Brood, Warden, Spindle), 90 s at tier 2, 2 min at tier 3, 2.5 min for Prism, each
+// band 20 percent either side of its target. Easy is shorter and Insane longer through bossScale.
+// Before (R1 rows, every fight 313 to 345 s at Normal): warden 313, brood 330, spindle 329,
+// ember 345, mirage 330, gravitas 326, bastion 328, tempest 329, twins 329, prism 335.
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
-import { damageBoss, damageBossPart, livePart } from '../../src/game/bosses/core';
-import { bossNominalLevel, MAX_PARTS } from '../../src/game/bosses/table';
-import { PartType } from '../../src/game/bosses/types';
-import { stepGame } from '../../src/game/game';
+import { bossNominalLevel } from '../../src/game/bosses/table';
+import { FIRST_FIGHT_HP_MUL, T3_SWAPPED_BOSSES } from '../../src/levelgen/boss';
 import { BOSS_IDS, type BossId } from '../../src/levelgen/leveldef';
-import { bs, bossGame, enter, park } from './bossHelpers';
-import { DT, idle } from './helpers';
+import { fightSeconds } from './bossFightBot';
 
 afterEach(() => bus.clear());
 
-const OPEN_FIRE = 180;
-const POD_REACTION = 0.5;
-const MIN_SEC = 294;
-const MAX_SEC = 364;
+/** Ryan's target seconds at Normal (the Adventure order ramps inside a tier). */
+const FIGHT_TARGET_SEC: Readonly<Record<BossId, number>> = {
+  brood: 60,
+  warden: 67.5,
+  spindle: 75,
+  ember: 85,
+  mirage: 90,
+  gravitas: 95,
+  bastion: 115,
+  tempest: 120,
+  twins: 125,
+  prism: 150,
+};
+const BAND = 0.2;
 
-/** Seconds from the end of the entrance to the kill on the script, Infinity past 500 s. */
-function fightSeconds(id: BossId): number {
-  const level = bossNominalLevel(BOSS_IDS.indexOf(id));
-  const w = bossGame(id, { lives: 99, levelIndex: level }, {}, true, 0.25, true);
-  park(w, 500, 300);
-  enter(w);
-  const s = bs(w);
-  let acc = 0;
-  let podClock = 0;
-  for (let i = 0; i < 120 * 500; i++) {
-    let pod = -1;
-    for (let k = 0; k < MAX_PARTS && pod < 0; k++) {
-      const p = livePart(w, s, k);
-      // A Twin is the second body (its hits come off the shared bar), not a part to pop.
-      if (p > 0 && w.a[p] !== PartType.Broodling && w.a[p] !== PartType.Twin) pod = p;
-    }
-    if (s.split) {
-      acc += OPEN_FIRE * DT;
-      const n = Math.floor(acc);
-      let target = -1;
-      for (let k = 0; k < MAX_PARTS && target < 0; k++) target = livePart(w, s, k);
-      if (n > 0 && target > 0) {
-        damageBossPart(w, target, n, 0, 0);
-        acc -= n;
-      }
-    } else if (pod > 0) {
-      podClock += DT;
-      if (podClock >= POD_REACTION) {
-        damageBossPart(w, pod, 9999, 0, 0);
-        podClock = 0;
-      }
-    } else {
-      podClock = 0;
-    }
-    if (s.exposed) {
-      acc += OPEN_FIRE * DT;
-      const n = Math.floor(acc);
-      if (n > 0) {
-        // Hits land on the body centre (inside Mirage's open arc whenever it is open).
-        damageBoss(w, n, w.x[s.id] ?? 0, w.y[s.id] ?? 0);
-        acc -= n;
-      }
-    }
-    if (s.status === 'defeated') return i / 120;
-    stepGame(w, DT, idle());
-  }
-  return Infinity;
+/** The Adventure level of a guardian (version 9 swaps the first two bosses). */
+function adventureLevel(id: BossId): number {
+  for (const [j, swapped] of Object.entries(T3_SWAPPED_BOSSES)) if (swapped === id) return 5 * Number(j);
+  return bossNominalLevel(BOSS_IDS.indexOf(id));
 }
 
-describe('fight length at open fire, Normal, each boss on its own level (R1 band)', () => {
-  const secs = new Map<BossId, number>();
-  for (const id of BOSS_IDS) secs.set(id, fightSeconds(id));
+describe('fight length on the bot, each guardian on its Adventure level (boss health band)', () => {
+  const normal = new Map<BossId, number>();
+  const easy = new Map<BossId, number>();
+  const insane = new Map<BossId, number>();
+  for (const id of BOSS_IDS) {
+    const levelIndex = adventureLevel(id);
+    normal.set(id, fightSeconds(id, { levelIndex }));
+    easy.set(id, fightSeconds(id, { levelIndex, difficulty: 'easy' }));
+    insane.set(id, fightSeconds(id, { levelIndex, difficulty: 'insane' }));
+  }
 
   it('reports the ten fights', () => {
-    console.info(`fight seconds: ${BOSS_IDS.map((id) => `${id} ${(secs.get(id) ?? 0).toFixed(1)}`).join(', ')}`);
-    expect(secs.size).toBe(10);
+    const row = (m: Map<BossId, number>): string => BOSS_IDS.map((id) => `${id} ${(m.get(id) ?? 0).toFixed(1)}`).join(', ');
+    console.info(`fight seconds normal: ${row(normal)}\neasy: ${row(easy)}\ninsane: ${row(insane)}`);
+    expect(normal.size).toBe(10);
   });
 
   for (const id of BOSS_IDS) {
-    it(`${id} lasts ${MIN_SEC} to ${MAX_SEC} s`, () => {
-      const t = secs.get(id) ?? 0;
-      expect(t).toBeGreaterThanOrEqual(MIN_SEC);
-      expect(t).toBeLessThanOrEqual(MAX_SEC);
+    const target = FIGHT_TARGET_SEC[id];
+    it(`${id} lasts ${(target * (1 - BAND)).toFixed(0)} to ${(target * (1 + BAND)).toFixed(0)} s at Normal`, () => {
+      const t = normal.get(id) ?? 0;
+      expect(t).toBeGreaterThanOrEqual(target * (1 - BAND));
+      expect(t).toBeLessThanOrEqual(target * (1 + BAND));
+    });
+    it(`${id} is shorter on Easy and longer on Insane, and always ends`, () => {
+      const n = normal.get(id) ?? 0;
+      expect(easy.get(id) ?? Infinity).toBeLessThan(n);
+      expect(insane.get(id) ?? 0).toBeGreaterThan(n);
+      expect(Number.isFinite(insane.get(id) ?? Infinity)).toBe(true);
     });
   }
+
+  it('the fights ramp by tier: every tier 2 fight outlasts every tier 1 fight, and so on up to Prism', () => {
+    const tiers: BossId[][] = [
+      ['brood', 'warden', 'spindle'],
+      ['ember', 'mirage', 'gravitas'],
+      ['bastion', 'tempest', 'twins'],
+      ['prism'],
+    ];
+    for (let k = 1; k < tiers.length; k++) {
+      const lo = Math.max(...(tiers[k - 1] ?? []).map((id) => normal.get(id) ?? 0));
+      const hi = Math.min(...(tiers[k] ?? []).map((id) => normal.get(id) ?? 0));
+      expect(hi).toBeGreaterThan(lo);
+    }
+  });
+
+  it('Adventure first fight discount: Brood at level 5 with hpMul 0.75 is shorter still', () => {
+    const t = fightSeconds('brood', { levelIndex: 5, hpMul: FIRST_FIGHT_HP_MUL });
+    expect(FIRST_FIGHT_HP_MUL).toBe(0.75);
+    expect(t).toBeLessThan(normal.get('brood') ?? 0);
+    expect(t).toBeGreaterThan(0.6 * (normal.get('brood') ?? 0));
+  });
 });
