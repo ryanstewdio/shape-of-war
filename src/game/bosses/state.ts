@@ -115,6 +115,11 @@ export interface BossState {
    * gone, bs.id is -1, the parts' hit points are the boss bar and the kill is the last part's.
    */
   split: boolean;
+  /**
+   * Boss health: the bar's full value after a split, in tenths (Brood: the Broodlings' starting sum,
+   * their own bar). 0 means the bar keeps maxHp (Gravitas and Tempest carry the body's remainder).
+   */
+  splitMax: number;
   splitEv: { id: BossId; parts: number };
 
   hudTimer: number;
@@ -228,6 +233,7 @@ function createState(w: World, spec: BossSpec, def: BossDef): BossState {
     bonus: 0,
     slain: false,
     split: false,
+    splitMax: 0,
     splitEv: { id: spec.id, parts: 0 },
     hudTimer: 0,
     hudHp: -1,
@@ -317,6 +323,7 @@ export function armState(w: World, spec: BossSpec, def: BossDef, atSec: number):
   s.bonus = 0;
   s.slain = false;
   s.split = false;
+  s.splitMax = 0;
   s.splitEv.id = spec.id;
   s.splitEv.parts = 0;
   s.hudTimer = 0;

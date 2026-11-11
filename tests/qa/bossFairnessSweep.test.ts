@@ -233,7 +233,10 @@ describe('fairness sweep: every boss, 60 s, six fuzzed sessions each (rules 5 an
     // path is swept on the legacy hit points below.
     // R1: boss hit points rose 40 percent, so a 60 s session takes a smaller share of the bar.
     expect(all.filter((x) => x.bossLost >= 0.14).length).toBeGreaterThan(10);
-    expect(Math.max(...all.map((x) => x.bossLost))).toBeLessThan(1);
+    // Boss health (Ryan 2026-11-11): tier 1 fights last about a minute again, so some 60 s sessions
+    // now kill their boss outright (the kill path below still sweeps every boss on legacy rows).
+    expect(Math.max(...all.map((x) => x.bossLost))).toBeLessThanOrEqual(1);
+    expect(all.some((x) => x.bossDownTick >= 0)).toBe(true);
     expect(Math.max(...all.map((x) => x.maxHazards))).toBe(MAX_HAZARDS);
     expect(Math.max(...all.map((x) => x.maxParts))).toBe(MAX_PARTS);
     expect(Math.max(...all.map((x) => x.maxBullets))).toBeGreaterThan(0);

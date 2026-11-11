@@ -3,6 +3,7 @@
 // nothing draws. Reads only: never changes the simulation.
 import { BOSS_IDS } from '../../levelgen/leveldef';
 import { Kind, type World } from '../world';
+import { barHpOf, barMaxOf } from './core';
 import { bossOf } from './state';
 
 /** One boss as render and HUD see it. No allocation: callers pass one reused object as out. */
@@ -38,12 +39,29 @@ export interface BossView {
   /** Boss abilities wave: true while Warden's shield is up; shieldLeft the seconds left, 0 when down. */
   shielded?: boolean;
   shieldLeft?: number;
+  /**
+   * Boss health (Ryan 2026-11-11), read by bossBar. True while the guardian has a bar to show: alive,
+   * entrance included, and after a split while its parts carry the fight (active is then false, as no
+   * body is left to draw). Optional so existing literals compile; readBoss always writes these.
+   */
+  barOn?: boolean;
+  /** Hit points on the bar now: the body's, or after a split the live parts' sum (tenths). */
+  barHp?: number;
+  /** The bar's full value: maxHp, or the Broodlings' starting sum after Brood splits (tenths). */
+  barMax?: number;
+  /** True after Brood split: the bar is the Broodlings' own, labelled "Broodlings". */
+  broodlings?: boolean;
 }
 
 /** Fill out from the boss of the world and return it. No allocation: out is the caller's object. */
 export function readBoss(w: World, out: BossView): BossView {
   const bs = bossOf(w);
   const id = bs === null ? -1 : bs.id;
+  const on = bs !== null && bs.status === 'alive' && (bs.split || (id > 0 && w.alive[id] === 1 && w.kind[id] === Kind.Boss));
+  out.barOn = on;
+  out.barHp = on && bs !== null ? barHpOf(w, bs) : 0;
+  out.barMax = on && bs !== null ? barMaxOf(bs) : 0;
+  out.broodlings = on && bs !== null && bs.split && bs.splitMax > 0;
   if (bs === null || bs.status !== 'alive' || id <= 0 || w.alive[id] !== 1 || w.kind[id] !== Kind.Boss) {
     out.active = false;
     return out;
@@ -69,5 +87,5 @@ export function readBoss(w: World, out: BossView): BossView {
 
 /** A fresh BossView for a caller to keep and reuse (allocates once; call at setup, not per frame). */
 export function createBossView(): BossView {
-  return { active: false, id: 0, mode: 0, phase: 1, hp: 0, maxHp: 0, modeT: 0, x: 0, y: 0, rot: 0, radius: 0, exposed: false, exposedLeft: -1, exposedT: 0, shielded: false, shieldLeft: 0 };
+  return { active: false, id: 0, mode: 0, phase: 1, hp: 0, maxHp: 0, modeT: 0, x: 0, y: 0, rot: 0, radius: 0, exposed: false, exposedLeft: -1, exposedT: 0, shielded: false, shieldLeft: 0, barOn: false, barHp: 0, barMax: 0, broodlings: false };
 }
