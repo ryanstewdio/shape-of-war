@@ -5,6 +5,7 @@
 // fallback check skips success there (fallbackStatus), the sim's verdict decides the win
 // (levelSuccess) and the label reads "Defeat the boss" while the hold lasts (objectiveProgress).
 import type { BossSpec, ObjectiveDef } from '../levelgen/leveldef';
+import type { BossBar } from '../game/bosses/bar';
 import { bossName } from './boss';
 import { formatClock, formatCompact, formatInt } from './format';
 
@@ -104,6 +105,17 @@ export interface ObjectiveProgress {
   stars?: number | null;
   /** R2: where the first and second star thresholds sit on the star line, 0 to 1. Empty with no line. */
   starMarks?: number[];
+  /**
+   * Boss fight only: the blue Shield strip fill, 0 to 1. Absent or null means a single bar. When set,
+   * `health` is the red strip under it and `fraction` repeats the health.
+   */
+  shield?: number | null;
+  /** Boss fight only: the red Health strip fill, 0 to 1. */
+  health?: number;
+}
+
+function clamp01(v: number): number {
+  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
 }
 
 function frac(a: number, b: number): number {
@@ -117,16 +129,19 @@ export function starLine(score: number, thresholds: readonly [number, number, nu
   return { stars: frac(score, top), starMarks: [frac(thresholds[0], top), frac(thresholds[1], top)] };
 }
 
-/** The boss of a boss level and how much of its health is left (0 to 1, 1 before it is hurt). */
+/** The boss of a boss level and its two stacked bars (bossBar of the boss view; full before it enters). */
 export interface BossBarInput {
   spec: BossSpec;
-  hpFraction: number;
+  bar: BossBar;
 }
+
+/** Label of the Broodlings phase (bossBar says so through BossBar.label). */
+export const BROODLINGS_LABEL = 'Broodlings';
 
 /**
  * Pure: the HUD bar on a boss level (Survive, then beat the boss). Before the entrance
  * (elapsed < atSec) the bar fills with time toward atSec and reads "BOSS IN m:ss"; from the
- * entrance it shows the boss health draining and reads the boss name. No kill or score count.
+ * entrance it shows a blue Shield strip over a red Health strip and reads BossBar.label, else the boss name. No kill or score count.
  */
 export function bossObjectiveProgress(
   boss: BossBarInput,
@@ -136,7 +151,10 @@ export function bossObjectiveProgress(
   const line = starLine(s.score, thresholds);
   const at = boss.spec.atSec;
   if (s.elapsedSec < at) return { label: `BOSS IN ${formatClock(at - s.elapsedSec)}`, fraction: frac(s.elapsedSec, at), ...line };
-  return { label: bossName(boss.spec.id), fraction: Math.max(0, Math.min(1, boss.hpFraction)), ...line };
+  const shield = clamp01(boss.bar.shield);
+  const health = clamp01(boss.bar.health);
+  const label = boss.bar.label !== '' ? boss.bar.label : bossName(boss.spec.id);
+  return { label, fraction: health, shield, health, ...line };
 }
 
 /**
