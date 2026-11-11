@@ -83,7 +83,8 @@ export const CUES: Readonly<Record<CueName, CueDef>> = {
   uiTap: { voices: [v('sine', 1000, 1000, 0.03, 0.05)] },
   // Boss entry: a low noise rumble closing down with a sub sweep under it, about a second.
   bossRumble: { voices: [v('noise', 0, 0, 1.2, 0.22, lp(420, 60)), v('triangle', 82, 41, 1.2, 0.2)] },
-  // Boss hit: a low, longer thud with a short noise knock, heavier than the music's per kind
+  // Boss hit: no longer played by the synth (the music tick owns guardian hits); kept as the
+  // loudness reference tests/audio/bossTick.test.ts compares the tick against. A low, longer thud with a short noise knock, heavier than the music's per kind
   // ticks (those are at most 0.03 gain and 0.05 s).
   bossHit: { voices: [v('triangle', 196, 98, 0.09, 0.08), v('noise', 0, 0, 0.05, 0.06, { type: 'bandpass', f0: 900, f1: 260 })] },
   // Boss death: bigKill grown up, a longer noise burst and saw fall plus a sub boom.
@@ -93,17 +94,6 @@ export const CUES: Readonly<Record<CueName, CueDef>> = {
   // Boss shot: a soft, low falling blip, so it reads apart from the player's square fire cue.
   bossShot: { voices: [v('sine', 640, 420, 0.07, 0.045)] },
 };
-
-/**
- * The sim's Kind.Boss value. Audio never imports src/game, so it is mirrored here;
- * tests/audio/cues.test.ts checks it against the real enum.
- */
-export const BOSS_KIND = 22;
-
-/** Pure: the cue for an fx:hit: the boss hit on a boss hit that did damage, otherwise none (the music plays hit ticks). */
-export function cueForHit(kind: number, blocked: boolean): CueName | null {
-  return kind === BOSS_KIND && !blocked ? 'bossHit' : null;
-}
 
 /** Bus 'sfx' names to cues. 'explode' is upgraded to bigKill by the preceding fx:kill colour. */
 export const SFX_TO_CUE: Readonly<Record<SfxName, CueName>> = {
@@ -131,7 +121,6 @@ export const RATE_LIMITS: Readonly<Partial<Record<CueName, number>>> = {
   fire: 12,
   geomPickup: 20,
   telegraph: 4,
-  bossHit: 8,
 };
 
 /**
