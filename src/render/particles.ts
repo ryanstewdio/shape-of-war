@@ -300,6 +300,37 @@ export function burstBossHit(
   return n;
 }
 
+/**
+ * Inward shatter (glow-fury-three, Mirage's mirrors): count shards start on a ring of radius r about
+ * (x, y) and fly in toward it, never more than the live cap. Returns the number written.
+ */
+export function burstInward(
+  x: number,
+  y: number,
+  r: number,
+  colour: number,
+  count: number,
+  speedMin: number,
+  speedMax: number,
+  lifeMin: number,
+  lifeMax: number,
+): number {
+  if (!(r > 0)) return 0;
+  scratch.count = Math.max(0, Math.min(pool.limit, Math.floor(count)));
+  scratch.speedMin = speedMin;
+  scratch.speedMax = speedMax;
+  scratch.lifeMin = lifeMin;
+  scratch.lifeMax = lifeMax;
+  scratch.drag = 1;
+  scratch.colour = colour;
+  scratch.colour2 = null;
+  scratch.inwardRadius = r;
+  scratch.bigEvery = 0;
+  const n = emitBurst(pool, x, y, scratch);
+  scratch.inwardRadius = 0;
+  return n;
+}
+
 /** Spray count particles from (x, y) in arena units with default speeds. */
 export function burst(x: number, y: number, colour: number, count: number): void {
   scratch.count = tierBurstCount(count, burstTier, pool.limit);
