@@ -3,6 +3,9 @@
 import { bossName } from './boss';
 import type { BossId } from '../levelgen/leveldef';
 
+/** How long the dev fight line stays up as a HUD toast. */
+export const FIGHT_TOAST_MS = 6000;
+
 export interface FightTimer {
   id: BossId | null;
   enterAt: number;

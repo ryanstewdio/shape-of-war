@@ -79,14 +79,14 @@ import { aspectClass, createHud, due, type AspectClass } from './ui/hud';
 import { hudFrame, overlayPadding, type HudFrame } from './ui/hudFrame';
 import { pickLevel, parseLevelQuery, type GeneratorModule, type LevelPick } from './ui/levelSource';
 import { resolveAudio } from './ui/audioPort';
-import { bossName, needsBossStrip } from './ui/boss';
+import { bossBarFeed, bossName, needsBossStrip } from './ui/boss';
 import { endlessLabel, endlessLevel, endlessLine } from './ui/endless';
 import { createHowToScreen } from './ui/howTo';
 import { createLevelSelect } from './ui/levelSelect';
 import { continueLabel, createMenuScreen, footerLine, shortSha } from './ui/menu';
 import { gateSearch, isDev } from './ui/devGate';
 import { unlockAllLevels } from './ui/devUnlock';
-import { FIGHT_TIMER_START, fightLine, fightStep, type FightTimer } from './ui/fightTimer';
+import { FIGHT_TOAST_MS, FIGHT_TIMER_START, fightLine, fightStep, type FightTimer } from './ui/fightTimer';
 import { createSplashScreen } from './ui/splash';
 import { createPreviewWorld, previewRect, stepPreview } from './ui/preview';
 import { starsFor } from './game/objective';
@@ -428,7 +428,8 @@ async function boot(): Promise<void> {
   // lives (the objective label and the Endless label), and whether this run's boss died (the
   // results line). One reused view, so nothing allocates per call.
   const bossRead: BossView = { active: false, id: 0, mode: 0, phase: 0, hp: 0, maxHp: 0, modeT: 0, x: 0, y: 0, rot: 0, radius: 0 };
-  const bossAlive = (): boolean => readBoss(world, bossRead).active;
+  const feedOf = (): BossBar | null => bossBarFeed(readBoss(world, bossRead));
+  const bossAlive = (): boolean => readBoss(world, bossRead).barOn === true; // barOn: still true on the Broodlings after the body is gone
   let bossDown = false;
   bus.on('sim:bossDown', () => {
     bossDown = true;
@@ -453,7 +454,7 @@ async function boot(): Promise<void> {
     });
     bus.on('sim:bossDown', () => {
       fightLineText = fightLine(fight, world.time);
-      if (flow.mode === 'endless' || flow.mode === 'freeplay') hud.toast(fightLineText);
+      hud.toast(fightLineText, FIGHT_TOAST_MS); // every mode, dev builds only (6 s)
     });
   }
   // G3A: whether the cover screen reserves its boss strip for this run (ui/boss.ts needsBossStrip).
@@ -482,7 +483,8 @@ async function boot(): Promise<void> {
     if (flow.mode === 'endless' || flow.mode === 'freeplay') {
       hud.setLine(flow.mode === 'endless' ? endlessLine(endlessSeed, world.time) : freePlayLine(freePlayArenaName(), freePlayChoice.config.length, world.time));
       hud.setObjective({ label: endlessLabel(bossAlive()), fraction: 0, stars: null }); // "Boss" while one lives; no stars
-      if (bossAlive()) hud.setBossBar(bossBar(bossRead));
+      const fed = feedOf();
+      if (fed !== null) hud.setBossBar(fed);
       hud.setClock(CLOCK_HIDDEN); // the level line already carries the Endless and Free Play clock
     } else {
       // Reads "Defeat the boss" while the level holds for a living boss (docs/13 boss rule 9).
@@ -492,7 +494,8 @@ async function boot(): Promise<void> {
       const bossInput = level.boss !== undefined ? { spec: level.boss, bar: alive ? bossBar(bossRead) : FULL_BOSS_BAR } : undefined;
       const snap = snapshotOf(world);
       hud.setObjective(objectiveProgress(level.objective, snap, alive, targets.stars, bossInput)); // R6: scaled by difficulty
-      if (alive) hud.setBossBar(bossBar(bossRead)); // the one boss health bar: Shield over Health, Broodlings label
+      const fed = feedOf(); // the one boss health bar: Shield over Health, Broodlings label
+      if (fed !== null) hud.setBossBar(fed); // keeps feeding after Brood's body is gone (alive is false then)
       // hud-clock: countdown or time played on the objective's own sim clock, so paused time never counts.
       const clock = clockView(level.objective, snap.elapsedSec, level.boss !== undefined);
       const step = warnStep(warn, clock.shownLeft);
