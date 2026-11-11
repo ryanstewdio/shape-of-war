@@ -34,6 +34,13 @@ export const BOSS_SEGMENT_AT_SEC = 10;
 export const BOSS_LOOP_FROM = 3;
 /** Extra hit point multiplier per completed pass of the list. */
 export const BOSS_HP_PER_PASS = 0.25;
+/**
+ * Boss arenas (Ryan, 2026-11-11, version 13): the first Adventure guardian level whose arena grows
+ * to at least the Free Play medium size of its kind. Brood at level 5 keeps its arena.
+ */
+export const BOSS_ARENA_FROM_LEVEL = 10;
+/** Boss arenas: guardians whose arena grows to the Free Play large size (Spindle needs room to orbit). */
+export const BOSS_ARENA_LARGE: readonly BossId[] = Object.freeze<BossId[]>(['spindle']);
 /** Most gravity wells a boss level keeps (rule 12). */
 export const BOSS_MAX_WELLS = 1;
 

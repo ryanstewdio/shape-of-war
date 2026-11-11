@@ -80,6 +80,15 @@ export const GENERATOR_VERSION_V11 = 11;
  * def carries it too. A version 12 level plays every version 11 rule.
  */
 export const GENERATOR_VERSION_V12 = 12;
+/**
+ * Boss arenas (Ryan, 2026-11-11). Generator version of an Adventure guardian level from
+ * BOSS_ARENA_FROM_LEVEL (level 10 and every later guardian level, loops included) built with the
+ * version 12 config plus GenConfig.enableBossArenas (the default config): the arena grows to at
+ * least the Free Play medium size of its kind, and Spindle's to the large size (bossArena.ts).
+ * Every other level keeps its version, and versions 1 to 12 are unchanged, byte for byte
+ * (V12_GEN_CONFIG builds 12). A version 13 level plays every version 11 rule.
+ */
+export const GENERATOR_VERSION_V13 = 13;
 
 /**
  * Version 6 star thresholds as multiples of par, each rounded to the 500 grid: a strong player
@@ -100,8 +109,8 @@ export const isT3Version = (v: number): boolean => v === GENERATOR_VERSION_V9 ||
 /** True when a def carries the Tester Tom par ramp (version 10, 11 or 12). */
 export const hasParRamp = (v: number): boolean => v === GENERATOR_VERSION_V10 || isShortVersion(v);
 
-/** True when a def carries the short levels (version 11, or 12 on a trough level). */
-export const isShortVersion = (v: number): boolean => v === GENERATOR_VERSION_V11 || v === GENERATOR_VERSION_V12;
+/** True when a def carries the short levels (version 11, 12 on a trough level or 13 on a guardian level). */
+export const isShortVersion = (v: number): boolean => v === GENERATOR_VERSION_V11 || v === GENERATOR_VERSION_V12 || v === GENERATOR_VERSION_V13;
 
 /**
  * Tester Tom par ramp (version 10): multiplier on the wave budget and on maxLiveEnemies of level n,
@@ -401,6 +410,13 @@ export interface GenConfig {
    * builds version 11 byte for byte. Default on. Endless never reads it.
    */
   enableTrough?: boolean;
+  /**
+   * Boss arenas (Ryan, 2026-11-11). On together with the version 12 config: Adventure guardian
+   * levels from BOSS_ARENA_FROM_LEVEL grow their arena (bossArena.ts) and report
+   * GENERATOR_VERSION_V13. Optional; only true turns it on, so absent or false builds version 12
+   * byte for byte. Default on. Endless and Free Play never read it.
+   */
+  enableBossArenas?: boolean;
 }
 
 export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
@@ -419,6 +435,7 @@ export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>(
   enableParRamp: true,
   enableShortLevels: true,
   enableTrough: true,
+  enableBossArenas: true,
 });
 
 /** DEFAULT_GEN_CONFIG with the v2 enemies, bosses and cylinder off: the v1 generator, byte for byte. */
@@ -481,6 +498,9 @@ export const V10_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ..
 /** DEFAULT_GEN_CONFIG with the troughs off: the version 11 generator (short levels on), byte for byte. */
 export const V11_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableTrough: false });
 
+/** DEFAULT_GEN_CONFIG with the boss arenas off: the version 12 generator (troughs on), byte for byte. */
+export const V12_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableBossArenas: false });
+
 /** True when a config builds R1 paced levels (long levels and R1 pacing both on). */
 export const runsR1 = (cfg: Readonly<GenConfig>): boolean => cfg.enableLongLevels === true && cfg.enableR1Pacing === true;
 
@@ -498,6 +518,9 @@ export const runsShort = (cfg: Readonly<GenConfig>): boolean => runsParRamp(cfg)
 
 /** True when a config may build trough levels (version 12): the short levels config plus enableTrough. */
 export const runsTrough = (cfg: Readonly<GenConfig>): boolean => runsShort(cfg) && cfg.enableTrough === true;
+
+/** True when a config builds boss arenas (version 13): the trough config plus enableBossArenas. */
+export const runsBossArenas = (cfg: Readonly<GenConfig>): boolean => runsTrough(cfg) && cfg.enableBossArenas === true;
 
 export interface ValidationResult {
   ok: boolean;

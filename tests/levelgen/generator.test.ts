@@ -5,7 +5,9 @@ import * as gen from '../../src/levelgen/generator';
 import { BANDS, DEFAULT_GEN_CONFIG, ENDLESS_ARENA, MAX_RETRIES, V1_GEN_CONFIG, V4_GEN_CONFIG, V5_GEN_CONFIG, bandOf, levelSeed } from '../../src/levelgen/leveldef';
 import type { GenConfig, LevelDef } from '../../src/levelgen/leveldef';
 import {
+  ARENA_MAX_HEIGHT,
   FOLD_SAFE_RECTS,
+  FREE_PLAY_SIZE_SCALE,
   MIN_SHIP_PX,
   SHIP_RADIUS,
   fitScale,
@@ -141,7 +143,8 @@ describe('generator', { timeout: 30_000 }, () => {
           const d = gen.generateLevel(s, n);
           const h = BANDS[bandOf(n)].arenaHeight;
           expect(d.arena.height).toBeGreaterThanOrEqual(h.min);
-          expect(d.arena.height).toBeLessThanOrEqual(h.max);
+          // Boss arenas: a version 13 guardian arena grows past the band, up to the Free Play large size.
+          expect(d.arena.height).toBeLessThanOrEqual(gen.guardianArenaBoss(n, DEFAULT_GEN_CONFIG) === null ? h.max : ARENA_MAX_HEIGHT * FREE_PLAY_SIZE_SCALE.large);
         }
       }
     });
@@ -400,7 +403,9 @@ describe('generator', { timeout: 30_000 }, () => {
       for (const s of RUN_SEEDS) {
         for (const n of BAND_SAMPLE_LEVELS) {
           const a = gen.generateLevel(s, n).arena;
-          for (const rect of FOLD_SAFE_RECTS) expect(2 * SHIP_RADIUS * fitScale(a.width, a.height, rect)).toBeGreaterThanOrEqual(MIN_SHIP_PX);
+          // Boss arenas: a version 13 guardian arena keeps the Free Play large floor (F1 with the large scale).
+          const floor = gen.guardianArenaBoss(n, DEFAULT_GEN_CONFIG) === null ? MIN_SHIP_PX : MIN_SHIP_PX / FREE_PLAY_SIZE_SCALE.large;
+          for (const rect of FOLD_SAFE_RECTS) expect(2 * SHIP_RADIUS * fitScale(a.width, a.height, rect)).toBeGreaterThanOrEqual(floor - 1e-9);
         }
       }
     });

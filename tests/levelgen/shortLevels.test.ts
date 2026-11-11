@@ -7,6 +7,7 @@ import {
   DEFAULT_GEN_CONFIG,
   GENERATOR_VERSION_V10,
   GENERATOR_VERSION_V11,
+  GENERATOR_VERSION_V13,
   V1_GEN_CONFIG,
   V5_GEN_CONFIG,
   V6_GEN_CONFIG,
@@ -57,7 +58,8 @@ describe('short levels config and version', () => {
     const v = GENERATOR_VERSION_V11;
     expect(isLongVersion(v) && isR3Version(v) && isT3Version(v) && hasParRamp(v)).toBe(true);
     for (const n of [1, 4, 5, 8, 10, 14, 15, 30]) {
-      expect(generateLevel(42, n).generatorVersion, `level ${n}`).toBe(GENERATOR_VERSION_V11);
+      // foundry-boss-arenas: guardian levels from 10 (10, 15, 30 here) are version 13 by default.
+      expect(generateLevel(42, n).generatorVersion, `level ${n}`).toBe(n >= 10 && n % 5 === 0 ? GENERATOR_VERSION_V13 : GENERATOR_VERSION_V11);
       expect(generateLevel(42, n, V10_GEN_CONFIG).generatorVersion, `level ${n}`).toBe(GENERATOR_VERSION_V10);
     }
   });

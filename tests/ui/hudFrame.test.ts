@@ -1,5 +1,6 @@
 // B6 regression: every HUD element (score, multiplier, objective, par, lives, bombs, pause, super
 // ring and label, bomb button) lies outside the arena on the cover (21:9) and main (10:9) screens.
+import { V12_GEN_CONFIG } from '../../src/levelgen/leveldef';
 import { describe, expect, it } from 'vitest';
 import { SHIP_SPEED } from '../../src/game/ship';
 import { layoutButtons } from '../../src/input/buttons';
@@ -153,7 +154,7 @@ describe('B9 main screen arena scale: on-screen ship speed', () => {
   }
 
   function row(level: number): Row {
-    const { width: aw, height: ah } = generateLevel(SEED, level).arena;
+    const { width: aw, height: ah } = generateLevel(SEED, level, V12_GEN_CONFIG).arena; // B9 pins predate the V13 guardian arenas
     const m = hudFrame(MAIN.w, MAIN.h, ZERO, aw, ah);
     const c = hudFrame(COVER.w, COVER.h, ZERO, aw, ah);
     // Pre-B6: the legacy docs/01 top band play rect, buttons drawn over the arena.
