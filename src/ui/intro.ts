@@ -335,20 +335,20 @@ export interface IntroExtra {
  */
 export function introCard(
   levelIndex: number,
-  def: Pick<LevelDef, 'objective' | 'stars' | 'drone' | 'superType'> & { par?: number; boss?: BossSpec; arena?: LevelDef['arena']; surface?: LevelDef['surface'] },
+  def: Pick<LevelDef, 'objective' | 'stars' | 'drone' | 'superType'> & { par?: number; difficultyPar?: LevelDef['difficultyPar']; boss?: BossSpec; arena?: LevelDef['arena']; surface?: LevelDef['surface'] },
   difficulty: Difficulty = 'normal',
   extra: IntroExtra = {},
   table: ParScaleTable = DIFFICULTY,
 ): IntroCard {
   // Tester 1: the goal reads the target the sim plays (createGame scales it the same way).
-  const goal: GoalDef = { ...(def.boss === undefined ? {} : { boss: def.boss }), objective: objectiveFor(def.objective, difficulty, table) };
+  const goal: GoalDef = { ...(def.boss === undefined ? {} : { boss: def.boss }), objective: objectiveFor(def.objective, difficulty, table, def.difficultyPar?.[difficulty]?.goal) };
   return {
     title: `Level ${Math.max(1, Math.floor(levelIndex))}`,
     mission: missionFor(goal),
     arena: arenaDetail(def),
     goal: goalSentence(goal),
     victory: victorySentence(goal),
-    stars: starTargets(targetsFor({ par: def.par ?? 0, stars: def.stars }, difficulty, table).stars),
+    stars: starTargets(targetsFor({ par: def.par ?? 0, stars: def.stars, ...(def.difficultyPar === undefined ? {} : { difficultyPar: def.difficultyPar }) }, difficulty, table).stars),
     starCap: starCapLine(difficulty),
     enemies: foeLines(extra.newFoes ?? []),
     loadout: loadoutItems(def.drone, def.superType, extra.reward ?? ''),

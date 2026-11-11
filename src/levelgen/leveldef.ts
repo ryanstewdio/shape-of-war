@@ -1,5 +1,6 @@
 // Contract stub (docs/05-build-plan.md "Contract stubs"). Types are copied exactly from
 // docs/02-level-generator.md section 3. Foundry owns this file from W1 and may grow it additively.
+import type { Difficulty } from '../core/difficulty';
 import type { SurfaceKind } from '../core/surface';
 import type { FreePlayBosses, FreePlayDensity, FreePlaySize, FreePlayWells } from '../core/freeplayConfig';
 
@@ -89,6 +90,16 @@ export const GENERATOR_VERSION_V12 = 12;
  * (V12_GEN_CONFIG builds 12). A version 13 level plays every version 11 rule.
  */
 export const GENERATOR_VERSION_V13 = 13;
+/**
+ * Guardian par (Ryan, 2026-11-11, ruling on the par audit). Generator version of every Adventure
+ * guardian level (level 5 and every fifth level, loops included) built with the version 13 config
+ * plus GenConfig.enableGuardianPar (the default config): par on difficulty d is GUARDIAN_PAR_SHARE[d]
+ * of the score really available on d over a tiered fight (guardianPar.ts), carried per difficulty in
+ * LevelDef.difficultyPar. Every other level keeps its version, and versions 1 to 13 are unchanged,
+ * byte for byte (V13_GEN_CONFIG builds 13). A version 14 level plays every version 11 rule, and a
+ * version 14 guardian level from BOSS_ARENA_FROM_LEVEL keeps the version 13 arena.
+ */
+export const GENERATOR_VERSION_V14 = 14;
 
 /**
  * Version 6 star thresholds as multiples of par, each rounded to the 500 grid: a strong player
@@ -109,8 +120,9 @@ export const isT3Version = (v: number): boolean => v === GENERATOR_VERSION_V9 ||
 /** True when a def carries the Tester Tom par ramp (version 10, 11 or 12). */
 export const hasParRamp = (v: number): boolean => v === GENERATOR_VERSION_V10 || isShortVersion(v);
 
-/** True when a def carries the short levels (version 11, 12 on a trough level or 13 on a guardian level). */
-export const isShortVersion = (v: number): boolean => v === GENERATOR_VERSION_V11 || v === GENERATOR_VERSION_V12 || v === GENERATOR_VERSION_V13;
+/** True when a def carries the short levels (version 11, 12 on a trough level, 13 or 14 on a guardian level). */
+export const isShortVersion = (v: number): boolean =>
+  v === GENERATOR_VERSION_V11 || v === GENERATOR_VERSION_V12 || v === GENERATOR_VERSION_V13 || v === GENERATOR_VERSION_V14;
 
 /**
  * Tester Tom par ramp (version 10): multiplier on the wave budget and on maxLiveEnemies of level n,
@@ -305,7 +317,27 @@ export interface LevelDef {
    * drift (Forge: isOpenDrum is false when this is set). Absent on every other level.
    */
   noDrift?: true;
+  /**
+   * Guardian par (version 14): par, its three stars and, on a score race, the goal for each
+   * difficulty. Present only on a version 14 guardian level, appended last so every older def keeps
+   * its keys and bytes. The normal entry equals par and stars. targetsFor (core/stars.ts) reads it
+   * in place of par x parScale.
+   */
+  difficultyPar?: DifficultyPar;
 }
+
+/** One difficulty's targets on a version 14 guardian level (guardianPar.ts). JSON serialisable. */
+export interface DifficultyParEntry {
+  /** On the PAR_STEP grid, at least PAR_MIN. */
+  par: number;
+  /** R1_STAR_MULS x par, each on the grid (r1Stars). */
+  stars: [number, number, number];
+  /** Score race goal (wholeLevelTarget of par): present only when the objective is scoreInTime. */
+  goal?: number;
+}
+
+/** Version 14 guardian targets by difficulty. */
+export type DifficultyPar = Record<Difficulty, DifficultyParEntry>;
 
 /** W2: most deterministic re-derives generateLevel makes after the first attempt. */
 export const MAX_RETRIES = 8;
@@ -417,6 +449,13 @@ export interface GenConfig {
    * byte for byte. Default on. Endless and Free Play never read it.
    */
   enableBossArenas?: boolean;
+  /**
+   * Guardian par (Ryan, 2026-11-11). On together with the version 13 config: every Adventure
+   * guardian level takes the per difficulty par of guardianPar.ts and reports
+   * GENERATOR_VERSION_V14. Optional; only true turns it on, so absent or false builds version 13
+   * byte for byte. Default on. Endless and Free Play never read it.
+   */
+  enableGuardianPar?: boolean;
 }
 
 export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({
@@ -436,6 +475,7 @@ export const DEFAULT_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>(
   enableShortLevels: true,
   enableTrough: true,
   enableBossArenas: true,
+  enableGuardianPar: true,
 });
 
 /** DEFAULT_GEN_CONFIG with the v2 enemies, bosses and cylinder off: the v1 generator, byte for byte. */
@@ -501,6 +541,9 @@ export const V11_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ..
 /** DEFAULT_GEN_CONFIG with the boss arenas off: the version 12 generator (troughs on), byte for byte. */
 export const V12_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableBossArenas: false });
 
+/** DEFAULT_GEN_CONFIG with the guardian par off: the version 13 generator (boss arenas on), byte for byte. */
+export const V13_GEN_CONFIG: Readonly<GenConfig> = Object.freeze<GenConfig>({ ...DEFAULT_GEN_CONFIG, enableGuardianPar: false });
+
 /** True when a config builds R1 paced levels (long levels and R1 pacing both on). */
 export const runsR1 = (cfg: Readonly<GenConfig>): boolean => cfg.enableLongLevels === true && cfg.enableR1Pacing === true;
 
@@ -521,6 +564,9 @@ export const runsTrough = (cfg: Readonly<GenConfig>): boolean => runsShort(cfg) 
 
 /** True when a config builds boss arenas (version 13): the trough config plus enableBossArenas. */
 export const runsBossArenas = (cfg: Readonly<GenConfig>): boolean => runsTrough(cfg) && cfg.enableBossArenas === true;
+
+/** True when a config builds guardian par levels (version 14): the boss arenas config plus enableGuardianPar. */
+export const runsGuardianPar = (cfg: Readonly<GenConfig>): boolean => runsBossArenas(cfg) && cfg.enableGuardianPar === true;
 
 export interface ValidationResult {
   ok: boolean;

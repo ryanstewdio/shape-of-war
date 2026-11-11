@@ -340,3 +340,61 @@ Shares by difficulty at a 90 s fight; the last columns are Normal when the fight
 | 424242 | 40 | tempest | 46776.8k | 58471.0k | 67241.6k | 76012.3k | 1269.5k | 3246.5k | 6566.5k | 8827.5k | 0.51 | 0.49 | 0.42 | 0.36 | 0.88 | 0.25 |
 | 424242 | 45 | twins | 46546.8k | 58183.5k | 66911.0k | 75638.6k | 1150.5k | 2955.5k | 6118.0k | 8430.0k | 0.51 | 0.49 | 0.42 | 0.36 | 0.88 | 0.24 |
 | 424242 | 50 | prism | 61442.4k | 76803.0k | 88323.4k | 99843.9k | 1477.5k | 3782.0k | 7645.0k | 10391.0k | 0.51 | 0.49 | 0.42 | 0.36 | 0.89 | 0.23 |
+
+## After V14
+
+Brief: docs/briefs/foundry-guardian-par.md (Ryan's ruling 2026-11-11 on this audit). Measured on branch feat/foundry-guardian-par with `node scripts/par-audit.ts`, which now runs the default config (generator version 14) with a tiered fight. The sections above came from the version 13 build and stay as they were.
+
+- The rule: par on difficulty d is s_d of the score really available on d. s_d: Easy 0.51, Normal 0.49, Hard 0.42, Insane 0.36 (`GUARDIAN_PAR_SHARE`, src/levelgen/guardianPar.ts). Available: full waves to the entrance, then `WAVE_BUDGET_WITH_BOSS[d]` of them over the expected fight, all killed, geoms at `V10_COLLECT_RATE`, plus the guardian bonus on the Normal par.
+- Expected fight by guardian tier (`GUARDIAN_FIGHT_SEC`, separate from `BOSS_FIGHT_SEC`): tier 1 70 s, tier 2 90 s, tier 3 120 s, tier 4 150 s.
+- Every guardian level carries `difficultyPar` (par, stars at 1, 1.25 and 1.5 x par, and on a score race the goal at 0.6 x par, each on the 500 grid). `targetsFor` reads it; every other level keeps par x parScale and its version 13 bytes.
+- Result: par / available on all 10 guardian levels, 3 seeds and 4 difficulties is within 0.003 of s_d (target: within 0.02). No guardian level is flagged high or low.
+- Score race goals on Normal sit at 0.29 of available, like other levels. On Easy, Hard and Insane the game still scales the Normal goal by parScale (src/game/difficulty.ts `objectiveFor`, outside Foundry), so those goals are flagged in the report until that reads `difficultyPar[d].goal`.
+- Quick kills: a tier 3 or 4 guardian killed in 30 s leaves Normal at 0.96 to 1.32 of available (just reachable to just out of reach); tier 1 and 2 stay at 0.55 to 0.91. A fight that runs 180 s gives 0.24 to 0.40.
+
+### Guardian par after V14 (tiered fight)
+
+Fight seconds by tier: tier 1 70 s, tier 2 90 s, tier 3 120 s, tier 4 150 s. Par per difficulty from LevelDef.difficultyPar (targetsFor). Sec: the entrance plus the fight (or the objective time if sooner).
+
+| | easy | normal | hard | insane |
+|---|---:|---:|---:|---:|
+| target share s_d | 0.51 | 0.49 | 0.42 | 0.36 |
+| median par / available | 0.51 | 0.49 | 0.42 | 0.36 |
+| min | 0.51 | 0.49 | 0.42 | 0.36 |
+| max | 0.51 | 0.49 | 0.42 | 0.36 |
+| largest gap to s_d | 0.003 | 0.002 | 0.001 | 0.000 |
+
+Shares by difficulty at the tiered fight; the last columns are Normal when the fight lasts 30 or 180 s instead.
+
+| Seed | Lvl | Guardian | Sec | Par easy | Par normal | Par hard | Par insane | Avail easy | Avail normal | Avail hard | Avail insane | Share easy | Share normal | Share hard | Share insane | N at 30 s | N at 180 s |
+|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 5 | brood | 155 | 39.5k | 56.0k | 72.0k | 98.0k | 77.7k | 114.4k | 171.3k | 272.4k | 0.51 | 0.49 | 0.42 | 0.36 | 0.55 | 0.30 |
+| 1 | 10 | warden | 155 | 233.5k | 450.5k | 772.0k | 1033.5k | 457.6k | 919.5k | 1838.0k | 2871.2k | 0.51 | 0.49 | 0.42 | 0.36 | 0.63 | 0.27 |
+| 1 | 15 | spindle | 155 | 125.5k | 228.5k | 348.5k | 463.0k | 246.6k | 466.5k | 830.1k | 1286.3k | 0.51 | 0.49 | 0.42 | 0.36 | 0.60 | 0.27 |
+| 1 | 20 | ember | 175 | 274.5k | 763.0k | 1632.0k | 2230.0k | 538.3k | 1557.5k | 3886.1k | 6194.3k | 0.51 | 0.49 | 0.42 | 0.36 | 0.90 | 0.27 |
+| 1 | 25 | mirage | 175 | 542.0k | 1230.5k | 2309.0k | 3127.5k | 1062.8k | 2511.4k | 5498.0k | 8688.0k | 0.51 | 0.49 | 0.42 | 0.36 | 0.84 | 0.26 |
+| 1 | 30 | gravitas | 175 | 985.5k | 2236.0k | 4212.5k | 5553.5k | 1932.8k | 4563.1k | 10030.2k | 15426.4k | 0.51 | 0.49 | 0.42 | 0.36 | 0.78 | 0.28 |
+| 1 | 35 | bastion | 205 | 2354.5k | 6399.5k | 13278.5k | 18081.0k | 4616.3k | 13059.9k | 31615.5k | 50224.5k | 0.51 | 0.49 | 0.42 | 0.36 | 0.96 | 0.34 |
+| 1 | 40 | tempest | 205 | 1384.5k | 4340.0k | 9642.5k | 13524.5k | 2714.5k | 8857.2k | 22958.1k | 37567.7k | 0.51 | 0.49 | 0.42 | 0.36 | 1.10 | 0.33 |
+| 1 | 45 | twins | 205 | 1947.0k | 5873.5k | 13158.0k | 18597.5k | 3817.7k | 11986.8k | 31329.0k | 51659.5k | 0.51 | 0.49 | 0.42 | 0.36 | 1.08 | 0.34 |
+| 1 | 50 | prism | 235 | 1963.5k | 6014.5k | 13459.0k | 18934.0k | 3850.3k | 12274.4k | 32045.8k | 52594.3k | 0.51 | 0.49 | 0.42 | 0.36 | 1.10 | 0.39 |
+| 1000 | 5 | brood | 155 | 32.0k | 52.0k | 73.5k | 101.0k | 62.4k | 105.9k | 174.7k | 280.6k | 0.51 | 0.49 | 0.42 | 0.36 | 0.61 | 0.28 |
+| 1000 | 10 | warden | 155 | 131.5k | 251.0k | 401.5k | 529.5k | 258.1k | 512.5k | 955.9k | 1470.9k | 0.51 | 0.49 | 0.42 | 0.36 | 0.59 | 0.25 |
+| 1000 | 15 | spindle | 155 | 238.5k | 454.0k | 755.0k | 1016.5k | 467.5k | 926.5k | 1797.2k | 2823.6k | 0.51 | 0.49 | 0.42 | 0.36 | 0.61 | 0.27 |
+| 1000 | 20 | ember | 175 | 567.5k | 1532.0k | 3139.0k | 4365.5k | 1112.6k | 3126.7k | 7473.6k | 12127.0k | 0.51 | 0.49 | 0.42 | 0.36 | 0.91 | 0.25 |
+| 1000 | 25 | mirage | 175 | 597.5k | 1522.5k | 3041.5k | 4175.0k | 1171.7k | 3107.2k | 7241.2k | 11597.6k | 0.51 | 0.49 | 0.42 | 0.36 | 0.85 | 0.26 |
+| 1000 | 30 | gravitas | 175 | 571.0k | 1432.0k | 2852.0k | 3920.0k | 1119.5k | 2922.6k | 6790.6k | 10888.3k | 0.51 | 0.49 | 0.42 | 0.36 | 0.82 | 0.28 |
+| 1000 | 35 | bastion | 205 | 1498.5k | 4558.0k | 10288.0k | 14523.0k | 2938.2k | 9302.0k | 24495.5k | 40342.1k | 0.51 | 0.49 | 0.42 | 0.36 | 1.08 | 0.34 |
+| 1000 | 40 | tempest | 205 | 1030.5k | 3162.5k | 7139.0k | 10295.5k | 2020.2k | 6454.2k | 16997.7k | 28598.1k | 0.51 | 0.49 | 0.42 | 0.36 | 1.12 | 0.30 |
+| 1000 | 45 | twins | 205 | 1710.5k | 5471.5k | 12357.5k | 17216.5k | 3354.2k | 11166.1k | 29422.2k | 47823.9k | 0.51 | 0.49 | 0.42 | 0.36 | 1.08 | 0.32 |
+| 1000 | 50 | prism | 235 | 1705.0k | 5682.5k | 13525.5k | 19643.0k | 3342.8k | 11596.4k | 32203.8k | 54564.3k | 0.51 | 0.49 | 0.42 | 0.36 | 1.24 | 0.40 |
+| 424242 | 5 | brood | 155 | 37.0k | 58.5k | 85.0k | 114.0k | 72.8k | 118.9k | 202.0k | 316.6k | 0.51 | 0.49 | 0.42 | 0.36 | 0.60 | 0.30 |
+| 424242 | 10 | warden | 155 | 103.5k | 199.0k | 329.0k | 448.0k | 202.7k | 406.6k | 783.9k | 1243.8k | 0.51 | 0.49 | 0.42 | 0.36 | 0.61 | 0.24 |
+| 424242 | 15 | spindle | 155 | 180.5k | 361.5k | 640.5k | 892.0k | 354.2k | 737.6k | 1524.8k | 2477.9k | 0.51 | 0.49 | 0.42 | 0.36 | 0.66 | 0.28 |
+| 424242 | 20 | ember | 175 | 717.5k | 1593.0k | 2960.0k | 4012.5k | 1406.9k | 3251.4k | 7047.6k | 11145.7k | 0.51 | 0.49 | 0.42 | 0.36 | 0.77 | 0.27 |
+| 424242 | 25 | mirage | 175 | 423.5k | 1006.5k | 1928.5k | 2592.5k | 830.0k | 2054.1k | 4591.3k | 7202.0k | 0.51 | 0.49 | 0.42 | 0.36 | 0.79 | 0.27 |
+| 424242 | 30 | gravitas | 175 | 487.5k | 1256.0k | 2579.0k | 3569.0k | 956.2k | 2563.4k | 6140.6k | 9914.4k | 0.51 | 0.49 | 0.42 | 0.36 | 0.83 | 0.28 |
+| 424242 | 35 | bastion | 205 | 1865.5k | 5188.0k | 10586.0k | 14606.0k | 3657.8k | 10587.7k | 25204.3k | 40571.8k | 0.51 | 0.49 | 0.42 | 0.36 | 0.99 | 0.34 |
+| 424242 | 40 | tempest | 205 | 1404.5k | 4302.0k | 9675.5k | 13443.5k | 2753.4k | 8780.0k | 23037.1k | 37343.3k | 0.51 | 0.49 | 0.42 | 0.36 | 1.09 | 0.33 |
+| 424242 | 45 | twins | 205 | 1299.5k | 4124.5k | 9695.5k | 13770.0k | 2547.6k | 8416.9k | 23084.7k | 38250.2k | 0.51 | 0.49 | 0.42 | 0.36 | 1.13 | 0.33 |
+| 424242 | 50 | prism | 235 | 1832.0k | 6561.0k | 16174.5k | 23166.0k | 3592.5k | 13389.7k | 38510.7k | 64349.9k | 0.51 | 0.49 | 0.42 | 0.36 | 1.32 | 0.39 |

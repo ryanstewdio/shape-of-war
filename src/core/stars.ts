@@ -5,12 +5,23 @@
 // R6 (Ryan, gate R5): par and the three star targets follow the run's difficulty. Every place that
 // shows or scores them reads targetsFor, which multiplies the level's own numbers by
 // DIFFICULTY[d].parScale (Foundry calibrates the values).
+// Guardian par (version 14, Ryan 2026-11-11): a guardian level carries its own par and stars per
+// difficulty (LevelDef.difficultyPar); targetsFor reads that entry when present and falls back to
+// par x parScale when absent.
 import { DIFFICULTY, type Difficulty, type DifficultyTable } from './difficulty';
 
 /** The level's par and its three star targets. */
 export interface ParTargets {
   readonly par: number;
   readonly stars: readonly [number, number, number];
+}
+
+/** Per difficulty targets a level may carry (LevelDef.difficultyPar, version 14 guardian levels). */
+export type DifficultyTargets = Readonly<Partial<Record<Difficulty, ParTargets>>>;
+
+/** What targetsFor reads from a level: par, stars and, when present, the per difficulty targets. */
+export interface LevelTargets extends ParTargets {
+  readonly difficultyPar?: DifficultyTargets;
 }
 
 /** Only the field targetsFor reads, so tests can pass a stubbed table. */
@@ -27,8 +38,21 @@ export function scaleTarget(v: number, scale: number): number {
   return Number.isFinite(v) && v > 0 ? Math.max(1, Math.round(v * scale)) : v;
 }
 
-/** Pure: par and the three star targets for a run on difficulty `d`. */
-export function targetsFor(level: ParTargets, d: Difficulty, table: ParScaleTable = DIFFICULTY): ParTargets {
+/** Pure: true when e is a usable entry: a positive finite par and three finite stars. */
+export function isTargetEntry(e: ParTargets | undefined): e is ParTargets {
+  return e !== undefined && Number.isFinite(e.par) && e.par > 0 && Array.isArray(e.stars) && e.stars.length === 3 && e.stars.every((v) => Number.isFinite(v));
+}
+
+/**
+ * Pure: par and the three star targets for a run on difficulty `d`: the level's own entry for d
+ * when it carries a usable one (version 14 guardian levels), else par and stars x parScale.
+ */
+export function targetsFor(level: LevelTargets, d: Difficulty, table: ParScaleTable = DIFFICULTY): ParTargets {
+  const own = level.difficultyPar?.[d];
+  if (isTargetEntry(own)) {
+    const [a, b, c] = own.stars;
+    return { par: own.par, stars: [a, b, c] };
+  }
   const k = parScaleFor(d, table);
   const [a, b, c] = level.stars;
   return { par: scaleTarget(level.par, k), stars: [scaleTarget(a, k), scaleTarget(b, k), scaleTarget(c, k)] };

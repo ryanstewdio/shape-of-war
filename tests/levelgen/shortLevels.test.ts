@@ -8,12 +8,14 @@ import {
   GENERATOR_VERSION_V10,
   GENERATOR_VERSION_V11,
   GENERATOR_VERSION_V13,
+  GENERATOR_VERSION_V14,
   V1_GEN_CONFIG,
   V5_GEN_CONFIG,
   V6_GEN_CONFIG,
   V8_GEN_CONFIG,
   V9_GEN_CONFIG,
   V10_GEN_CONFIG,
+  V13_GEN_CONFIG,
   fmix32,
   hasParRamp,
   isLongVersion,
@@ -59,7 +61,9 @@ describe('short levels config and version', () => {
     expect(isLongVersion(v) && isR3Version(v) && isT3Version(v) && hasParRamp(v)).toBe(true);
     for (const n of [1, 4, 5, 8, 10, 14, 15, 30]) {
       // foundry-boss-arenas: guardian levels from 10 (10, 15, 30 here) are version 13 by default.
-      expect(generateLevel(42, n).generatorVersion, `level ${n}`).toBe(n >= 10 && n % 5 === 0 ? GENERATOR_VERSION_V13 : GENERATOR_VERSION_V11);
+      // foundry-guardian-par: every guardian level (5 too) is version 14 by default; V13_GEN_CONFIG keeps 13.
+      expect(generateLevel(42, n).generatorVersion, `level ${n}`).toBe(n % 5 === 0 ? GENERATOR_VERSION_V14 : GENERATOR_VERSION_V11);
+      expect(generateLevel(42, n, V13_GEN_CONFIG).generatorVersion, `level ${n}`).toBe(n >= 10 && n % 5 === 0 ? GENERATOR_VERSION_V13 : GENERATOR_VERSION_V11);
       expect(generateLevel(42, n, V10_GEN_CONFIG).generatorVersion, `level ${n}`).toBe(GENERATOR_VERSION_V10);
     }
   });
