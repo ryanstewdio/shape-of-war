@@ -52,7 +52,7 @@ describe('telegraph per tier', () => {
     expect(clampLaneHalfWidth(22)).toBe(22);
     expect(clampLaneHalfWidth(-3)).toBe(0);
     for (const n of [0, 1, 2, 3, 4, 9]) expect(sweepGap(n)).toBeGreaterThanOrEqual(90 * DEG);
-    expect(clampSweepArms(9)).toBe(3);
+    expect(clampSweepArms(9)).toBe(4); // fury two: Spindle's enraged fourth arm (90 deg gaps)
     expect(clampSweepArms(0)).toBe(1);
   });
 });

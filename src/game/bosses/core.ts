@@ -318,6 +318,7 @@ export function stepBossSchedule(w: World, dt: number): void {
   } else {
     bs.modeT += dt;
   }
+  if (bs.hitT >= 0) bs.hitT += dt;
   stepRotation(w, bs, dt);
   stepExposed(bs, dt);
   stepWindowLead(bs, dt);
@@ -636,6 +637,7 @@ export function damageBoss(w: World, amount: number, hx: number, hy: number, ign
   }
   if (!(dmg > 0) || !through) {
     emitHit(g, hx, hy, Kind.Boss, id, true);
+    emitBossHit(bs, hx, hy, false);
     return false;
   }
   const clamp = bs.def.clampDamage;
@@ -644,6 +646,7 @@ export function damageBoss(w: World, amount: number, hx: number, hy: number, ign
   const left = (w.hp[id] ?? 0) - (amt > 0 ? amt : 0);
   const hp = left > 0 ? left : 0;
   w.hp[id] = hp;
+  emitBossHit(bs, hx, hy, amt > 0); // a fury break hit is absorbed (0 lands)
   if (hp <= 0) {
     defeatBoss(w, bs, id);
     return true;
@@ -653,6 +656,20 @@ export function damageBoss(w: World, amount: number, hx: number, hy: number, ign
   syncBossPhase(w, bs, bs.id);
   checkCracks(w, bs, bs.id);
   return false;
+}
+
+/**
+ * Hit feedback: one player hit on a guardian body, core or part at (x, y). landed is true when it
+ * took hit points (hitT restarts at 0), false when it was absorbed. Reused payload, per hit.
+ */
+function emitBossHit(bs: BossState, x: number, y: number, landed: boolean): void {
+  if (landed) bs.hitT = 0;
+  const e = bs.hitEv;
+  e.id = bs.spec.id;
+  e.x = x;
+  e.y = y;
+  e.landed = landed;
+  bus.emit('sim:bossHit', e);
 }
 
 /** Whole tenths an armoured hit of amount lands; the fraction carries to the next hit. */
@@ -711,6 +728,7 @@ export function damageBossPart(w: World, id: number, amount: number, hx: number,
   const gate = guard === null ? undefined : guard.def.partGate;
   if (guard !== null && gate !== undefined && !gate(w, guard, id)) {
     emitHit(g, hx, hy, Kind.BossPart, id, true); // a shielded part: blocked, no damage
+    if (guard.status === 'alive') emitBossHit(guard, hx, hy, false);
     return false;
   }
   const prev = w.hp[id] ?? 0;
@@ -720,6 +738,7 @@ export function damageBossPart(w: World, id: number, amount: number, hx: number,
   w.hp[id] = hp;
   const bs = bossOf(w);
   const applied = amt <= 0 ? 0 : amt < prev ? amt : prev > 0 ? prev : 0;
+  if (bs !== null && bs.status === 'alive') emitBossHit(bs, hx, hy, applied > 0);
   if (hp > 0) {
     emitHit(g, hx, hy, Kind.BossPart, id, false);
     partDamaged(w, bs, id, applied, false, w.x[id] ?? 0, w.y[id] ?? 0);
