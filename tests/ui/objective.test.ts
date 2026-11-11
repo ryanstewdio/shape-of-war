@@ -246,19 +246,8 @@ describe('boss level bar', () => {
   it('before the entrance it fills with time and reads BOSS IN', () => {
     expect(objectiveProgress(obj, snap(30), false, undefined, { spec, bar: { shield: 1, health: 1, label: '' } })).toMatchObject({ label: 'BOSS IN 1:30', fraction: 0.25 });
   });
-  it('from the entrance it shows the boss health and name', () => {
-    expect(objectiveProgress(obj, snap(120), true, undefined, { spec, bar: { shield: 0, health: 0.4, label: '' } })).toMatchObject({ label: 'Warden', fraction: 0.4, shield: 0, health: 0.4 });
-  });
-  it('shows the shield and health strips from a BossBar', () => {
-    expect(objectiveProgress(obj, snap(120), true, undefined, { spec, bar: { shield: 0.25, health: 1, label: '' } })).toMatchObject({ label: 'Warden', shield: 0.25, health: 1 });
-  });
-  it('uses the BossBar label, Broodlings in the split phase', () => {
-    const brood = { id: 'brood', tier: 1, atSec: 120, hpMul: 1 } as const;
-    expect(objectiveProgress(obj, snap(200), true, undefined, { spec: brood, bar: { shield: 0.5, health: 1, label: 'Broodlings' } }).label).toBe('Broodlings');
-    expect(objectiveProgress(obj, snap(200), true, undefined, { spec: brood, bar: { shield: 1, health: 1, label: '' } }).label).toBe('Brood');
-  });
-  it('the entrance phase carries no strips', () => {
-    expect(objectiveProgress(obj, snap(30), false, undefined, { spec, bar: { shield: 0, health: 0, label: '' } }).shield).toBeUndefined();
+  it('from the entrance the objective bar only names the task, the boss bar holds the health', () => {
+    expect(objectiveProgress(obj, snap(120), true, undefined, { spec, bar: { shield: 0, health: 0.4, label: '' } })).toEqual({ label: 'Defeat the boss', fraction: 0, stars: null, starMarks: [] });
   });
   it('non boss levels are unchanged', () => {
     expect(objectiveProgress(obj, snap(30)).label).toBe('Destroy 0 / 300');

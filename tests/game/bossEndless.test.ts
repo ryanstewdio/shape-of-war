@@ -3,13 +3,13 @@
 // pause while it lives and resume when it dies. The reward is 5000 x tier and 20 geoms.
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
-import { bossAlive, damageBoss } from '../../src/game/bosses/core';
+import { bossAlive } from '../../src/game/bosses/core';
 import { createEndlessGame } from '../../src/game/game';
 import { gs } from '../../src/game/state';
 import { Kind } from '../../src/game/world';
 import { generateEndless, generateEndlessSegment } from '../../src/levelgen/generator';
 import type { EndlessSegmentDef } from '../../src/levelgen/leveldef';
-import { count, run } from './bossHelpers';
+import { count, run, slay } from './bossHelpers';
 
 afterEach(() => bus.clear());
 
@@ -41,7 +41,7 @@ describe('endless boss', () => {
     // Death: 5000 x tier and 20 geoms, then the clock runs again.
     const score = g.score;
     const geoms = count(w, Kind.Geom);
-    damageBoss(w, 99999, 0, 0, true);
+    slay(w); // Warden fury: through the break
     expect(g.score - score).toBe(5000);
     expect(count(w, Kind.Geom) - geoms).toBeGreaterThanOrEqual(20);
     run(w, 1);

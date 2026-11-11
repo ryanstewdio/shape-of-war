@@ -11,7 +11,7 @@ import { ringEvery, ringGaps } from '../../src/game/bosses/warden';
 import { stepGame } from '../../src/game/game';
 import { angleBetween } from '../../src/game/steer';
 import { Kind, type World } from '../../src/game/world';
-import { bs, bossGame, enter, park } from './bossHelpers';
+import { bs, bossGame, enter, park, wardenFury } from './bossHelpers';
 import { DT, idle } from './helpers';
 
 afterEach(() => bus.clear());
@@ -104,16 +104,15 @@ describe('warden', () => {
     expect(checked).toBeGreaterThanOrEqual(2);
   });
 
-  it('phase 2 rings come every 2.8 s with two gaps', () => {
+  it('phase 2 rings come every 2.4 s enraged (2.8 s table value) with two gaps', () => {
     expect(ringEvery(1)).toBe(3.7);
     expect(ringEvery(2)).toBe(2.8);
+    expect(ringEvery(2, 2)).toBe(2.4);
     expect(ringGaps(2)).toBe(2);
     const w = bossGame('warden');
     park(w, 600, 400);
     enter(w);
-    bs(w).open = true;
-    damageBoss(w, Math.floor(bs(w).maxHp / 2) + 1, 0, 0);
-    expect(bs(w).phase).toBe(2);
+    wardenFury(w); // Warden fury: phase 2 starts at the break, enraged after it (dash held)
     const born: number[] = [];
     // Stop before the first shield (10 s into the fight) pauses the ring clock.
     for (let i = 0; i < 120 * 9; i++) {
@@ -125,7 +124,7 @@ describe('warden', () => {
       }
     }
     expect(born.length).toBeGreaterThanOrEqual(2);
-    for (let k = 1; k < born.length; k++) expect((born[k] ?? 0) - (born[k - 1] ?? 0)).toBeCloseTo(2.8, 1);
+    for (let k = 1; k < born.length; k++) expect((born[k] ?? 0) - (born[k - 1] ?? 0)).toBeCloseTo(2.4, 1);
   });
 
   it('seeks its target at no more than 55 u/s', () => {

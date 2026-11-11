@@ -155,13 +155,13 @@ function fire(w: World, bs: BossState, id: number): boolean {
 /**
  * One step of the rotation (call from stepBossSchedule while the boss is alive). Its clock runs on
  * attack time (enrage and cadence) and holds while the boss is entering, the ship is down, the boss
- * is staggered, changing phase or shielded.
+ * is staggered, changing phase, shielded or in Warden's fury break.
  */
 export function stepRotation(w: World, bs: BossState, dt: number): void {
   if (bs.status !== 'alive') return;
   stepRotationLaunch(w, bs);
   if (!bs.rotOn || bs.mode === BossMode.Entering || !w.ship.active) return;
-  if (bs.stagger > 0 || bs.phaseT > 0 || bs.shielded) return;
+  if (bs.stagger > 0 || bs.phaseT > 0 || bs.shielded || bs.fury === 1) return; // Warden's fury break too
   const enraged = bs.hold || bs.age >= ENRAGE_AFTER_SEC;
   const adt = (enraged ? dt * ENRAGE_RATE : dt) * bs.cadence;
   if (bs.rotWait > 0) {

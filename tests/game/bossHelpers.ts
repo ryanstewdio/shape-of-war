@@ -1,6 +1,8 @@
 // Shared helpers for the boss tests (docs/12 wave V3-A).
 import { TURRET_SHIELD } from '../../src/game/bosses/bastion';
-import { bossHittable, damageBossPart } from '../../src/game/bosses/core';
+import { DASH_CLOCK_SLOT } from '../../src/game/bosses/warden';
+import { FURY_BREAK_SEC } from '../../src/game/bosses/table';
+import { bossHittable, damageBoss, damageBossPart } from '../../src/game/bosses/core';
 import { bossOf, type BossState } from '../../src/game/bosses/state';
 import { afterAll, beforeAll, expect } from 'vitest';
 import { BOSS_TABLE } from '../../src/game/bosses/table';
@@ -96,6 +98,37 @@ export function bs(w: World): BossState {
   const s = bossOf(w);
   if (s === null) throw new Error('no boss state');
   return s;
+}
+
+/**
+ * Kill the boss outright with Detonate style damage (ignoreShield). Warden fury: the first hit stops
+ * at the Shield bar and starts the invincible break, so this ends the break and hits again.
+ */
+export function slay(w: World, ignoreShield = true): boolean {
+  if (damageBoss(w, 99999, 0, 0, ignoreShield)) return true;
+  const s = bossOf(w);
+  if (s !== null && s.fury === 1) {
+    s.fury = 2;
+    s.furyT = 0;
+  }
+  return damageBoss(w, 99999, 0, 0, ignoreShield);
+}
+
+/**
+ * Warden phase 2 the way play reaches it (fury): a hit empties the Shield bar, the break runs out
+ * and Warden is enraged. holdDash pushes the dash clock out so a test isolates the shield or rings.
+ */
+export function wardenFury(w: World, holdDash = true): void {
+  const s = bossOf(w);
+  if (s === null) throw new Error('no boss state');
+  s.open = true;
+  damageBoss(w, 99999, 0, 0);
+  expect(s.fury).toBe(1);
+  expect(s.phase).toBe(2);
+  const n = Math.round(FURY_BREAK_SEC * 120) + 1;
+  for (let i = 0; i < n; i++) stepGame(w, DT, idle());
+  expect(s.fury).toBe(2);
+  if (holdDash) s.abl[DASH_CLOCK_SLOT] = 1e9;
 }
 
 /** Step until the boss is past its entrance (hittable). Returns its id. */
