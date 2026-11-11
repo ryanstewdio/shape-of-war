@@ -60,6 +60,8 @@ export interface Burst {
   bigSize?: number;
   bigSpeedMul?: number;
   bigLifeMul?: number;
+  /** Draw size multiplier of an ordinary spark (glow-hit-feel); 1 or unset keeps the default. */
+  sparkSize?: number;
 }
 
 /** Ember defaults for a Burst that sets bigEvery but not the rest. */
@@ -130,7 +132,7 @@ export function emitBurst(p: ParticlePool, x: number, y: number, b: Burst): numb
     p.colour[id] = !ember && b.colour2 !== null && (k & 1) === 1 ? b.colour2 : b.colour;
     p.fresh[id] = 1;
     p.trail[id] = 0;
-    p.size[id] = ember ? (b.bigSize ?? EMBER_SIZE) : 1;
+    p.size[id] = ember ? (b.bigSize ?? EMBER_SIZE) : b.sparkSize !== undefined && b.sparkSize > 0 ? b.sparkSize : 1;
   }
   return n;
 }

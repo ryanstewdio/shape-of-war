@@ -269,6 +269,37 @@ export function burstBoss(
   return n;
 }
 
+/**
+ * Guardian hit sparks (glow-hit-feel): like burstBoss but ordinary sparks drawn size times larger and
+ * no embers, so a landed hit reads in a busy fight. Returns the number written.
+ */
+export function burstBossHit(
+  x: number,
+  y: number,
+  colour: number,
+  count: number,
+  speedMin: number,
+  speedMax: number,
+  lifeMin: number,
+  lifeMax: number,
+  size: number,
+): number {
+  scratch.count = Math.max(0, Math.min(pool.limit, Math.floor(count)));
+  scratch.speedMin = speedMin;
+  scratch.speedMax = speedMax;
+  scratch.lifeMin = lifeMin;
+  scratch.lifeMax = lifeMax;
+  scratch.drag = 1.8;
+  scratch.colour = colour;
+  scratch.colour2 = null;
+  scratch.inwardRadius = 0;
+  scratch.bigEvery = 0;
+  scratch.sparkSize = size;
+  const n = emitBurst(pool, x, y, scratch);
+  scratch.sparkSize = 1;
+  return n;
+}
+
 /** Spray count particles from (x, y) in arena units with default speeds. */
 export function burst(x: number, y: number, colour: number, count: number): void {
   scratch.count = tierBurstCount(count, burstTier, pool.limit);
