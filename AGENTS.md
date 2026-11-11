@@ -41,7 +41,8 @@ Never change these paths, even if an issue seems to ask you to:
 Outside this list, a path may change only if it is on the issue's allowed list. A path that is on neither list stays untouched.
 
 ## 5. Branch and pull request
-- Name the branch `cx/<issue number>-<slug>`. Cut it from the commit Codex checks out for you (the local branch may be named `work`), and record that commit's sha as the start sha before any change. Do not fetch: the sandbox has no network beyond what the issue names. Put the start sha in the pull request body.
+- Work from the commit Codex checks out for you (the local branch may be named `work`), and record that commit's sha as the start sha before any change. Do not fetch: the sandbox has no network beyond what the issue names. Put the start sha in the pull request body.
+- Publish with the GitHub connector only, never git push: create branch `cx/<issue number>-<slug>` from current main on GitHub, upload only the allowed files as one commit on it, then open the pull request. If an allowed file changed on main after the start sha, stop and report instead of uploading.
 - Open one pull request against main. Its body holds, in this order: the bad news first; the exact output of `git diff --stat`; what you left out; each command you ran with the exact tail of its output; risks; and the model name exactly as the Codex model control shows it.
 - Post a verdict in the task thread in under 40 lines. Its last line is either `Verdict: ready for review` or `Verdict: blocked: <reason>`.
 - You get at most three revision rounds on one pull request. After the third, stop and report.
