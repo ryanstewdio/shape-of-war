@@ -418,7 +418,7 @@ describe('speeds ignore speedScale (boss rule 13)', () => {
 });
 
 describe('waves while a boss lives (boss rule 4)', () => {
-  it('keeps 3 of every 5 scheduled entries, and all of them without a live boss', () => {
+  it('keeps 1 of every 4 scheduled entries at Normal (WAVE_BUDGET_WITH_BOSS), and all of them without a live boss', () => {
     const { w } = makeGame();
     for (let i = 0; i < 10; i++) expect(keepScheduledEntry(w)).toBe(true);
     const b = bossGame('spindle');
@@ -426,10 +426,10 @@ describe('waves while a boss lives (boss rule 4)', () => {
     enter(b);
     let kept = 0;
     for (let i = 0; i < 100; i++) if (keepScheduledEntry(b)) kept++;
-    expect(kept).toBe(60);
+    expect(kept).toBe(25);
   });
 
-  it('a wave due while the boss lives spawns 0.6 of its entries', () => {
+  it('a wave due while the boss lives spawns 0.25 of its entries at Normal', () => {
     const entries: SpawnEntry[] = [];
     for (let i = 0; i < 10; i++) {
       entries.push({ kind: 'grunt', tOffsetSec: 0, mode: 'fixed', x: -600 + i * 20, y: -400, angleDeg: 0, radius: 0, headingDeg: 0 });
@@ -449,7 +449,7 @@ describe('waves while a boss lives (boss rule 4)', () => {
     const w = bossGame('spindle', { waves });
     park(w, 600, 400);
     run(w, 5);
-    expect(count(w, Kind.Grunt)).toBe(6);
+    expect(count(w, Kind.Grunt)).toBe(2);
     const v = bossGame('spindle', { waves, boss: undefined });
     park(v, 600, 400);
     run(v, 5);
