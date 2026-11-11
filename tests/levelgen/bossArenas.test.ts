@@ -1,4 +1,7 @@
 // foundry-boss-arenas: version 13 guardian arenas (Ryan, device check on ecde5b2, 2026-11-11).
+// foundry-guardian-par: the default config now builds version 14 guardian levels (same arenas, new
+// par), so the version 13 pins below read V13_GEN_CONFIG; tests/levelgen/guardianPar.test.ts
+// covers version 14 and the default config.
 import { describe, expect, it } from 'vitest';
 import { fmix32 } from '../../src/core/rng';
 import { BOSS_ARENA_FROM_LEVEL, BOSS_ARENA_LARGE, BOSS_EVERY } from '../../src/levelgen/boss';
@@ -11,6 +14,7 @@ import {
   GENERATOR_VERSION_V13,
   V11_GEN_CONFIG,
   V12_GEN_CONFIG,
+  V13_GEN_CONFIG,
   hasParRamp,
   isLongVersion,
   isR3Version,
@@ -50,7 +54,7 @@ describe('boss arenas: config and version', () => {
   it('selects version 13 on every guardian level from 10 (loops included) and nowhere else', () => {
     for (const seed of [0, 42, 0xdeadbeef]) {
       for (let n = 1; n <= 120; n++) {
-        const d = generateLevel(seed, n);
+        const d = generateLevel(seed, n, V13_GEN_CONFIG);
         const guardian = n >= BOSS_ARENA_FROM_LEVEL && n % BOSS_EVERY === 0;
         expect(guardianArenaBoss(n, DEFAULT_GEN_CONFIG) !== null, `level ${n}`).toBe(guardian);
         if (guardian) expect(d.generatorVersion, `level ${n}`).toBe(GENERATOR_VERSION_V13);
@@ -64,7 +68,7 @@ describe('boss arenas: config and version', () => {
       const s = seedAt(i);
       for (let n = 1; n <= 60; n++) {
         if (guardianArenaBoss(n, DEFAULT_GEN_CONFIG) !== null) continue;
-        expect(levelHash(generateLevel(s, n)), `seed ${s} level ${n}`).toBe(levelHash(generateLevel(s, n, V12_GEN_CONFIG)));
+        expect(levelHash(generateLevel(s, n, V13_GEN_CONFIG)), `seed ${s} level ${n}`).toBe(levelHash(generateLevel(s, n, V12_GEN_CONFIG)));
       }
     }
   }, 120_000);
@@ -77,12 +81,12 @@ describe('boss arenas: config and version', () => {
   }, 120_000);
 
   it('G1 ties version 13 to the flag and to guardian levels', () => {
-    const d = generateLevel(42, 15);
-    expect(validateLevel(d, DEFAULT_GEN_CONFIG).errors).toEqual([]);
+    const d = generateLevel(42, 15, V13_GEN_CONFIG);
+    expect(validateLevel(d, V13_GEN_CONFIG).errors).toEqual([]);
     expect(ids(validateLevel(d, V12_GEN_CONFIG).errors)).toContain('G1');
     const v12 = generateLevel(42, 15, V12_GEN_CONFIG);
     expect(validateLevel(v12, V12_GEN_CONFIG).errors).toEqual([]);
-    expect(ids(validateLevel(v12, DEFAULT_GEN_CONFIG).errors)).toContain('G1');
+    expect(ids(validateLevel(v12, V13_GEN_CONFIG).errors)).toContain('G1');
     const plain: LevelDef = { ...generateLevel(42, 12), generatorVersion: GENERATOR_VERSION_V13 };
     expect(ids(validateLevel(plain).errors)).toContain('G1');
     const small: LevelDef = { ...d, arena: base('rect', 1200, 800) };
@@ -154,8 +158,8 @@ describe('boss arenas: validator sweep', () => {
     for (let i = 0; i < 200; i++) {
       const s = seedAt(i);
       for (const n of GUARDIAN_LEVELS) {
-        const d = generateLevel(s, n);
-        const r = validateLevel(d, DEFAULT_GEN_CONFIG);
+        const d = generateLevel(s, n, V13_GEN_CONFIG);
+        const r = validateLevel(d, V13_GEN_CONFIG);
         if (!r.ok || d.generatorVersion !== GENERATOR_VERSION_V13) bad.push(`seed ${s} level ${n} v${d.generatorVersion}: ${r.errors.join('; ')}`);
       }
     }

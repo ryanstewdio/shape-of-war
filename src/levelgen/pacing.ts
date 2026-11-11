@@ -180,6 +180,14 @@ export function bossLevelPar(w: WaveSchedule, o: ObjectiveDef, atSec: number, co
   return { par, stars: r1Stars(par) };
 }
 
+/** Tester 1: the scoreInTime goal as a share of a whole level par (Normal). */
+export const WHOLE_TARGET_FRACTION = 0.6;
+
+/** Whole level scoreInTime target: WHOLE_TARGET_FRACTION x par on the PAR_STEP grid, at least PAR_MIN, at most par. */
+export function wholeLevelTarget(par: number): number {
+  return Math.min(par, Math.max(PAR_MIN, Math.round((WHOLE_TARGET_FRACTION * par) / PAR_STEP) * PAR_STEP));
+}
+
 /** Stars of an R1 par. */
 export function r1Stars(par: number): [number, number, number] {
   return [toParGrid(par * R1_STAR_MULS[0]), toParGrid(par * R1_STAR_MULS[1]), toParGrid(par * R1_STAR_MULS[2])];

@@ -460,8 +460,8 @@ describe('v2 enemy stage', { timeout: 60_000 }, () => {
       const d = v2Level();
       // V3, D13, release polish, R1, R2, R3, T3 and par ramp: 3 to 10 (GENERATOR_VERSION_V3 to _V10) are known, so 11 is the first unknown.
       // foundry-short-levels: short levels are version 11, so 12 is the first unknown.
-      // foundry-trough: trough levels are version 12; foundry-boss-arenas: guardian arenas are 13, so 14 is the first unknown.
-      d.generatorVersion = 14;
+      // foundry-trough: trough levels are version 12; foundry-boss-arenas: guardian arenas are 13; foundry-guardian-par: guardian par is 14, so 15 is the first unknown.
+      d.generatorVersion = 15;
       expect(validateLevel(d).errors.some((e) => e.startsWith('J3:'))).toBe(true);
     });
 

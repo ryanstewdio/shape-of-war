@@ -335,7 +335,7 @@ export interface IntroExtra {
  */
 export function introCard(
   levelIndex: number,
-  def: Pick<LevelDef, 'objective' | 'stars' | 'drone' | 'superType'> & { par?: number; boss?: BossSpec; arena?: LevelDef['arena']; surface?: LevelDef['surface'] },
+  def: Pick<LevelDef, 'objective' | 'stars' | 'drone' | 'superType'> & { par?: number; difficultyPar?: LevelDef['difficultyPar']; boss?: BossSpec; arena?: LevelDef['arena']; surface?: LevelDef['surface'] },
   difficulty: Difficulty = 'normal',
   extra: IntroExtra = {},
   table: ParScaleTable = DIFFICULTY,
@@ -348,7 +348,7 @@ export function introCard(
     arena: arenaDetail(def),
     goal: goalSentence(goal),
     victory: victorySentence(goal),
-    stars: starTargets(targetsFor({ par: def.par ?? 0, stars: def.stars }, difficulty, table).stars),
+    stars: starTargets(targetsFor({ par: def.par ?? 0, stars: def.stars, ...(def.difficultyPar === undefined ? {} : { difficultyPar: def.difficultyPar }) }, difficulty, table).stars),
     starCap: starCapLine(difficulty),
     enemies: foeLines(extra.newFoes ?? []),
     loadout: loadoutItems(def.drone, def.superType, extra.reward ?? ''),

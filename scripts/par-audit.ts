@@ -18,11 +18,17 @@
 // through a vite dev server in middleware mode (as scripts/guide-images.ts does). The audit itself
 // is a pure function of injected modules, so the test passes the real modules directly. No clock,
 // no PRNG: two runs give byte identical output.
+//
+// After V14 (brief foundry-guardian-par, Ryan's ruling 2026-11-11): the default config builds
+// version 14 guardian levels, whose par per difficulty targetsFor reads from LevelDef.difficultyPar.
+// With the tieredFight option a guardian level counts its tier's expected fight
+// (src/levelgen/guardianPar.ts GUARDIAN_FIGHT_SEC) in place of one fight length for every guardian;
+// main() prints the full report and the "After V14" guardian table at that fight.
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Difficulty, DifficultyTable } from '../src/core/difficulty';
-import type { ParTargets } from '../src/core/stars';
-import type { EnemyKind, LevelDef, ObjectiveDef } from '../src/levelgen/leveldef';
+import type { LevelTargets, ParTargets } from '../src/core/stars';
+import type { BossTier, EnemyKind, LevelDef, ObjectiveDef } from '../src/levelgen/leveldef';
 
 /** Run seeds of the audit. */
 export const AUDIT_SEEDS: readonly number[] = Object.freeze([1, 1000, 424242]);
@@ -38,7 +44,7 @@ export interface AuditDeps {
   readonly generateLevel: (runSeed: number, levelIndex: number) => LevelDef;
   readonly DIFFICULTIES: readonly Difficulty[];
   readonly DIFFICULTY: Readonly<Record<Difficulty, DifficultyTable>>;
-  readonly targetsFor: (level: ParTargets, d: Difficulty) => ParTargets;
+  readonly targetsFor: (level: LevelTargets, d: Difficulty) => ParTargets;
   readonly objectiveFor: (o: ObjectiveDef, d: Difficulty) => ObjectiveDef;
   readonly scaledCount: (n: number, rate: number) => number;
   readonly WAVE_BUDGET_WITH_BOSS: Readonly<Record<Difficulty, number>>;
@@ -54,6 +60,10 @@ export interface AuditDeps {
   readonly parStep: number;
   /** Share of par the guardian kill pays (scoring.ts BOSS_BONUS_SHARE). */
   readonly bonusShare: number;
+  /** Expected guardian fight seconds by tier (guardianPar.ts GUARDIAN_FIGHT_SEC, version 14). */
+  readonly guardianFightSec: (tier: BossTier) => number;
+  /** Target share s_d of the version 14 par (guardianPar.ts GUARDIAN_PAR_SHARE). */
+  readonly guardianParShare: Readonly<Record<Difficulty, number>>;
 }
 
 export type LevelType = 'guardian' | 'race' | 'survive' | 'destroy';
@@ -89,6 +99,8 @@ export interface AuditOptions {
   readonly levels?: number;
   /** Seconds of guardian fight counted (default deps.bossFightSec, the par model's own). */
   readonly fightSec?: number;
+  /** Version 14: each guardian level counts deps.guardianFightSec(tier) instead of fightSec. */
+  readonly tieredFight?: boolean;
 }
 
 export interface AuditResult {
@@ -195,9 +207,11 @@ export function auditPar(deps: AuditDeps, opts: AuditOptions = {}): AuditResult 
       const type = levelType(def);
       const objSec = deps.objectiveSec(def.objective, def.waves);
       const bossAt = def.boss === undefined ? null : def.boss.atSec;
-      const levelSec = bossAt === null ? objSec : Math.min(objSec, bossAt + fightSec);
+      const fight = def.boss !== undefined && opts.tieredFight === true ? deps.guardianFightSec(def.boss.tier) : fightSec;
+      const levelSec = bossAt === null ? objSec : Math.min(objSec, bossAt + fight);
       for (const d of deps.DIFFICULTIES) {
-        const t = deps.targetsFor({ par: def.par, stars: def.stars }, d);
+        // Version 14: targetsFor reads the guardian level's own par per difficulty.
+        const t = deps.targetsFor(def, d);
         const o = deps.objectiveFor(def.objective, d);
         const spawns = spawnsOn(deps, def, d, levelSec, bossAt);
         // The game pays the bonus on the level's own (Normal) par: core.ts bossBonus(w.level.par).
@@ -430,6 +444,75 @@ export function renderProposal(p: ProposalResult, difficulties: readonly Difficu
   return out.join('\n');
 }
 
+// After V14: the guardian table of a tiered fight audit.
+
+/** Version 14 acceptance: par / available within this of s_d at the tiered fight. */
+export const V14_SHARE_TOLERANCE = 0.02;
+
+export interface GuardianShareSummary {
+  readonly target: number;
+  readonly median: number;
+  readonly min: number;
+  readonly max: number;
+  /** Largest |share - target| over the guardian rows. */
+  readonly worst: number;
+}
+
+/** Pure: per difficulty summary of guardian par shares against s_d. */
+export function guardianShareSummary(res: AuditResult, deps: Pick<AuditDeps, 'DIFFICULTIES' | 'guardianParShare'>): Record<Difficulty, GuardianShareSummary> {
+  const out = {} as Record<Difficulty, GuardianShareSummary>;
+  for (const d of deps.DIFFICULTIES) {
+    const xs = res.rows.filter((r) => r.type === 'guardian' && r.difficulty === d).map((r) => r.parShare);
+    const target = deps.guardianParShare[d];
+    out[d] = {
+      target,
+      median: median(xs),
+      min: xs.length === 0 ? 0 : Math.min(...xs),
+      max: xs.length === 0 ? 0 : Math.max(...xs),
+      worst: xs.reduce((m, x) => Math.max(m, Math.abs(x - target)), 0),
+    };
+  }
+  return out;
+}
+
+/**
+ * Pure: the "After V14" guardian table. `tiered` is an audit with tieredFight; each `checks` entry
+ * is an audit at one fixed fight length, shown as the Normal share when the fight lasts that long.
+ */
+export function renderAfterV14(
+  tiered: AuditResult,
+  deps: Pick<AuditDeps, 'DIFFICULTIES' | 'guardianParShare' | 'guardianFightSec'>,
+  checks: readonly { readonly fightSec: number; readonly res: AuditResult }[] = [],
+): string {
+  const ds = deps.DIFFICULTIES;
+  const sum = guardianShareSummary(tiered, deps);
+  const out: string[] = [];
+  out.push('### Guardian par after V14 (tiered fight)');
+  out.push('');
+  out.push(`Fight seconds by tier: ${([1, 2, 3, 4] as const).map((t) => `tier ${t} ${deps.guardianFightSec(t)} s`).join(', ')}. Par per difficulty from LevelDef.difficultyPar (targetsFor). Sec: the entrance plus the fight (or the objective time if sooner).`);
+  out.push('');
+  out.push(`| | ${ds.join(' | ')} |`);
+  out.push(`|---|${ds.map(() => '---:').join('|')}|`);
+  out.push(`| target share s_d | ${ds.map((d) => sum[d].target.toFixed(2)).join(' | ')} |`);
+  out.push(`| median par / available | ${ds.map((d) => f2(sum[d].median)).join(' | ')} |`);
+  out.push(`| min | ${ds.map((d) => f2(sum[d].min)).join(' | ')} |`);
+  out.push(`| max | ${ds.map((d) => f2(sum[d].max)).join(' | ')} |`);
+  out.push(`| largest gap to s_d | ${ds.map((d) => sum[d].worst.toFixed(3)).join(' | ')} |`);
+  out.push('');
+  out.push(`Shares by difficulty at the tiered fight${checks.length > 0 ? `; the last columns are Normal when the fight lasts ${checks.map((c) => c.fightSec).join(' or ')} s instead` : ''}.`);
+  out.push('');
+  out.push(`| Seed | Lvl | Guardian | Sec | ${ds.map((d) => `Par ${d}`).join(' | ')} | ${ds.map((d) => `Avail ${d}`).join(' | ')} | ${ds.map((d) => `Share ${d}`).join(' | ')} |${checks.map((c) => ` N at ${c.fightSec} s |`).join('')}`);
+  out.push(`|---:|---:|---|---:|${ds.map(() => '---:').join('|')}|${ds.map(() => '---:').join('|')}|${ds.map(() => '---:').join('|')}|${checks.map(() => '---:|').join('')}`);
+  for (const n of tiered.rows.filter((r) => r.type === 'guardian' && r.difficulty === 'normal')) {
+    const by = ds.map((d) => tiered.rows.find((r) => r.seed === n.seed && r.level === n.level && r.difficulty === d));
+    const at = checks.map((c) => f2(c.res.rows.find((r) => r.seed === n.seed && r.level === n.level && r.difficulty === 'normal')?.parShare ?? 0));
+    out.push(
+      `| ${n.seed} | ${n.level} | ${n.guardian} | ${n.levelSec.toFixed(0)} | ${by.map((r) => k1(r?.par ?? 0)).join(' | ')} | ${by.map((r) => k1(r?.available ?? 0)).join(' | ')} | ${by.map((r) => f2(r?.parShare ?? 0)).join(' | ')} |${at.map((x) => ` ${x} |`).join('')}`,
+    );
+  }
+  return out.join('\n');
+}
+
 // Module loading. Each module type is the real src/ module's type.
 
 type GeneratorModule = typeof import('../src/levelgen/generator');
@@ -443,6 +526,7 @@ type PacingModule = typeof import('../src/levelgen/pacing');
 type LevelDefModule = typeof import('../src/levelgen/leveldef');
 type BossModule = typeof import('../src/levelgen/boss');
 type ValidateModule = typeof import('../src/levelgen/validate');
+type GuardianParModule = typeof import('../src/levelgen/guardianPar');
 
 export interface AuditModules {
   readonly generator: Pick<GeneratorModule, 'generateLevel'>;
@@ -456,6 +540,7 @@ export interface AuditModules {
   readonly levelDef: Pick<LevelDefModule, 'ENEMY_BASE' | 'ENEMY_GEOMS'>;
   readonly boss: Pick<BossModule, 'BOSS_FIGHT_SEC'>;
   readonly validate: Pick<ValidateModule, 'PAR_MIN' | 'PAR_STEP'>;
+  readonly guardianPar: Pick<GuardianParModule, 'guardianFightSec' | 'GUARDIAN_PAR_SHARE'>;
 }
 
 /** Pure: the audit's dependencies from the real modules. */
@@ -479,6 +564,8 @@ export function depsFrom(m: AuditModules): AuditDeps {
     parMin: m.validate.PAR_MIN,
     parStep: m.validate.PAR_STEP,
     bonusShare: m.scoring.BOSS_BONUS_SHARE,
+    guardianFightSec: (tier) => m.guardianPar.guardianFightSec(tier),
+    guardianParShare: m.guardianPar.GUARDIAN_PAR_SHARE,
   };
 }
 
@@ -505,6 +592,7 @@ export async function loadModules(root: string): Promise<AuditModules> {
       levelDef: (await load('/src/levelgen/leveldef.ts')) as unknown as LevelDefModule,
       boss: (await load('/src/levelgen/boss.ts')) as unknown as BossModule,
       validate: (await load('/src/levelgen/validate.ts')) as unknown as ValidateModule,
+      guardianPar: (await load('/src/levelgen/guardianPar.ts')) as unknown as GuardianParModule,
     };
   } finally {
     await server.close();
@@ -514,12 +602,13 @@ export async function loadModules(root: string): Promise<AuditModules> {
 async function main(): Promise<void> {
   const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
   const deps = depsFrom(await loadModules(root));
-  const audit = auditPar(deps);
-  console.log(renderReport(audit, deps.DIFFICULTIES));
+  // After V14: the default config (version 14 guardian levels) at the tiered fight. The report
+  // sections before "After V14" in docs/qa/par-audit.md came from the version 13 build of this script.
+  const tiered = auditPar(deps, { tieredFight: true });
+  console.log(renderReport(tiered, deps.DIFFICULTIES));
   console.log('');
-  console.log(renderGuardianSensitivity(auditPar(deps, { fightSec: SHORT_FIGHT_SEC }), deps.DIFFICULTIES, SHORT_FIGHT_SEC));
-  console.log('');
-  console.log(renderProposal(proposeGuardianPar(deps, audit), deps.DIFFICULTIES));
+  const checks = CHECK_FIGHT_SEC.map((fightSec) => ({ fightSec, res: auditPar(deps, { fightSec }) }));
+  console.log(renderAfterV14(tiered, deps, checks));
 }
 
 // Run only when started as a script, so tests can import the pure functions above.

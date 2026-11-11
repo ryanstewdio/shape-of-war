@@ -30,6 +30,7 @@ import {
   GENERATOR_VERSION_V11,
   GENERATOR_VERSION_V12,
   GENERATOR_VERSION_V13,
+  GENERATOR_VERSION_V14,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_BREATHER_SEC,
@@ -53,6 +54,7 @@ import {
   runsParRamp,
   runsShort,
   runsBossArenas,
+  runsGuardianPar,
   runsT3,
   runsTrough,
   isShortVersion,
@@ -125,7 +127,8 @@ import {
 } from './validate';
 import { growGuardianArena } from './bossArena';
 import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards, t3BossForLevel } from './boss';
-import { R3_COLLECT_RATE, V10_COLLECT_RATE, bossLevelPar, destroyCountFor, inBreather, pulseAt, wholeLevelPar } from './pacing';
+import { R3_COLLECT_RATE, V10_COLLECT_RATE, bossLevelPar, destroyCountFor, inBreather, pulseAt, wholeLevelPar, wholeLevelTarget } from './pacing';
+import { guardianLevelPar } from './guardianPar';
 import type { PulseShape } from './pacing';
 import {
   CYLINDER_CHANCE,
@@ -1242,7 +1245,12 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   // Drum taste: at most one well and no spawners (the boss rule 12 step, no draw).
   // Trough: at most one well, on the floor band; spawners inside the spawn band (no draw).
   const hazards = taste ? bossHazards(drawn) : trough ? troughHazards(drawn, arena.width) : drawn;
-  const whole = r3
+  // Guardian par (version 14): par per difficulty over the tiered fight; the Normal entry is par.
+  const parBoss = bossLevel && runsGuardianPar(cfg) ? levelBossOf(levelIndex, cfg) : null;
+  const guardianPar = parBoss === null ? null : guardianLevelPar({ waves, roster, objective, atSec: parBoss.atSec, tier: parBoss.tier });
+  const whole = guardianPar !== null
+    ? { par: guardianPar.normal.par, stars: guardianPar.normal.stars }
+    : r3
     ? bossLevel
       ? bossLevelPar(waves, objective, bossLevelAtSec(cfg), t10 ? V10_COLLECT_RATE : undefined)
       : wholeLevelPar(waves, objective, t10 ? V10_COLLECT_RATE : R3_COLLECT_RATE)
@@ -1283,7 +1291,9 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
     // Version 9 only, appended last so every older def keeps its keys and bytes.
     ...(taste ? { noDrift: true as const } : {}),
   };
-  return withLevelBoss(def, cfg);
+  const placed = withLevelBoss(def, cfg);
+  // Version 14: the per difficulty par joins last, after the boss field, so every other key keeps its place.
+  return guardianPar === null ? placed : { ...placed, generatorVersion: GENERATOR_VERSION_V14, difficultyPar: guardianPar };
 }
 
 /**
@@ -1448,13 +1458,8 @@ export function longPulse(l: LongBandParams): PulseShape {
   return { calmSec: LONG_CALM_SEC, peakEverySec: l.peakEverySec, breatherSec: LONG_BREATHER_SEC };
 }
 
-/** Tester 1: the scoreInTime goal as a share of a whole level par (Normal). */
-export const WHOLE_TARGET_FRACTION = 0.6;
-
-/** Whole level scoreInTime target: WHOLE_TARGET_FRACTION x par on the PAR_STEP grid, at least PAR_MIN, at most par. */
-export function wholeLevelTarget(par: number): number {
-  return Math.min(par, Math.max(PAR_MIN, Math.round((WHOLE_TARGET_FRACTION * par) / PAR_STEP) * PAR_STEP));
-}
+// Tester 1: the scoreInTime goal; moved to pacing.ts (guardian par reads it too), re-exported here.
+export { WHOLE_TARGET_FRACTION, wholeLevelTarget } from './pacing';
 
 /**
  * Long scoreInTime target: the target the same waves give over the band's legacy time limit

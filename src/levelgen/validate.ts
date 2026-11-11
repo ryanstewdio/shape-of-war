@@ -21,6 +21,7 @@ import {
   GENERATOR_VERSION_V11,
   GENERATOR_VERSION_V12,
   GENERATOR_VERSION_V13,
+  GENERATOR_VERSION_V14,
   isShortVersion,
   isT3Version,
   levelMaxLive,
@@ -43,12 +44,16 @@ import {
   speedScaleFor,
 } from './leveldef';
 import { DRUM_BAR_THICK, MEMBRANE_MAX, MEMBRANE_MIN } from './drum';
+import { DIFFICULTIES } from '../core/difficulty';
+import { guardianLevelPar } from './guardianPar';
+import { r1Stars, wholeLevelTarget } from './pacing';
 import { BOSS_SHORT_LEVEL_AT_SEC, shortLevelSec, shortObjectiveTable } from './short';
 import { BOSS_ARENA_FROM_LEVEL, BOSS_ARENA_LARGE, BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, BOSS_SEGMENT_AT_SEC, FIRST_FIGHT_HP_MUL, bossForLevel, bossForSegment, bossTierOf, freePlayBossFor, sameBoss, t3BossForLevel } from './boss';
 import type {
   ArenaDef,
   Band,
   BossSpec,
+  DifficultyParEntry,
   EndlessDef,
   EndlessSegmentDef,
   EnemyKind,
@@ -466,7 +471,7 @@ function checkJson(c: Collector, def: unknown): void {
 function checkVersions(c: Collector, version: number, generatorVersion: number): void {
   c.check('J3', (report) => {
     if (version !== LEVELDEF_VERSION) report(`version ${version} !== ${LEVELDEF_VERSION}`);
-    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9, GENERATOR_VERSION_V10, GENERATOR_VERSION_V11, GENERATOR_VERSION_V12, GENERATOR_VERSION_V13];
+    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9, GENERATOR_VERSION_V10, GENERATOR_VERSION_V11, GENERATOR_VERSION_V12, GENERATOR_VERSION_V13, GENERATOR_VERSION_V14];
     if (!known.includes(generatorVersion)) report(`generatorVersion ${generatorVersion} not ${known.join(', ')}`);
   });
 }
@@ -502,6 +507,8 @@ export interface LevelCheckOptions extends BossCheckOptions {
   enableTrough?: boolean;
   /** Boss arenas: with the version 12 flags on (enableTrough true), G1 ties GENERATOR_VERSION_V13 to this flag. */
   enableBossArenas?: boolean;
+  /** Guardian par: with the version 13 flags on, GP1 ties GENERATOR_VERSION_V14 to this flag. */
+  enableGuardianPar?: boolean;
 }
 
 interface BossRules {
@@ -979,8 +986,8 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
     if (def.seed !== want) report(`seed ${def.seed} !== levelSeed(runSeed, levelIndex) ${want}`);
     if (def.band !== band) report(`band ${def.band} !== bandOf(${def.levelIndex}) ${band}`);
   });
-  // Boss arenas: a version 13 arena may reach the Free Play large size (A1 and F1 as Free Play large).
-  checkArena(c, def.arena, def.surface === 'cylinder', false, def.generatorVersion === GENERATOR_VERSION_V13 ? FREE_PLAY_SIZE_SCALE.large : 1);
+  // Boss arenas: a version 13 arena (or a version 14 guardian arena) may reach the Free Play large size (A1 and F1 as Free Play large).
+  checkArena(c, def.arena, def.surface === 'cylinder', false, hasGuardianArena(def) ? FREE_PLAY_SIZE_SCALE.large : 1);
   checkRoster(c, def.roster, band, def.levelIndex >= LEAVER_FROM_LEVEL);
   checkSpeed(c, def.speedScale, def.levelIndex);
   checkObjective(c, def, band);
@@ -1074,6 +1081,7 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
   });
   checkDrumTaste(c, def, opts);
   checkBossArena(c, def, opts);
+  checkGuardianPar(c, def, opts);
   c.check('J5', (report) => {
     const r = def.retries;
     if (r === undefined || !isInt(r) || r < 0 || r > MAX_RETRIES) report(`retries ${String(r)} not an integer 0 to ${MAX_RETRIES}`);
@@ -1111,8 +1119,10 @@ function checkBossArena(c: Collector, def: LevelDef, opts: LevelCheckOptions | u
   c.check('G1', (report) => {
     const v13 = def.generatorVersion === GENERATOR_VERSION_V13;
     const guardian = isGuardianArenaLevel(def.levelIndex, def.boss);
+    // Guardian par: a version 14 guardian level from BOSS_ARENA_FROM_LEVEL keeps the version 13 arena.
+    const grown = hasGuardianArena(def);
     if (v13 && !guardian) report(`generatorVersion ${GENERATOR_VERSION_V13} on level ${def.levelIndex}, which is not a guardian level from ${BOSS_ARENA_FROM_LEVEL}`);
-    if (v13 && guardian && def.boss !== undefined && def.surface === 'flat') {
+    if (grown && guardian && def.boss !== undefined && def.surface === 'flat') {
       const min = guardianArenaMin(def.arena.shape, def.boss.id);
       if (def.arena.width < min.width - EPS || def.arena.height < min.height - EPS) {
         report(`guardian arena ${def.arena.width} x ${def.arena.height} smaller than ${min.width} x ${min.height} for ${def.boss.id}`);
@@ -1127,8 +1137,87 @@ function checkBossArena(c: Collector, def: LevelDef, opts: LevelCheckOptions | u
       opts.enableParRamp === true &&
       opts.enableShortLevels === true &&
       opts.enableTrough === true;
-    if (flags && opts.enableBossArenas === true && guardian && !v13) report(`guardian level ${def.levelIndex} with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V13}`);
+    if (flags && opts.enableBossArenas === true && guardian && !grown) report(`guardian level ${def.levelIndex} with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V13} or ${GENERATOR_VERSION_V14}`);
     if (v13 && opts !== undefined && opts.enableBossArenas !== undefined && !(flags && opts.enableBossArenas)) report(`generatorVersion ${GENERATOR_VERSION_V13} with enableBossArenas or a version 12 flag off`);
+  });
+}
+
+/** Boss arenas: true when a def carries the grown guardian arena (version 13, or version 14 from BOSS_ARENA_FROM_LEVEL). Pure. */
+export function hasGuardianArena(def: Pick<LevelDef, 'generatorVersion' | 'levelIndex'>): boolean {
+  return def.generatorVersion === GENERATOR_VERSION_V13 || (def.generatorVersion === GENERATOR_VERSION_V14 && def.levelIndex >= BOSS_ARENA_FROM_LEVEL);
+}
+
+/**
+ * Pure: the shape errors of a version 14 difficultyPar field against its def. Every difficulty has
+ * an entry; each par is on the PAR_STEP grid and at least PAR_MIN; stars are r1Stars(par); a goal
+ * is present exactly on a score race and is wholeLevelTarget(par); the normal entry equals par,
+ * stars and the objective's target.
+ */
+export function difficultyParErrors(def: Pick<LevelDef, 'par' | 'stars' | 'objective' | 'difficultyPar'>): string[] {
+  const out: string[] = [];
+  const dp = def.difficultyPar;
+  if (dp === undefined) return out;
+  if (typeof dp !== 'object' || dp === null) return [`difficultyPar not an object`];
+  const race = def.objective.kind === 'scoreInTime';
+  const known = new Set<string>(DIFFICULTIES);
+  for (const k of Object.keys(dp)) if (!known.has(k)) out.push(`difficultyPar has unknown key ${k}`);
+  for (const d of DIFFICULTIES) {
+    const e = dp[d] as DifficultyParEntry | undefined;
+    if (e === undefined) {
+      out.push(`difficultyPar.${d} missing`);
+      continue;
+    }
+    if (!(e.par >= PAR_MIN) || e.par % PAR_STEP !== 0) out.push(`difficultyPar.${d}.par ${e.par} not a multiple of ${PAR_STEP} at least ${PAR_MIN}`);
+    const want = r1Stars(e.par);
+    if (!Array.isArray(e.stars) || e.stars.length !== 3 || e.stars.some((v, i) => v !== want[i])) out.push(`difficultyPar.${d}.stars [${String(e.stars)}] !== [${want.join(', ')}]`);
+    if (race && e.goal !== wholeLevelTarget(e.par)) out.push(`difficultyPar.${d}.goal ${String(e.goal)} !== ${wholeLevelTarget(e.par)}`);
+    if (!race && e.goal !== undefined) out.push(`difficultyPar.${d}.goal ${e.goal} on a ${def.objective.kind} level`);
+  }
+  const n = dp.normal as DifficultyParEntry | undefined;
+  if (n !== undefined) {
+    if (n.par !== def.par) out.push(`difficultyPar.normal.par ${n.par} !== par ${def.par}`);
+    if (!Array.isArray(n.stars) || n.stars.some((v, i) => v !== def.stars[i])) out.push(`difficultyPar.normal.stars !== stars`);
+    if (def.objective.kind === 'scoreInTime' && n.goal !== def.objective.target) out.push(`difficultyPar.normal.goal ${String(n.goal)} !== target ${def.objective.target}`);
+  }
+  return out;
+}
+
+/**
+ * GP1 (guardian par): GENERATOR_VERSION_V14 and difficultyPar come together, only on a guardian
+ * level, and the field has the shape difficultyParErrors checks. With the version 13 flags known
+ * on, every guardian level carries version 14 exactly when enableGuardianPar is on. GP2: the field
+ * equals guardianLevelPar of the def's own waves, roster, objective and boss.
+ */
+function checkGuardianPar(c: Collector, def: LevelDef, opts: LevelCheckOptions | undefined): void {
+  const v14 = def.generatorVersion === GENERATOR_VERSION_V14;
+  c.check('GP1', (report) => {
+    const has = def.difficultyPar !== undefined;
+    if (v14 && def.boss === undefined) report(`generatorVersion ${GENERATOR_VERSION_V14} on level ${def.levelIndex}, which has no guardian`);
+    if (v14 && !has) report(`generatorVersion ${GENERATOR_VERSION_V14} without difficultyPar`);
+    if (!v14 && has) report(`difficultyPar with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V14}`);
+    for (const e of difficultyParErrors(def)) report(e);
+    const flags =
+      opts !== undefined &&
+      opts.enableLongLevels === true &&
+      opts.enableR1Pacing === true &&
+      opts.enableR3Length === true &&
+      opts.enableT3 === true &&
+      opts.enableParRamp === true &&
+      opts.enableShortLevels === true &&
+      opts.enableTrough === true &&
+      opts.enableBossArenas === true;
+    if (flags && opts.enableGuardianPar === true && def.boss !== undefined && !v14) report(`guardian level ${def.levelIndex} with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V14}`);
+    if (v14 && opts !== undefined && opts.enableGuardianPar !== undefined && !(flags && opts.enableGuardianPar)) report(`generatorVersion ${GENERATOR_VERSION_V14} with enableGuardianPar or a version 13 flag off`);
+  });
+  c.check('GP2', (report) => {
+    const dp = def.difficultyPar;
+    const boss = def.boss;
+    if (dp === undefined || boss === undefined || !v14) return;
+    const want = guardianLevelPar({ waves: def.waves, roster: def.roster, objective: def.objective, atSec: boss.atSec, tier: boss.tier });
+    for (const d of DIFFICULTIES) {
+      const got = dp[d] as DifficultyParEntry | undefined;
+      if (got !== undefined && got.par !== want[d].par) report(`difficultyPar.${d}.par ${got.par} !== guardian par ${want[d].par}`);
+    }
   });
 }
 
