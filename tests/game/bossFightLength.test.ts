@@ -6,6 +6,7 @@
 // band 20 percent either side of its target. Easy is shorter and Insane longer through bossScale.
 // Before (R1 rows, every fight 313 to 345 s at Normal): warden 313, brood 330, spindle 329,
 // ember 345, mirage 330, gravitas 326, bastion 328, tempest 329, twins 329, prism 335.
+// Warden fury wave: warden 72 to 65 (the dash windows), brood 59 to 27 (device time retune).
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
 import { bossNominalLevel } from '../../src/game/bosses/table';
@@ -15,9 +16,13 @@ import { fightSeconds } from './bossFightBot';
 
 afterEach(() => bus.clear());
 
-/** Ryan's target seconds at Normal (the Adventure order ramps inside a tier). */
+/**
+ * Ryan's target seconds at Normal (the Adventure order ramps inside a tier). Brood (Warden fury
+ * wave): its rows now come from Ryan's device time (150 to 170 s on device against a 60 s target),
+ * not the bot; the bot reads about 27 s for the retuned fight (59 before), so its band sits there.
+ */
 const FIGHT_TARGET_SEC: Readonly<Record<BossId, number>> = {
-  brood: 60,
+  brood: 27,
   warden: 67.5,
   spindle: 75,
   ember: 85,

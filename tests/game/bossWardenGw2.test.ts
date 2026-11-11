@@ -3,13 +3,12 @@
 // phase 2 the dropping shield fires one ring of 12 enemy bullets.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/core/events';
-import { damageBoss } from '../../src/game/bosses/core';
 import { BOSS_TABLE, HORNET, HORNET_CAP, MAX_HORNETS, WARDEN, WARDEN_SHIELD } from '../../src/game/bosses/table';
 import { dropRingActive, dropRingHeading, ringEvery } from '../../src/game/bosses/warden';
 import { enemyBulletsOf } from '../../src/game/enemyBullets';
 import { stepGame } from '../../src/game/game';
 import type { World } from '../../src/game/world';
-import { bs, bossGame, enter, park, run, LEGACY_BOSS_HP } from './bossHelpers';
+import { bs, bossGame, enter, park, run, wardenFury, LEGACY_BOSS_HP } from './bossHelpers';
 import { stateHash } from './bossGw2Helpers';
 import { DT, idle } from './helpers';
 
@@ -22,12 +21,7 @@ function fight(phase: 1 | 2): { w: World; id: number } {
   const w = bossGame('warden', { par: 1000 });
   park(w, 600, 400);
   const id = enter(w);
-  if (phase === 2) {
-    bs(w).open = true;
-    damageBoss(w, Math.floor(bs(w).maxHp / 2) + 1, 0, 0);
-    expect(bs(w).phase).toBe(2);
-    run(w, 1);
-  }
+  if (phase === 2) wardenFury(w); // Warden fury: phase 2 starts at the break
   return { w, id };
 }
 

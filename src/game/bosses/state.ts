@@ -72,6 +72,14 @@ export interface BossState {
    */
   shielded: boolean;
   shieldLeft: number;
+  /**
+   * Warden fury (Ryan 2026-11-11): 0 none, 1 the invincible break, 2 enraged to the death. furyT is
+   * the seconds into the current stage. A ship death restart keeps the stage; armState clears it.
+   */
+  fury: 0 | 1 | 2;
+  furyT: number;
+  /** 'sim:bossFury' payload, reused. */
+  furyEv: { id: BossId; stage: 'break' | 'on'; sec: number; x: number; y: number };
   /** 'sim:bossShield' payload (GW2), reused: emitted when any boss shield goes up and when it drops. */
   shieldEv: { id: BossId; up: boolean; x: number; y: number };
 
@@ -216,6 +224,9 @@ function createState(w: World, spec: BossSpec, def: BossDef): BossState {
     shielded: false,
     shieldLeft: 0,
     shieldEv: { id: spec.id, up: false, x: 0, y: 0 },
+    fury: 0,
+    furyT: 0,
+    furyEv: { id: spec.id, stage: 'break', sec: 0, x: 0, y: 0 },
     shotT: 0,
     shotWait: 0,
     shotId: -1,
@@ -311,6 +322,9 @@ export function armState(w: World, spec: BossSpec, def: BossDef, atSec: number):
   s.shieldLeft = 0;
   s.shieldEv.id = spec.id;
   s.shieldEv.up = false;
+  s.fury = 0;
+  s.furyT = 0;
+  s.furyEv.id = spec.id;
   s.shotT = 0;
   s.shotWait = 0;
   s.shotId = -1;
