@@ -85,6 +85,8 @@ import { createHowToScreen } from './ui/howTo';
 import { createLevelSelect } from './ui/levelSelect';
 import { continueLabel, createMenuScreen, footerLine, shortSha } from './ui/menu';
 import { gateSearch, isDev } from './ui/devGate';
+import { unlockAllLevels } from './ui/devUnlock';
+import { FIGHT_TIMER_START, fightLine, fightStep, type FightTimer } from './ui/fightTimer';
 import { createSplashScreen } from './ui/splash';
 import { createPreviewWorld, previewRect, stepPreview } from './ui/preview';
 import { starsFor } from './game/objective';
@@ -431,6 +433,29 @@ async function boot(): Promise<void> {
   bus.on('sim:bossDown', () => {
     bossDown = true;
   });
+  // Dev only: guardian fight timer on the sim clock (world.time), so paused time never counts.
+  let fight: FightTimer = { ...FIGHT_TIMER_START };
+  let fightLineText = '';
+  if (gated.dev) {
+    bus.on('game:start', () => {
+      fight = { ...FIGHT_TIMER_START };
+      fightLineText = '';
+    });
+    bus.on('sim:bossEnter', (p) => {
+      fight = fightStep(fight, { type: 'enter', id: p.id, t: world.time });
+      fightLineText = '';
+    });
+    bus.on('sim:bossSplit', () => {
+      fight = fightStep(fight, { type: 'split', t: world.time });
+    });
+    bus.on('sim:bossFury', (p) => {
+      fight = fightStep(fight, { type: 'fury', stage: p.stage, t: world.time });
+    });
+    bus.on('sim:bossDown', () => {
+      fightLineText = fightLine(fight, world.time);
+      if (flow.mode === 'endless' || flow.mode === 'freeplay') hud.toast(fightLineText);
+    });
+  }
   // G3A: whether the cover screen reserves its boss strip for this run (ui/boss.ts needsBossStrip).
   // Set in startLevel before the layout, so the arena is the same size from the first frame.
   let bossStrip = false;
@@ -457,6 +482,7 @@ async function boot(): Promise<void> {
     if (flow.mode === 'endless' || flow.mode === 'freeplay') {
       hud.setLine(flow.mode === 'endless' ? endlessLine(endlessSeed, world.time) : freePlayLine(freePlayArenaName(), freePlayChoice.config.length, world.time));
       hud.setObjective({ label: endlessLabel(bossAlive()), fraction: 0, stars: null }); // "Boss" while one lives; no stars
+      if (bossAlive()) hud.setBossBar(bossBar(bossRead));
       hud.setClock(CLOCK_HIDDEN); // the level line already carries the Endless and Free Play clock
     } else {
       // Reads "Defeat the boss" while the level holds for a living boss (docs/13 boss rule 9).
@@ -466,6 +492,7 @@ async function boot(): Promise<void> {
       const bossInput = level.boss !== undefined ? { spec: level.boss, bar: alive ? bossBar(bossRead) : FULL_BOSS_BAR } : undefined;
       const snap = snapshotOf(world);
       hud.setObjective(objectiveProgress(level.objective, snap, alive, targets.stars, bossInput)); // R6: scaled by difficulty
+      if (alive) hud.setBossBar(bossBar(bossRead)); // the one boss health bar: Shield over Health, Broodlings label
       // hud-clock: countdown or time played on the objective's own sim clock, so paused time never counts.
       const clock = clockView(level.objective, snap.elapsedSec, level.boss !== undefined);
       const step = warnStep(warn, clock.shownLeft);
@@ -665,6 +692,7 @@ async function boot(): Promise<void> {
       bus.emit('game:start', { mode: 'adventure', levelIndex: 1 });
     },
     seedHash: (seed) => (generator === null ? null : pickLevel(generator, seed, 1, VALID_FIXTURES).hash),
+    unlockAll: () => void unlockAllLevels(),
     resetProgress: () => {
       resetProgress();
     },
@@ -910,6 +938,7 @@ async function boot(): Promise<void> {
       bestStars: customSeed ? end.stars : (loadAdventureScores()[String(index)]?.stars ?? 0),
     };
     if (level.boss !== undefined) result.bossName = bossName(level.boss.id);
+    if (gated.dev && fightLineText !== '') result.fightLine = fightLineText;
     // The results "Boss defeated" line reports the number the sim paid: scoring.bossBonus, the only copy.
     if (success && bossDown) result.bossBonus = bossBonus(level.par, 'adventure', level.boss?.tier ?? 0);
     // Story: a boss win plays its freeing scene first; progress is already saved above.

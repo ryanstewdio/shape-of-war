@@ -42,6 +42,7 @@ import { button, createScreen, el, type Screen } from './dom';
 import { createFrameThrottle, createSlider } from './slider';
 import { bus } from '../core/events';
 import { attachScrollbar } from './scrollbar';
+import { UNLOCK_ALL_CONFIRM, UNLOCK_ALL_DONE, UNLOCK_ALL_LABEL } from './devUnlock';
 
 /** Reset progress confirmation (second tap needed) and done texts. The reset clears the story too. */
 export const RESET_CONFIRM_TEXT = 'Tap again: clears levels, story and call sign';
@@ -412,6 +413,8 @@ export interface SettingsActions {
   /** Level 1 hash for a seed, or null when no generator is present. */
   seedHash(seed: number): string | null;
   resetProgress(): void;
+  /** Dev builds only: unlock Adventure levels 1 to 50 on the stored seed. */
+  unlockAll?(): void;
   /** window.sowDebug.stress(400, 2000). */
   stress(): void;
   /** Current neon value, read when the screen opens (the debug panel may have moved it). */
@@ -555,6 +558,22 @@ export function createSettingsScreen(parent: HTMLElement, model: SettingsModel, 
 
   const debugRow = el('div', 'sow-row');
   debugRow.append(button(STRESS_LABEL, a.stress));
+  const unlockAll = a.unlockAll;
+  if (a.dev === true && unlockAll !== undefined) {
+    let unlockArmed: number | null = null;
+    const unlockBtn = button(UNLOCK_ALL_LABEL, () => {
+      const r = confirmTap(unlockArmed, performance.now());
+      unlockArmed = r.armedAt;
+      if (r.fire) {
+        unlockAll();
+        unlockBtn.textContent = UNLOCK_ALL_DONE;
+      } else {
+        unlockBtn.textContent = UNLOCK_ALL_CONFIRM;
+      }
+    });
+    // A dev build shows it in the panel at once; no taps on the build label needed.
+    bottom.append(unlockBtn);
+  }
   debugRow.style.display = 'none';
   const version = el('div', 'sow-small', `build ${a.buildId}`);
   version.style.alignSelf = 'flex-end';

@@ -25,7 +25,6 @@ import {
   BOSS_MAX_PIPS,
   bossBannerText,
   bossColour,
-  bossFill,
   bossGate,
   bossView,
   enterPayload,
@@ -33,6 +32,7 @@ import {
   type HudBoss,
   type PipState,
 } from './boss';
+import { barFills, type BossBar } from '../game/bosses/bar';
 import { el } from './dom';
 import {
   combineView,
@@ -334,6 +334,10 @@ export interface Hud {
   setBoss(p: HudBoss): void;
   /** Hide the boss bar and forget the throttle: a new world has no boss. */
   clearBoss(): void;
+  /** Dev builds: a short line at the banner spot that hides itself after `ms`. */
+  toast(text: string, ms?: number): void;
+  /** Feed the boss bar its Shield and Health fills and label (bossBar of the boss view). Repaints now when the bar is up. */
+  setBossBar(b: BossBar): void;
   /** True while the boss bar is up. */
   bossShown(): boolean;
   /** Start the boss banner for this boss: it fades in over 1.2 s, holds, fades out, then hides itself. */
@@ -495,12 +499,43 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   bossBarEl.style.display = 'none';
   bossBarEl.style.background = 'rgba(2, 4, 12, 0.55)';
   bossBarEl.setAttribute('data-hud', 'boss-bar');
-  const bossFillEl = el('div', 'sow-hud-fill');
-  bossFillEl.setAttribute('data-hud', 'boss-fill');
-  bossBarEl.append(bossFillEl);
+  // One boss health bar (the one players see): a blue Shield strip over a red Health strip.
+  const bossStrip = (name: string, top: string): { track: HTMLDivElement; fill: HTMLDivElement } => {
+    const track = el('div', 'sow-hud-fill');
+    const f = el('div', 'sow-hud-fill');
+    track.style.cssText = `position:absolute;left:0;right:0;top:${top};height:calc(50% - 1px);width:auto;background:transparent;box-shadow:none`;
+    f.style.height = '100%';
+    track.setAttribute('data-hud', `${name}-strip`);
+    f.setAttribute('data-hud', `${name}-fill`);
+    track.append(f);
+    return { track, fill: f };
+  };
+  const shieldStrip = bossStrip('shield', '0');
+  const healthStrip = bossStrip('health', 'calc(50% + 1px)');
+  bossBarEl.append(shieldStrip.track, healthStrip.track);
+  /** The BossBar fed by main.ts each HUD tick; null until one arrives (hud:boss then draws a fallback). */
+  let bossBarFeed: BossBar | null = null;
+  let bossDefaultName = '';
+  const paintBossStrips = (b: BossBar): void => {
+    const blue = toneColour('blue', neon.saturation);
+    const red = toneColour('red', neon.saturation);
+    const pct = (v: number): string => `${Math.round(Math.max(0, Math.min(1, v)) * 1000) / 10}%`;
+    shieldStrip.fill.style.width = pct(b.shield);
+    shieldStrip.fill.style.background = blue;
+    shieldStrip.fill.style.boxShadow = `0 0 ${glowBlur(neon.glowAlpha)}px ${blue}`;
+    shieldStrip.track.style.opacity = b.shield > 0 ? '1' : '0.3'; // a cracked shield dims its strip
+    healthStrip.fill.style.width = pct(b.health);
+    healthStrip.fill.style.background = red;
+    healthStrip.fill.style.boxShadow = `0 0 ${glowBlur(neon.glowAlpha)}px ${red}`;
+  };
   // Boss banner (G3A): one line, the upper case name and a dot in the boss colour. It is not a HUD
   // box: it sits at the top of the play rect for a few seconds. Its opacity follows a pure clock
   // (bannerAlpha) that hud:score advances; a short CSS transition smooths the 100 ms steps.
+  const toastEl = el('div', 'sow-hud-item', '');
+  toastEl.style.display = 'none';
+  toastEl.style.textAlign = 'center';
+  toastEl.setAttribute('data-hud', 'toast');
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
   const bannerEl = el('div', 'sow-hud-item', '');
   bannerEl.style.fontWeight = '800';
   bannerEl.style.letterSpacing = '0.14em';
@@ -544,20 +579,7 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   const starFill = el('div', 'sow-hud-star');
   starFill.setAttribute('data-hud', 'starLine');
   const starTicks = [el('div', 'sow-hud-tick'), el('div', 'sow-hud-tick')];
-  // Boss fight: two thin strips inside the bar, blue Shield on top, red Health under it. Hidden otherwise.
-  const strip = (name: string, top: string): { track: HTMLDivElement; fill: HTMLDivElement } => {
-    const track = el('div', 'sow-hud-fill');
-    const f = el('div', 'sow-hud-fill');
-    track.style.cssText = `position:absolute;left:0;right:0;top:${top};height:calc(50% - 1px);width:auto;display:none;background:transparent;box-shadow:none`;
-    f.style.height = '100%';
-    track.setAttribute('data-hud', `${name}-strip`);
-    f.setAttribute('data-hud', `${name}-fill`);
-    track.append(f);
-    return { track, fill: f };
-  };
-  const shieldStrip = strip('shield', '0');
-  const healthStrip = strip('health', 'calc(50% + 1px)');
-  bar.append(fill, shieldStrip.track, healthStrip.track, starFill, ...starTicks);
+  bar.append(fill, starFill, ...starTicks);
   // hud-clock: a box host, a neon frame inside it, the pixel digits inside the frame. Hidden until set.
   const clockHost = el('div', 'sow-hud-item');
   clockHost.setAttribute('data-hud', 'clock');
@@ -618,7 +640,7 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   bombLabel.setAttribute('data-hud', 'bomb-label');
   const superName = el('div', 'sow-hud-item');
   superName.setAttribute('data-hud', 'super-label');
-  root.append(bar, objLabel, clockHost, score, mult, weaponBar, weaponLabel, droneBar, droneLabel, par, bossBarEl, bossNameEl, bossPipsEl, bannerEl, lives, bombs, pause, bombRing, superRing, bombLabel, superName);
+  root.append(bar, objLabel, clockHost, score, mult, weaponBar, weaponLabel, droneBar, droneLabel, par, bossBarEl, bossNameEl, bossPipsEl, bannerEl, toastEl, lives, bombs, pause, bombRing, superRing, bombLabel, superName);
   // Button look state: neon from applyNeon, bombs and charge from hud:score, held from setHeld.
   let neon: NeonParams = getNeonState().params;
   let bombsLeft = 1;
@@ -778,17 +800,32 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
       bossBarEl.style.display = v.visible ? '' : 'none';
       bossPipsEl.style.display = v.visible && v.pips.length > 0 ? 'flex' : 'none';
       if (!v.visible) return;
-      const fillStyle = bossFill(p.id, now());
-      bossNameEl.textContent = v.name;
+      const feed = bossBarFeed;
+      bossDefaultName = v.name;
+      bossNameEl.textContent = feed !== null && feed.label !== '' ? feed.label : v.name;
       bossNameEl.style.color = bossColour(p.id);
       bossNameEl.style.textShadow = `0 0 6px ${bossColour(p.id, 0.8)}`; // tier glow, not the shared cyan one
       bossBarEl.style.borderColor = bossColour(p.id, 0.7);
-      bossFillEl.style.background = fillStyle.background;
-      bossFillEl.style.boxShadow = fillStyle.glow;
-      bossFillEl.style.width = `${Math.round(v.fraction * 1000) / 10}%`;
+      paintBossStrips(feed ?? { ...barFills(p.hp, p.maxHp), label: '' });
       paintPips(p.id, v.pips);
     },
+    toast(text, ms = 4000) {
+      if (toastTimer !== undefined) clearTimeout(toastTimer);
+      toastEl.textContent = text;
+      toastEl.style.display = '';
+      toastTimer = setTimeout(() => {
+        toastTimer = undefined;
+        toastEl.style.display = 'none';
+      }, ms);
+    },
+    setBossBar(b) {
+      bossBarFeed = b;
+      if (!bossUp) return;
+      paintBossStrips(b);
+      bossNameEl.textContent = b.label !== '' ? b.label : bossDefaultName;
+    },
     clearBoss() {
+      bossBarFeed = null;
       bossGateState = { ...BOSS_GATE_START };
       bossDownSeen = false;
       bossUp = false;
@@ -830,22 +867,6 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
     setObjective(p) {
       objLabel.textContent = p.label;
       fill.style.width = `${Math.round(p.fraction * 1000) / 10}%`;
-      const split = p.shield !== undefined && p.shield !== null && p.health !== undefined;
-      fill.style.display = split ? 'none' : '';
-      shieldStrip.track.style.display = split ? '' : 'none';
-      healthStrip.track.style.display = split ? '' : 'none';
-      if (split) {
-        const sh = p.shield ?? 0;
-        const blue = toneColour('blue', neon.saturation);
-        const red = toneColour('red', neon.saturation);
-        shieldStrip.fill.style.width = `${Math.round(sh * 1000) / 10}%`;
-        shieldStrip.fill.style.background = blue;
-        shieldStrip.fill.style.boxShadow = `0 0 ${glowBlur(neon.glowAlpha)}px ${blue}`;
-        shieldStrip.track.style.opacity = sh > 0 ? '1' : '0.3'; // a cracked shield dims its strip
-        healthStrip.fill.style.width = `${Math.round((p.health ?? 0) * 1000) / 10}%`;
-        healthStrip.fill.style.background = red;
-        healthStrip.fill.style.boxShadow = `0 0 ${glowBlur(neon.glowAlpha)}px ${red}`;
-      }
       const line = p.stars ?? null;
       starFill.style.display = line === null ? 'none' : '';
       starFill.style.width = `${Math.round((line ?? 0) * 1000) / 10}%`;
@@ -892,6 +913,7 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
       setBox(bossPipsEl, B.bossPips, false);
       setBox(bossBarEl, B.bossBar, false);
       setBox(bannerEl, frame.banner, true);
+      setBox(toastEl, frame.banner, true);
       bannerEl.style.overflow = 'visible'; // setBox clips text boxes, which would cut the banner glow
       const pipD = Math.max(6, Math.min(10, B.bossPips.h - 6));
       for (const pip of bossPipEls) {
