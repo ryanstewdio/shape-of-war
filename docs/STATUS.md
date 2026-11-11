@@ -10,6 +10,7 @@ History: docs/STATUS-ARCHIVE.md. Decisions: docs/DECISIONS.md (newest rows at th
 
 ## Open checks and items
 - Awaiting Ryan's device check on dev APK 4a5e3bc (sent 2026-11-11; b79c954 and ecc5807 are superseded and were never checked). Three templates were sent: (1) wave check: enraged Spindle 4 arms, Ember blue flame, crack width, Bulwark with Pierce (passes the shield, 2 damage, PIERCE_BULWARK_DAMAGE), tick only hit sound, level 15 par reachable (V14), fight lines and ratings for Brood, Spindle, Ember; (2) sweep of levels 25, 30, 35, 40, 45, 50 on Normal (fight line and rating each); (3) fury three: Broodling frenzy and pincer, Mirage false landings and double image, Gravitas tide and ring flash.
+- From Ryan's fury three check on 4a5e3bc (2026-11-12): (1) FIX MIRAGE first: fight not finishable in reasonable time (tiny damage opening, little damage per hit, over 6 minutes); diagnose before any number change (shield gate arc, hit points 1620, fury break, mirrors). (2) Gravitas needs a redesign, Ryan's idea: it leaves low gravity puddles that disappear over time; propose a design for his approval. (3) Brood pincer not noticeable: propose a telegraph or stronger move. Mirage looks and false landings were not rated. Wave check and sweep templates still unanswered.
 - Fury table approved by Ryan for all seven. Landed: Brood, Mirage, Gravitas (swarm-fury-three PR 52, glow-fury-three PR 53; constants BROOD_FRENZY, MIRAGE_FURY, GRAVITAS_FURY in src/game/bosses/table.ts, all untuned). Next: wave 2 Bastion (wall in: four membrane walls; Foundry must widen validator M1 beyond drums first), Tempest (crosswind), Twins (hunting bond); wave 3 Prism (crown walls).
 - Swarm requests from fury three, not built: a signed pull strength in src/game/bosses/core.ts so the Gravitas push lives in bossContacts; createBossView defaults for frenzy, tide, tideFlipIn. Known gaps: Brood slime and dart clocks pause during a pincer; the push pauses with the boss step (bomb stagger); the pincer has no telegraph field of its own.
 - Guardian par known gap: a tier 3 or 4 guardian killed in about 30 s leaves Normal par at 0.96 to 1.32 of available.
@@ -20,6 +21,7 @@ History: docs/STATUS-ARCHIVE.md. Decisions: docs/DECISIONS.md (newest rows at th
 ## Recent gates (newest first)
 | Gate | Date | Result | Evidence from Ryan |
 |---|---|---|---|
+| Fury three | 2026-11-12 | partial | 4a5e3bc: Brood split flash yes, hot green frenzy yes, pincer not noticeable but fair, fight 1:52 total, rated 3.5 acceptable; Mirage broken: only takes damage through a tiny opening and takes little damage, would take over 6 minutes; Gravitas break yes, ring flash yes, push and pull readable and fair, fight 2:35, rated 3, but a bit boring and needs a redesign; fps not given |
 | Boss calm and arenas | 2026-11-11 | pass with notes | 9c799e2: Brood 3, Spindle 4, arena right, needles fair, enraged Spindle 3 arms (bug), Ember 4, Leavers yes, calmer waves yes, hits readable, cracks too thick in places, 59 fps |
 | Fury two | 2026-11-11 | partial | ecde5b2: Brood 0:22 rated 1, refill yes; levels after 10 too hard (swarm plus small arena); hits hard to read; 60 fps |
 | Warden fury | 2026-11-11 | pass | 1580146: unlock yes, one bar yes, Warden fun 4, break, enraged form and aim line clear |
@@ -27,4 +29,4 @@ History: docs/STATUS-ARCHIVE.md. Decisions: docs/DECISIONS.md (newest rows at th
 | Trough and native | 2026-11-10 | pass | 6987c7c after clearing data: troughs, pull 3, 3D 4; Auto Backup cause found |
 
 ## Next action
-Record Ryan's device check on 4a5e3bc in the gates table and tune from his fight lines and ratings (3 is the target). Then wave 2: Foundry M1 brief first, then Bastion, Tempest, Twins (Swarm sim plus Glow looks, shared stub first). Dispatcher sequence: next job is 1160.
+Diagnose and fix Mirage (Swarm), with Ryan's yes on the proposed numbers. Propose the Gravitas redesign (low gravity puddles) and a more noticeable Brood pincer for approval. Then wave 2: Bastion, Tempest, Twins. Dispatcher sequence: next job is 1161.
