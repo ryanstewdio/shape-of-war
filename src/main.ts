@@ -97,6 +97,7 @@ import { createBootScreen } from './ui/boot';
 import { arenaName, armIntro, createIntroScreen, endlessIntroCard, introActive, introCard, NO_INTRO, startIntro, tickIntro, type IntroGate } from './ui/intro';
 import { createResultsScreen } from './ui/results';
 import { createDoubleBack, installBackButton } from './native/backButton';
+import { installServiceWorkerCleanup } from './native/dropServiceWorker';
 import { createSettingsModel, createSettingsScreen } from './ui/settings';
 
 // Foundry's generator, if src/levelgen/generator.ts exists at build time. import.meta.glob
@@ -917,6 +918,7 @@ async function boot(): Promise<void> {
   bus.on('game:start', (p) => dispatch({ type: 'start', mode: p.mode, levelIndex: p.levelIndex }));
   bus.on('game:pause', () => dispatch({ type: 'pause' }));
   // Android back (Ryan 2026-11-10): pause in a level, previous screen elsewhere, double back on the menu exits. No-op on the web.
+  installServiceWorkerCleanup(); // native only: drop a service worker left by an old PWA install
   const menuBack = createDoubleBack(() => performance.now());
   installBackButton(() => {
     const s = flow.screen;

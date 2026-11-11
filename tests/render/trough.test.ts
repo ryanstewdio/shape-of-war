@@ -23,6 +23,7 @@ import {
   troughSteep,
   TROUGH_SHADE_MAX,
 } from '../../src/render/troughGeom';
+import { TROUGH_DEPTH_SCALE } from '../../src/render/troughDepth';
 
 const W = 1216;
 const H = 860;
@@ -30,10 +31,14 @@ const D = FOCAL_MUL * H;
 const P = (): DrumPoint => ({ x: 0, y: 0, s: 1, a: 1, m: 1 });
 const RECT = [-W / 2, -H / 2, W / 2, -H / 2, W / 2, H / 2, -W / 2, H / 2];
 
-/** At tilt 0 the depth scale is D / (D - lift), so the ground height is recoverable from x / u. */
+/**
+ * At tilt 0 the projection factor is D / (D - lift) (y / v), so the ground height is recoverable
+ * from the screen. The depth scale s also carries the trough-depth slope cue, so it is not used.
+ */
 function heightFromScreen(u: number, d = makeTroughDrum(W, H, 0)): number {
-  const p = troughProject(u, 0, 0, d, P());
-  const lift = D * (1 - 1 / p.s);
+  const p = troughProject(u, 100, 0, d, P());
+  const f = p.y / 100;
+  const lift = D * (1 - 1 / f);
   return lift + d.depth;
 }
 
@@ -63,7 +68,8 @@ describe('trough projection follows the shared profile', () => {
     for (const u of [-W / 2, W / 2]) {
       expect(heightFromScreen(u)).toBeCloseTo(TROUGH_DEPTH_SHARE * W, 6);
       const p = troughProject(u, 0, 0, d, P());
-      expect(p.s).toBeCloseTo(1, 12);
+      // Plain projection 1 at the rim; s carries the trough-depth rim scale on top.
+      expect(p.s).toBeCloseTo(TROUGH_DEPTH_SCALE, 12);
       expect(p.x).toBeCloseTo(u, 9);
     }
   });
