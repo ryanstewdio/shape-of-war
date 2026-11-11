@@ -22,7 +22,6 @@ import {
   CUES,
   createRateLimiter,
   createWindowLimiter,
-  cueForHit,
   cueForSfx,
   isBigKillColour,
   MAX_VOICES,
@@ -325,10 +324,6 @@ export function installAudio(opts: AudioOptions): () => void {
     b.on('sim:bossDown', () => {
       play('bossDeath');
       bossDown = true;
-    }),
-    b.on('fx:hit', (p) => {
-      const cue = cueForHit(p.kind, p.blocked);
-      if (cue !== null) play(cue);
     }),
     b.on('fx:bossShot', () => play('bossShot')),
   ];

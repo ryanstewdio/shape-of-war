@@ -4,10 +4,8 @@
 // AudioContext) a storm of boss events never holds more than the 24 voice sfx cap.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
-  BOSS_KIND,
   CUES,
   createWindowLimiter,
-  cueForHit,
   MAX_VOICES,
   RATE_LIMITS,
   WINDOW_LIMITS,
@@ -33,7 +31,6 @@ describe('boss cue table', () => {
     expect(durOf(hit)).toBeGreaterThan(HIT_DUR_SEC);
     const tone = hit.voices.find((v) => v.wave !== 'noise');
     expect(tone?.f0 ?? 1e9).toBeLessThan(220); // the lowest kill note tick sits above A3
-    expect(RATE_LIMITS.bossHit).toBe(8);
   });
 
   it('the boss death is a bigKill variant: the same kinds of voices, longer and with a sub boom', () => {
@@ -64,12 +61,8 @@ describe('boss cue table', () => {
     expect(RATE_LIMITS.telegraph).toBe(4);
   });
 
-  it('routes fx:hit: a damaging Kind.Boss hit to the boss hit, nothing else', () => {
-    expect(BOSS_KIND).toBe(Kind.Boss);
-    expect(cueForHit(Kind.Boss, false)).toBe('bossHit');
-    expect(cueForHit(Kind.Boss, true)).toBeNull();
-    expect(cueForHit(Kind.BossPart, false)).toBeNull();
-    expect(cueForHit(Kind.Grunt, false)).toBeNull();
+  it('plays no cue for fx:hit (the music tick owns guardian hits)', () => {
+    expect(RATE_LIMITS).not.toHaveProperty('bossHit');
   });
 });
 
@@ -138,17 +131,14 @@ afterAll(() => {
 });
 
 describe('boss cues through the synth', () => {
-  it('the bus plays the rumble, the hit, the death and the shot', () => {
+  it('the bus plays the rumble, the death and the shot, and nothing for a hit', () => {
     const from = ctx.oscs.length;
     ctx.currentTime = 100;
     bus.emit('sim:bossEnter', { id: 'warden', tier: 1 });
     expect(started(82, from)).toBe(1);
     bus.emit('fx:hit', { x: 0, y: 0, kind: Kind.Boss, id: 3, blocked: false });
-    expect(started(196, from)).toBe(1);
     bus.emit('fx:hit', { x: 0, y: 0, kind: Kind.Boss, id: 3, blocked: true });
-    ctx.currentTime = 100.5;
-    bus.emit('fx:hit', { x: 0, y: 0, kind: Kind.Boss, id: 3, blocked: true });
-    expect(started(196, from)).toBe(1); // a blocked hit is the music's deflect, not this cue
+    expect(started(196, from)).toBe(0); // no cue for fx:hit, damaging or blocked
     bus.emit('fx:bossShot', { x: 0, y: 0, id: 'spindle' });
     expect(started(640, from)).toBe(1);
     bus.emit('sim:bossDown', { id: 'warden', x: 0, y: 0 });
@@ -173,15 +163,13 @@ describe('boss cues through the synth', () => {
     expect(n).toBeGreaterThanOrEqual(17);
   });
 
-  it('boss hits at 60 Hz are throttled to about 8 a second', () => {
+  it('boss hits at 60 Hz play no cue', () => {
     const from = ctx.oscs.length;
     for (let i = 0; i < 120; i++) {
       ctx.currentTime = 300 + i / 60;
       bus.emit('fx:hit', { x: 0, y: 0, kind: Kind.Boss, id: 1, blocked: false });
     }
-    const n = started(196, from);
-    expect(n).toBeLessThanOrEqual(17);
-    expect(n).toBeGreaterThanOrEqual(14);
+    expect(started(196, from)).toBe(0);
   });
 
   it('a storm of boss and combat events never holds more than 24 sfx voices', () => {
