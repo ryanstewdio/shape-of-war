@@ -32,10 +32,13 @@ export interface BossRow {
  * 4060, spindle 5918, ember 3205, mirage 5932, gravitas 7602, bastion 5222, tempest 5020, twins
  * 5918, prism 1840 (every fight 315 to 345 s on the bot). Brood's row is its body only; its
  * Broodlings add BROODLING.hp each.
+ * Warden fury, Brood first cut (Ryan 2026-11-11): Brood's body x0.44 (459 before) and BROODLING.hp
+ * x0.31. These come from Ryan's device time (150 to 170 s, about half body and half Broodlings,
+ * against a 60 s target: body about 35 s, Broodlings about 25 s at Normal level 5), not the bot.
  */
 export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
   warden: { tier: 1, hp: 519, phases: 2, radius: 56, colour: 'bossBlue' },
-  brood: { tier: 1, hp: 459, phases: 2, radius: 52, colour: 'bossGreen' },
+  brood: { tier: 1, hp: 202, phases: 2, radius: 52, colour: 'bossGreen' },
   spindle: { tier: 1, hp: 1350, phases: 2, radius: 48, colour: 'bossYellow' },
   ember: { tier: 2, hp: 822, phases: 3, radius: 44, colour: 'bossOrange' },
   mirage: { tier: 2, hp: 1620, phases: 3, radius: 50, colour: 'bossMagenta' },
@@ -147,6 +150,38 @@ export const WARDEN = {
   ringStartPad: 10,
   /** Entrance slide ends at this share of the wall distance. */
   entryHome: 0.55,
+} as const;
+
+/** Warden fury: seconds of the invincible break when the Shield bar empties (Ryan 2026-11-11). */
+export const FURY_BREAK_SEC = 4.5;
+
+/**
+ * Warden fury (Ryan 2026-11-11, every mode Warden appears in). At the stage 1 crack (the Shield bar
+ * empties) Warden breaks: it stops, clears its rings and Hornets, closes its core and takes no
+ * damage for breakSec, and phase 2 starts. From then to its death it is enraged: faster seek and
+ * turn, quicker rings, and a dash charge (aim, dash, a ring of bullets, then an open core). Shields
+ * keep their cycle. The single place for every fury number.
+ */
+export const WARDEN_FURY = {
+  breakSec: FURY_BREAK_SEC,
+  /** Enraged seek and turn (55 u/s and 60 deg/s before). */
+  seekSpeed: 80,
+  turnRate: 90 * DEG,
+  /** Enraged ring interval (phase 2 was 2.8 s). */
+  ringEvery: 2.4,
+  /** First dash this long after the break ends, then one every dashEvery, start to start. */
+  dashFirst: 3,
+  dashEvery: 8,
+  /** Aim: Warden stops, heading locked toward the ship at the start. */
+  aimSec: 0.8,
+  /** Dash speed along the heading, for at most dashSec or until a wall stops it. */
+  dashSpeed: 300,
+  dashSec: 1.0,
+  /** Where it stops: one ring of this many enemy bullets at this speed, u/s. */
+  dashRingBullets: 12,
+  dashRingSpeed: 180,
+  /** Then the core opens this long (the reward window). */
+  openSec: 2.0,
 } as const;
 
 /**
@@ -283,8 +318,11 @@ export const BROOD = {
 export const BROODLING = {
   count: 3,
   radius: 20,
-  /** 60 spread hits each (the table dialect: HP in hits, stored as tenths), 180 hits across the three. */
-  hp: 600,
+  /**
+   * 19 spread hits each (the table dialect: HP in hits, stored as tenths). Ryan's device time, not
+   * the bot (Warden fury wave: x0.31 of 600, so the Broodlings take about 25 s of a 60 s fight).
+   */
+  hp: 190,
   /** Spawn ring around the dead body centre, u. */
   spawnRing: 40,
   /** Role 0: seeks the ship, turn limited. Contact kills (every Broodling does). */
