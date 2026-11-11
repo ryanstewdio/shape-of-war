@@ -338,7 +338,7 @@ import {
   type ThreatPulse,
   type WallFeature,
 } from './mapFx';
-import { burstBoss, burstSmall, emitBlinkStreak, emitDeflectSparks, emitEnemyTrail, emitGeomSparkle, trailsActive } from './particles';
+import { burstBoss, burstBossHit, burstSmall, emitBlinkStreak, emitDeflectSparks, emitEnemyTrail, emitGeomSparkle, trailsActive } from './particles';
 import { bossSlot, DRONE_KIND_NUM, isFloorSlot, KIND_NUM, LEAVER_KIND_NUM, leaverSlot, partSlot, partVisualSlot, specFor } from './shapeSpecs';
 import {
   leaverFrameStep,
@@ -748,15 +748,22 @@ import {
   BODY_FLASH_FILL,
   BODY_FLASH_GLOW,
   BODY_FLASH_LINE,
+  BODY_FLASH_WIDTH,
   bodyFlashAmount,
   bossHitSparkColour,
   bossHitSparkCount,
   createBodyFlash,
   createSparkGate,
+  crackPulse,
+  crackStrength,
+  crackWidthMul,
   emberFurySparkRate,
   furyArmAlpha,
   furyArmTint,
   furySpikes,
+  healthShare,
+  HIT_SPARK_LIFE_MUL,
+  HIT_SPARK_SIZE,
   resetBodyFlash,
   resetSparkGate,
   sparkAllow,
@@ -1432,6 +1439,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let simHitSeen = false;
   let simHitSeq = 0;
   const bossCracks = createBossCracks();
+  let crackGlowCol = 0xffffff;
   // v33: outline fragments, one per removed arc, each a polyline (world units, relative to its
   // centre, already rotated into the world) that drifts out, tumbles and fades in the boss colours.
   const PIECES = PIECES_MAX;
@@ -2681,7 +2689,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       if (bossView.hitT === undefined) triggerBodyFlash(bodyFlash);
       if (!simHitSeen) {
         bossSparkSeq = (bossSparkSeq + 1) | 0;
-        burstBoss(x, y, palette[bossColourOf(bossIdx)], hitSparkCount(bossSparkSeq), 140, 360, 0.15, 0.3);
+        burstBossHit(x, y, palette[bossColourOf(bossIdx)], hitSparkCount(bossSparkSeq), 140, 360, 0.15 * HIT_SPARK_LIFE_MUL, 0.3 * HIT_SPARK_LIFE_MUL, HIT_SPARK_SIZE);
       }
     }
     if (!bossHitAllow(bossHitThrottle, hitClockMs)) return;
@@ -2714,7 +2722,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     simHitSeq = (simHitSeq + 1) | 0;
     const colour = bossHitSparkColour(landed, palette[bossColourOf(bossIdx)]);
     const n = bossHitSparkCount(landed, simHitSeq);
-    if (landed) burstBoss(x, y, colour, n, 140, 360, 0.15, 0.3);
+    if (landed) burstBossHit(x, y, colour, n, 140, 360, 0.15 * HIT_SPARK_LIFE_MUL, 0.3 * HIT_SPARK_LIFE_MUL, HIT_SPARK_SIZE);
     else burstBoss(x, y, colour, n, 80, 180, 0.1, 0.18);
   }
 
@@ -3966,14 +3974,27 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const rot = bodyRot[0] ?? 0;
     const sc = bodyScale[0] ?? 1;
     const flare = 1 + 0.8 * Math.max(0, 1 - bossCracks.age / BREAK_SETTLE_SEC);
+    // glow-hit-feel: crack glow strength from health (dim at full, bright near the end) plus a pulse
+    // on each landed hit (the view's hitT, else the flash age).
+    const strength = crackStrength(
+      healthShare(bossView.hp, bossView.maxHp),
+      crackPulse(bossView.hitT !== undefined ? bossView.hitT : bodyFlash.age),
+    );
+    const wm = crackWidthMul(strength);
+    const glowCol = crackGlowCol;
     for (let k = 0; k < n; k++) {
       const a0 = bossCracks.arcs[k * 2] ?? 0;
       const a1 = bossCracks.arcs[k * 2 + 1] ?? 0;
+      // Soft wide glow under the edge lines, thicker and brighter as health falls.
+      outlineArc(g, a0 - EDGE_SPAN, a0, x, y, rot, sc);
+      g.stroke({ width: lw * 2.2 * wm, color: glowCol, alpha: Math.min(1, 0.22 * strength) * a, cap: 'round' });
+      outlineArc(g, a1, a1 + EDGE_SPAN, x, y, rot, sc);
+      g.stroke({ width: lw * 2.2 * wm, color: glowCol, alpha: Math.min(1, 0.22 * strength) * a, cap: 'round' });
       // The outline beside each torn end shifts hue toward the accent and flickers.
       outlineArc(g, a0 - EDGE_SPAN, a0, x, y, rot, sc);
-      g.stroke({ width: lw * 1.15, color: dmgCol.edge, alpha: edgeFlicker(timeSec, k * 2) * a, cap: 'round' });
+      g.stroke({ width: lw * 1.15 * wm, color: dmgCol.edge, alpha: Math.min(1, edgeFlicker(timeSec, k * 2) * (0.7 + 0.3 * strength)) * a, cap: 'round' });
       outlineArc(g, a1, a1 + EDGE_SPAN, x, y, rot, sc);
-      g.stroke({ width: lw * 1.15, color: dmgCol.edge, alpha: edgeFlicker(timeSec, k * 2 + 1) * a, cap: 'round' });
+      g.stroke({ width: lw * 1.15 * wm, color: dmgCol.edge, alpha: Math.min(1, edgeFlicker(timeSec, k * 2 + 1) * (0.7 + 0.3 * strength)) * a, cap: 'round' });
       // Torn ends: a short bright stub angled out of the line, like a snapped filament.
       for (let e = 0; e < 2; e++) {
         const t = e === 0 ? a0 : a1;
@@ -3988,7 +4009,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const ty = ca * dir;
         const len = rs * STUB_LEN;
         g.moveTo(ex, ey).lineTo(ex + (tx * 0.8 + ca * 0.6) * len, ey + (ty * 0.8 + sa * 0.6) * len);
-        g.stroke({ width: lw * 1.3, color: dmgCol.stub, alpha: Math.min(1, a * flare), cap: 'round' });
+        g.stroke({ width: lw * 1.3 * wm, color: dmgCol.stub, alpha: Math.min(1, a * flare * (0.8 + 0.2 * strength)), cap: 'round' });
         g.circle(ex, ey, lw * 0.9 * flare).fill({ color: dmgCol.stub, alpha: Math.min(1, 0.85 * a * flare) });
       }
     }
@@ -4781,6 +4802,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     attachBossLayers(g, u);
     const hue = palette[bossColourOf(bossIdx)];
     damageColours(hue, damageAccent(hue), dmgCol);
+    crackGlowCol = mixRgb(dmgCol.edge, 0xffffff, 0.5);
     const hot = mixRgb(hue, 0xffffff, 0.6);
     const R = bossBodyR(bossIdx);
     const lw = BOSS_LINE * tierWeight(bossTier);
@@ -4857,7 +4879,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         for (let b = 0; b < bodyCount; b++) {
           if (b > 0 && bossIdx !== BOSS_TWINS) continue;
           outlinePath(g, bodyX[b] ?? 0, bodyY[b] ?? 0, bodyRot[b] ?? 0, bodyScale[b] ?? 1);
-          g.fill({ color: 0xffffff, alpha: BODY_FLASH_FILL * fa }).stroke({ width: lw * 1.6, color: 0xffffff, alpha: BODY_FLASH_LINE * fa });
+          g.fill({ color: 0xffffff, alpha: BODY_FLASH_FILL * fa }).stroke({ width: lw * BODY_FLASH_WIDTH, color: 0xffffff, alpha: BODY_FLASH_LINE * fa });
         }
       }
     }

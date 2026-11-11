@@ -4,7 +4,20 @@ import {
   BLOCK_GREY,
   BLOCK_GREY_SHARE,
   BLOCK_SPARK_MS,
+  BODY_FLASH_FILL,
   BODY_FLASH_GAP,
+  BODY_FLASH_GLOW,
+  CRACK_GLOW_MAX,
+  CRACK_GLOW_MIN,
+  CRACK_PULSE_BOOST,
+  CRACK_PULSE_SEC,
+  HIT_SPARK_LIFE_MUL,
+  HIT_SPARK_SIZE,
+  crackGlow,
+  crackPulse,
+  crackStrength,
+  crackWidthMul,
+  healthShare,
   BODY_FLASH_SEC,
   EMBER_FURY_SPARK_RATE,
   HIT_SPARK_MS,
@@ -158,5 +171,42 @@ describe('generic fury', () => {
     const sumA = Array.from(a.alpha.subarray(0, a.count)).reduce((s, v) => s + v, 0);
     const sumB = Array.from(b.alpha.subarray(0, b.count)).reduce((s, v) => s + v, 0);
     expect(sumB).toBeCloseTo(sumA * 0.5, 4);
+  });
+});
+
+describe('glow-hit-feel helpers', () => {
+  it('healthShare clamps and tolerates bad input', () => {
+    expect(healthShare(50, 100)).toBe(0.5);
+    expect(healthShare(150, 100)).toBe(1);
+    expect(healthShare(-5, 100)).toBe(0);
+    expect(healthShare(10, 0)).toBe(1);
+    expect(healthShare(Number.NaN, 100)).toBe(1);
+  });
+  it('crackGlow rises as health falls', () => {
+    expect(crackGlow(1)).toBe(CRACK_GLOW_MIN);
+    expect(crackGlow(0)).toBe(CRACK_GLOW_MAX);
+    expect(crackGlow(0.2)).toBeGreaterThan(crackGlow(0.8));
+  });
+  it('crackPulse is 1 at a hit and 0 once over or unknown', () => {
+    expect(crackPulse(0)).toBe(1);
+    expect(crackPulse(CRACK_PULSE_SEC / 2)).toBeCloseTo(0.5);
+    expect(crackPulse(CRACK_PULSE_SEC)).toBe(0);
+    expect(crackPulse(-1)).toBe(0);
+    expect(crackPulse(undefined)).toBe(0);
+    expect(crackPulse(Number.NaN)).toBe(0);
+  });
+  it('crackStrength adds the pulse and crackWidthMul stays in 1 to 2.6', () => {
+    expect(crackStrength(1, 1)).toBeCloseTo(CRACK_GLOW_MIN + CRACK_PULSE_BOOST);
+    expect(crackStrength(0.5, 5)).toBe(crackStrength(0.5, 1));
+    expect(crackWidthMul(0)).toBe(1);
+    expect(crackWidthMul(99)).toBeCloseTo(2.6);
+    expect(crackWidthMul(crackStrength(0.1, 0))).toBeGreaterThan(crackWidthMul(crackStrength(0.9, 0)));
+  });
+  it('hit constants are stronger than before and the flash cap is kept', () => {
+    expect(BODY_FLASH_FILL).toBeGreaterThan(0.5);
+    expect(BODY_FLASH_GLOW).toBeGreaterThan(0.6);
+    expect(HIT_SPARK_SIZE).toBe(2);
+    expect(HIT_SPARK_LIFE_MUL).toBeGreaterThan(1);
+    expect(BODY_FLASH_GAP).toBe(0.18);
   });
 });

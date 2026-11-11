@@ -18,10 +18,12 @@ export const BODY_FLASH_SEC = 0.07;
 /** Shortest time between two flash starts (s): caps the strobe near 5.5 Hz under heavy fire. */
 export const BODY_FLASH_GAP = 0.18;
 /** Peak white fill alpha over the body, and the outline alpha: the body still reads through. */
-export const BODY_FLASH_FILL = 0.5;
+export const BODY_FLASH_FILL = 0.8;
 export const BODY_FLASH_LINE = 1;
 /** Extra glow multiplier at the flash peak. */
-export const BODY_FLASH_GLOW = 0.6;
+export const BODY_FLASH_GLOW = 1.4;
+/** Outline width multiplier of the flash (glow-hit-feel: was 1.6). */
+export const BODY_FLASH_WIDTH = 2.4;
 
 /** Body flash state: seconds since the last flash start (Infinity before any). */
 export interface BodyFlash {
@@ -73,6 +75,9 @@ export const HIT_SPARK_MS = 45;
 export const BLOCK_SPARK_MS = 70;
 /** Share of white in a landed spark, and the grey a blocked spark is mixed to. */
 export const HIT_SPARK_WHITE = 0.45;
+/** Landed hit sparks (glow-hit-feel): about twice the size and a little longer lived. */
+export const HIT_SPARK_SIZE = 2;
+export const HIT_SPARK_LIFE_MUL = 1.3;
 export const BLOCK_GREY = 0x8c8c8c;
 export const BLOCK_GREY_SHARE = 0.85;
 
@@ -141,4 +146,41 @@ export const EMBER_FURY_SPARK_RATE = 70;
 /** Pure: the extra hot red spark trail rate while Ember dashes enraged; 0 otherwise or on Low. */
 export function emberFurySparkRate(stage: number, dashing: boolean, low: boolean): number {
   return stage === 2 && dashing && !low ? EMBER_FURY_SPARK_RATE : 0;
+}
+
+// glow-hit-feel: the cracks glow brighter and thicker as health falls, and pulse on each landed hit.
+/** Crack glow at full health and near death (0 to 1 strength). */
+export const CRACK_GLOW_MIN = 0.25;
+export const CRACK_GLOW_MAX = 1;
+/** Crack pulse length (s) after a landed hit, and its extra strength at the start. */
+export const CRACK_PULSE_SEC = 0.25;
+export const CRACK_PULSE_BOOST = 0.8;
+
+/** Pure: health share 0 to 1 from hp and maxHp (1 when maxHp is not positive or not finite). */
+export function healthShare(hp: number, maxHp: number): number {
+  const m = fin(maxHp, 0);
+  if (!(m > 0)) return 1;
+  return Math.min(1, Math.max(0, fin(hp, m) / m));
+}
+
+/** Pure: base crack glow strength: CRACK_GLOW_MIN at full health rising to CRACK_GLOW_MAX at none. */
+export function crackGlow(share: number): number {
+  const s = Math.min(1, Math.max(0, fin(share, 1)));
+  return CRACK_GLOW_MIN + (CRACK_GLOW_MAX - CRACK_GLOW_MIN) * (1 - s);
+}
+
+/** Pure: pulse 1 at a landed hit falling to 0 at CRACK_PULSE_SEC; hitT below 0 or unknown is 0. */
+export function crackPulse(hitT: number | undefined): number {
+  if (hitT === undefined || !Number.isFinite(hitT) || hitT < 0 || hitT >= CRACK_PULSE_SEC) return 0;
+  return 1 - hitT / CRACK_PULSE_SEC;
+}
+
+/** Pure: crack glow strength 0 to 1.8: the health glow plus the hit pulse. */
+export function crackStrength(share: number, pulse: number): number {
+  return crackGlow(share) + CRACK_PULSE_BOOST * Math.min(1, Math.max(0, fin(pulse, 0)));
+}
+
+/** Pure: width multiplier of the crack glow strokes (1 dim to 2.6 bright). */
+export function crackWidthMul(strength: number): number {
+  return 1 + (Math.min(1.8, Math.max(0, fin(strength, 0))) / 1.8) * 1.6;
 }
