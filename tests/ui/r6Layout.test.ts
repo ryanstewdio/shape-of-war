@@ -63,7 +63,7 @@ describe('par and stars follow difficulty (stubbed table)', () => {
     const src = readFileSync(fileURLToPath(new URL('../../src/main.ts', import.meta.url)), 'utf8');
     expect(src).toContain('targets = targetsFor(level, runDifficulty);');
     expect(src).toContain('hud.setLevel(index, targets.par, pick.hash);');
-    expect(src).toContain('alive, targets.stars, bossBar)');
+    expect(src).toContain('alive, targets.stars, bossInput)');
     expect(src).toContain('scoreStars: starsFor(p.score, targets.stars),');
     expect(src).toContain('par: targets.par,');
     expect(src).toContain('starTargets: targets.stars,');

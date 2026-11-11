@@ -57,6 +57,7 @@ import {
   MAX_PARTS,
   maxHpFor,
   PHASE_CHANGE_SEC,
+  PIERCE_GUARDIAN_MULT,
   STAGGER_SEC,
   WAVE_BUDGET_WITH_BOSS,
   WINDOW_LEAD_INTERVAL,
@@ -265,8 +266,8 @@ function viewModeOf(bs: BossState): BossMode {
 
 function emitBossHud(w: World, bs: BossState, dt: number, force: boolean): void {
   bs.hudTimer -= dt;
-  // After a split the bar is the sum of the parts' hit points (Brood's Broodlings).
-  const hp = bs.split ? partsHp(w, bs) : bs.id > 0 ? (w.hp[bs.id] ?? 0) : 0;
+  // After a split the bar is the sum of the parts' hit points (Brood's Broodlings) on barMaxOf.
+  const hp = barHpOf(w, bs);
   const changed = hp !== bs.hudHp || bs.phase !== bs.hudPhase || bs.viewMode !== bs.hudMode;
   if (!changed || (!force && bs.hudTimer > 0)) return;
   bs.hudTimer = BOSS_HUD_INTERVAL;
@@ -275,7 +276,7 @@ function emitBossHud(w: World, bs: BossState, dt: number, force: boolean): void 
   bs.hudMode = bs.viewMode;
   const e = bs.hudEv;
   e.hp = hp;
-  e.maxHp = bs.maxHp;
+  e.maxHp = barMaxOf(bs);
   e.phase = bs.phase;
   e.phases = bs.row.phases;
   e.mode = bs.viewMode;
@@ -507,10 +508,13 @@ export function bossBodyContact(w: World, boss: number, x: number, y: number, r:
   return circlesOverlapOn(w.surface, x, y, r, w.x[boss] ?? 0, w.y[boss] ?? 0, w.radius[boss] ?? 0);
 }
 
-/** BOSS_DAMAGE for a player bullet style. Drone shots are spread style and deal the same 10. */
+/**
+ * BOSS_DAMAGE for a player bullet style. Drone shots are spread style and deal the same 10. Pierce
+ * gets PIERCE_GUARDIAN_MULT (every caller hits a guardian body, core or part).
+ */
 export function bossDamageForStyle(style: number): number {
   if (style === STYLE_RAPID) return BOSS_DAMAGE.rapid;
-  if (style === STYLE_PIERCE) return BOSS_DAMAGE.pierce;
+  if (style === STYLE_PIERCE) return Math.round(BOSS_DAMAGE.pierce * PIERCE_GUARDIAN_MULT);
   if (style === STYLE_ORBIT) return BOSS_DAMAGE.orbit;
   return BOSS_DAMAGE.spread;
 }
@@ -589,7 +593,11 @@ export function crackStage(hp: number, max: number): number {
 
 /** Emit 'sim:bossCrack' once for each stage body (0 or 1) newly passed at hp of max, at (x, y). */
 export function crackBody(bs: BossState, body: number, hp: number, max: number, x: number, y: number): void {
-  const st = crackStage(hp, max);
+  crackTo(bs, body, crackStage(hp, max), x, y);
+}
+
+/** Emit 'sim:bossCrack' once for each stage of body (0 or 1) newly reached up to st, at (x, y). */
+export function crackTo(bs: BossState, body: number, st: number, x: number, y: number): void {
   let cur = bs.crack[body] ?? 2;
   while (cur < st) {
     cur++;
@@ -764,6 +772,24 @@ export function bossOnShipDeath(w: World): void {
   bs.retry = 0;
   resetRotation(bs);
   if (bs.mode !== BossMode.Entering && !bs.split) bs.def.reset(w, bs.id, bs, false); // a split boss has no body to restart
+}
+
+/**
+ * Hit points on the boss bar now, in tenths: the body (w.hp of the boss), or after a split the live
+ * body parts' sum (Broodlings, Gravitants, Tempestlings). 0 with no boss alive.
+ */
+export function barHpOf(w: World, bs: BossState): number {
+  if (bs.status !== 'alive') return 0;
+  if (bs.split) return partsHp(w, bs);
+  return bs.id > 0 ? (w.hp[bs.id] ?? 0) : 0;
+}
+
+/**
+ * The full value of the boss bar, in tenths: maxHp, or after a split splitMax when the split boss set
+ * one (Brood: the Broodlings' own bar), else maxHp (Gravitas and Tempest carry the body's remainder).
+ */
+export function barMaxOf(bs: BossState): number {
+  return bs.split && bs.splitMax > 0 ? bs.splitMax : bs.maxHp;
 }
 
 /** Boss hit points on the bar after a split: the live parts' sum, in tenths. */

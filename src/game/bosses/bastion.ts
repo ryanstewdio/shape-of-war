@@ -48,9 +48,9 @@ export const enum Wake {
   Charge = 2,
 }
 
-/** Pure: tenths one turret death takes off the bar for a boss of maxHp. */
+/** Pure: tenths one turret death takes off the bar for a boss of maxHp (floored, so four never pass 20 percent). */
 export function turretBarCut(maxHp: number): number {
-  return Math.round(maxHp * BASTION.turretBarShare);
+  return Math.floor(maxHp * BASTION.turretBarShare);
 }
 
 /** Pure: the body hit points after a turret death: the cut, never below 1 (a turret never kills the core). */

@@ -38,7 +38,11 @@ import { bossWinScenes, levelStartScenes, replayScenes, storyLevels } from './st
 import { createStoryPlayer } from './ui/story/player';
 import { capDpr, fmt3, readInsets, viewportLine } from './core/viewport';
 import { awardKill, bossBonus, collectGeom, resetScore, scoreOf, shipDied, stars } from './game/scoring';
+import { bossBar, type BossBar } from './game/bosses/bar';
 import { readBoss, type BossView } from './game/bosses/view';
+
+/** Boss bar before the guardian is on the field: both strips full, the guardian's own name. */
+const FULL_BOSS_BAR: BossBar = { shield: 1, health: 1, label: '' };
 import { armBossFromSpec } from './game/bosses/index';
 import { bossTierOf } from './levelgen/boss';
 import type { BossId } from './levelgen/leveldef';
@@ -459,9 +463,9 @@ async function boot(): Promise<void> {
       // R2: the bar fills toward the objective; the thin star line reads the level's thresholds.
       // T3: on a boss level the bar counts down to the entrance, then drains with the boss health.
       const alive = bossAlive();
-      const bossBar = level.boss !== undefined ? { spec: level.boss, hpFraction: alive && bossRead.maxHp > 0 ? bossRead.hp / bossRead.maxHp : 1 } : undefined;
+      const bossInput = level.boss !== undefined ? { spec: level.boss, bar: alive ? bossBar(bossRead) : FULL_BOSS_BAR } : undefined;
       const snap = snapshotOf(world);
-      hud.setObjective(objectiveProgress(level.objective, snap, alive, targets.stars, bossBar)); // R6: scaled by difficulty
+      hud.setObjective(objectiveProgress(level.objective, snap, alive, targets.stars, bossInput)); // R6: scaled by difficulty
       // hud-clock: countdown or time played on the objective's own sim clock, so paused time never counts.
       const clock = clockView(level.objective, snap.elapsedSec, level.boss !== undefined);
       const step = warnStep(warn, clock.shownLeft);

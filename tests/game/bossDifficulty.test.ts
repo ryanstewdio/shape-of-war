@@ -54,13 +54,14 @@ describe('difficulty bossScale in the sim (stubbed difficultyOf)', () => {
     });
   }
 
-  it('Hard Spindle needs armour past the Int16 store and keeps its full hit points', () => {
-    table.current = DIFFICULTY.hard;
-    const w = bossGame('spindle', { levelIndex: 20 });
+  it('Insane Twins needs armour past the Int16 store and keeps its full hit points', () => {
+    // Boss health: the rows came down, so Insane Twins (2250 hits times 1.62) is the case past the store.
+    table.current = DIFFICULTY.insane;
+    const w = bossGame('twins', { levelIndex: 20 });
     enter(w);
     const s = bs(w);
     expect(s.maxHp).toBe(32767);
     expect(s.armour).toBeGreaterThan(1);
-    expect(s.maxHp * s.armour).toBeCloseTo(fullHpFor(BOSS_TABLE.spindle, 1.35), 4);
+    expect(s.maxHp * s.armour).toBeCloseTo(fullHpFor(BOSS_TABLE.twins, 1.62), 4);
   });
 });

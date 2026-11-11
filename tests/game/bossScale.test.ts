@@ -81,8 +81,10 @@ describe('hit points, armour and difficulty (pure)', () => {
       expect(maxHpFor(row, 1)).toBe(Math.min(full, BOSS_HP_MAX));
       expect(maxHpFor(row, 1) * armourFor(row, 1)).toBeCloseTo(full, 6);
     }
-    expect(armourFor(BOSS_TABLE.warden, 1)).toBe(1);
-    expect(armourFor(BOSS_TABLE.spindle, 1)).toBeGreaterThan(1);
+    // Boss health: every row fits the store at hpMul 1 (armour 1); a later pass or Insane can still pass it.
+    for (const id of BOSS_IDS) expect(armourFor(BOSS_TABLE[id], 1)).toBe(1);
+    expect(armourFor(BOSS_TABLE.twins, 2)).toBeGreaterThan(1);
+    expect(maxHpFor(BOSS_TABLE.twins, 2) * armourFor(BOSS_TABLE.twins, 2)).toBeCloseTo(fullHpFor(BOSS_TABLE.twins, 2), 6);
   });
 
   it('armoured hits keep every tenth: a sum of hits lands its total over the armour', () => {

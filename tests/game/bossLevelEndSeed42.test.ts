@@ -8,7 +8,8 @@
 // and its bonus.
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
-import { bossHittable, bossHolding, bossPending, countParts, damageBoss, damageBossPart, isBossTarget, livePart } from '../../src/game/bosses/core';
+import { STYLE_PIERCE } from '../../src/game/bullets';
+import { bossDamageForStyle, bossHittable, bossHolding, bossPending, countParts, damageBoss, damageBossPart, isBossTarget, livePart } from '../../src/game/bosses/core';
 import { bossOf } from '../../src/game/bosses/state';
 import { isTargetable } from '../../src/game/combat';
 import { createGame, objectiveClock, stepGame } from '../../src/game/game';
@@ -40,6 +41,9 @@ const PORT: ScoringPort = {
 };
 
 type Plan = 'objectiveFirst' | 'bossFirst' | 'deadAtKill';
+
+/** The scripted killing blow, tenths: the biggest single hit on a guardian (pierce). */
+const BLOW = bossDamageForStyle(STYLE_PIERCE);
 
 /**
  * Aim the real stick at the nearest target. The boss and its parts only when boss is true; with
@@ -129,8 +133,11 @@ function play(level: number, plan: Plan): { w: World; r: Run } {
     const ledger0 = scoreOf(w);
     const sim0 = g.score;
     const simKills0 = g.kills;
-    if (plan === 'deadAtKill' && bossHolding(w) && id > 0 && s !== null && s.open && w.ship.active && (w.hp[id] ?? 0) <= 40) {
-      expect(damageBoss(w, 40, w.x[id] ?? 0, w.y[id] ?? 0)).toBe(true);
+    // Boss health: the blow is the biggest single hit (a pierce bullet, 60 tenths since the 1.5x), so no
+    // natural hit can take the last tenths before the scripted one. Brood's body never dies (it
+    // splits once both its bars are empty), so its blow is the last Broodling's below.
+    if (plan === 'deadAtKill' && bossHolding(w) && id > 0 && s !== null && s.spec.id !== 'brood' && s.open && w.ship.active && (w.hp[id] ?? 0) <= BLOW) {
+      expect(damageBoss(w, BLOW, w.x[id] ?? 0, w.y[id] ?? 0)).toBe(true);
       die(w);
       r.deaths++;
       r.deadAtDown = !w.ship.active && !bossPending(w);
@@ -138,8 +145,8 @@ function play(level: number, plan: Plan): { w: World; r: Run } {
     if (plan === 'deadAtKill' && bossHolding(w) && s !== null && s.split && countParts(w, s) === 1 && w.ship.active) {
       // A split Brood has no body: the killing blow is the last Broodling's.
       const last = [0, 1, 2, 3].map((k) => livePart(w, s, k)).find((p) => p > 0) ?? -1;
-      if (last > 0 && (w.hp[last] ?? 0) <= 40) {
-        expect(damageBossPart(w, last, 40, w.x[last] ?? 0, w.y[last] ?? 0)).toBe(true);
+      if (last > 0 && (w.hp[last] ?? 0) <= BLOW) {
+        expect(damageBossPart(w, last, BLOW, w.x[last] ?? 0, w.y[last] ?? 0)).toBe(true);
         die(w);
         r.deaths++;
         r.deadAtDown = !w.ship.active && !bossPending(w);

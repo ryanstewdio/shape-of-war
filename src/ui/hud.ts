@@ -544,7 +544,20 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
   const starFill = el('div', 'sow-hud-star');
   starFill.setAttribute('data-hud', 'starLine');
   const starTicks = [el('div', 'sow-hud-tick'), el('div', 'sow-hud-tick')];
-  bar.append(fill, starFill, ...starTicks);
+  // Boss fight: two thin strips inside the bar, blue Shield on top, red Health under it. Hidden otherwise.
+  const strip = (name: string, top: string): { track: HTMLDivElement; fill: HTMLDivElement } => {
+    const track = el('div', 'sow-hud-fill');
+    const f = el('div', 'sow-hud-fill');
+    track.style.cssText = `position:absolute;left:0;right:0;top:${top};height:calc(50% - 1px);width:auto;display:none;background:transparent;box-shadow:none`;
+    f.style.height = '100%';
+    track.setAttribute('data-hud', `${name}-strip`);
+    f.setAttribute('data-hud', `${name}-fill`);
+    track.append(f);
+    return { track, fill: f };
+  };
+  const shieldStrip = strip('shield', '0');
+  const healthStrip = strip('health', 'calc(50% + 1px)');
+  bar.append(fill, shieldStrip.track, healthStrip.track, starFill, ...starTicks);
   // hud-clock: a box host, a neon frame inside it, the pixel digits inside the frame. Hidden until set.
   const clockHost = el('div', 'sow-hud-item');
   clockHost.setAttribute('data-hud', 'clock');
@@ -817,6 +830,22 @@ export function createHud(parent: HTMLElement, now: () => number = () => perform
     setObjective(p) {
       objLabel.textContent = p.label;
       fill.style.width = `${Math.round(p.fraction * 1000) / 10}%`;
+      const split = p.shield !== undefined && p.shield !== null && p.health !== undefined;
+      fill.style.display = split ? 'none' : '';
+      shieldStrip.track.style.display = split ? '' : 'none';
+      healthStrip.track.style.display = split ? '' : 'none';
+      if (split) {
+        const sh = p.shield ?? 0;
+        const blue = toneColour('blue', neon.saturation);
+        const red = toneColour('red', neon.saturation);
+        shieldStrip.fill.style.width = `${Math.round(sh * 1000) / 10}%`;
+        shieldStrip.fill.style.background = blue;
+        shieldStrip.fill.style.boxShadow = `0 0 ${glowBlur(neon.glowAlpha)}px ${blue}`;
+        shieldStrip.track.style.opacity = sh > 0 ? '1' : '0.3'; // a cracked shield dims its strip
+        healthStrip.fill.style.width = `${Math.round((p.health ?? 0) * 1000) / 10}%`;
+        healthStrip.fill.style.background = red;
+        healthStrip.fill.style.boxShadow = `0 0 ${glowBlur(neon.glowAlpha)}px ${red}`;
+      }
       const line = p.stars ?? null;
       starFill.style.display = line === null ? 'none' : '';
       starFill.style.width = `${Math.round((line ?? 0) * 1000) / 10}%`;
