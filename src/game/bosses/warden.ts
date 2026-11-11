@@ -34,12 +34,13 @@ import { angleBetween, distBetween, entityHash, moveHeading, targetOf, turnTowar
 import type { World } from '../world';
 import { bus } from '../../core/events';
 import { moveToHit } from '../steer';
-import { bossEnraged, clearHazards, clearHornets, HAZARD_OVERLAP, spawnHornet, spawnRing } from './core';
+import { bossEnraged, HAZARD_OVERLAP, spawnHornet, spawnRing } from './core';
+import { furyClampDamage, furyDue, furyOnPhase, furyPhaseOf, startFuryBreak, stepFury } from './fury';
 import { bossTele, minionCount } from './scale';
 import { setShield } from './shield';
 import { bossOf, type BossState } from './state';
 import { ENEMY_BULLET_RADIUS, spawnEnemyBullet } from '../enemyBullets';
-import { CRACK_AT, ENRAGE_RATE, FURY_BREAK_SEC, HAZARD, HAZARD_RECHECK_SEC, HORNET, MAX_HORNETS, WARDEN, WARDEN_FURY, WARDEN_SHIELD } from './table';
+import { ENRAGE_RATE, HAZARD, HAZARD_RECHECK_SEC, HORNET, MAX_HORNETS, WARDEN, WARDEN_FURY, WARDEN_SHIELD } from './table';
 import { BossMode, type BossDef } from './types';
 
 const TAU = Math.PI * 2;
@@ -81,23 +82,8 @@ export function turnRateFor(fury: number): number {
   return fury >= 2 ? WARDEN_FURY.turnRate : WARDEN.turnRate;
 }
 
-/**
- * Pure: the hit points (tenths) Warden's body stops at when the Shield bar empties: the largest whole
- * value below CRACK_AT[0] of maxHp, so the stage 1 crack and the break land on the same hit.
- */
-export function furyBreakHp(maxHp: number): number {
-  if (!(maxHp > 0)) return 0;
-  const v = Math.ceil(maxHp * CRACK_AT[0] - 1e-9) - 1;
-  return v > 0 ? v : 0;
-}
-
-/** Pure: tenths of a hit of amount that land on a body at hp in fury stage fury (maxHp its maximum). */
-export function furyClamp(fury: number, hp: number, maxHp: number, amount: number): number {
-  if (fury === 1) return 0; // the break: no hit moves the bar
-  if (fury !== 0) return amount;
-  const room = hp - furyBreakHp(maxHp);
-  return room > 0 && amount > room ? room : amount; // the crossing hit stops where the Shield bar empties
-}
+/** The shared fury rules (fury.ts), re-exported where the Warden tests first met them. */
+export { furyBreakHp, furyClamp } from './fury';
 
 /** Seconds of dash aim left, -1 when not aiming (BossView.dashAim). */
 export function dashAimOf(bs: BossState): number {
@@ -169,48 +155,34 @@ export function reset(w: World, id: number, bs: BossState, first: boolean): void
   bs.abl[DASH_LEFT] = 0;
 }
 
-function emitFury(w: World, id: number, bs: BossState, stage: 'break' | 'on', sec: number): void {
-  const e = bs.furyEv;
-  e.id = bs.spec.id;
-  e.stage = stage;
-  e.sec = sec;
-  e.x = w.x[id] ?? 0;
-  e.y = w.y[id] ?? 0;
-  bus.emit('sim:bossFury', e);
-}
-
-/** The Shield bar emptied: the invincible break starts ('sim:bossFury' break, once). */
-function startBreak(w: World, id: number, bs: BossState): void {
-  bs.fury = 1;
-  bs.furyT = 0;
-  clearHazards(w); // Warden's own live rings
-  clearHornets(w, bs);
-  setShield(bs, false, w.x[id] ?? 0, w.y[id] ?? 0, 0);
+/** Warden's own break reset: the shield swarm and the dash stop, the windows close. */
+function onBreak(w: World, id: number, bs: BossState): void {
   bs.abl[INTO] = 0;
   bs.abl[BURSTS] = 0;
   bs.abl[DASH_STATE] = IDLE;
   bs.t1 = -1;
   bs.t2 = 0;
-  bs.retry = 0;
-  bs.open = false;
-  bs.openLeft = -1;
-  bs.mode = BossMode.Guarded;
-  emitFury(w, id, bs, 'break', FURY_BREAK_SEC);
+}
+
+/** Enraged: the first dash comes dashFirst after the break. */
+function onEnrage(w: World, id: number, bs: BossState): void {
+  bs.abl[DASH_CLOCK] = WARDEN_FURY.dashFirst;
+  bs.abl[DASH_STATE] = IDLE;
 }
 
 /** Hit hook: the break takes no damage, and the crossing hit stops where the Shield bar empties. */
 export function clampDamage(w: World, id: number, bs: BossState, amount: number): number {
-  return furyClamp(bs.fury, w.hp[id] ?? 0, bs.maxHp, amount);
+  return furyClampDamage(w, id, bs, amount);
 }
 
 /** After a hit Warden lived: the break starts the moment the Shield bar is empty. */
 export function afterDamage(w: World, id: number, bs: BossState): void {
-  if (bs.fury === 0 && (w.hp[id] ?? 0) <= furyBreakHp(bs.maxHp)) startBreak(w, id, bs);
+  if (furyDue(w, id, bs)) startFuryBreak(w, id, bs, onBreak);
 }
 
 /** Phase hook: phase 2 starts at the break (not at half health). */
-export function phaseOf(w: World, id: number, bs: BossState): number {
-  return bs.fury >= 1 ? 2 : 1;
+export function phaseOf(w: World, id: number, bs: BossState, hp: number): number {
+  return furyPhaseOf(w, id, bs, hp);
 }
 
 /** Release burst b: Hornets spread evenly round the body, flying straight out. */
@@ -404,21 +376,8 @@ function stepDash(w: World, id: number, bs: BossState, dt: number, adt: number):
 }
 
 export function step(w: World, id: number, bs: BossState, dt: number, adt: number): void {
-  if (bs.fury === 1) {
-    // The break: Warden stands still, core closed, no rings, no shield; then it is enraged.
-    bs.furyT += dt;
-    bs.open = false;
-    bs.openLeft = -1;
-    bs.mode = BossMode.Guarded;
-    if (bs.furyT < FURY_BREAK_SEC - 1e-9) return;
-    bs.fury = 2;
-    bs.furyT = 0;
-    bs.abl[DASH_CLOCK] = WARDEN_FURY.dashFirst;
-    bs.abl[DASH_STATE] = IDLE;
-    emitFury(w, id, bs, 'on', 0);
-    return;
-  }
-  if (bs.fury === 2) bs.furyT += dt;
+  // The break: Warden stands still, core closed, no rings, no shield; then it is enraged.
+  if (stepFury(w, id, bs, dt, onEnrage)) return;
   if (dashing(bs)) {
     stepDash(w, id, bs, dt, adt);
     return;
@@ -461,7 +420,7 @@ export function onPhase(w: World, id: number, bs: BossState, phase: number): voi
   // The next ring uses the phase 2 interval and gaps; keep the ring clock where it is. The shield
   // clock keeps running too (GW1: restarting it here is what hid the shield on device). Fury: phase
   // 2 starts with the break, which is the pause (Warden stands still), so no second pause stacks.
-  if (bs.fury >= 1) bs.phaseT = 0;
+  furyOnPhase(bs, phase);
 }
 
 /**
@@ -490,4 +449,4 @@ export function entryHome(d: number): number {
   return d * WARDEN.entryHome;
 }
 
-export const def: BossDef = { reset, step, onPhase, entryHome, clampDamage, afterDamage, phaseOf };
+export const def: BossDef = { reset, step, onPhase, entryHome, clampDamage, afterDamage, phaseOf, fury: true };

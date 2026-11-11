@@ -128,7 +128,7 @@ describe('the hold in play', () => {
     enter(w);
     const g = gs(w);
     expect(g.waveClock).toBeLessThan(60);
-    damageBoss(w, 99999, 0, 0);
+    slay(w); // fury two: through Spindle's break
     expect(bossPending(w)).toBe(false);
     stepGame(w, DT, idle());
     expect(g.outcome).toBe('won');
@@ -168,7 +168,7 @@ describe('the hold in play', () => {
     enter(w);
     const g = gs(w);
     g.kills = 1;
-    damageBoss(w, 99999, 0, 0);
+    slay(w); // fury two: through Spindle's break
     expect(g.kills).toBe(2);
     damageBoss(w, 99999, 0, 0);
     expect(g.kills).toBe(2);

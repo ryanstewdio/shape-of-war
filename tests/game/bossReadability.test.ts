@@ -106,7 +106,7 @@ describe('sim:bossWindow', () => {
 });
 
 describe('sim:bossCrack', () => {
-  it('spindle: once per stage, and a single big hit passes both stages in order', () => {
+  it('spindle: once per stage; a single big hit stops at the stage 1 crack (fury break)', () => {
     const log = listenCrack();
     const w = bossGame('spindle');
     park(w, 600, 400);
@@ -116,7 +116,8 @@ describe('sim:bossCrack', () => {
     damageBoss(w, 10, 0, 0, true);
     expect(log.map((e) => e.stage)).toEqual([1]);
     expect(log[0]).toMatchObject({ id: 'spindle', x: w.x[boss], y: w.y[boss] });
-    damageBoss(w, Math.round(max * 0.3), 0, 0, true);
+    bs(w).fury = 2; // fury two: past the break
+    damageBoss(w, Math.round(max * 0.35), 0, 0, true);
     damageBoss(w, 10, 0, 0, true);
     expect(log.map((e) => e.stage)).toEqual([1, 2]);
 
@@ -126,6 +127,9 @@ describe('sim:bossCrack', () => {
     park(w2, 600, 400);
     enter(w2);
     damageBoss(w2, Math.round(bs(w2).maxHp * 0.8), 0, 0, true);
+    expect(log2.map((e) => e.stage)).toEqual([1]);
+    bs(w2).fury = 2;
+    damageBoss(w2, Math.round(bs(w2).maxHp * 0.5), 0, 0, true);
     expect(log2.map((e) => e.stage)).toEqual([1, 2]);
   });
 

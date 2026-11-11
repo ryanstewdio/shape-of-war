@@ -3,7 +3,7 @@
 // destroy objective; parts and hazards count 0 and score 0.
 import { describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
-import { bossBonusAwarded, damageBoss } from '../../src/game/bosses/core';
+import { bossBonusAwarded } from '../../src/game/bosses/core';
 import { stepGame } from '../../src/game/game';
 import {
   awardKill,
@@ -19,7 +19,7 @@ import {
 } from '../../src/game/scoring';
 import { gs, type ScoringPort } from '../../src/game/state';
 import { createWorld, Kind, type World } from '../../src/game/world';
-import { bossGame, enter, park } from '../game/bossHelpers';
+import { bossGame, enter, park, slay } from '../game/bossHelpers';
 import { DT, idle, quietLevel } from '../game/helpers';
 
 describe('boss bonus', () => {
@@ -120,7 +120,7 @@ describe('the sim sends the boss kill and bonus to the port', () => {
       const sim0 = g.score;
       const kills0 = g.kills;
       const l0 = scoreOf(w);
-      expect(damageBoss(w, 99999, 0, 0)).toBe(true);
+      expect(slay(w)).toBe(true); // fury two: through Spindle's break
       expect(g.score - sim0).toBe(2500);
       expect(g.kills - kills0).toBe(1);
       expect(bossBonusAwarded(w)).toBe(2500);
