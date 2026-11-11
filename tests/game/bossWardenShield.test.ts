@@ -15,7 +15,7 @@ import { def as grunt } from '../../src/game/enemies/grunt';
 import { stepGame } from '../../src/game/game';
 import { gs } from '../../src/game/state';
 import { Kind, type World } from '../../src/game/world';
-import { bs, bossGame, count, enter, park, run } from './bossHelpers';
+import { bs, bossGame, count, enter, park, run, wardenFury } from './bossHelpers';
 import { DT, idle } from './helpers';
 
 afterEach(() => {
@@ -23,15 +23,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** Warden in phase 2 with the ship parked, the phase change pause over. Returns the body id. */
+/** Warden in phase 2 (enraged, past the fury break) with the ship parked. Returns the body id. */
 function phase2(shield = true): { w: World; id: number } {
   const w = bossGame('warden', { par: 1000 }, {}, shield);
   park(w, 600, 400);
   const id = enter(w);
-  bs(w).open = true;
-  damageBoss(w, Math.floor(bs(w).maxHp / 2) + 1, 0, 0); // just past 50 percent
-  expect(bs(w).phase).toBe(2);
-  run(w, 1); // the phase change pause
+  wardenFury(w); // Warden fury: phase 2 starts at the break; the dash is held to isolate the shield
   return { w, id };
 }
 
@@ -268,7 +265,11 @@ describe('warden hornets', () => {
     const { w } = phase2(false);
     gs(w).lives = 5;
     untilShield(w);
+    // Warden fury: enraged Warden seeks faster, so its Hornets reach the parked ship before they
+    // arm; hold the ship safe through the wait, then test the contact on purpose.
+    gs(w).invulnerable = true;
     run(w, (WARDEN_SHIELD.burstAt[0] ?? 0) + HORNET.armSec + 0.1);
+    gs(w).invulnerable = false;
     const h = hornets(w)[0] ?? -1;
     expect(h).toBeGreaterThan(0);
     const lives = gs(w).lives;

@@ -13,7 +13,7 @@ import { killShip } from '../../src/game/player';
 import { removeEntity } from '../../src/game/remove';
 import { gs } from '../../src/game/state';
 import type { ObjectiveDef } from '../../src/levelgen/leveldef';
-import { bossGame, enter, park, run } from './bossHelpers';
+import { bossGame, enter, park, run, slay } from './bossHelpers';
 import { DT, idle } from './helpers';
 
 afterEach(() => bus.clear());
@@ -96,7 +96,7 @@ describe('the hold in play', () => {
       run(w, 2);
       expect(g.waveClock).toBe(clock);
       expect(overs).toHaveLength(0);
-      damageBoss(w, 99999, 0, 0, true);
+      slay(w); // Warden fury: through the break
       stepGame(w, DT, idle());
       expect(g.outcome).toBe('won');
       expect(overs).toHaveLength(1);
