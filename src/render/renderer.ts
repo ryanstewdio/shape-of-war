@@ -1439,7 +1439,6 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let simHitSeen = false;
   let simHitSeq = 0;
   const bossCracks = createBossCracks();
-  let crackGlowCol = 0xffffff;
   // v33: outline fragments, one per removed arc, each a polyline (world units, relative to its
   // centre, already rotated into the world) that drifts out, tumbles and fades in the boss colours.
   const PIECES = PIECES_MAX;
@@ -3981,15 +3980,14 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       crackPulse(bossView.hitT !== undefined ? bossView.hitT : bodyFlash.age),
     );
     const wm = crackWidthMul(strength);
-    const glowCol = crackGlowCol;
     for (let k = 0; k < n; k++) {
       const a0 = bossCracks.arcs[k * 2] ?? 0;
       const a1 = bossCracks.arcs[k * 2 + 1] ?? 0;
       // Soft wide glow under the edge lines, thicker and brighter as health falls.
       outlineArc(g, a0 - EDGE_SPAN, a0, x, y, rot, sc);
-      g.stroke({ width: lw * 2.2 * wm, color: glowCol, alpha: Math.min(1, 0.22 * strength) * a, cap: 'round' });
+      g.stroke({ width: lw * 2.2 * wm, color: dmgCol.stub, alpha: Math.min(1, 0.22 * strength) * a, cap: 'round' });
       outlineArc(g, a1, a1 + EDGE_SPAN, x, y, rot, sc);
-      g.stroke({ width: lw * 2.2 * wm, color: glowCol, alpha: Math.min(1, 0.22 * strength) * a, cap: 'round' });
+      g.stroke({ width: lw * 2.2 * wm, color: dmgCol.stub, alpha: Math.min(1, 0.22 * strength) * a, cap: 'round' });
       // The outline beside each torn end shifts hue toward the accent and flickers.
       outlineArc(g, a0 - EDGE_SPAN, a0, x, y, rot, sc);
       g.stroke({ width: lw * 1.15 * wm, color: dmgCol.edge, alpha: Math.min(1, edgeFlicker(timeSec, k * 2) * (0.7 + 0.3 * strength)) * a, cap: 'round' });
@@ -4802,7 +4800,6 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     attachBossLayers(g, u);
     const hue = palette[bossColourOf(bossIdx)];
     damageColours(hue, damageAccent(hue), dmgCol);
-    crackGlowCol = mixRgb(dmgCol.edge, 0xffffff, 0.5);
     const hot = mixRgb(hue, 0xffffff, 0.6);
     const R = bossBodyR(bossIdx);
     const lw = BOSS_LINE * tierWeight(bossTier);
