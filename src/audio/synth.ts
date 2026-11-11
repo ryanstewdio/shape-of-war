@@ -13,6 +13,8 @@ import { createTimeWarnBackend } from './timeWarnSynth';
 import { createTurboBackend } from './turboSynth';
 import { installRippleSfx, type RippleController } from './rippleSfx';
 import { createRippleBackend } from './rippleSynth';
+import { installBossTick, type BossTickController } from './bossTick';
+import { createBossTickBackend } from './bossTickSynth';
 import { installStorySfx, type StoryController } from './storySfx';
 import { createStoryBackend } from './storySfxSynth';
 import {
@@ -160,6 +162,7 @@ const gw2Backend = createGw2Backend({ graph: sfxGraph, noise: noiseBuffer, regis
 const turboBackend = createTurboBackend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
 const rippleBackend = createRippleBackend({ graph: sfxGraph, noise: noiseBuffer, registerOneShot });
 const scrollTickBackend = createScrollTickBackend({ graph: sfxGraph });
+const bossTickBackend = createBossTickBackend({ graph: sfxGraph });
 const storyBackend = createStoryBackend({ graph: sfxGraph });
 const timeWarnBackend = createTimeWarnBackend({ graph: sfxGraph });
 
@@ -288,6 +291,8 @@ export function installAudio(opts: AudioOptions): () => void {
   const scrollTick: ScrollTickController = installScrollTick(b, scrollTickBackend);
   // Tester 3: pond ripple thump and whoosh (rippleSfx.ts).
   const ripple: RippleController = installRippleSfx(b, rippleBackend);
+  // Boss shot tick on 'sim:bossHit' (bossTick.ts).
+  const bossTick: BossTickController = installBossTick(b, bossTickBackend);
   // P1 story scene cues: reveal, guardian drone, freed chord, panel tick (storySfx.ts).
   const story: StoryController = installStorySfx(b, storyBackend);
   // HUD clock warnings at 60, 30 and the last 10 seconds (timeWarnSfx.ts).
@@ -296,6 +301,7 @@ export function installAudio(opts: AudioOptions): () => void {
     gw2.dispose,
     story.dispose,
     ripple.dispose,
+    bossTick.dispose,
     turbo.dispose,
     scrollTick.dispose,
     timeWarn.dispose,
