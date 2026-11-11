@@ -51,10 +51,27 @@ describe('bulwark vs pierce', () => {
     return { hp: w.hp[id] ?? 0, alive: w.bullets.alive[b] === 1 };
   }
 
-  it('a Pierce shot on the front arc damages the Bulwark and keeps flying', () => {
+  it('a Pierce shot on the front arc takes PIERCE_BULWARK_DAMAGE and keeps flying', () => {
+    expect(bulwark.PIERCE_BULWARK_DAMAGE).toBe(2);
     const r = shoot(true, 216);
-    expect(r.hp).toBe(bulwark.def.hp - 1);
+    expect(r.hp).toBe(bulwark.def.hp - bulwark.PIERCE_BULWARK_DAMAGE);
     expect(r.alive).toBe(true);
+  });
+
+  it('a Pierce shot on the back also takes PIERCE_BULWARK_DAMAGE', () => {
+    expect(shoot(true, 184).hp).toBe(bulwark.def.hp - bulwark.PIERCE_BULWARK_DAMAGE);
+  });
+
+  it('two Pierce hits kill a Bulwark', () => {
+    const { w } = makeGame();
+    const id = put(w, bulwark.def, 200, 0);
+    w.rot[id] = 0;
+    for (let i = 0; i < 2; i++) {
+      const b = spawnBullet(w.bullets, 216, 0, 0, 0, 1);
+      armPierce(w.bullets, b);
+      bulletHits(w);
+    }
+    expect(w.alive[id] === 1 && w.kind[id] === Kind.Bulwark).toBe(false); // the slot may be reused by a drop
   });
 
   it('a spread shot on the front arc is still absorbed', () => {
