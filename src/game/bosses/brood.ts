@@ -17,6 +17,15 @@
 // every 2 s, slot 2 flees and launches Darts every 4 s. They carry their own bar (bs.splitMax).
 // Contact with any Broodling kills. The fight ends with the third one, once.
 // Split scratch: t0 slime clock, t1 dart clock, angle the orbiter's angle around the ship.
+//
+// Frenzy (fury three, BROOD_FRENZY): the body has no fury and no break (the split is its mid point).
+// The first Broodling death enrages the rest: BossState.fury goes to 2 ('sim:bossFury' on, once; a
+// ship death keeps it) and readBoss writes frenzy. Survivors move speedMul faster in their roles, and
+// every everySec of attack time two survivors pincer the ship: each stops and faces a point reach u
+// past the ship on the far side from the other for aimSec, then drives through it at driveSpeed (at
+// most driveSec). A lone survivor keeps the speed and hunts the ship. Frenzy scratch (bs.abl): 0 the
+// pincer clock, 1 the pincer stage (0 none, 1 aim, 2 drive), 2 stage seconds left, 3 to 8 each
+// slot's drive point (x, y), 9 to 11 1 while that slot still drives.
 import { bus } from '../../core/events';
 import * as dart from '../enemies/dart';
 import { dropSlime } from '../enemies/slime';
@@ -26,7 +35,7 @@ import { bossAdt, clearHazards, countParts, crackBody, livePart, spawnAdd, spawn
 import { angleToOn, wrapPi } from './kit';
 import { bossTele, minionCount } from './scale';
 import { bossOf, type BossState } from './state';
-import { BROOD, BROODLING, MAX_ADDS, MAX_PARTS } from './table';
+import { BROOD, BROOD_FRENZY, BROODLING, MAX_ADDS, MAX_PARTS } from './table';
 import { BossMode, PartType, type BossDef } from './types';
 import { removeEntity } from '../remove';
 import { difficultyOf } from '../difficulty';
@@ -367,14 +376,22 @@ function launchDarts(w: World, id: number, bs: BossState): void {
 /** One step of a Broodling (Kind.BossPart, PartType.Broodling). Paused while the ship is down or the boss is staggered. */
 export function stepBroodling(w: World, id: number, dt: number): void {
   const bs = bossOf(w);
-  if (bs === null || bs.status !== 'alive' || !bs.split || !w.ship.active || bs.stagger > 0) return;
+  if (bs === null || bs.status !== 'alive' || !bs.split) return;
+  if (!w.ship.active) {
+    bs.abl[P_STAGE] = Pincer.None; // a pincer in flight is called off while the ship is down
+    return;
+  }
+  if (bs.stagger > 0) return;
   const adt = bossAdt(w, bs, dt);
   const ship = targetOf(w, id);
-  switch (slotOf(bs, id)) {
+  const slot = slotOf(bs, id);
+  if (bs.fury === 2 && stepFrenzy(w, id, bs, slot, dt, adt)) return;
+  const fury = bs.fury;
+  switch (slot) {
     case BroodlingRole.Chase: {
       const rot = turnToward(w.rot[id] ?? 0, angleBetween(w, id, ship), BROODLING.turnRate * dt);
       w.rot[id] = rot;
-      moveHeading(w, id, rot, BROODLING.chaseSpeed, dt);
+      moveHeading(w, id, rot, frenzySpeed(BROODLING.chaseSpeed, fury), dt);
       return;
     }
     case BroodlingRole.Orbit: {
@@ -382,7 +399,7 @@ export function stepBroodling(w: World, id: number, dt: number): void {
       const tx = (w.x[ship] ?? 0) + Math.cos(bs.angle) * BROODLING.orbitRadius;
       const ty = (w.y[ship] ?? 0) + Math.sin(bs.angle) * BROODLING.orbitRadius;
       w.rot[id] = angleToOn(w.surface, w.x[id] ?? 0, w.y[id] ?? 0, tx, ty);
-      stepToward(w, id, tx, ty, BROODLING.orbitSpeed * dt);
+      stepToward(w, id, tx, ty, frenzySpeed(BROODLING.orbitSpeed, fury) * dt);
       bs.t0 -= adt;
       if (bs.t0 <= 0) {
         bs.t0 += BROODLING.slimeEvery;
@@ -398,7 +415,7 @@ export function stepBroodling(w: World, id: number, dt: number): void {
       const want = fleeHeading(angleBetween(w, ship, id), Math.atan2(-y, -cx), Math.sqrt(cx * cx + y * y));
       const rot = turnToward(w.rot[id] ?? 0, want, BROODLING.fleeTurnRate * dt);
       w.rot[id] = rot;
-      moveHeading(w, id, rot, BROODLING.fleeSpeed, dt);
+      moveHeading(w, id, rot, frenzySpeed(BROODLING.fleeSpeed, fury), dt);
       bs.t1 -= adt;
       if (bs.t1 <= 0) {
         bs.t1 += BROODLING.dartEvery;
@@ -410,4 +427,152 @@ export function stepBroodling(w: World, id: number, dt: number): void {
   }
 }
 
-export const def: BossDef = { reset, step, onPhase, entryHome, clampDamage, cracks };
+// ---------------------------------------------------------------------------------------------
+// Frenzy
+
+const P_CLOCK = 0;
+const P_STAGE = 1;
+const P_LEFT = 2;
+const P_PT = 3;
+const P_DRIVE = 9;
+
+/** Pincer stages (bs.abl[P_STAGE]). */
+export const enum Pincer {
+  None = 0,
+  Aim = 1,
+  Drive = 2,
+}
+
+/** Pure: a Broodling speed in a fury stage (enraged: times BROOD_FRENZY.speedMul). */
+export function frenzySpeed(speed: number, fury: number): number {
+  return fury >= 2 ? speed * BROOD_FRENZY.speedMul : speed;
+}
+
+/**
+ * Pure: the drive point of a Broodling whose partner is at (ox, oy), with the ship at (sx, sy):
+ * reach u past the ship on the far side from the partner, written into out (flat offsets).
+ */
+export function pincerPoint(sx: number, sy: number, ox: number, oy: number, out: { x: number; y: number }): void {
+  let dx = sx - ox;
+  let dy = sy - oy;
+  const d = Math.sqrt(dx * dx + dy * dy);
+  if (d > 1e-6) {
+    dx /= d;
+    dy /= d;
+  } else {
+    dx = 1;
+    dy = 0;
+  }
+  out.x = sx + dx * BROOD_FRENZY.reach;
+  out.y = sy + dy * BROOD_FRENZY.reach;
+}
+
+const fev = { x: 0, y: 0 };
+const pt = { x: 0, y: 0 };
+
+/** The Broodlings enrage: the first death after the split ('sim:bossFury' on, once). */
+function enrageBroodlings(bs: BossState, x: number, y: number): void {
+  bs.fury = 2;
+  bs.furyT = 0;
+  bs.abl[P_CLOCK] = 0;
+  bs.abl[P_STAGE] = Pincer.None;
+  const e = bs.furyEv;
+  e.id = bs.spec.id;
+  e.stage = 'on';
+  e.sec = 0;
+  e.x = x;
+  e.y = y;
+  bus.emit('sim:bossFury', e);
+}
+
+/** Part hook: the first Broodling to die enrages the others (pods never do). */
+export function onPartDamage(w: World, bs: BossState, part: number, applied: number, broke: boolean): void {
+  if (!broke || !bs.split || bs.fury !== 0 || bs.status !== 'alive') return;
+  enrageBroodlings(bs, w.x[part] ?? 0, w.y[part] ?? 0);
+}
+
+/** Start a pincer: each of the two survivors locks a point past the ship on the far side from the other. */
+function startPincer(w: World, bs: BossState, a: number, b: number): void {
+  const sx = w.x[0] ?? 0;
+  const sy = w.y[0] ?? 0;
+  for (let k = 0; k < MAX_PARTS && k < BROODLING.count; k++) bs.abl[P_DRIVE + k] = 0;
+  for (let i = 0; i < 2; i++) {
+    const self = i === 0 ? a : b;
+    const other = i === 0 ? b : a;
+    const k = slotOf(bs, self);
+    if (k < 0 || k >= BROODLING.count) continue;
+    // The partner's offset from the ship on the surface (the short way across a drum seam).
+    w.surface.delta(sx, sy, w.x[other] ?? 0, w.y[other] ?? 0, fev);
+    pincerPoint(sx, sy, sx + fev.x, sy + fev.y, pt);
+    w.surface.wrap(pt);
+    bs.abl[P_PT + 2 * k] = pt.x;
+    bs.abl[P_PT + 2 * k + 1] = pt.y;
+    bs.abl[P_DRIVE + k] = 1;
+  }
+  bs.abl[P_STAGE] = Pincer.Aim;
+  bs.abl[P_LEFT] = BROOD_FRENZY.aimSec;
+}
+
+/** The pincer clock, run once per step by the first live Broodling. */
+function stepPincerClock(w: World, bs: BossState, dt: number, adt: number, a: number, b: number): void {
+  const stage = bs.abl[P_STAGE] ?? 0;
+  if (stage === Pincer.None) {
+    const c = (bs.abl[P_CLOCK] ?? 0) + adt;
+    if (c < BROOD_FRENZY.everySec || b < 0) {
+      bs.abl[P_CLOCK] = c < BROOD_FRENZY.everySec ? c : BROOD_FRENZY.everySec;
+      return;
+    }
+    bs.abl[P_CLOCK] = c - BROOD_FRENZY.everySec;
+    startPincer(w, bs, a, b);
+    return;
+  }
+  const left = (bs.abl[P_LEFT] ?? 0) - dt;
+  if (left > 0) {
+    bs.abl[P_LEFT] = left;
+    return;
+  }
+  if (stage === Pincer.Aim) {
+    bs.abl[P_STAGE] = Pincer.Drive;
+    bs.abl[P_LEFT] = BROOD_FRENZY.driveSec;
+    return;
+  }
+  bs.abl[P_STAGE] = Pincer.None;
+}
+
+/**
+ * Frenzy movement of Broodling id in slot k. Returns true when it replaced the role step: a lone
+ * survivor hunting, or a pincer aim or drive in progress.
+ */
+function stepFrenzy(w: World, id: number, bs: BossState, k: number, dt: number, adt: number): boolean {
+  let a = -1;
+  let b = -1;
+  for (let j = 0; j < BROODLING.count; j++) {
+    const p = livePart(w, bs, j);
+    if (p < 0) continue;
+    if (a < 0) a = p;
+    else if (b < 0) b = p;
+  }
+  if (id === a) {
+    bs.furyT += dt;
+    stepPincerClock(w, bs, dt, adt, a, b);
+  }
+  if (b < 0) {
+    // A lone survivor hunts the ship at the frenzy speed.
+    const rot = turnToward(w.rot[id] ?? 0, angleBetween(w, id, targetOf(w, id)), BROODLING.turnRate * dt);
+    w.rot[id] = rot;
+    moveHeading(w, id, rot, frenzySpeed(BROODLING.chaseSpeed, bs.fury), dt);
+    return true;
+  }
+  const stage = bs.abl[P_STAGE] ?? 0;
+  if (stage === Pincer.None || k < 0 || k >= BROODLING.count || (bs.abl[P_DRIVE + k] ?? 0) !== 1) return false;
+  const px = bs.abl[P_PT + 2 * k] ?? 0;
+  const py = bs.abl[P_PT + 2 * k + 1] ?? 0;
+  const to = angleToOn(w.surface, w.x[id] ?? 0, w.y[id] ?? 0, px, py);
+  w.rot[id] = to;
+  if (stage === Pincer.Aim) return true; // it stops and faces its point
+  const step = BROOD_FRENZY.driveSpeed * dt;
+  if (stepToward(w, id, px, py, step) <= step) bs.abl[P_DRIVE + k] = 0; // through its point: back to its role
+  return true;
+}
+
+export const def: BossDef = { reset, step, onPhase, entryHome, clampDamage, cracks, onPartDamage };

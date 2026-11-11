@@ -26,6 +26,7 @@ function started(shield = true): { w: World; id: number } {
 }
 
 function crack(w: World, id: number): void {
+  bs(w).fury = 2; // fury three: Mirage is on the shared fury; skip the break to isolate the mirrors
   w.hp[id] = Math.floor(bs(w).maxHp * CRACK_AT[1]) + 5;
   damageBoss(w, 10, w.x[id] ?? 0, w.y[id] ?? 0, true);
 }

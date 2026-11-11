@@ -15,7 +15,16 @@
 // back every 6 s while Mirage lives. 'sim:bossSplit' fires once, at the crack; the body stays (it is
 // not a body split: bs.split stays false). Ability scratch (bs.abl): 0 and 1 last position, 2 and 3
 // the one before, 4 copy countdown (0 idle), 5 respawn clock, 6 1 once split, 7 positions known.
+//
+// Fury (shared, fury.ts; fury three): at the stage 1 crack Mirage breaks (stands still, markers and
+// lanes gone, core closed, no damage, FURY_BREAK_SEC), phase 2 starts there, then it is enraged to
+// its death. False landings (MIRAGE_FURY): every enraged warp shows up to rings landing ring markers
+// on the warp candidates (same distance rule), each at least fakeGap u from the others. Which one is
+// real reads the world clock and the warp counter through hash01, never the PRNG. The fakes are
+// markers only and vanish fakeFadeSec before the landing. Lanes, mirrors and the gate are unchanged.
+// Ability scratch: 8 fakes shown, 9 to 12 the fake points (x, y), 13 and 14 the fake marker ids.
 import { bus } from '../../core/events';
+import { hash01 } from '../../core/rng';
 import { isInsideOn } from '../arena';
 import type { Surface } from '../../core/surface';
 import { removeEntity } from '../remove';
@@ -23,9 +32,10 @@ import { SHIP_RADIUS } from '../ship';
 import { angleBetween, entityHash, inFrontArc, moveTo, targetOf } from '../steer';
 import { Kind, type World } from '../world';
 import { crackBody, livePart, spawnLane, spawnPart, spawnRingMarker } from './core';
+import { furyClampDamage, furyDue, furyOnPhase, furyPhaseOf, startFuryBreak, stepFury } from './fury';
 import { hazardHitsOn, pointDistOn, wrapPi } from './kit';
 import type { BossState } from './state';
-import { HAZARD_RECHECK_SEC, MIRAGE, MIRROR } from './table';
+import { HAZARD_RECHECK_SEC, MIRAGE, MIRAGE_FURY, MIRROR } from './table';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
 
 const H0X = 0;
@@ -36,6 +46,11 @@ const COPY = 4;
 const RESPAWN = 5;
 const SPLIT = 6;
 const KNOWN = 7;
+const FAKES = 8;
+const FAKE_X = 9;
+const FAKE_ID = 13;
+/** Fake rings at most (MIRAGE_FURY.rings less the real one; the scratch holds two). */
+const MAX_FAKES = 2;
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
@@ -80,7 +95,31 @@ export function warpCandidate(tx: number, ty: number, h1: number, h2: number, k:
   out.y = ty + Math.sin(a) * d;
 }
 
+/**
+ * Pure: which of n landing rings is the real one, from the world clock (seconds) and the warp
+ * counter: hash01 of the clock in whole milliseconds and the counter, never the PRNG.
+ */
+export function realRingIndex(clock: number, warp: number, n: number): number {
+  if (!(n > 1)) return 0;
+  const ms = Number.isFinite(clock) && clock > 0 ? Math.floor(clock * 1000) : 0;
+  const k = Math.floor(hash01(ms >>> 0, warp >>> 0) * n);
+  return k < 0 ? 0 : k >= n ? n - 1 : k;
+}
+
+/** Pure: landing rings a warp shows in a fury stage (rings enraged, else 1). */
+export function ringsFor(fury: number): number {
+  return fury >= 2 ? Math.min(MIRAGE_FURY.rings, MAX_FAKES + 1) : 1;
+}
+
+/** Pure: seconds a fake ring shows: the real warning less the fade, so it is gone before the landing. */
+export function fakeLife(markSec: number): number {
+  const v = markSec - MIRAGE_FURY.fakeFadeSec;
+  return v > 0 ? v : 0;
+}
+
 const cand = { x: 0, y: 0 };
+/** Up to MIRAGE_FURY.rings fitted landing points of one enraged warp (x, y pairs), set at load. */
+const ringPts = new Float64Array(2 * (MAX_FAKES + 1));
 /** The marker ends with its countdown; inside this tail its absence is expected. */
 const MARKER_GRACE = 0.05;
 
@@ -94,6 +133,69 @@ function dropMarker(w: World, bs: BossState): void {
   bs.n0 = -1;
 }
 
+/** Remove the live fake rings and forget them. */
+function dropFakes(w: World, bs: BossState): void {
+  for (let k = 0; k < MAX_FAKES; k++) {
+    const m = bs.abl[FAKE_ID + k] ?? -1;
+    if (m > 0 && w.alive[m] === 1 && w.kind[m] === Kind.BossHazard && bs.hzMarker[m] === 1) removeEntity(w, m);
+    bs.abl[FAKE_ID + k] = -1;
+  }
+}
+
+/** Show the fake rings recorded for this warp (markers only; they vanish fakeFadeSec before the landing). */
+function showFakes(w: World, id: number, bs: BossState): void {
+  dropFakes(w, bs);
+  const n = bs.abl[FAKES] ?? 0;
+  const life = fakeLife(MIRAGE.markSec);
+  for (let k = 0; k < n && k < MAX_FAKES; k++) {
+    bs.abl[FAKE_ID + k] = life > 0 ? spawnRingMarker(w, bs, bs.abl[FAKE_X + 2 * k] ?? 0, bs.abl[FAKE_X + 2 * k + 1] ?? 0, w.radius[id] ?? 0, life) : -1;
+  }
+}
+
+/**
+ * Enraged warp: gather up to rings landing points from the candidates (inside the arena, at least
+ * fakeGap u apart), pick the real one by realRingIndex, mark it and show the rest as fakes.
+ */
+function markFury(w: World, id: number, bs: BossState, tx: number, ty: number, h1: number, h2: number, n: number): boolean {
+  const r = w.radius[id] ?? 0;
+  const want = ringsFor(bs.fury);
+  let got = 0;
+  for (let k = 0; k < MIRAGE.warpTries && got < want; k++) {
+    warpCandidate(tx, ty, h1, h2, k, cand);
+    w.surface.wrap(cand);
+    if (!isInsideOn(w.surface, w.level.arena, cand.x, cand.y, r)) continue;
+    let near = false;
+    for (let j = 0; j < got; j++) {
+      if (pointDistOn(w.surface, cand.x, cand.y, ringPts[2 * j] ?? 0, ringPts[2 * j + 1] ?? 0) < MIRAGE_FURY.fakeGap) near = true;
+    }
+    if (near) continue;
+    ringPts[2 * got] = cand.x;
+    ringPts[2 * got + 1] = cand.y;
+    got++;
+  }
+  if (got === 0) return false;
+  const real = realRingIndex(w.time, n, got);
+  const x = ringPts[2 * real] ?? 0;
+  const y = ringPts[2 * real + 1] ?? 0;
+  const m = spawnRingMarker(w, bs, x, y, r, MIRAGE.markSec);
+  if (m < 0) return false; // hazard cap: never warp unmarked
+  bs.t1 = x;
+  bs.t2 = y;
+  bs.n0 = m;
+  bs.t3 = MIRAGE.markSec;
+  bs.n2 = MirageWarp.Marked;
+  let f = 0;
+  for (let j = 0; j < got; j++) {
+    if (j === real) continue;
+    bs.abl[FAKE_X + 2 * f] = ringPts[2 * j] ?? 0;
+    bs.abl[FAKE_X + 2 * f + 1] = ringPts[2 * j + 1] ?? 0;
+    f++;
+  }
+  bs.abl[FAKES] = f;
+  showFakes(w, id, bs); // a fake that hits the hazard cap is skipped: the real ring always shows
+  return true;
+}
+
 /** Pick a landing point inside the arena and mark it. False when none fits (try again later). */
 function mark(w: World, id: number, bs: BossState): boolean {
   const t = targetOf(w, id);
@@ -104,6 +206,7 @@ function mark(w: World, id: number, bs: BossState): boolean {
   bs.n1 = n + 1;
   const h1 = entityHash(w, id, n * 2);
   const h2 = entityHash(w, id, n * 2 + 1);
+  if (bs.fury >= 2) return markFury(w, id, bs, tx, ty, h1, h2, n);
   for (let k = 0; k < MIRAGE.warpTries; k++) {
     warpCandidate(tx, ty, h1, h2, k, cand);
     w.surface.wrap(cand); // R6 drum: a landing point past the seam is its image on the strip (flat: no op)
@@ -161,7 +264,25 @@ export function reset(w: World, id: number, bs: BossState, first: boolean): void
   bs.mode = BossMode.Attacking;
 }
 
+/** Mirage's own break reset: markers and lanes are gone (clearHazards), no warp is pending. */
+function onBreak(w: World, id: number, bs: BossState): void {
+  bs.n0 = -1;
+  bs.n2 = MirageWarp.Idle;
+  bs.t3 = 0;
+  bs.retry = 0;
+  bs.abl[FAKES] = 0;
+  dropFakes(w, bs);
+}
+
+/** Enraged: the first false landing marks after the entrance lead (firstWarp). */
+function onEnrage(w: World, id: number, bs: BossState): void {
+  bs.n2 = MirageWarp.Idle;
+  bs.t0 = warpEveryFor(bs.phase) - MIRAGE.markSec - MIRAGE.firstWarp;
+}
+
 export function step(w: World, id: number, bs: BossState, dt: number, adt: number): void {
+  // The break: Mirage stands still, no warps, core closed; then it is enraged.
+  if (stepFury(w, id, bs, dt, onEnrage)) return;
   stepWarp(w, id, bs, dt, adt);
   if ((bs.abl[SPLIT] ?? 0) === 1) stepMirrors(w, id, bs, dt);
 }
@@ -185,10 +306,13 @@ function stepWarp(w: World, id: number, bs: BossState, dt: number, adt: number):
       if (m < 0) return;
       bs.n0 = m;
       bs.t3 = MIRAGE.markSec;
+      if (bs.fury >= 2) showFakes(w, id, bs); // the false landings show again with it
     }
     bs.t3 -= dt; // the landing warning is never shortened by enrage
     if (bs.t3 > 0) return;
     dropMarker(w, bs);
+    dropFakes(w, bs); // already gone by their life; a stale id is cleared
+    bs.abl[FAKES] = 0;
     const r = w.radius[id] ?? 0;
     if (!spotClear(w, bs, r)) {
       // The ship is on the spot: wait 0.3 s, then pick and mark a fresh one.
@@ -208,7 +332,23 @@ function stepWarp(w: World, id: number, bs: BossState, dt: number, adt: number):
 }
 
 export function onPhase(w: World, id: number, bs: BossState, phase: number): void {
-  // The warp interval reads bs.phase from the next warp on.
+  // The warp interval reads bs.phase from the next warp on. The break is the phase 2 pause.
+  furyOnPhase(bs, phase);
+}
+
+/** Hit hook: the break takes no damage, and the crossing hit stops at the stage 1 crack. */
+export function clampDamage(w: World, id: number, bs: BossState, amount: number): number {
+  return furyClampDamage(w, id, bs, amount);
+}
+
+/** After a hit Mirage lived: the break starts the moment the stage 1 bar is empty. */
+export function afterDamage(w: World, id: number, bs: BossState): void {
+  if (furyDue(w, id, bs)) startFuryBreak(w, id, bs, onBreak);
+}
+
+/** Phase hook: phase 2 starts at the break, phase 3 from hit points. */
+export function phaseOf(w: World, id: number, bs: BossState, hp: number): number {
+  return furyPhaseOf(w, id, bs, hp);
 }
 
 /** Shield arc: a hit counts only through the open arc. */
@@ -305,4 +445,4 @@ export function cracks(w: World, id: number, bs: BossState): void {
   if ((bs.abl[SPLIT] ?? 0) === 0 && (bs.crack[0] ?? 0) >= 2) splitMirrors(w, id, bs);
 }
 
-export const def: BossDef = { reset, step, onPhase, entryHome, gate, cracks };
+export const def: BossDef = { reset, step, onPhase, entryHome, gate, cracks, clampDamage, afterDamage, phaseOf, fury: true };

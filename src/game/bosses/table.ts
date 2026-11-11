@@ -355,6 +355,23 @@ export const BROODLING = {
   firstDelay: 1.5,
 } as const;
 
+/**
+ * Brood frenzy (Ryan 2026-11-11, fury three). Brood's body has no fury and no break: the split is its
+ * mid point. The Broodlings enrage when the first one dies ('sim:bossFury' on, once): survivors move
+ * speedMul faster, and every everySec of attack time two survivors close on the ship from opposite
+ * sides (the pincer): each stops and faces a point reach u past the ship on the far side from the
+ * other for aimSec, then drives through it at driveSpeed for at most driveSec. A lone survivor keeps
+ * the speed and hunts the ship.
+ */
+export const BROOD_FRENZY = {
+  speedMul: 1.25,
+  everySec: 4,
+  aimSec: 0.4,
+  reach: 140,
+  driveSpeed: 200,
+  driveSec: 1.6,
+} as const;
+
 /** Spindle (tier 1, level 15). */
 export const SPINDLE = {
   orbitRadius: 200,
@@ -472,6 +489,18 @@ export const MIRAGE = {
 } as const;
 
 /**
+ * Mirage fury (Ryan 2026-11-11, fury three). Shared fury: the break at the stage 1 crack, then
+ * enraged. False landings: every enraged warp shows rings landing ring markers, one real. The fakes
+ * are markers only (never lethal) and vanish fakeFadeSec before the landing. Every ring follows the
+ * warp distance rule and stands at least fakeGap u from each other ring.
+ */
+export const MIRAGE_FURY = {
+  rings: 3,
+  fakeFadeSec: 0.2,
+  fakeGap: 120,
+} as const;
+
+/**
  * Gravitas (tier 2, violet, level 30; roster row 6). Seeks at 45 u/s with a pull around it. Three
  * anchors gate all damage; each lost anchor weakens the pull by a third. A collapsing ring with a
  * 60 deg gap facing the ship every 5, 4 then 3 s.
@@ -496,6 +525,17 @@ export const GRAVITAS = {
   pullRadius: 300,
   pullMax: 100,
   entryHome: 0.45,
+} as const;
+
+/**
+ * Gravitas fury (Ryan 2026-11-11, fury three). Shared fury: the break at the stage 1 crack, then
+ * enraged. Tide: the pull flips to a push and back every flipSec at the same strength (the same
+ * speed cap), on the body and after the stage 2 split on the pair. Glow flashes a ring from
+ * telegraphSec before each flip (BossView.tideFlipIn).
+ */
+export const GRAVITAS_FURY = {
+  flipSec: 4,
+  telegraphSec: 0.8,
 } as const;
 
 /**

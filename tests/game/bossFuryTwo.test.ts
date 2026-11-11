@@ -128,7 +128,7 @@ describe('shared fury', () => {
   }
 
   it('a guardian off the shared fury reads fury 0', () => {
-    const w = bossGame('mirage');
+    const w = bossGame('bastion');
     park(w, 600, 400);
     enter(w);
     bs(w).fury = 2;
