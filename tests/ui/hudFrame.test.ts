@@ -1,5 +1,6 @@
 // B6 regression: every HUD element (score, multiplier, objective, par, lives, bombs, pause, super
 // ring and label, bomb button) lies outside the arena on the cover (21:9) and main (10:9) screens.
+import { V12_GEN_CONFIG } from '../../src/levelgen/leveldef';
 import { describe, expect, it } from 'vitest';
 import { SHIP_SPEED } from '../../src/game/ship';
 import { layoutButtons } from '../../src/input/buttons';
@@ -10,7 +11,6 @@ import { fitArena } from '../../src/render/layout';
 import { MULTIPLIER_CAP } from '../../src/game/scoring';
 import { hudText, playRect, superLabel } from '../../src/ui/hud';
 import {
-import { V12_GEN_CONFIG } from '../../src/levelgen/leveldef';
   COVER_DRONE_ROW,
   COVER_LEFT,
   hudFrame,
