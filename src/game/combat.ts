@@ -204,9 +204,10 @@ export function bulletHits(w: World): void {
       const k = w.kind[id] ?? 0;
       if (k === Kind.GravityWell) continue;
       if (k === Kind.Bulwark) {
-        // A pierce bullet already through this Bulwark ignores it; otherwise the front arc absorbs.
+        // A pierce bullet already through this Bulwark ignores it. Pierce (and any combo with it)
+        // passes through the front arc; every other bullet is absorbed by it.
         if (style === STYLE_PIERCE && hasHit(p, b, id)) continue;
-        if (shielded(w, id, bx, by)) {
+        if (style !== STYLE_PIERCE && shielded(w, id, bx, by)) {
           emitHit(gs(w), bx, by, Kind.Bulwark, id, true);
           killBullet(p, b);
           break;
