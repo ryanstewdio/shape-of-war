@@ -11,7 +11,7 @@ import { defOf } from './defs';
 import { isWarping } from './enemies/blink';
 import { novaDeathRipple } from './enemies/gravitywell';
 import { shardColour, shardHolding, splitLeaver } from './enemies/leaver';
-import { shieldBlocks } from './enemies/bulwark';
+import { PIERCE_BULWARK_DAMAGE, shieldBlocks } from './enemies/bulwark';
 import { isArmed } from './enemies/mine';
 import { collectGeom, def as geomDef, PICKUP_RADIUS, spawnGeoms } from './geoms';
 import { onScoringKill } from './pickup';
@@ -216,7 +216,7 @@ export function bulletHits(w: World): void {
       if (style === STYLE_PIERCE && k !== Kind.SnakeBody) {
         if (hasHit(p, b, id)) continue;
         const stopped = recordHit(p, b, id);
-        hurt(w, id, 1, bx, by);
+        hurt(w, id, k === Kind.Bulwark ? PIERCE_BULWARK_DAMAGE : 1, bx, by);
         if (stopped) break;
         continue;
       }
