@@ -5,6 +5,8 @@
 // The boss kill bonus is not here: src/game/scoring.ts bossBonus is the only copy (G3A), so the
 // number on the results line cannot drift from the number the sim pays.
 import type { Events } from '../core/events';
+import { bossBar, type BossBar } from '../game/bosses/bar';
+import type { BossView } from '../game/bosses/view';
 import { BOSS_IDS, type BossId, type BossTier, type LevelDef } from '../levelgen/leveldef';
 import { BASE_PALETTE, type PaletteKey } from '../render/neon';
 
@@ -235,4 +237,13 @@ export function bannerAlpha(t: number): number {
 export function bannerAdvance(t: number, dtSec: number): number {
   const step = Number.isFinite(dtSec) ? Math.min(BANNER_MAX_STEP_SEC, Math.max(0, dtSec)) : 0;
   return Math.min(BANNER_TOTAL_SEC, t + step);
+}
+
+/**
+ * Pure: the bar main.ts feeds the HUD each tick. It follows `barOn`, not `active`: after Brood splits
+ * its body is gone (active false) but the Broodlings carry the fight, and their own bar starts full.
+ * null when no guardian has a bar. The HUD never clamps a fill upward, so no bar jumps except at the split.
+ */
+export function bossBarFeed(v: Readonly<BossView>): BossBar | null {
+  return v.barOn === true ? bossBar(v) : null;
 }
