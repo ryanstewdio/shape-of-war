@@ -10,6 +10,7 @@ import { fitArena } from '../../src/render/layout';
 import { MULTIPLIER_CAP } from '../../src/game/scoring';
 import { hudText, playRect, superLabel } from '../../src/ui/hud';
 import {
+import { V12_GEN_CONFIG } from '../../src/levelgen/leveldef';
   COVER_DRONE_ROW,
   COVER_LEFT,
   hudFrame,
@@ -153,7 +154,7 @@ describe('B9 main screen arena scale: on-screen ship speed', () => {
   }
 
   function row(level: number): Row {
-    const { width: aw, height: ah } = generateLevel(SEED, level).arena;
+    const { width: aw, height: ah } = generateLevel(SEED, level, V12_GEN_CONFIG).arena; // B9 pins predate the V13 guardian arenas
     const m = hudFrame(MAIN.w, MAIN.h, ZERO, aw, ah);
     const c = hudFrame(COVER.w, COVER.h, ZERO, aw, ah);
     // Pre-B6: the legacy docs/01 top band play rect, buttons drawn over the arena.
