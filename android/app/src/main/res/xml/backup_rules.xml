@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older (fullBackupContent). Keep app_webview/Default/Local Storage and IndexedDB. -->
+<full-backup-content>
+    <exclude domain="root" path="app_webview/Default/Service Worker" />
+    <exclude domain="root" path="app_webview/Default/Cache" />
+    <exclude domain="root" path="app_webview/Default/Code Cache" />
+    <exclude domain="root" path="app_webview/Default/GPUCache" />
+    <exclude domain="cache" path="." />
+</full-backup-content>
