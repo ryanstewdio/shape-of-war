@@ -341,7 +341,7 @@ export function introCard(
   table: ParScaleTable = DIFFICULTY,
 ): IntroCard {
   // Tester 1: the goal reads the target the sim plays (createGame scales it the same way).
-  const goal: GoalDef = { ...(def.boss === undefined ? {} : { boss: def.boss }), objective: objectiveFor(def.objective, difficulty, table) };
+  const goal: GoalDef = { ...(def.boss === undefined ? {} : { boss: def.boss }), objective: objectiveFor(def.objective, difficulty, table, def.difficultyPar?.[difficulty]?.goal) };
   return {
     title: `Level ${Math.max(1, Math.floor(levelIndex))}`,
     mission: missionFor(goal),

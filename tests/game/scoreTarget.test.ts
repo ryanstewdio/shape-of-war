@@ -50,7 +50,7 @@ describe('objectiveFor and levelWithTarget', () => {
         const def = generateLevel(s * 104729, l);
         if (def.objective.kind !== 'scoreInTime') continue;
         n++;
-        for (const k of DIFFICULTIES) expect(scoreTarget(objectiveFor(def.objective, k))).toBeLessThanOrEqual(targetsFor(def, k).stars[0]);
+        for (const k of DIFFICULTIES) expect(scoreTarget(objectiveFor(def.objective, k, undefined, def.difficultyPar?.[k]?.goal))).toBeLessThanOrEqual(targetsFor(def, k).stars[0]);
       }
     }
     expect(n).toBeGreaterThan(10);

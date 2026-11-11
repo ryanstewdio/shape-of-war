@@ -60,9 +60,10 @@ export function levelWithLiveCap(level: LevelDef, scale: number, cap: number): L
  * as par and the star targets do (core/stars.ts scaleTarget), so it never passes the 1 star line.
  * Every other objective, and every objective on Normal, is returned as the same object.
  */
-export function objectiveFor(o: ObjectiveDef, d: Difficulty, table: ParScaleTable = DIFFICULTY): ObjectiveDef {
+export function objectiveFor(o: ObjectiveDef, d: Difficulty, table: ParScaleTable = DIFFICULTY, ownGoal?: number): ObjectiveDef {
   if (o.kind !== 'scoreInTime') return o;
-  const target = scaleTarget(o.target, parScaleFor(d, table));
+  // Guardian par (version 14): a level's own goal for d (LevelDef.difficultyPar) replaces target x parScale.
+  const target = ownGoal !== undefined && Number.isFinite(ownGoal) && ownGoal > 0 ? ownGoal : scaleTarget(o.target, parScaleFor(d, table));
   return target === o.target ? o : { ...o, target };
 }
 
@@ -71,6 +72,6 @@ export function objectiveFor(o: ObjectiveDef, d: Difficulty, table: ParScaleTabl
  * objective is unchanged (always on Normal), else a shallow copy; the input is never mutated.
  */
 export function levelWithTarget(level: LevelDef, d: Difficulty, table: ParScaleTable = DIFFICULTY): LevelDef {
-  const objective = objectiveFor(level.objective, d, table);
+  const objective = objectiveFor(level.objective, d, table, level.difficultyPar?.[d]?.goal);
   return objective === level.objective ? level : { ...level, objective };
 }
