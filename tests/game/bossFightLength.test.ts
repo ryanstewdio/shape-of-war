@@ -19,10 +19,10 @@ afterEach(() => bus.clear());
 /**
  * Ryan's target seconds at Normal (the Adventure order ramps inside a tier). Brood (Warden fury
  * wave): its rows now come from Ryan's device time (150 to 170 s on device against a 60 s target),
- * not the bot; the bot reads about 27 s for the retuned fight (59 before), so its band sits there.
+ * not the bot; the bot reads about 27 s for the retuned fight (59 before); the calm pass (body 340, Broodlings 450) reads 44 s, so its band sits there.
  */
 const FIGHT_TARGET_SEC: Readonly<Record<BossId, number>> = {
-  brood: 27,
+  brood: 44,
   warden: 67.5,
   spindle: 75,
   ember: 85,
