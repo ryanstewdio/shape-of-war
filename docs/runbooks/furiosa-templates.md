@@ -44,7 +44,7 @@ Gates: <which of (a) to (h) are confirmed, for example "a b c d e f g h confirme
 <work that is tempting but not part of this issue>
 
 ## PR requirements
-Branch cx/<n>-<slug> from the commit Codex checks out; record it as the start sha. One PR against main. Body: the start sha, bad news first, exact git diff --stat, what was left out, each command with its exact output tail, risks, the model name exactly as the Codex model control shows it.
+Work from the commit Codex checks out; record it as the start sha. Publish with the GitHub connector only: create branch cx/<n>-<slug> from current main on ryanstewdio/shape-of-war, upload only the allowed files as one commit on it, open one PR against main. Never git push. If an allowed file changed on main after the start sha, stop and report instead of uploading. Body: the start sha, bad news first, exact git diff --stat, what was left out, each command with its exact output tail, risks, the model name exactly as the Codex model control shows it.
 
 ## Expected verdict shape
 Under 40 lines in the task thread, last line "Verdict: ready for review" or "Verdict: blocked: <reason>".
