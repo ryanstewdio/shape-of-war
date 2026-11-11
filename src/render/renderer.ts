@@ -338,7 +338,7 @@ import {
   type ThreatPulse,
   type WallFeature,
 } from './mapFx';
-import { burstBoss, burstBossHit, burstSmall, emitBlinkStreak, emitDeflectSparks, emitEnemyTrail, emitGeomSparkle, trailsActive } from './particles';
+import { burstBoss, burstBossHit, burstInward, burstSmall, emitBlinkStreak, emitDeflectSparks, emitEnemyTrail, emitGeomSparkle, trailsActive } from './particles';
 import { bossSlot, DRONE_KIND_NUM, isFloorSlot, KIND_NUM, LEAVER_KIND_NUM, leaverSlot, partSlot, partVisualSlot, specFor } from './shapeSpecs';
 import {
   leaverFrameStep,
@@ -468,6 +468,8 @@ import {
   MIRAGE_SHIELD,
   PART_ANCHOR,
   PART_BROODLING,
+  PART_GRAVITANT,
+  PART_MIRROR,
   PART_POD,
   PART_TEMPESTLING,
   PART_TURRET,
@@ -518,7 +520,7 @@ import {
   mirageArcOpenness,
   warpJumped,
 } from './bossTier2';
-import { planAnchorTethers, planEmberLane, planMirageArc, TETHER_ANCHORS_MAX } from './bossTier2Fx';
+import { arcChords, planAnchorTethers, planEmberLane, planMirageArc, TETHER_ANCHORS_MAX } from './bossTier2Fx';
 import {
   ADD_HUE_MIX,
   addGlow,
@@ -559,7 +561,7 @@ import {
   turboRate,
   turboWidth,
 } from './turboFx';
-import { createSpriteBuf, fxHalo, resetSpriteBuf, type FxHalo } from './fxSprites';
+import { createSpriteBuf, fxHalo, pushArc, resetSpriteBuf, type FxHalo } from './fxSprites';
 import { createFxSpriteLayer, makeBossFxAtlas } from './fxSpriteLayer';
 // G3C boss identity (run 0288): Prism window from 'sim:bossWindow', per boss hit flash, cracks from
 // 'sim:bossCrack', owner hue attacks, the tier 3 halo and the Twins enrage flare (bossIdentity.ts).
@@ -605,6 +607,42 @@ import {
 // Look v33: damage by incompleteness (no dark paint), the Ember flame body, the nova colour cycle.
 import { DETACH_ARC, damageColours, damagedSpec, EDGE_SPAN, edgeFlicker, STUB_LEN, type DamageColours } from './bossDamage';
 import { blueBodyAlpha, blueEdgeAlpha, blueEdgeWidth, emberFurySpark, emberFuryStops, emberFuryTint } from './emberFury';
+// Fury three (glow-fury-three): Brood's Broodlings, Mirage's shatter and double image, Gravitas's tide.
+import {
+  broodSplitFlash,
+  flipInOf,
+  frenzyGlow,
+  frenzyOn,
+  frenzyPulse,
+  frenzyScale,
+  frenzySpec,
+  GRAV_RING_ALPHA,
+  GRAV_RING_R,
+  GRAV_RING_SPAN,
+  GRAV_RING_WIDTH,
+  gravitasArcStart,
+  gravitasCollapseGlow,
+  gravitasCollapseScale,
+  gravitasFuryTint,
+  gravitasRingAngle,
+  gravitasRingArcs,
+  gravitasRingOn,
+  gravitasSnapAccel,
+  MIRAGE_EDGE_ALPHA,
+  MIRAGE_EDGE_WIDTH,
+  MIRAGE_SHARD_LIFE,
+  MIRAGE_SHARD_SPEED,
+  mirageEchoAlpha,
+  mirageEchoOffset,
+  mirageEchoOn,
+  mirageFuryTint,
+  mirageShardCount,
+  ripplesOut,
+  TIDE_RING_R,
+  tideFlash,
+  tideLatticeAccel,
+  tideOf,
+} from './furyThree';
 import { EMBER_TONGUES, FLAME_BANDS, FLAME_STOP_COUNT, flameAt, flameColour, flameStops, flameTongue, TONGUE_FLOATS } from './emberFlame';
 import {
   CALM_BANDS,
@@ -1647,6 +1685,33 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let furyTNow = 0;
   const furyOff: Offset = { x: 0, y: 0 };
   const furyPts = new Float32Array(6);
+  // glow-fury-three. The fury stage, frenzy and tide read every frame even with no body (after a split
+  // the parts carry the fight, so furyNow is 0 there); the Broodling split flash age; the frenzied
+  // and all white Broodling contexts and glow textures (cached like the fury body); the Gravitant and
+  // Mirror spots drawn this frame; the Mirage double image view (shares the boss body context).
+  let f3Fury: 0 | 1 | 2 = 0;
+  let f3FuryT = 0;
+  let f3Frenzy = false;
+  let f3Tide: -1 | 0 | 1 = 0;
+  let f3FlipIn = -1;
+  let broodFlashAge = Number.POSITIVE_INFINITY;
+  let broodHotCtx: GraphicsContext | null = null;
+  let broodWhiteCtx: GraphicsContext | null = null;
+  let broodHotTex: Texture | null = null;
+  let broodWhiteTex: Texture | null = null;
+  let broodCtxSlot = -1;
+  let broodTexKey = -1;
+  const F3_HALVES = 2;
+  const halfX = new Float32Array(F3_HALVES);
+  const halfY = new Float32Array(F3_HALVES);
+  const halfR = new Float32Array(F3_HALVES);
+  let halfCount = 0;
+  const mirrorX = new Float32Array(F3_HALVES);
+  const mirrorY = new Float32Array(F3_HALVES);
+  let mirrorCount = 0;
+  let echoView: Graphics | null = null;
+  const echoOff: Offset = { x: 0, y: 0 };
+  let bossBodyView: Graphics | null = null;
   const aimPen = createDrumPen();
   let dashAimShown = false;
   let levelSeed = 0;
@@ -1966,6 +2031,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     if (furyTex !== null) furyTex.destroy(true);
     furyTex = null;
     furyTexKey = -1;
+    if (broodHotTex !== null) broodHotTex.destroy(true);
+    if (broodWhiteTex !== null) broodWhiteTex.destroy(true);
+    broodHotTex = null;
+    broodWhiteTex = null;
+    broodTexKey = -1;
     glowTexturesDirty = false;
   }
 
@@ -2488,6 +2558,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       if (furyCtx !== null) retiredContexts.push(furyCtx);
       furyCtx = null;
       furyKey = -1;
+      if (broodHotCtx !== null) retiredContexts.push(broodHotCtx);
+      if (broodWhiteCtx !== null) retiredContexts.push(broodWhiteCtx);
+      broodHotCtx = null;
+      broodWhiteCtx = null;
+      broodCtxSlot = -1;
       redrawWalls(r);
     },
     tint(): void {
@@ -2828,7 +2903,116 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
    * so the green shard burst goes where the body last drew (bossDrawX, bossDrawY), with a green shock
    * ring on the map effect tiers. The Broodlings themselves draw as part slots (bossShapes.ts).
    */
+  /**
+   * glow-fury-three 'sim:bossFury': at Mirage's break its mirror ring (and any mirror image still
+   * standing) shatters inward onto the body, with a ring closing on it. Fewer shards on Low.
+   */
+  function onBossFury(id: string, stage: string, x: number, y: number): void {
+    if (stage !== 'break' || id !== 'mirage') return;
+    const t = getEffectsTier();
+    const hue = palette[bossColourOf(BOSS_MIRAGE)];
+    const hot = mixRgb(hue, 0xffffff, 0.55);
+    const r = MIRAGE_SHIELD * bossBodyR(BOSS_MIRAGE) * (bossDrawScale > 0 ? bossDrawScale : 1);
+    const ring = mirageShardCount(t, 0);
+    const [s0, s1] = MIRAGE_SHARD_SPEED;
+    const [l0, l1] = MIRAGE_SHARD_LIFE;
+    burstInward(x, y, r, hot, ring - (ring >> 1), s0, s1, l0, l1);
+    burstInward(x, y, r, 0xffffff, ring >> 1, s0, s1, l0, l1);
+    const per = mirrorCount > 0 ? Math.floor((mirageShardCount(t, mirrorCount) - ring) / mirrorCount) : 0;
+    for (let k = 0; k < mirrorCount; k++) burstInward(mirrorX[k] ?? x, mirrorY[k] ?? y, r * 0.8, hot, per, s0, s1, l0, l1);
+    addPulse(pulsePool, PULSE_RING, x, y, 0, r * 1.15, r * 0.2, 0.4, hot, 1);
+  }
+
+  /** glow-fury-three: the frenzied (hot) or all white Broodling context, rebuilt with the slot or neon. */
+  function broodlingContext(slot: number, hot: boolean): GraphicsContext {
+    if (broodCtxSlot !== slot || broodHotCtx === null || broodWhiteCtx === null) {
+      if (broodHotCtx !== null) retiredContexts.push(broodHotCtx);
+      if (broodWhiteCtx !== null) retiredContexts.push(broodWhiteCtx);
+      broodHotCtx = buildContext(frenzySpec(specForSlot(slot)), currentRender, palette);
+      broodWhiteCtx = buildContext(whiteSpec(specForSlot(slot)), currentRender, palette);
+      broodCtxSlot = slot;
+    }
+    return hot ? broodHotCtx : broodWhiteCtx;
+  }
+
+  /** glow-fury-three: the frenzied or all white Broodling glow texture. */
+  function broodlingGlow(slot: number, hot: boolean): Texture {
+    const key = slot * 2 + (bloomOn ? 1 : 0);
+    if (broodTexKey !== key || broodHotTex === null || broodWhiteTex === null) {
+      if (broodHotTex !== null) retiredTextures.push(broodHotTex);
+      if (broodWhiteTex !== null) retiredTextures.push(broodWhiteTex);
+      broodHotTex = makeKindTexture(slot, !bloomOn, frenzySpec(specForSlot(slot)));
+      broodWhiteTex = makeKindTexture(slot, !bloomOn, whiteSpec(specForSlot(slot)));
+      broodTexKey = key;
+    }
+    return hot ? broodHotTex : broodWhiteTex;
+  }
+
+  /**
+   * glow-fury-three Gravitas, on the hazard layer: enraged, a spinning white ring of arcs round the
+   * body; before each tide flip a ring flashing on it. With no body (after the split) both ride each
+   * Gravitant. Fewer arcs and chords on Low.
+   */
+  function planFuryThree(timeSec: number): void {
+    if (bossIdx !== BOSS_GRAVITAS) return;
+    const ring = gravitasRingOn(f3Fury);
+    const tf = tideFlash(f3FlipIn);
+    if (!ring && tf <= 0) return;
+    const t = getEffectsTier();
+    const body = bossView.active && bossSeen;
+    const n = body ? 1 : halfCount;
+    const alpha = bossView.active ? bossBodyAlpha(bossView.mode, bossView.modeT) : 1;
+    const lw = BOSS_LINE * tierWeight(bossTier);
+    const arcs = gravitasRingArcs(t);
+    const turn = gravitasRingAngle(timeSec);
+    const flashCol = mixRgb(palette[bossColourOf(BOSS_GRAVITAS)], 0xffffff, 0.6);
+    for (let b = 0; b < n; b++) {
+      const x = body ? bossDrawX + bossShake.x + furyOff.x : (halfX[b] ?? 0);
+      const y = body ? bossDrawY + bossShake.y + furyOff.y : (halfY[b] ?? 0);
+      const R = body ? bossBodyR(bossIdx) * (bodyScale[0] ?? 1) : (halfR[b] ?? 0);
+      if (!(R > 0)) continue;
+      if (ring) {
+        const r = R * GRAV_RING_R;
+        const chords = t === 'low' ? Math.max(2, arcChords(r, GRAV_RING_SPAN) >> 1) : arcChords(r, GRAV_RING_SPAN);
+        for (let k = 0; k < arcs; k++) pushArc(hazardBuf, x, y, r, gravitasArcStart(turn, k, arcs), GRAV_RING_SPAN, chords, lw * GRAV_RING_WIDTH, GRAV_RING_ALPHA * alpha, 0xffffff, halo);
+      }
+      if (tf > 0) {
+        const r = R * TIDE_RING_R;
+        const full = Math.PI * 2;
+        const chords = t === 'low' ? Math.max(6, arcChords(r, full) >> 1) : arcChords(r, full);
+        pushArc(hazardBuf, x, y, r, 0, full, chords, lw * 1.8, tf * alpha, flashCol, halo);
+      }
+    }
+  }
+
+  /**
+   * glow-fury-three: enraged Mirage carries a double image, a view sharing the body's context, a few
+   * units off and flickering in a white hot magenta. Hidden otherwise.
+   */
+  function drawMirageEcho(timeSec: number): void {
+    const src = bossBodyView;
+    const on = bossView.active && bossSeen && bossIdx === BOSS_MIRAGE && mirageEchoOn(furyNow) && src !== null;
+    if (!on || src === null) {
+      if (echoView && echoView.visible) echoView.visible = false;
+      return;
+    }
+    if (!echoView) {
+      echoView = new Graphics(src.context);
+      echoView.label = 'mirageEcho';
+    } else if (echoView.context !== src.context) echoView.context = src.context;
+    if (echoView.parent !== entities) entities.addChildAt(echoView, 0);
+    echoView.visible = true;
+    mirageEchoOffset(timeSec, echoOff);
+    echoView.position.set((bodyX[0] ?? 0) + echoOff.x, (bodyY[0] ?? 0) + echoOff.y);
+    echoView.rotation = bodyRot[0] ?? 0;
+    echoView.scale.set(bodyScale[0] ?? 1);
+    echoView.tint = mixRgb(palette[bossColourOf(BOSS_MIRAGE)], 0xffffff, 0.55);
+    echoView.alpha = mirageEchoAlpha(timeSec) * bossBodyAlpha(bossView.mode, bossView.modeT);
+  }
+
   function onBossSplit(): void {
+    // glow-fury-three: the Broodlings flash white once as they appear.
+    if (bossIdx === BOSS_BROOD) broodFlashAge = 0;
     const x = splitCoord(bossDrawX, 0);
     const y = splitCoord(bossDrawY, 0);
     const t = getEffectsTier();
@@ -2891,6 +3075,14 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     turretsLast = turretCount;
     turretCount = 0;
     for (const g of dashGhosts) g.age += dt;
+    // glow-fury-three: read with or without a body (the parts carry the look after a split).
+    broodFlashAge += dt;
+    const barOn = bossView.barOn === true;
+    f3Fury = barOn ? furyStage(bossView.fury) : 0;
+    f3FuryT = f3Fury === 0 ? 0 : (bossView.furyT ?? 0);
+    f3Frenzy = barOn && frenzyOn(bossView.frenzy);
+    f3Tide = barOn ? tideOf(bossView.tide) : 0;
+    f3FlipIn = barOn ? flipInOf(bossView.tideFlipIn) : -1;
     if (!bossView.active) {
       bossLastX = Number.NaN;
       bossLastY = Number.NaN;
@@ -2976,6 +3168,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       const slot = partSlot(PART_BROODLING, bossTierOf(b));
       contextForSlot(slot);
       glowTextureFor(slot);
+      // glow-fury-three: and its split flash and frenzy looks.
+      broodlingContext(slot, true);
+      broodlingGlow(slot, true);
     }
     prewarmedBoss = b;
   }
@@ -3021,6 +3216,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     h.tier = bossTier;
     h.tint = palette[bossColourOf(bossIdx)];
     h.alphaMul = 1;
+    // glow-fury-three: while the Gravitas tide pushes its pull ripples run outward.
+    h.rippleOut = bossIdx === BOSS_GRAVITAS && ripplesOut(f3Tide);
     // glow-fury-two: Spindle's beam arms cross to hot red in fury and pulse slowly while enraged.
     if (furyNow !== 0 && bossIdx === BOSS_SPINDLE && h.type === HAZARD_SWEEP) {
       h.tint = furyArmTint(furyNow, furyTNow, h.tint, palette.red);
@@ -3034,7 +3231,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const sim = lattice.sim;
     const gravitasPulls = bossView.active && bossIdx === BOSS_GRAVITAS;
     if (h.type === HAZARD_PULL && !gravitasPulls && sim && wellsSeen < MAX_WELLS) {
-      addForce(sim, h.x, h.y, h.radius, BOSS_PULL_ACCEL);
+      addForce(sim, h.x, h.y, h.radius, bossIdx === BOSS_GRAVITAS ? tideLatticeAccel(BOSS_PULL_ACCEL, f3Tide) : BOSS_PULL_ACCEL);
       wellsSeen++;
     }
   }
@@ -3120,8 +3317,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       const n = landingSparks(t);
       if (n > 0) burstSmall(x, y, tint, n, 120, 360, 0.35);
     } else if (bossIdx === BOSS_GRAVITAS && lattice.sim && wellsSeen < MAX_WELLS) {
-      const accel = gravitasLatticeAccel(anchorsLast, bossView.mode, bossView.modeT);
-      if (accel < 0) {
+      // glow-fury-three: the tide turns the pull to a push; the break snaps the lattice inward.
+      const pull = gravitasLatticeAccel(anchorsLast, bossView.mode, bossView.modeT);
+      const accel = tideLatticeAccel(pull, f3Tide) + gravitasSnapAccel(furyNow, furyTNow, BOSS_PULL_ACCEL);
+      if (accel !== 0) {
         addForce(lattice.sim, x, y, GRAVITAS_LATTICE_R, accel);
         wellsSeen++;
       }
@@ -3245,6 +3444,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       if (entrance.alpha > 0) planEntranceRing(hazardBuf, bossDrawX, bossDrawY, entrance.r, entrance.alpha, palette[bossColourOf(bossIdx)], bossTier, haloBoss);
       planTier2(timeSec);
     }
+    planFuryThree(timeSec);
     if (hazardBuf.count > 0 || hazardLayer.shown > 0) hazardLayer.sync(hazardBuf);
     stats.hazardSprites = hazardBuf.count;
   }
@@ -3447,6 +3647,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     bus.on('sim:bossPhase', (p) => onBossPhase(p.id)),
     // v31: Brood split into three Broodlings (Swarm, merged): the green shard burst.
     bus.on('sim:bossSplit', () => onBossSplit()),
+    // glow-fury-three: Mirage's break shatters its mirrors inward.
+    bus.on('sim:bossFury', (p) => onBossFury(p.id, p.stage, p.x, p.y)),
     bus.on('sim:bossDown', (p) => onBossDown(p.id, p.x, p.y)),
     // glow-fury-two: per hit feedback on a guardian (Swarm contract; payload reused).
     bus.on('sim:bossHit', (p) => onSimBossHit(p.id, p.x, p.y, p.landed)),
@@ -4874,6 +5076,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       }
       drawShell(g, u, rs, lw, bodyA, timeSec);
       if (furyNow !== 0 && furySpikes(bossIdx, BOSS_WARDEN)) drawFurySpikes(g, rs, lw, bodyA);
+      // glow-fury-three: enraged Mirage burns a white hot edge round its body.
+      if (bossIdx === BOSS_MIRAGE && mirageEchoOn(furyNow)) {
+        outlinePath(g, bodyX[0] ?? 0, bodyY[0] ?? 0, bodyRot[0] ?? 0, bodyScale[0] ?? 1);
+        g.stroke({ width: lw * MIRAGE_EDGE_WIDTH, color: 0xffffff, alpha: MIRAGE_EDGE_ALPHA * bodyA });
+      }
       // glow-fury-two hit flash: the whole body washed white under 0.08 s (fill plus outline), at most
       // one flash start per 0.18 s so heavy fire strobes and the body still reads.
       const fa = bodyFlashAmount(bodyFlash) * bodyA;
@@ -5017,7 +5224,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         ? 0xffffff
         : bossIdx === BOSS_EMBER
           ? emberFuryTint(furyNow, furyTNow, palette[bossColourOf(bossIdx)], palette, flameTime)
-          : furyTint(furyNow, furyTNow, palette[bossColourOf(bossIdx)], palette.red);
+          : bossIdx === BOSS_MIRAGE
+            ? mirageFuryTint(furyNow, furyTNow, palette[bossColourOf(bossIdx)])
+            : bossIdx === BOSS_GRAVITAS
+              ? gravitasFuryTint(furyNow, furyTNow, palette[bossColourOf(bossIdx)])
+              : furyTint(furyNow, furyTNow, palette[bossColourOf(bossIdx)], palette.red);
     const bossTint = coreless
       ? exposed && shellHot(exposeAge)
         ? mixRgb(palette.red, 0xffffff, flickerRedWhite(bossTier))
@@ -5039,6 +5250,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     shipDrawn = false;
     bossSeen = false;
     bodyCount = 1;
+    halfCount = 0;
+    mirrorCount = 0;
+    bossBodyView = null;
+    // glow-fury-three: the Gravitas break collapse, and the Broodling split flash or frenzy.
+    const collapse = bossView.active && bossIdx === BOSS_GRAVITAS ? gravitasCollapseScale(furyNow, furyTNow) : 1;
+    const broodFlash = broodSplitFlash(broodFlashAge);
     for (let i = 0; i < w.cap; i++) {
       if (w.alive[i] !== 1) {
         hideSlot(i);
@@ -5068,6 +5285,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
             ? leaverSlot(leaverFrameStep(timeSec, hash01(i)))
             : visualSlot(kind, w.a[i] ?? -1, kind === KIND_NUM.slime ? hash01(i) : 0);
       const isShard = kind === LEAVER_KIND_NUM.shard;
+      /** glow-fury-three: 0 normal, 1 split flash, 2 frenzy (Broodlings only). */
+      let broodLook = 0;
       let v = views[i];
       if (!v) {
         v = new Graphics(contextForSlot(slot));
@@ -5212,18 +5431,24 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         if (furyNow !== 0) {
           ev.x += furyOff.x;
           ev.y += furyOff.y;
-          ev.alpha *= bossIdx === BOSS_EMBER ? blueBodyAlpha(furyNow, flameTime) : furyPulseAlpha(furyNow, furyTNow);
+          // glow-fury-three: Mirage and Gravitas keep a steady body (their looks carry the beat).
+          ev.alpha *= bossIdx === BOSS_EMBER ? blueBodyAlpha(furyNow, flameTime) : bossIdx === BOSS_MIRAGE || bossIdx === BOSS_GRAVITAS ? 1 : furyPulseAlpha(furyNow, furyTNow);
         }
+        // glow-fury-three: the Gravitas break collapses the drawn body to a point and swells it back.
+        ev.scaleX *= collapse;
+        ev.scaleY *= collapse;
         bossSeen = true;
+        bossBodyView = v;
         bodyX[0] = ev.x;
         bodyY[0] = ev.y;
         bodyRot[0] = ev.rot;
-        bodyScale[0] = scale;
+        bodyScale[0] = scale * collapse;
         const phaseEvent = bossPhaseAge < PHASE_FLASH_SEC ? 1 - bossPhaseAge / PHASE_FLASH_SEC : 0;
         const phaseMode = bossView.active ? bossPhaseFlash(bossView.mode, bossView.modeT) : 0;
         ev.glowMul = bossGlowMul(bossHitAge, phaseEvent > phaseMode ? phaseEvent : phaseMode);
         if (furyNow !== 0) ev.glowMul *= furyGlowMul(furyNow, furyTNow);
         ev.glowMul *= 1 + BODY_FLASH_GLOW * bodyFlashAmount(bodyFlash);
+        if (collapse < 1) ev.glowMul *= gravitasCollapseGlow(collapse);
         if (bossView.active) bossTier2Body(w, i, bossDrawX, bossDrawY, ev.rot, scale, dt);
         // Wave C: the Bastion keep burns hotter as turrets fall; a surviving twin is hot and fluttering.
         if (bossView.active && bossIdx === BOSS_BASTION) {
@@ -5265,6 +5490,30 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
           stormH[stormCount] = hash01(i);
           stormA[stormCount] = ev.alpha;
           stormCount++;
+        }
+        // glow-fury-three: the Broodlings flash white once at the split, then burn hot green in frenzy;
+        // the Gravitant and Mirror spots are kept for the fury rings and the mirror shatter.
+        const pa = w.a[i] ?? 0;
+        if (isBroodlingPart(pa)) {
+          broodLook = broodFlash ? 1 : f3Frenzy ? 2 : 0;
+          const c = broodLook === 0 ? contextForSlot(slot) : broodlingContext(slot, broodLook === 2);
+          if (v.context !== c) v.context = c;
+          if (broodLook === 1) ev.glowMul *= 1.8;
+          else if (broodLook === 2) {
+            const p = frenzyPulse(timeSec, hash01(i));
+            ev.scaleX *= frenzyScale(p);
+            ev.scaleY *= frenzyScale(p);
+            ev.glowMul *= frenzyGlow(p);
+          }
+        } else if (pa === PART_GRAVITANT && halfCount < F3_HALVES) {
+          halfX[halfCount] = ev.x;
+          halfY[halfCount] = ev.y;
+          halfR[halfCount] = partR(PART_GRAVITANT) * ev.scaleX;
+          halfCount++;
+        } else if (pa === PART_MIRROR && mirrorCount < F3_HALVES) {
+          mirrorX[mirrorCount] = ev.x;
+          mirrorY[mirrorCount] = ev.y;
+          mirrorCount++;
         }
         // Wave B: Gravitas anchors are joined by faint lines (planTier2 reads these positions).
         const pt = partType(w.a[i] ?? 0);
@@ -5358,6 +5607,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       if (isBoss) {
         const bt = bossGlowTexture(slot);
         if (s.texture !== bt) s.texture = bt;
+      } else if (isPart && isBroodlingPart(w.a[i] ?? 0)) {
+        const bt = broodLook === 0 ? glowTextureFor(slot) : broodlingGlow(slot, broodLook === 2);
+        if (s.texture !== bt) s.texture = bt;
       }
       if (!s.visible) s.visible = true;
       s.tint = glowTint;
@@ -5372,6 +5624,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     drawShardShimmer(timeSec);
     drawNovaSnakes(w, alpha, timeSec);
     drawBossIdentity(timeSec);
+    drawMirageEcho(timeSec);
     drawDashAim(timeSec);
     drawDroneMode(arm.mode);
     drawWellFx();
@@ -5813,6 +6066,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     bossSpeed = 0;
     ghostAge = Number.POSITIVE_INFINITY;
     if (ghostView) ghostView.visible = false;
+    broodFlashAge = Number.POSITIVE_INFINITY;
+    if (echoView) echoView.visible = false;
     anchorCount = 0;
     anchorsLast = 3;
     emberFlameEm.acc = 0;

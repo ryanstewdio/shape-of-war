@@ -161,11 +161,14 @@ export const PULL_RIPPLES = 2;
 /** The pull is never lethal: its alpha never passes this. */
 export const PULL_ALPHA = 0.32;
 
-/** Pure: radius fraction (1 at the edge, 0 at the centre) of pull ripple k at age t. */
-export function pullRipple(age: number, k: number): number {
+/**
+ * Pure: radius fraction (1 at the edge, 0 at the centre) of pull ripple k at age t. outward
+ * (glow-fury-three, the Gravitas tide pushing) runs the same ripples from the centre to the edge.
+ */
+export function pullRipple(age: number, k: number, outward = false): number {
   const t = Number.isFinite(age) ? Math.max(0, age) : 0;
   const p = (t * PULL_RIPPLE_HZ + k / PULL_RIPPLES) % 1;
-  return 1 - p;
+  return outward ? p : 1 - p;
 }
 
 /** Pure: pull alpha at an age: fades in over 0.3 s, never above PULL_ALPHA. */
@@ -205,6 +208,8 @@ export interface HazardInput {
   timeSec: number;
   /** Optional alpha multiplier on sweep arms (glow-fury-two: the Spindle enraged pulse); 1 if absent. */
   alphaMul?: number;
+  /** Optional: pull ripples run outward (glow-fury-three, the Gravitas tide pushing); inward if absent. */
+  rippleOut?: boolean;
 }
 
 const form: HazardForm = { lethal: false, alpha: 0, thick: 0, flash: 0 };
@@ -301,10 +306,10 @@ function planPull(h: HazardInput, b: SpriteBuf, halo: Readonly<FxHalo>): number 
   const w = HAZARD_LINE * tierWeight(h.tier) * 0.6;
   let n = pushArc(b, h.x, h.y, R, 0, Math.PI * 2, ringSegments(R, Math.PI * 2), w, a, h.tint, halo);
   for (let k = 0; k < PULL_RIPPLES; k++) {
-    const f = pullRipple(h.age, k);
+    const f = pullRipple(h.age, k, h.rippleOut === true);
     const r = R * f;
     if (r < 8) continue;
-    // Ripples brighten as they close in, so the pull reads as inward.
+    // Ripples are brightest near the centre: closing in they brighten (a pull), running out they fade (a push).
     n += pushArc(b, h.x, h.y, r, 0, Math.PI * 2, ringSegments(r, Math.PI * 2), w, a * (0.35 + 0.65 * (1 - f)), h.tint, halo);
   }
   return n;
