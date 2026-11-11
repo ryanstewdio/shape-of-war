@@ -1,6 +1,6 @@
 // Bulwark (docs/10 wave C): slow seeker that moves along its heading at 90 u/s and may turn only
 // 70 deg/s toward the ship. A frontal shield arc of +-60 deg around the heading absorbs player
-// bullets, drone shots and orbit blades (combat.ts asks shieldBlocks). Bombs and Detonate ignore
+// bullets (not Pierce, which passes through), drone shots and orbit blades (combat.ts asks shieldBlocks). Bombs and Detonate ignore
 // the shield. Render contract: shield arc centred on w.rot, +-60 deg, radius SHIELD_RADIUS.
 import { enemySpeedScale, turnScale } from '../state';
 import { angleToShip, DEG, inFrontArc, moveHeading, turnToward } from '../steer';

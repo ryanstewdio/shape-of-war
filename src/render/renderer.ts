@@ -604,6 +604,7 @@ import {
 } from './bossIdentity';
 // Look v33: damage by incompleteness (no dark paint), the Ember flame body, the nova colour cycle.
 import { DETACH_ARC, damageColours, damagedSpec, EDGE_SPAN, edgeFlicker, STUB_LEN, type DamageColours } from './bossDamage';
+import { blueBodyAlpha, blueEdgeAlpha, blueEdgeWidth, emberFurySpark, emberFuryStops, emberFuryTint } from './emberFury';
 import { EMBER_TONGUES, FLAME_BANDS, FLAME_STOP_COUNT, flameAt, flameColour, flameStops, flameTongue, TONGUE_FLOATS } from './emberFlame';
 import {
   CALM_BANDS,
@@ -3105,7 +3106,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       else emberSparkEm.acc = 0;
       // glow-fury-two: enraged, a short hot red spark trail rides each dash.
       const furySpark = emberFurySparkRate(furyNow, dashing, t === 'low');
-      if (furySpark > 0) emitEnemyTrail(emberFuryEm, furySpark, x - dx * R * 0.3, y - dy * R * 0.3, vx * 0.4, vy * 0.4, ENEMY_TRAIL_CHARGER, furyHotRed(palette.red), dt);
+      if (furySpark > 0) emitEnemyTrail(emberFuryEm, furySpark, x - dx * R * 0.3, y - dy * R * 0.3, vx * 0.4, vy * 0.4, ENEMY_TRAIL_CHARGER, emberFurySpark(palette, w.time, (w.time * 5.3) % 1), dt);
       else emberFuryEm.acc = 0;
     } else if (bossIdx === BOSS_MIRAGE && jumped) {
       // Ghost at the old spot (off on Low through afterimageAlpha) and a landing flash at the new one.
@@ -3985,9 +3986,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       const a1 = bossCracks.arcs[k * 2 + 1] ?? 0;
       // Soft wide glow under the edge lines, thicker and brighter as health falls.
       outlineArc(g, a0 - EDGE_SPAN, a0, x, y, rot, sc);
-      g.stroke({ width: lw * 2.2 * wm, color: dmgCol.stub, alpha: Math.min(1, 0.22 * strength) * a, cap: 'round' });
+      g.stroke({ width: lw * 2.2 * wm, color: dmgCol.stub, alpha: Math.min(1, 0.3 * strength) * a, cap: 'round' });
       outlineArc(g, a1, a1 + EDGE_SPAN, x, y, rot, sc);
-      g.stroke({ width: lw * 2.2 * wm, color: dmgCol.stub, alpha: Math.min(1, 0.22 * strength) * a, cap: 'round' });
+      g.stroke({ width: lw * 2.2 * wm, color: dmgCol.stub, alpha: Math.min(1, 0.3 * strength) * a, cap: 'round' });
       // The outline beside each torn end shifts hue toward the accent and flickers.
       outlineArc(g, a0 - EDGE_SPAN, a0, x, y, rot, sc);
       g.stroke({ width: lw * 1.15 * wm, color: dmgCol.edge, alpha: Math.min(1, edgeFlicker(timeSec, k * 2) * (0.7 + 0.3 * strength)) * a, cap: 'round' });
@@ -4035,6 +4036,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
    */
   function drawEmberFlame(g: Graphics, x: number, y: number, rot: number, rs: number, lw: number, a: number, t: number): void {
     flameStops(palette, flameRgb);
+    // glow-ember-flame: in fury the stops bend to the pulsing blue flame and the edge flickers.
+    if (furyNow !== 0) emberFuryStops(flameRgb, palette, furyNow, furyTNow, t);
     for (let k = 0; k < EMBER_TONGUES; k++) {
       flameTongue(k, t, rs, rot, flamePts);
       const o = k * TONGUE_FLOATS;
@@ -4055,7 +4058,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         else g.lineTo(px, py);
       }
       for (let j = FLAME_BANDS - 1; j >= 0; j--) g.lineTo(x + (flamePts[rt + j * 2] ?? 0), y + (flamePts[rt + j * 2 + 1] ?? 0));
-      g.stroke({ width: lw * 0.45, color: flameColour(flameRgb, 0.6, t, k + 3), alpha: 0.85 * a, join: 'round' });
+      const ew = furyNow === 2 ? blueEdgeWidth(t, k) : 1;
+      const ea = furyNow === 2 ? blueEdgeAlpha(t, k) : 0.85;
+      g.stroke({ width: lw * 0.45 * ew, color: flameColour(flameRgb, 0.6, t, k + 3), alpha: ea * a, join: 'round' });
     }
   }
 
@@ -5007,7 +5012,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     // ED1 cue: while exposed (or reassembling) the boss draws its coreless white shell, tinted the
     // tier colour or, in the flicker's on share while exposed, hot red.
     const coreless = bossCoreless();
-    const furyCol = furyNow !== 0 ? furyTint(furyNow, furyTNow, palette[bossColourOf(bossIdx)], palette.red) : 0xffffff;
+    const furyCol =
+      furyNow === 0
+        ? 0xffffff
+        : bossIdx === BOSS_EMBER
+          ? emberFuryTint(furyNow, furyTNow, palette[bossColourOf(bossIdx)], palette, flameTime)
+          : furyTint(furyNow, furyTNow, palette[bossColourOf(bossIdx)], palette.red);
     const bossTint = coreless
       ? exposed && shellHot(exposeAge)
         ? mixRgb(palette.red, 0xffffff, flickerRedWhite(bossTier))
@@ -5202,7 +5212,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         if (furyNow !== 0) {
           ev.x += furyOff.x;
           ev.y += furyOff.y;
-          ev.alpha *= furyPulseAlpha(furyNow, furyTNow);
+          ev.alpha *= bossIdx === BOSS_EMBER ? blueBodyAlpha(furyNow, flameTime) : furyPulseAlpha(furyNow, furyTNow);
         }
         bossSeen = true;
         bodyX[0] = ev.x;
