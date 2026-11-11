@@ -20,6 +20,7 @@ import {
   GENERATOR_VERSION_V10,
   GENERATOR_VERSION_V11,
   GENERATOR_VERSION_V12,
+  GENERATOR_VERSION_V13,
   isShortVersion,
   isT3Version,
   levelMaxLive,
@@ -43,7 +44,7 @@ import {
 } from './leveldef';
 import { DRUM_BAR_THICK, MEMBRANE_MAX, MEMBRANE_MIN } from './drum';
 import { BOSS_SHORT_LEVEL_AT_SEC, shortLevelSec, shortObjectiveTable } from './short';
-import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, BOSS_SEGMENT_AT_SEC, FIRST_FIGHT_HP_MUL, bossForLevel, bossForSegment, bossTierOf, freePlayBossFor, sameBoss, t3BossForLevel } from './boss';
+import { BOSS_ARENA_FROM_LEVEL, BOSS_ARENA_LARGE, BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_MAX_WELLS, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, BOSS_SEGMENT_AT_SEC, FIRST_FIGHT_HP_MUL, bossForLevel, bossForSegment, bossTierOf, freePlayBossFor, sameBoss, t3BossForLevel } from './boss';
 import type {
   ArenaDef,
   Band,
@@ -62,7 +63,8 @@ import type {
 } from './leveldef';
 import { ALL_ENEMY_KINDS, isV2Kind } from './v2enemies';
 import { TROUGH_MAX_WELLS, TROUGH_MIN_ASPECT, TROUGH_MIN_LEVEL, troughEligible, troughMapErrors } from './trough';
-import { LEAVER_FROM_LEVEL, LEAVER_FROM_SEGMENT } from './leveldef';
+import { LEAVER_FROM_LEVEL, LEAVER_FROM_SEGMENT, round1 } from './leveldef';
+import type { BossId } from './leveldef';
 import type { FreePlayDensity, FreePlaySize } from '../core/freeplayConfig';
 import {
   CYLINDER_MAX_OBSTACLES,
@@ -464,7 +466,7 @@ function checkJson(c: Collector, def: unknown): void {
 function checkVersions(c: Collector, version: number, generatorVersion: number): void {
   c.check('J3', (report) => {
     if (version !== LEVELDEF_VERSION) report(`version ${version} !== ${LEVELDEF_VERSION}`);
-    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9, GENERATOR_VERSION_V10, GENERATOR_VERSION_V11, GENERATOR_VERSION_V12];
+    const known = [GENERATOR_VERSION, GENERATOR_VERSION_V2, GENERATOR_VERSION_V3, GENERATOR_VERSION_V4, GENERATOR_VERSION_V5, GENERATOR_VERSION_V6, GENERATOR_VERSION_V7, GENERATOR_VERSION_V8, GENERATOR_VERSION_V9, GENERATOR_VERSION_V10, GENERATOR_VERSION_V11, GENERATOR_VERSION_V12, GENERATOR_VERSION_V13];
     if (!known.includes(generatorVersion)) report(`generatorVersion ${generatorVersion} not ${known.join(', ')}`);
   });
 }
@@ -498,6 +500,8 @@ export interface LevelCheckOptions extends BossCheckOptions {
   enableShortLevels?: boolean;
   /** Trough wave: false makes V1 and TR1 reject a trough def; absent or true judges it on TR1 and TR2. */
   enableTrough?: boolean;
+  /** Boss arenas: with the version 12 flags on (enableTrough true), G1 ties GENERATOR_VERSION_V13 to this flag. */
+  enableBossArenas?: boolean;
 }
 
 interface BossRules {
@@ -975,7 +979,8 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
     if (def.seed !== want) report(`seed ${def.seed} !== levelSeed(runSeed, levelIndex) ${want}`);
     if (def.band !== band) report(`band ${def.band} !== bandOf(${def.levelIndex}) ${band}`);
   });
-  checkArena(c, def.arena, def.surface === 'cylinder');
+  // Boss arenas: a version 13 arena may reach the Free Play large size (A1 and F1 as Free Play large).
+  checkArena(c, def.arena, def.surface === 'cylinder', false, def.generatorVersion === GENERATOR_VERSION_V13 ? FREE_PLAY_SIZE_SCALE.large : 1);
   checkRoster(c, def.roster, band, def.levelIndex >= LEAVER_FROM_LEVEL);
   checkSpeed(c, def.speedScale, def.levelIndex);
   checkObjective(c, def, band);
@@ -1068,11 +1073,63 @@ export function validateLevel(def: LevelDef, opts?: LevelCheckOptions): Validati
     if (!flag && v11) report(`generatorVersion ${GENERATOR_VERSION_V11} with enableShortLevels or a version 10 flag off`);
   });
   checkDrumTaste(c, def, opts);
+  checkBossArena(c, def, opts);
   c.check('J5', (report) => {
     const r = def.retries;
     if (r === undefined || !isInt(r) || r < 0 || r > MAX_RETRIES) report(`retries ${String(r)} not an integer 0 to ${MAX_RETRIES}`);
   });
   return c.result();
+}
+
+/**
+ * Boss arenas (version 13): the least arena a guardian level from BOSS_ARENA_FROM_LEVEL keeps: the
+ * Free Play medium size of its kind, large for BOSS_ARENA_LARGE. Rect, roundRect and rectObstacles
+ * are the rect kind; circle and hexagon the circle kind (a hexagon's height is the circle's
+ * diameter, its width that times HEX_ASPECT). Pure.
+ */
+export function guardianArenaMin(shape: ArenaDef['shape'], bossId: BossId): { width: number; height: number } {
+  const size: FreePlaySize = BOSS_ARENA_LARGE.includes(bossId) ? 'large' : 'medium';
+  if (shape === 'circle') return freePlayArenaSize('circle', size);
+  if (shape === 'hexagon') {
+    const h = freePlayArenaSize('circle', size).height;
+    return { width: round1(h * HEX_ASPECT), height: h };
+  }
+  return freePlayArenaSize('rect', size);
+}
+
+/** Boss arenas: true when a level of this index and boss takes the version 13 arena. Pure. */
+export function isGuardianArenaLevel(levelIndex: number, boss: BossSpec | null | undefined): boolean {
+  return boss !== null && boss !== undefined && levelIndex >= BOSS_ARENA_FROM_LEVEL;
+}
+
+/**
+ * G1 (boss arenas): GENERATOR_VERSION_V13 only on a guardian level from BOSS_ARENA_FROM_LEVEL,
+ * whose flat arena is at least guardianArenaMin of its shape and boss. With the version 12 flags
+ * and enableBossArenas known on, every such level carries it.
+ */
+function checkBossArena(c: Collector, def: LevelDef, opts: LevelCheckOptions | undefined): void {
+  c.check('G1', (report) => {
+    const v13 = def.generatorVersion === GENERATOR_VERSION_V13;
+    const guardian = isGuardianArenaLevel(def.levelIndex, def.boss);
+    if (v13 && !guardian) report(`generatorVersion ${GENERATOR_VERSION_V13} on level ${def.levelIndex}, which is not a guardian level from ${BOSS_ARENA_FROM_LEVEL}`);
+    if (v13 && guardian && def.boss !== undefined && def.surface === 'flat') {
+      const min = guardianArenaMin(def.arena.shape, def.boss.id);
+      if (def.arena.width < min.width - EPS || def.arena.height < min.height - EPS) {
+        report(`guardian arena ${def.arena.width} x ${def.arena.height} smaller than ${min.width} x ${min.height} for ${def.boss.id}`);
+      }
+    }
+    const flags =
+      opts !== undefined &&
+      opts.enableLongLevels === true &&
+      opts.enableR1Pacing === true &&
+      opts.enableR3Length === true &&
+      opts.enableT3 === true &&
+      opts.enableParRamp === true &&
+      opts.enableShortLevels === true &&
+      opts.enableTrough === true;
+    if (flags && opts.enableBossArenas === true && guardian && !v13) report(`guardian level ${def.levelIndex} with generatorVersion ${def.generatorVersion}, want ${GENERATOR_VERSION_V13}`);
+    if (v13 && opts !== undefined && opts.enableBossArenas !== undefined && !(flags && opts.enableBossArenas)) report(`generatorVersion ${GENERATOR_VERSION_V13} with enableBossArenas or a version 12 flag off`);
+  });
 }
 
 /**

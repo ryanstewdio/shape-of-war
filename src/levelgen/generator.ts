@@ -29,6 +29,7 @@ import {
   GENERATOR_VERSION_V10,
   GENERATOR_VERSION_V11,
   GENERATOR_VERSION_V12,
+  GENERATOR_VERSION_V13,
   LEVELDEF_VERSION,
   LONG_BANDS,
   LONG_BREATHER_SEC,
@@ -51,6 +52,7 @@ import {
   runsR3,
   runsParRamp,
   runsShort,
+  runsBossArenas,
   runsT3,
   runsTrough,
   isShortVersion,
@@ -119,7 +121,9 @@ import {
   validateLevel,
   FREE_PLAY_SNAKES_PER_SEGMENT,
   FREE_PLAY_SNAKE_FROM_SEGMENT,
+  isGuardianArenaLevel,
 } from './validate';
+import { growGuardianArena } from './bossArena';
 import { BOSS_LEVEL_AT_SEC, BOSS_LONG_LEVEL_AT_SEC, BOSS_R3_LEVEL_AT_SEC, BOSS_V5_LEVEL_AT_SEC, bossForLevel, bossForSegment, bossHazards, t3BossForLevel } from './boss';
 import { R3_COLLECT_RATE, V10_COLLECT_RATE, bossLevelPar, destroyCountFor, inBreather, pulseAt, wholeLevelPar } from './pacing';
 import type { PulseShape } from './pacing';
@@ -1185,7 +1189,10 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
   const surface: SurfaceKind = trough ? 'trough' : pickSurface(seed, levelIndex, cfg);
   const cyl = surface === 'cylinder';
   const taste = drumTaste(levelIndex, cfg);
-  const arena = cyl ? cylinderArena(seed, levelIndex, cfg, stream(s, SALT.arena), band) : trough ? generateTroughArena(stream(s, SALT.arena), band) : generateArena(stream(s, SALT.arena), band);
+  const drawnArena = cyl ? cylinderArena(seed, levelIndex, cfg, stream(s, SALT.arena), band) : trough ? generateTroughArena(stream(s, SALT.arena), band) : generateArena(stream(s, SALT.arena), band);
+  // Boss arenas (version 13): a flat guardian level from BOSS_ARENA_FROM_LEVEL grows its arena, no draw.
+  const arenaBoss = guardianArenaBoss(levelIndex, cfg);
+  const arena = arenaBoss !== null && surface === 'flat' ? growGuardianArena(drawnArena, arenaBoss.id) : drawnArena;
   // Drum taste: the gentle band 1 roster (grunt, wanderer, pinwheel) from the same stream.
   const v1Roster = generateRoster(stream(s, SALT.roster), taste ? 1 : band, cfg);
   const loadout = stream(s, SALT.loadout);
@@ -1286,15 +1293,29 @@ function buildLevel(runSeed: number, levelIndex: number, seed: number, attempt: 
  */
 export function withLevelBoss(def: LevelDef, cfg: GenConfig): LevelDef {
   const long = cfg.enableLongLevels === true;
-  const at = bossLevelAtSec(cfg);
-  // Tester 3: version 9 opens with Brood, then Warden, the first fight at FIRST_FIGHT_HP_MUL.
-  const boss = !cfg.enableBosses ? null : runsT3(cfg) ? t3BossForLevel(def.levelIndex, at) : bossForLevel(def.levelIndex, at);
+  const boss = levelBossOf(def.levelIndex, cfg);
   if (boss === null) return def;
+  // Boss arenas: a guardian level from BOSS_ARENA_FROM_LEVEL of the version 13 config.
+  if (guardianArenaBoss(def.levelIndex, cfg) !== null) return { ...def, generatorVersion: GENERATOR_VERSION_V13, hazards: bossHazards(def.hazards), boss };
   // Release gate R2: a boss level built with the R1 config has the R1 waves and the 200 s entrance
   // (version 7); with the R1 pacing off it keeps version 5 (long) or 3.
   // Release gate R3: version 8 with the R3 length on.
   const generatorVersion = runsShort(cfg) ? GENERATOR_VERSION_V11 : runsParRamp(cfg) ? GENERATOR_VERSION_V10 : runsT3(cfg) ? GENERATOR_VERSION_V9 : runsR3(cfg) ? GENERATOR_VERSION_V8 : runsR1(cfg) ? GENERATOR_VERSION_V7 : long ? GENERATOR_VERSION_V5 : GENERATOR_VERSION_V3;
   return { ...def, generatorVersion, hazards: bossHazards(def.hazards), boss };
+}
+
+/** The boss of Adventure level n under a config (Tester 3 order from version 9), or null. Pure, no draw. */
+export function levelBossOf(levelIndex: number, cfg: GenConfig): BossSpec | null {
+  const at = bossLevelAtSec(cfg);
+  // Tester 3: version 9 opens with Brood, then Warden, the first fight at FIRST_FIGHT_HP_MUL.
+  return !cfg.enableBosses ? null : runsT3(cfg) ? t3BossForLevel(levelIndex, at) : bossForLevel(levelIndex, at);
+}
+
+/** Boss arenas: the boss of level n when the version 13 config grows its arena, else null. Pure, no draw. */
+export function guardianArenaBoss(levelIndex: number, cfg: GenConfig): BossSpec | null {
+  if (!runsBossArenas(cfg)) return null;
+  const boss = levelBossOf(levelIndex, cfg);
+  return isGuardianArenaLevel(levelIndex, boss) ? boss : null;
 }
 
 /** Boss entrance second on a level of this config: 85 s (short levels), 120 s (R3), 200 s (R1 config), 240 s (long levels), else 20 s. */

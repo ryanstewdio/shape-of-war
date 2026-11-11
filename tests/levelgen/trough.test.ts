@@ -8,7 +8,7 @@ import { DEFAULT_FREE_PLAY } from '../../src/core/freeplayConfig';
 import type { FreePlayConfig, FreePlaySize } from '../../src/core/freeplayConfig';
 import { bossForLevel } from '../../src/levelgen/boss';
 import { freePlayLevel, freePlaySegment, levelOptionsOf } from '../../src/levelgen/freeplay';
-import { generateLevel, isTroughLevel, levelBeats, levelHash, pickSurface } from '../../src/levelgen/generator';
+import { generateLevel, guardianArenaBoss, isTroughLevel, levelBeats, levelHash, pickSurface } from '../../src/levelgen/generator';
 import {
   DEFAULT_GEN_CONFIG,
   GENERATOR_VERSION_V11,
@@ -157,7 +157,8 @@ describe('frozen output', () => {
     for (let i = 0; i < 6; i++) {
       const s = seedAt(i);
       for (let n = 20; n <= 60; n++) {
-        if (isTroughLevel(s, n)) continue;
+        // foundry-boss-arenas: guardian levels from 10 are version 13 (bossArenas.test.ts pins them).
+        if (isTroughLevel(s, n) || guardianArenaBoss(n, DEFAULT_GEN_CONFIG) !== null) continue;
         expect(levelHash(generateLevel(s, n))).toBe(levelHash(generateLevel(s, n, V11_GEN_CONFIG)));
       }
     }
