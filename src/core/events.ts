@@ -128,6 +128,13 @@ export interface Events {
    * clashes with the old ENRAGE_AFTER_SEC enrage or the membrane 'sim:enrage'.
    */
   'sim:bossFury': { id: BossId; stage: 'break' | 'on'; sec: number; x: number; y: number };
+  /**
+   * Swarm to Glow and Chorus (boss hit feedback contract stub, Ryan 2026-11-11). One player hit on a
+   * guardian body, core or part at (x, y). landed: it took hit points off the bar; false when a closed
+   * core, shield, pod guard or fury break absorbed it. Reused payload, emitted per hit; listeners rate
+   * limit themselves.
+   */
+  'sim:bossHit': { id: BossId; x: number; y: number; landed: boolean };
   /** Forge to Glow and Chorus (R2 contract stub): an enemy passed through a membrane and is now enraged (hot red, faster). */
   'sim:enrage': { id: number; x: number; y: number };
   /** Forge to Glow and Chorus (R2 contract stub): an open drum drift burst starts in inSec seconds (telegraph). */
