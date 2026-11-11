@@ -12,6 +12,8 @@ export const def: EnemyDef = { kind: Kind.Bulwark, radius: 18, speed: 90, value:
 export const TURN_RATE = 70 * DEG;
 export const SHIELD_HALF_ARC = 60 * DEG;
 export const SHIELD_RADIUS = 26;
+/** Hit points a Pierce bullet (or a combo with Pierce) takes off a Bulwark, from any side. */
+export const PIERCE_BULWARK_DAMAGE = 2;
 
 /** True when a hit arriving from (px, py) lands on the shield (the front arc). */
 export function shieldBlocks(w: World, id: number, px: number, py: number): boolean {
