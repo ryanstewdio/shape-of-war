@@ -18,6 +18,7 @@ import {
   maxHpFor,
   WARDEN,
 } from '../../src/game/bosses/table';
+import { NEEDLE_CLOCK_SLOT } from '../../src/game/bosses/spindle';
 import { HazardType } from '../../src/game/bosses/types';
 import { enemyBulletsOf } from '../../src/game/enemyBullets';
 import { stepGame } from '../../src/game/game';
@@ -148,6 +149,7 @@ describe('level scale in the sim', () => {
       const w = bossGame('spindle', { levelIndex: level });
       park(w, 600, 400);
       enter(w);
+      bs(w).abl[NEEDLE_CLOCK_SLOT] = -1e9; // fury two: needles held, the pellet alone
       for (let i = 0; i < 120 * 12; i++) {
         stepGame(w, DT, idle());
         const p = enemyBulletsOf(w);

@@ -102,6 +102,11 @@ export interface BossDef {
    * -1. Drives the 'sim:bossWindow' countdown. Absent means windows are reported on their edges only.
    */
   windowLead?(bs: BossState): number;
+  /**
+   * Optional: true when the guardian uses the shared fury (fury.ts: the break at the stage 1 crack,
+   * then enraged). readBoss then writes BossView.fury and furyT for it.
+   */
+  fury?: boolean;
   /** Optional: report cracks per body (Twins) through crackBody. Absent means one body, w.hp of maxHp. */
   cracks?(w: World, id: number, bs: BossState): void;
 }

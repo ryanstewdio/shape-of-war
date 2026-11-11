@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
-import { bossBonusAwarded, damageBoss } from '../../src/game/bosses/core';
+import { bossBonusAwarded } from '../../src/game/bosses/core';
 import { bossBonus } from '../../src/game/scoring';
 import { gs } from '../../src/game/state';
 import { BOSS_IDS, type BossId } from '../../src/levelgen/leveldef';
@@ -41,7 +41,7 @@ import {
 } from '../../src/ui/boss';
 import { formatInt } from '../../src/ui/format';
 import { bossLine } from '../../src/ui/results';
-import { bossGame, enter } from '../game/bossHelpers';
+import { bossGame, enter, slay } from '../game/bossHelpers';
 
 const p = (over: Partial<HudBoss> = {}): HudBoss => ({ id: 'warden', hp: 3600, maxHp: 3600, phase: 1, phases: 2, mode: 2, ...over });
 
@@ -287,7 +287,7 @@ describe('boss kill bonus has one copy: scoring.bossBonus (docs/13 SPEC 3.6 rule
       enter(w);
       const g = gs(w);
       const before = g.score;
-      expect(damageBoss(w, 99999, 0, 0), `par ${par}`).toBe(true);
+      expect(slay(w), `par ${par}`).toBe(true); // fury two: through Spindle's break
       const paid = g.score - before;
       expect(paid, `par ${par}`).toBe(bossBonus(par, 'adventure', BOSS_TIER.spindle));
       expect(bossBonusAwarded(w), `par ${par}`).toBe(paid);

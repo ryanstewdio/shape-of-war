@@ -432,6 +432,7 @@ import {
   approach,
   BOSS_BROOD,
   BOSS_SPINDLE,
+  BOSS_WARDEN,
   BOSS_BURST_WHITE,
   BOSS_DEATH_SHAKE_PX,
   BOSS_DEATH_SHAKE_SEC,
@@ -575,7 +576,6 @@ import {
   crackEvent,
   FRAG_PTS,
   fragmentPts,
-  hitFlashAlpha,
   hitSparkCount,
   onBossCrack,
   onBossWindow,
@@ -743,10 +743,30 @@ import {
   furyTint,
   whiteSpec,
 } from './wardenFury';
+// Guardian hit feedback and the generic fury look (glow-fury-two): body flash, hit sparks, arms.
+import {
+  BODY_FLASH_FILL,
+  BODY_FLASH_GLOW,
+  BODY_FLASH_LINE,
+  bodyFlashAmount,
+  bossHitSparkColour,
+  bossHitSparkCount,
+  createBodyFlash,
+  createSparkGate,
+  emberFurySparkRate,
+  furyArmAlpha,
+  furyArmTint,
+  furySpikes,
+  resetBodyFlash,
+  resetSparkGate,
+  sparkAllow,
+  stepBodyFlash,
+  triggerBodyFlash,
+} from './bossHitFury';
 import type { ShapePrim } from './shapeSpecs';
 import { createEnemyBulletLayer } from './enemyBullets';
 import type { EnemyBulletFrame, EnemyBulletsLike } from './enemyBulletFx';
-import { HAZARD_LANE, HAZARD_PULL, HAZARD_SPRITE_CAP, planEntranceRing, planHazard, type HazardInput } from './hazardFx';
+import { HAZARD_LANE, HAZARD_PULL, HAZARD_SPRITE_CAP, HAZARD_SWEEP, planEntranceRing, planHazard, type HazardInput } from './hazardFx';
 import { BOSS_PULL_ACCEL, KICK_BOSS_DOWN, KICK_BOSS_PHASE } from './lattice/kicks';
 import { HEAT_BOSS } from './lattice/heat';
 import { RIPPLE_BOSS } from './fx';
@@ -1404,8 +1424,13 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   // two Graphics: the tier 3 halo under the bodies, the flash, cracks, ring and pieces over them.
   const bossWin = createBossWindow();
   const bossFlashT = createBossFlashThrottle();
-  let bossFlashAge = Number.POSITIVE_INFINITY;
   let bossSparkSeq = 0;
+  // glow-fury-two: the whole body white flash (rate capped), the 'sim:bossHit' spark gate, and
+  // whether that event has arrived this fight (then it owns the sparks, not 'fx:hit').
+  const bodyFlash = createBodyFlash();
+  const hitSparkGate = createSparkGate();
+  let simHitSeen = false;
+  let simHitSeq = 0;
   const bossCracks = createBossCracks();
   // v33: outline fragments, one per removed arc, each a polyline (world units, relative to its
   // centre, already rotated into the world) that drifts out, tumbles and fades in the boss colours.
@@ -1680,6 +1705,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let anchorsLast = 3;
   const emberFlameEm: Emitter = { acc: 0 };
   const emberSparkEm: Emitter = { acc: 0 };
+  /** glow-fury-two: Ember's short hot red spark trail on enraged dashes. */
+  const emberFuryEm: Emitter = { acc: 0 };
   // V3 wave C tier 3 state. The boss layer halo (tier widened), the live turret count of this frame
   // and of the last, the most turrets seen this fight, the Tempest drip emitter, the distance dashed
   // since the last ghost and a fixed pool of dash ghosts (views share the exposed boss context).
@@ -1694,7 +1721,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   for (let i = 0; i < DASH_GHOSTS; i++) dashGhosts.push({ x: 0, y: 0, rot: 0, scale: 1, age: DASH_GHOST_SEC, slot: -1, view: null });
   let partPeak = new Float32Array(0);
   const halo: FxHalo = { alpha: 0, width: 0 };
-  const hazardIn: HazardInput = { type: 0, x: 0, y: 0, rot: 0, radius: 0, vx: 0, vy: 0, age: 0, tier: 1, tint: 0xffffff, timeSec: 0 };
+  const hazardIn: HazardInput = { type: 0, x: 0, y: 0, rot: 0, radius: 0, vx: 0, vy: 0, age: 0, tier: 1, tint: 0xffffff, timeSec: 0, alphaMul: 1 };
   const bulletTints: number[] = [0xffffff, 0xffffff, 0xffffff, 0xffffff, 0xffffff];
   const bulletFrame: EnemyBulletFrame = { alpha: 0, timeSec: 0, effects: 'standard', halo, tints: bulletTints, white: 0xffffff };
 
@@ -2648,16 +2675,22 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   function onBossHit(x: number, y: number, blocked: boolean): void {
     // G3C: a 60 ms white outline flash and 2 to 3 sparks in the boss hue, at most 20 per second per
     // boss, on every tier, so damage reads on Bastion and Tempest at full speed.
+    // glow-fury-two: once 'sim:bossHit' arrives it owns the sparks; the body flash follows hitT, or
+    // these events while the sim does not write it.
     if (!blocked && bossFlashAllow(bossFlashT, bossIdx, hitClockMs)) {
-      bossFlashAge = 0;
-      bossSparkSeq = (bossSparkSeq + 1) | 0;
-      burstBoss(x, y, palette[bossColourOf(bossIdx)], hitSparkCount(bossSparkSeq), 140, 360, 0.15, 0.3);
+      if (bossView.hitT === undefined) triggerBodyFlash(bodyFlash);
+      if (!simHitSeen) {
+        bossSparkSeq = (bossSparkSeq + 1) | 0;
+        burstBoss(x, y, palette[bossColourOf(bossIdx)], hitSparkCount(bossSparkSeq), 140, 360, 0.15, 0.3);
+      }
     }
     if (!bossHitAllow(bossHitThrottle, hitClockMs)) return;
     if (!blocked) bossHitAge = 0;
     if (!hitFxOn(getEffectsTier())) return;
     const hue = palette[bossColourOf(bossIdx)];
     if (blocked) {
+      // glow-fury-two: with 'sim:bossHit' live a blocked hit reads as its single grey spark only.
+      if (simHitSeen) return;
       const dx = x - bossDrawX;
       const dy = y - bossDrawY;
       const d = Math.sqrt(dx * dx + dy * dy);
@@ -2666,6 +2699,23 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       return;
     }
     addPulse(hitPool, PULSE_FLASH, x, y, 0, 0, 0, HIT_FLASH_LIFE * 1.5, mixRgb(hue, 0xffffff, HIT_FLASH_WHITE), 1);
+  }
+
+  /**
+   * glow-fury-two 'sim:bossHit': a landed hit throws 2 to 4 sparks in the guardian hue at (x, y)
+   * (and flashes the body while the view has no hitT); a blocked one throws a single small grey
+   * spark and no flash. Each kind is rate capped (bossHitFury.ts). Every tier. No allocation.
+   */
+  function onSimBossHit(id: string, x: number, y: number, landed: boolean): void {
+    simHitSeen = true;
+    if (id !== '' && payloadBoss(id) !== bossIdx) return;
+    if (landed && bossView.hitT === undefined) triggerBodyFlash(bodyFlash);
+    if (!sparkAllow(hitSparkGate, landed, hitClockMs)) return;
+    simHitSeq = (simHitSeq + 1) | 0;
+    const colour = bossHitSparkColour(landed, palette[bossColourOf(bossIdx)]);
+    const n = bossHitSparkCount(landed, simHitSeq);
+    if (landed) burstBoss(x, y, colour, n, 140, 360, 0.15, 0.3);
+    else burstBoss(x, y, colour, n, 80, 180, 0.1, 0.18);
   }
 
   /** Boss index of a bus payload id (a BossId string). No allocation. */
@@ -2689,7 +2739,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     resetBossWindow(bossWin);
     resetBossCracks(bossCracks);
     pieceAge.fill(Number.POSITIVE_INFINITY);
-    bossFlashAge = Number.POSITIVE_INFINITY;
+    resetBodyFlash(bodyFlash);
+    resetSparkGate(hitSparkGate);
+    simHitSeen = false;
   }
 
   /** 'sim:bossWindow': the Prism run up (open false, secondsLeft) and the open window. */
@@ -2820,7 +2872,6 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     bossHitAge += dt;
     bossPhaseAge += dt;
     bossEdgeAge += dt;
-    bossFlashAge += dt;
     for (let k = 0; k < PIECES; k++) pieceAge[k] = (pieceAge[k] ?? 0) + dt;
     stepBossWindow(bossWin, dt);
     stepBossCracks(bossCracks, dt);
@@ -2838,6 +2889,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       bossSpeed = 0;
       emberFlameEm.acc = 0;
       emberSparkEm.acc = 0;
+      emberFuryEm.acc = 0;
       tempestDripEm.acc = 0;
       dashDist = 0;
       turretsSeen = 0;
@@ -2859,6 +2911,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     furyNow = furyStage(bossView.fury);
     furyTNow = furyNow === 0 ? 0 : (bossView.furyT ?? 0);
     furyShake(furyNow, furyTNow, furyOff);
+    stepBodyFlash(bodyFlash, bossView.hitT, dt);
     // GW2: the shield shell follows the view flag or 'sim:bossShield'; the window uses exposedLeft.
     stepShell(shell, bossView.shielded === true, bossView.exposedLeft ?? -1, dt);
     bossIdx = bossIndex(bossView.id);
@@ -2959,6 +3012,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     h.age = w.t[i] ?? 0;
     h.tier = bossTier;
     h.tint = palette[bossColourOf(bossIdx)];
+    h.alphaMul = 1;
+    // glow-fury-two: Spindle's beam arms cross to hot red in fury and pulse slowly while enraged.
+    if (furyNow !== 0 && bossIdx === BOSS_SPINDLE && h.type === HAZARD_SWEEP) {
+      h.tint = furyArmTint(furyNow, furyTNow, h.tint, palette.red);
+      h.alphaMul = furyArmAlpha(furyNow, furyTNow);
+    }
     h.timeSec = timeSec;
     planHazard(h, hazardBuf, haloBoss);
     if (h.type === HAZARD_LANE) laneHazards++;
@@ -3037,6 +3096,10 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       const spark = emberSparkRate(dashing, t);
       if (spark > 0) emitEnemyTrail(emberSparkEm, spark, x, y, vx, vy, ENEMY_TRAIL_CHARGER, flameAt(flameRgb, 0.7 + ((ft * 5.3) % 0.3)), dt);
       else emberSparkEm.acc = 0;
+      // glow-fury-two: enraged, a short hot red spark trail rides each dash.
+      const furySpark = emberFurySparkRate(furyNow, dashing, t === 'low');
+      if (furySpark > 0) emitEnemyTrail(emberFuryEm, furySpark, x - dx * R * 0.3, y - dy * R * 0.3, vx * 0.4, vy * 0.4, ENEMY_TRAIL_CHARGER, furyHotRed(palette.red), dt);
+      else emberFuryEm.acc = 0;
     } else if (bossIdx === BOSS_MIRAGE && jumped) {
       // Ghost at the old spot (off on Low through afterimageAlpha) and a landing flash at the new one.
       ghostX = lx;
@@ -3377,6 +3440,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     // v31: Brood split into three Broodlings (Swarm, merged): the green shard burst.
     bus.on('sim:bossSplit', () => onBossSplit()),
     bus.on('sim:bossDown', (p) => onBossDown(p.id, p.x, p.y)),
+    // glow-fury-two: per hit feedback on a guardian (Swarm contract; payload reused).
+    bus.on('sim:bossHit', (p) => onSimBossHit(p.id, p.x, p.y, p.landed)),
     // G3A: weak point exposure (Swarm, parallel run). Coded against the event name.
     onBossExposed(bus, (on) => {
       exposeEvent = exposeState(on);
@@ -4784,14 +4849,15 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         }
       }
       drawShell(g, u, rs, lw, bodyA, timeSec);
-      if (furyNow !== 0) drawFurySpikes(g, rs, lw, bodyA);
-      // Hit flash: a 60 ms white outline on every body.
-      const fa = hitFlashAlpha(bossFlashAge) * bodyA;
+      if (furyNow !== 0 && furySpikes(bossIdx, BOSS_WARDEN)) drawFurySpikes(g, rs, lw, bodyA);
+      // glow-fury-two hit flash: the whole body washed white under 0.08 s (fill plus outline), at most
+      // one flash start per 0.18 s so heavy fire strobes and the body still reads.
+      const fa = bodyFlashAmount(bodyFlash) * bodyA;
       if (fa > 0) {
         for (let b = 0; b < bodyCount; b++) {
           if (b > 0 && bossIdx !== BOSS_TWINS) continue;
           outlinePath(g, bodyX[b] ?? 0, bodyY[b] ?? 0, bodyRot[b] ?? 0, bodyScale[b] ?? 1);
-          g.stroke({ width: lw * 1.6, color: 0xffffff, alpha: fa });
+          g.fill({ color: 0xffffff, alpha: BODY_FLASH_FILL * fa }).stroke({ width: lw * 1.6, color: 0xffffff, alpha: BODY_FLASH_LINE * fa });
         }
       }
     }
@@ -5128,6 +5194,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const phaseMode = bossView.active ? bossPhaseFlash(bossView.mode, bossView.modeT) : 0;
         ev.glowMul = bossGlowMul(bossHitAge, phaseEvent > phaseMode ? phaseEvent : phaseMode);
         if (furyNow !== 0) ev.glowMul *= furyGlowMul(furyNow, furyTNow);
+        ev.glowMul *= 1 + BODY_FLASH_GLOW * bodyFlashAmount(bodyFlash);
         if (bossView.active) bossTier2Body(w, i, bossDrawX, bossDrawY, ev.rot, scale, dt);
         // Wave C: the Bastion keep burns hotter as turrets fall; a surviving twin is hot and fluttering.
         if (bossView.active && bossIdx === BOSS_BASTION) {
@@ -5721,6 +5788,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     anchorsLast = 3;
     emberFlameEm.acc = 0;
     emberSparkEm.acc = 0;
+    emberFuryEm.acc = 0;
     tempestDripEm.acc = 0;
     dashDist = 0;
     turretCount = 0;

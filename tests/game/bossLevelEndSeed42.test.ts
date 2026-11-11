@@ -156,6 +156,12 @@ function play(level: number, plan: Plan): { w: World; r: Run } {
     // bot that clears every wave has nearly met a destroy count. bossFirst therefore shoots only the
     // boss, so the boss still dies before the regular objective passes (the premise of the plan).
     aim(w, input, shootBoss, plan === 'bossFirst');
+    // Fury two: Spindle's 4.5 s break let the level 15 destroy count land first; bossFirst ends any
+    // fury break at once (as the helper slay does) so the plan keeps its premise.
+    if (plan === 'bossFirst' && s !== null && s.fury === 1) {
+      s.fury = 2;
+      s.furyT = 0;
+    }
     const o = w.level.objective;
     // scoreInTime, hold plans: this bot scores little while the boss lives (thinned waves) and its
     // attack drone kills the boss before the timer runs out, so the target is credited when the
