@@ -41,6 +41,8 @@ export interface LevelResult {
   starTargets?: readonly [number, number, number];
   /** Free Play options: the timed run length in seconds; absent for an Endless length. */
   scoreAttackSec?: number;
+  /** Dev builds only: the guardian fight time line (ui/fightTimer.ts). Absent outside dev. */
+  fightLine?: string;
   /** R3: the boss's name on a boss level win, for the labelled boss bonus line. */
   bossName?: string;
   /** R5 Details: kills scored this run (the destroy count). */

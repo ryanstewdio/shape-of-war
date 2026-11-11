@@ -26,7 +26,6 @@ import {
   BOSS_TIER,
   bossBannerText,
   bossColour,
-  bossFill,
   type HudBoss,
 } from '../../src/ui/boss';
 import {
@@ -388,7 +387,7 @@ describe('boss bar: DOM', () => {
       off,
       name: find('boss-name'),
       bar: find('boss-bar'),
-      fill: find('boss-fill'),
+      fill: find('health-fill'),
       pips,
       pipEls: pips.children,
       at: (ms: number) => {
@@ -428,7 +427,7 @@ describe('boss bar: DOM', () => {
     hud.setBoss(boss({ hp: 3600 }));
     expect(fill.style.width).toBe('100%');
     hud.setBoss(boss({ hp: 1800 }));
-    expect(fill.style.width).toBe('50%');
+    expect(fill.style.width).toBe('75.8%');
     hud.setBoss(boss({ hp: 0 }));
     expect(fill.style.width).toBe('0%');
     expect(shown(name)).toBe(true); // still up at 0 hit points: only sim:bossDown takes it away
@@ -438,7 +437,7 @@ describe('boss bar: DOM', () => {
   it('works through the bus too, on the first draw', () => {
     const { bus, fill } = build();
     bus.emit('hud:boss', boss({ hp: 900 }));
-    expect(fill.style.width).toBe('25%');
+    expect(fill.style.width).toBe('37.9%');
   });
 
   it('draws one pip per phase and marks the current one', () => {
@@ -488,7 +487,7 @@ describe('boss bar: DOM', () => {
     expect(fill.style.width).toBe('100%');
     at(1100);
     bus.emit('hud:boss', boss({ hp: 1800 }));
-    expect(fill.style.width).toBe('50%');
+    expect(fill.style.width).toBe('75.8%');
   });
 
   it('a burst of 50 events inside one window draws once', () => {
@@ -542,7 +541,7 @@ describe('boss bar: DOM', () => {
     const { bus, fill, pipEls } = build();
     bus.emit('hud:boss', boss({ hp: 1800, phases: 3 }));
     bus.emit('sim:bossEnter', { id: 'warden', tier: 1 });
-    expect(fill.style.width).toBe('50%');
+    expect(fill.style.width).toBe('75.8%');
     expect(litPips(pipEls)).toHaveLength(3);
   });
 
@@ -555,7 +554,7 @@ describe('boss bar: DOM', () => {
     expect(hud.bossShown()).toBe(false);
     bus.emit('hud:boss', boss({ hp: 1800 })); // same instant, same boss
     expect(shown(name)).toBe(true);
-    expect(fill.style.width).toBe('50%');
+    expect(fill.style.width).toBe('75.8%');
   });
 
   it('clearBoss also lifts the late payload guard, so a fresh level can show a boss at once', () => {
@@ -574,30 +573,13 @@ describe('boss bar: DOM', () => {
     expect(hud.bossShown()).toBe(false);
   });
 
-  it('the bar takes the tier colour and the tier glow; Prism is a moving rainbow', () => {
+  it('the strips use the palette blue and red for every guardian, not the tier colour', () => {
     const { hud, fill, at } = build();
-    for (const id of BOSS_IDS.filter((b) => b !== 'prism')) {
-      hud.setBoss(boss({ id }));
-      expect(fill.style.background, id).toBe(bossColour(id));
-      expect(fill.style.boxShadow, id).toBe(bossFill(id, 0).glow);
+    for (const id of BOSS_IDS) {
+      at(0);
+      hud.setBoss(boss({ id, phases: 4 }));
+      expect(fill.style.background, id).toContain('hsla(355');
     }
-    at(0);
-    hud.setBoss(boss({ id: 'prism', phases: 4 }));
-    const first = fill.style.background;
-    expect(first).toContain('linear-gradient');
-    at(750);
-    hud.setBoss(boss({ id: 'prism', phases: 4 }));
-    expect(fill.style.background).not.toBe(first);
-  });
-
-  it('the thick red glow of tier 3 is wider than tier 1', () => {
-    const { hud, fill } = build();
-    const px = (id: 'warden' | 'bastion'): number => {
-      hud.setBoss(boss({ id }));
-      return Number.parseInt(fill.style.boxShadow?.match(/0 0 (\d+)px/)?.[1] ?? '0', 10);
-    };
-    expect(px('bastion')).toBeGreaterThan(px('warden'));
-    expect(BOSS_TIER.bastion).toBe(3);
   });
 
   it('the unsubscribe function stops the boss events too', () => {

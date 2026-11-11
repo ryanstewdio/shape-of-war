@@ -171,6 +171,8 @@ export interface ResultText {
   details: LabelledValue[];
   /** Boss level win: "<Boss name> defeated", '' otherwise (a loss keeps the out of lives text). */
   goalLine: string;
+  /** Dev builds only: the guardian fight time, '' otherwise. */
+  fightLine: string;
   /** R2: the par reward shows. */
   parReached: boolean;
   /** R2: the big left button. */
@@ -222,6 +224,7 @@ export function resultLines(r: LevelResult): ResultText {
     newBest: false,
     details: detailItems(r),
     goalLine: '',
+    fightLine: r.fightLine ?? '',
     parReached: false,
     primary: 'retry' as const,
   };
@@ -285,7 +288,9 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
   badge.setAttribute('data-results', 'badge');
   const goalEl = el('div', 'sow-card-line');
   goalEl.setAttribute('data-results', 'goalLine');
-  headBox.append(title, sub, diff, badge, goalEl);
+  const fightEl = el('div', 'sow-card-line');
+  fightEl.setAttribute('data-results', 'fightLine');
+  headBox.append(title, sub, diff, badge, goalEl, fightEl);
   // (2) Score block.
   const scoreBox = el('div', 'sow-block');
   scoreBox.setAttribute('data-results', 'scoreBlock');
@@ -346,6 +351,7 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
       diff.classList.toggle('sow-diff-insane', r.difficulty === 'insane');
       showText(badge, t.badge);
       showText(goalEl, t.goalLine);
+      showText(fightEl, t.fightLine);
       setVectorText(score, t.score);
       par.replaceChildren();
       if (t.par !== '') par.append(el('span', 'sow-k', PAR_LABEL), el('span', 'sow-v', t.par.slice(PAR_LABEL.length + 1)));

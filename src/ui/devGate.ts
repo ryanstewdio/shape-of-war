@@ -23,12 +23,17 @@ export const DEV_KNOBS: readonly string[] = [
   'bloomBlur',
 ];
 
-/** Pure: true when the query carries dev=1 exactly. */
-export function isDev(search: string): boolean {
-  return new URLSearchParams(search).get(DEV_PARAM) === '1';
+/** The build time flag: VITE_SOW_DEV=1 turns every dev item on (the build:cap:dev test APK). */
+export function envDevFlag(): string | undefined {
+  return import.meta.env.VITE_SOW_DEV;
 }
 
-/** Pure: the query every knob reader may see. The query unchanged with ?dev=1, '' otherwise. */
-export function gateSearch(search: string): string {
-  return isDev(search) ? search : '';
+/** Pure: true when the query carries dev=1 exactly, or the build flag is '1'. */
+export function isDev(search: string, flag: string | undefined = envDevFlag()): boolean {
+  return flag === '1' || new URLSearchParams(search).get(DEV_PARAM) === '1';
+}
+
+/** Pure: the query every knob reader may see. The query unchanged in a dev session, '' otherwise. */
+export function gateSearch(search: string, flag: string | undefined = envDevFlag()): string {
+  return isDev(search, flag) ? search : '';
 }

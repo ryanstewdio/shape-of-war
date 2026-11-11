@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "build:cap": "tsc --noEmit && vite build --mode native --base=./ && cap sync",
+    "build:cap:dev": "tsc --noEmit && VITE_SOW_DEV=1 vite build --mode native --base=./ && cap sync",
     "preview": "vite preview --host --port 4173",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
