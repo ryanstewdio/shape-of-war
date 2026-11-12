@@ -1,27 +1,24 @@
 # Shape Legend player guide
 
-Describes main at 96dcc2a6f82be801797281c8cbdd30075afdf3d3 (version tester-1+96dcc2a), written 2026-11-10.
+Describes main at 1c528280eeb531681d8e54bce0c814031a72a6ec (version tester-1+1c52828), written 2026-11-12.
 
 ## Changed in this version
 
-This edition is a full rewrite. The last full edition described v2.0.0 (13b7d96). Over that edition, this one adds:
+This edition updates the tester-1+96dcc2a edition. Entries marked "(changed in tester-1+1c52828)" or "(new in tester-1+1c52828)" are what moved.
 
-- **The legend.** The story, its names and how story scenes play (section 1). The story was not in any earlier edition.
-- **Guardians.** Ten bosses, every 5th Adventure level, each with its own rules (section 13).
-- **Difficulty.** Easy, Normal, Hard and Insane, chosen on each level's start card, and the fourth star for an Insane win (section 6).
-- **Shorter levels and new pacing.** Level 1 is 90 s. Later levels run 2 to 3 minutes, with a beat every minute and a final rush (section 5).
-- **The clock.** A separate clock box with time warnings at 1:00, 0:30 and the last 10 s (section 5).
-- **Start card and results redesign**, par rewards (a life, a bomb or a starting weapon) and new star targets of 1, 1.25 and 1.5 times par (sections 4 and 5).
-- **Free Play.** A setup screen for your own run (section 14).
-- **Endless changes.** A guardian every 3 minutes and a growing extra life schedule (section 14).
-- **Leaver**, a new enemy that splits into shards (section 10).
-- **Hazards.** Gravity wells that arrive during play, go super nova, release nova snakes and send a pond ripple when destroyed; membranes (section 11).
-- **Weapons.** Six combos from any two weapons, orbit with a chainsaw bar, drone pickups with four drone modes, and a stronger Turbo (sections 8 and 9).
-- **Controls.** Floating sticks that follow your thumb, and the bomb and super buttons stacked high on the right edge (section 3).
-- **Drum levels.** A cylinder arena that wraps left to right, with four drum maps and drift (section 12).
-- **3D tilt**, menu music, boss music, Turbo music and story sounds (sections 16 and 17).
-- **How to**, a paged guide on the main menu.
-- **The game address** https://play.shapelegend.com and play on Android phones and iPhones (section 18).
+- **Guardian health bar.** Every guardian shows a blue Shield strip over a red Health strip. It cracks when the Shield strip empties (section 13).
+- **Fury.** Warden, Spindle, Ember, Mirage and Gravitas break for 4.5 s when their Shield strip empties, then fight enraged until they fall. Brood's Broodlings go into a frenzy instead (section 13).
+- **Guardian retune.** New hit points for every guardian, Brood splits into Broodlings with their own bar, Spindle needles, Ember Leavers, a wider Mirage opening, Gravitas tide and shelter pools (section 13).
+- **Calmer guardian fights.** Fewer regular enemies while a guardian is on the field, set by difficulty: none on Easy (sections 6 and 13).
+- **Bigger guardian arenas** from level 10, and par per difficulty on guardian levels (sections 4, 12 and 13).
+- **Hit feedback.** A white flash, sparks and a soft tick when your shot lands on a guardian. The old heavy guardian hit sound is gone (sections 13 and 17).
+- **Pierce.** 1.5 times damage on guardians; passes through a Bulwark's shield and takes 2 hit points off a Bulwark (sections 8 and 10).
+- **Trough levels.** A valley arena from level 24 that pulls your ship toward its floor, and a Free Play "Arena surface" row (sections 7, 12 and 14).
+- **Endless and Free Play guardians** open with Brood, then Warden. The Free Play Bosses row reads "Every 2 min" (sections 13 and 14).
+- **Start card.** A mission type headline, a Return to Menu button, and no clock on destroy and guardian levels (section 5).
+- **Reset progress** also clears the story and your call sign (section 16).
+- **Story.** The guardians from level 35 on serve Vecta (section 1).
+- **For testers.** Developer items show only in tester sessions (section 18).
 
 ![Every shape in the game](img/shapes/_all.svg)
 
@@ -42,7 +39,7 @@ You are a pilot who wakes in Vertane, a galaxy made of shapes and lines of light
 | Geoms | The captured citizens of Vertane. Breaking a Dim shape frees them as the small green diamonds you collect. |
 | Torus | The old guide, a being of nested shapes. Torus speaks to you in scenes. |
 | Vecta | The Grey Legend, a legend who came before you. The story reveals what he did as you free the guardians. |
-| Guardians | The ten bosses. The Dim took their colour. Beating one frees it. |
+| Guardians | The ten bosses. The Dim took their colour. Beating one frees it. The guardians of levels 35 to 50 are servants Vecta corrupted (changed in tester-1+1c52828) |
 | You | The pilot. You pick a call sign at the start. The pilot never speaks. |
 
 ### How scenes work
@@ -180,16 +177,16 @@ There is no bottom band layout any more. The game always uses one of the two lay
 | 2 | Multiplier | Lime green "x" number. Starts at x1. |
 | 3 | Weapon | Pickup weapon or combo name and a bar that drains over 20 s. Hidden while you have spread. |
 | 4 | Drone mode | Shown while a drone pickup is active (Homing, Detach, Rapid or Double), with its own bar. |
-| 5 | Clock | Time left on timed goals, time played on others. See section 5. |
+| 5 | Clock | Time left on timed goals. Destroy and guardian levels show no clock. See section 5. (changed in tester-1+1c52828) |
 | 6 | Goal bar | Fills toward the goal. |
-| 7 | Goal label | For example "Survive", "Destroy 23 / 60", "Score 3,200 / 5,000", "BOSS IN 1:05", then the guardian's name. |
-| 8 | Level line | Level number, par and level code, for example "L7  Par 6,500  #a1b2c3d4". |
+| 7 | Goal label | For example "Survive", "Destroy 23 / 60", "Score 3,200 / 5,000", "BOSS IN 1:05", then "Defeat the boss" once the guardian is on the field. (changed in tester-1+1c52828) |
+| 8 | Level line | Level number and par, for example "L7  Par 6,500". The level code shows here only in tester sessions (section 18). (changed in tester-1+1c52828) |
 | 9 | Lives | Under the buttons. One ▲ per life, up to 5, then "▲ x N". |
 | 10 | Bombs | One ● per bomb, up to 5, then "● x N". |
 | 11 | Pause | Two bars. |
 | 12 | Super button | Name above it, cyan fill rising as you collect geoms. |
 | 13 | Bomb button | BOMB above it, bombs left inside. |
-| 14 | Arena | Always fully visible between the HUD columns. On guardian and Endless runs a 20 px boss strip sits at the top. |
+| 14 | Arena | Always fully visible between the HUD columns. On guardian and Endless runs a 20 px boss strip sits at the top, with the guardian's name and its health bar: a blue Shield strip over a red Health strip (section 13). (changed in tester-1+1c52828) |
 
 ### HUD on the main screen
 
@@ -201,7 +198,7 @@ There is no bottom band layout any more. The game always uses one of the two lay
 | 2 | Multiplier | Under the score. |
 | 3 | Weapon | Right of the multiplier, with its bar. |
 | 4 | Drone mode | Right of the weapon, while a drone pickup is active. |
-| 5 | Clock | Its own box in the top band. |
+| 5 | Clock | Its own box in the top band, on timed goals only. (changed in tester-1+1c52828) |
 | 6 | Goal bar and label | Top centre. |
 | 7 | Level line | Under the goal. Hidden while a guardian is on the field. |
 | 8 | Lives | Top right, left of pause. |
@@ -265,6 +262,7 @@ Collecting geoms early matters more than killing fast. One death wipes the multi
 - Each Adventure level has a par score: the score a strong player reaches. It is at least 1,000 and a multiple of 500 on Normal.
 - Star targets: 1 star at par, 2 stars at 1.25 x par, 3 stars at 1.5 x par (each rounded to 500).
 - Par and the star targets change with difficulty: x0.8 on Easy, x1 on Normal, x1.15 on Hard, x1.3 on Insane.
+- Guardian levels have their own par for each difficulty instead, worked out from the score that difficulty really offers over the whole fight. The star targets are 1, 1.25 and 1.5 times that par as usual. (new in tester-1+1c52828)
 - Stars from score are capped by difficulty: Easy at most 1 star, Normal at most 2, Hard and Insane at most 3.
 - Stars are given only when you complete the goal. A failed level gives 0 stars.
 - The start card shows the three star targets and the cap for the chosen difficulty, for example "Normal: up to 2 stars".
@@ -298,24 +296,25 @@ After you pick, the screen confirms it, for example "Extra life ready for level 
 
 ### The start card
 
-Before each Adventure level a card holds the game until you tap Start. Top to bottom:
+Before each Adventure level a card holds the game until you tap Start. Top to bottom: (changed in tester-1+1c52828)
 
 - **Title**: "Level N".
-- **Goal** and **Victory**: one line each (see the table below).
-- **Star targets**: "1 star", "2 stars", "3 stars" with their scores, and the cap line for the difficulty.
-- **New enemies**: an icon, name and type for each kind new to your run.
+- **Mission type**: a headline in the pixel font, in the mission's colour (see the table below). (new in tester-1+1c52828)
+- **Goal**: one line (see the table below). (changed in tester-1+1c52828)
+- **Star targets**: "1 star", "2 stars", "3 stars" with their scores. (changed in tester-1+1c52828)
+- **New enemies**: "New:" and an icon for each kind new to your run. (changed in tester-1+1c52828)
 - **Difficulty chips**: Easy, Normal, Hard, Insane. Your last choice is picked. Tapping a chip rebuilds the level at that difficulty.
-- **Start**.
-- **Details**, closed by default: the arena (for example "Circle 900 x 900"), the drone, the super with what it does, a held par reward, and the seed.
+- **Start** and **Return to Menu**. Return to Menu goes back to the main menu without starting the level. (changed in tester-1+1c52828)
+- **Details**, closed by default: the victory line, the star cap for the difficulty (for example "Normal: up to 2 stars"), the name and type of each new enemy, the drone, the super with what it does, a held par reward, the arena (for example "Circle 900 x 900"), on a trough level the line "The ground slopes. Your ship slides toward the valley.", and the seed. (changed in tester-1+1c52828)
 
 ### Mission types
 
-| Mission | Goal line on the card | Victory line | Win | Lose |
-|---|---|---|---|---|
-| Score | "Score X in m:ss" | "X points when the m:ss clock runs out with a life left" | Your score is at or above the target when the clock runs out. The level always runs its full time, so you can keep climbing | Below target at time out, or out of lives |
-| Survive | "Survive m:ss" | "m:ss survived with a life left" | The clock counts down to 0 with a life left | Out of lives |
-| Destroy | "Destroy N enemies before your lives run out" | "N kills with a life left" | Kill the number shown. The level ends the moment you reach it | Out of lives |
-| Guardian | "Survive until <name> arrives, then defeat it (1:25)" | "<name> destroyed, with a life left" | The guardian is destroyed | Out of lives. There is no time out |
+| Mission | Headline on the card | Goal line on the card | Victory line | Win | Lose |
+|---|---|---|---|---|---|
+| Score | RUSH & SCORE, yellow (new in tester-1+1c52828) | "Score X in m:ss" | "X points when the m:ss clock runs out with a life left" | Your score is at or above the target when the clock runs out. The level always runs its full time, so you can keep climbing | Below target at time out, or out of lives |
+| Survive | HOLD OUT, cyan (new in tester-1+1c52828) | "Survive m:ss" | "m:ss survived with a life left" | The clock counts down to 0 with a life left | Out of lives |
+| Destroy | SEEK & DESTROY, red (new in tester-1+1c52828) | "Destroy N enemies before your lives run out" | "N kills with a life left" | Kill the number shown. The level ends the moment you reach it | Out of lives |
+| Guardian | GUARDIAN, magenta (new in tester-1+1c52828) | "Survive until <name> arrives, then defeat it (1:25)" | "<name> destroyed, with a life left" | The guardian is destroyed | Out of lives. There is no time out |
 
 - Scores on the card use a short form above 9,999, for example "12.3K".
 - The score target is 60 percent of par, on the 500 grid, at least 1,000 and never above par, then scaled by difficulty like par.
@@ -345,7 +344,7 @@ Before each Adventure level a card holds the game until you tap Start. Top to bo
 | Goal | Clock shows |
 |---|---|
 | Survive, Score | Time left, counting down |
-| Destroy, Guardian | Time played, small and white |
+| Destroy, Guardian | No clock (changed in tester-1+1c52828) |
 
 On a countdown the clock changes as time runs out:
 
@@ -385,9 +384,10 @@ Pick a difficulty on each Adventure and Endless start card. Free Play picks it o
 | Most enemies alive at once | x0.9 | x1 | x1.15 | x1.6 |
 | Guardian hit points and attack speed | x0.55 | x1 | x1.35 | x1.62 |
 | Guardian minions | x0.75 | x1 | x1.25 | x1.6 |
+| Regular enemies after a guardian enters | None | 25 percent of the usual waves | 50 percent | 60 percent (new in tester-1+1c52828) |
 | Guardian warning time | x1 | x1 | x1 | x0.85 |
-| Drift and pond ripple push | x0.7 | x1 | x1.3 | x1.6 |
-| Par and star targets | x0.8 | x1 | x1.15 | x1.3 |
+| Drift, trough pull and pond ripple push | x0.7 | x1 | x1.3 | x1.6 (changed in tester-1+1c52828) |
+| Par and star targets | x0.8 | x1 | x1.15 | x1.3 (guardian levels have their own par per difficulty, section 4) (changed in tester-1+1c52828) |
 | Most stars | 1 | 2 | 3 | 3, or 4 for any win |
 | Space physics | Off | Low | Medium | High |
 
@@ -435,6 +435,11 @@ Space physics is set by difficulty: Easy Off, Normal Low, Hard Medium, Insane Hi
 - Half deflection gives half push, but the top speed stays the same.
 - Respawning zeroes your speed.
 - Slime halves your top speed. Turbo raises it by 35 percent.
+- Inside a Gravitas shelter pool (section 13) your ship handles as on High for as long as you stay in it, whatever the difficulty. (new in tester-1+1c52828)
+
+### Trough pull
+
+On a trough level (section 12) the ground pulls your ship, and only your ship, toward the valley floor down the middle. The pull is almost nothing on the floor and strongest at the left and right rims: about 240 u/s at the rim on Normal, changed by difficulty like drift (section 6). Your top speed is higher, so you can always climb to a rim, but you must keep pushing to stay there. Enemies, bullets, geoms and pickups are not pulled. (new in tester-1+1c52828)
 
 ## 8. Weapons
 
@@ -450,8 +455,9 @@ You start each level with spread. Kills drop weapon pickups that give you a weap
 | ![Orbit pickup](img/shapes/weaponpickup-orbit.svg) | Orbit | Spikes circle you. No forward bullets | none | See below |
 
 - Your speed along the aim is added to bullet speed, up to 1600 u/s.
-- Every bullet hit does 1 damage.
-- Snake body segments stop a pierce bullet. A Bulwark's shield absorbs any bullet. A guardian's body stops every bullet, pierce included.
+- Every bullet hit does 1 damage, except Pierce on a Bulwark (2 damage). (changed in tester-1+1c52828)
+- Snake body segments stop a pierce bullet. A Bulwark's shield absorbs every bullet except Pierce and the combos with Pierce (Trident, Needle, Eclipse), which pass through it. A guardian's body stops every bullet, pierce included. (changed in tester-1+1c52828)
+- Pierce does 1.5 times its usual damage to guardians and their parts (section 13). (new in tester-1+1c52828)
 - Gravity wells bend your bullets, and a bullet that touches a well's core is used up on it. Bullets vanish on walls.
 
 ### Orbit and the chainsaw
@@ -741,10 +747,10 @@ Bands: levels 1 to 5 are band 1, 6 to 15 band 2, 16 to 30 band 3, 31 and up band
 | Size | Body radius 18 u. Shield 60 degrees either side of its heading |
 | Behaviour | Moves forward at 90 u/s and turns toward you at only 70 degrees a second. 3 hit points |
 | Tells | A blocked shot makes sparks and a metallic ping |
-| Counter | Circle it and shoot the sides or rear. Bombs and Detonate ignore the shield |
+| Counter | Circle it and shoot the sides or rear, or use Pierce, which passes through the shield and takes 2 hit points a hit. Bombs and Detonate ignore the shield (changed in tester-1+1c52828) |
 | Score and geoms | 150, 3 geoms |
 | First appears | Level 16. Weight 12, 16 in bands 3 and 4. Bastion also calls them in |
-| Notes | The shield blocks bullets, pierce bullets, drone shots and orbit spikes |
+| Notes | The shield blocks bullets, drone shots and orbit spikes. Pierce bullets, and the combos with Pierce, pass through it (changed in tester-1+1c52828) |
 | Briefing | "Bulwarks carry a shield on their front." / "Shots from the front just bounce away." / "Fly around it and hit it from behind." / "A bomb ignores the shield." |
 
 ### Blink
@@ -893,6 +899,8 @@ Dropped by Sowers and by Ember. Harmless for 0.8 s, then deadly to touch. They l
 | Hot red enemy | Enraged by a membrane |
 | White whirlpool | A super nova well |
 | Streaks across a drum | Drift is about to burst (section 12) |
+| Bright, wide grid lines at the sides, shapes growing as they climb | A trough's rims (section 12) (new in tester-1+1c52828) |
+| Violet dashed ring with rising specks | A Gravitas shelter pool, safe to enter (section 13) (new in tester-1+1c52828) |
 
 ## 12. Arenas and surfaces
 
@@ -903,6 +911,7 @@ Dropped by Sowers and by Ember. Harmless for 0.8 s, then deadly to touch. They l
 - Size grows with the band. Heights: 700 to 760 u (band 1), 760 to 880 u (band 2), 860 to 1000 u (band 3), 940 to 1100 u (band 4). Width is 1.3 to 1.8 times the height.
 - Wall bars are 24 u thick: none in band 1, 1 in band 2, 1 to 2 in band 3, 1 to 3 in band 4 (on the wall bar shape only).
 - Guardian levels are always flat.
+- **Guardian arenas.** From level 10 every guardian level gets a bigger arena: at least 1600 x 1000 u for a rectangle, 1100 u across for a circle or hexagon. Spindle's is bigger still: at least 2080 x 1300 u, or 1430 u across. Brood at level 5 keeps its usual arena. (new in tester-1+1c52828)
 
 ### Drum levels (cylinder)
 
@@ -916,6 +925,16 @@ Dropped by Sowers and by Ember. Harmless for 0.8 s, then deadly to touch. They l
 | Rings | 25 | 2 to 3 rings of bars round the drum, each with 1 to 2 gaps of 160 to 240 u and 1 to 2 membranes |
 | Pillars | 25 | 6 to 10 staggered short pillars |
 | Narrow | 20 | A drum about as wide as it is tall, with no bars. Has drift |
+
+### Trough levels
+
+- A trough is a flat rectangle whose ground is a valley across its width: the floor runs down the middle, and the ground rises toward the left and right walls, gentle near the floor and steep at the rims. The top and bottom are ordinary walls. (new in tester-1+1c52828)
+- **From level 24**, a non guardian level that is not a drum has a 24 percent chance to be a trough. Two troughs never come in a row. (new in tester-1+1c52828)
+- The pull acts on your ship only (section 7). It is changed by difficulty like drift. (new in tester-1+1c52828)
+- A trough is at least 1.5 times as wide as it is tall. It has at most 2 wall bars and at most 1 gravity well, all on the floor, so the rims stay clear. Enemies arrive across the valley, not on the rims. (new in tester-1+1c52828)
+- **Look.** Everything on a trough grows as it climbs, up to 1.35 times its size at the rim, as if the slope rose toward you. Grid lines and the arena outline get wider and brighter toward the rims. This is looks only: hit areas never change. (new in tester-1+1c52828)
+- The start card names the arena "Trough" and its Details say "The ground slopes. Your ship slides toward the valley." (new in tester-1+1c52828)
+- Free Play can turn its arena into a trough (section 14). (new in tester-1+1c52828)
 
 ### Drift
 
@@ -932,24 +951,27 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 ### Guardian levels
 
 - Every 5th Adventure level is a guardian level.
-- **Goal.** Survive until the guardian arrives at 1:25 on the wave clock, then defeat it. Before it arrives the goal bar reads "BOSS IN m:ss". After it arrives the bar shows its name and drains with its health. A banner with its name fades in as it enters.
+- **Goal.** Survive until the guardian arrives at 1:25 on the wave clock, then defeat it. Before it arrives the goal bar reads "BOSS IN m:ss". After it arrives the goal bar reads "Defeat the boss" and the boss strip shows its name and its health bar (see Health bar below). A banner with its name fades in as it enters. (changed in tester-1+1c52828)
 - **Win and lose.** You win the moment the guardian falls. You lose only when you run out of lives. There is no time out.
 - **Entrance.** The guardian slides in from the far wall over 2 s. It is harmless and cannot be hit while it slides in.
-- **Waves keep coming** while the guardian lives, at 60 percent of the usual rate.
+- **Waves thin out** once the guardian enters: none on Easy, 25 percent of the usual waves on Normal, 50 percent on Hard and 60 percent on Insane. Before it enters the waves are as usual. (changed in tester-1+1c52828)
 - **Holding out.** If the fight drags on to the level's hidden time limit (5:00 to 6:00 of wave clock), waves stop, the goal bar reads "Defeat the boss" and the guardian enrages. A guardian also enrages after 240 s alive. Enraged, it attacks 30 percent faster.
-- **The arena** is flat, with no Spawners and at most 1 gravity well. Lives and bombs are as on any level.
+- **The arena** is flat, with no Spawners and at most 1 gravity well. From level 10 it is bigger than on other levels (section 12). Lives and bombs are as on any level. (changed in tester-1+1c52828)
 - **Your death.** The guardian keeps its damage and its parts. Its attacks, minions and bullets are cleared, and its attack cycle restarts.
-- **Reward.** A guardian kill gives a bonus of a quarter of the level's par (rounded to 500), not multiplied, plus 20 geoms. It counts as 1 kill. The results screen shows "Boss bonus N (<name> defeated)".
+- **Reward.** A guardian kill gives a bonus of a quarter of the level's Normal par (rounded to 500) on every difficulty, not multiplied, plus 20 geoms. It counts as 1 kill. The results screen shows "Boss bonus N (<name> defeated)". (changed in tester-1+1c52828)
 - **Easy and Insane.** On Easy a guardian has 0.55 times the health and attacks at 0.55 times the speed, with 0.75 times the minions. On Insane it has 1.62 times the health and attack speed, 1.6 times the minions, and its warnings are 15 percent shorter. Hard is between (section 6).
 - **Getting stronger.** Guardians attack slower early on: x0.75 at level 5, rising to x1.0 at level 20 and x1.15 at level 50. The first guardian of a run (level 5) also has three quarters of its health.
 - **After level 50.** The list starts again from Ember, with 25 percent more health each time round: Ember 55, Mirage 60, Gravitas 65, Bastion 70, Tempest 75, Twins 80, Prism 85, then Ember again at 90 with 50 percent more, and so on. These loops attack at the x1.15 rate.
 
 ### Rules for every guardian
 
-- **Damage.** Guardians take damage in tenths of a hit: a spread or drone bullet 1 hit, rapid 0.7, pierce 4, an orbit spike 1.5 (then that spike rests 0.25 s), the Ram drone 2. Any bullet stops on a guardian's body.
+- **Damage.** Guardians take damage in tenths of a hit: a spread or drone bullet 1 hit, rapid 0.7, pierce 6 (1.5 times its usual 4), an orbit spike 1.5 (then that spike rests 0.25 s), the Ram drone 2. Any bullet stops on a guardian's body. (changed in tester-1+1c52828)
 - **Armour.** Very tough guardians spread their health over armour, so their bar drops more slowly per hit. Detonate ignores armour.
-- **Phases.** A 2 phase guardian changes at half health; a 3 phase one at two thirds and one third; Prism at 75, 50 and 25 percent. Each change pauses its attacks for 1 s.
-- **Cracks.** Below 66 percent health its outline cracks; below 33 percent it cracks further and a piece breaks off. Brood, Gravitas and Tempest split into smaller parts at the second crack.
+- **Health bar.** The bar has two strips: a blue Shield strip on top and a red Health strip under it. The Shield strip holds the top 34 percent of the guardian's health and empties first. The guardian cracks the moment it is empty, and the strip dims. Then the Health strip drains; the second crack comes halfway down it. Gravitas and Tempest carry their remaining health into their parts, so the bar runs on. Brood's Broodlings get a full bar of their own. (new in tester-1+1c52828)
+- **Phases.** A 2 phase guardian changes at half health; a 3 phase one at two thirds and one third; Prism at 75, 50 and 25 percent. A guardian with a fury starts phase 2 at its break instead. Each change pauses its attacks for 1 s. (changed in tester-1+1c52828)
+- **Cracks.** When the Shield strip empties (below 66 percent health) its outline cracks; below 33 percent it cracks further and a piece breaks off. The cracks glow brighter as its health drops. Gravitas and Tempest split into smaller parts at the second crack. Brood splits when both its strips are empty. The Twins crack only once their shared Shield strip is gone. (changed in tester-1+1c52828)
+- **Fury.** Warden, Spindle, Ember, Mirage and Gravitas have a fury. When the Shield strip empties the guardian breaks: for 4.5 s it stands still, shakes and flashes, its attacks and Hornets clear, its core closes, and no hit hurts it. Then it is enraged until it falls: it changes colour and its attacks change (see each guardian below). Your death does not end the fury. Brood has no fury of its own; its Broodlings go into a frenzy instead. (new in tester-1+1c52828)
+- **Hit feedback.** A shot that hurts a guardian, or one of its parts, flashes its body white for an instant, throws sparks in its colour and plays a soft tick. A blocked shot throws one small grey spark and a duller, quieter thunk. (new in tester-1+1c52828)
 - **Warnings.** Every attack shows a warning first (1.0 s on early guardians, 0.8 s on Ember, Mirage and Gravitas, 0.6 s on the rest), during which it is harmless. An attack that would appear right on you waits 0.3 s.
 - **Shots.** Every guardian also fires a volley every 5 to 6.5 s, cycling an aimed fan, a ring burst and a pincer, more bullets each phase. Guardian bullets fly straight, at most 240 u/s, and are only fired while you are at least 300 u away.
 - **Contact.** Touching a guardian's body, its split parts or its Hornets costs a life. Pods, anchors, turrets and Mirrors are safe to touch.
@@ -964,13 +986,14 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | 4,060 hits on Normal. Three quarters of that on its first fight at level 5 |
+| Health | Body 340 hits on Normal, then 3 Broodlings of 45 hits each. Three quarters of both on its first fight at level 5 (changed in tester-1+1c52828) |
 | Phases | 2 (phase 2 below half health) |
 | Movement | Prowls toward you at 75 u/s (90 in phase 2) for 3 s (2.2 s in phase 2), then charges |
 | Attacks | Charge: a lane warning for 1.0 s, then a charge at 320 u/s (360 in phase 2) for up to 1.8 s or until it hits a wall, then a 0.6 s recovery. Darts: 3 every 6 s (4 every 5 s in phase 2) |
 | Weak state | Immune while any of its 3 pods lives. The pods circle at 90 u and pop in 1 hit. Break all three and its core opens for 5 s: it flees and never charges. Pods regrow 9 s after the last one broke |
-| Split | At the second crack its body and pods vanish and 3 Broodlings appear, 60 hits each. One chases you, one circles you and lays Slime, one keeps away and fires 2 Darts every 4 s. Touching any Broodling costs a life. The fight ends with the third |
-| Counter | Break the pods fast, then pour fire into the core. Step off the charge lane |
+| Split | When both its strips are empty its body and pods vanish and 3 Broodlings appear, flashing white. They get their own full bar, labelled "Broodlings". One chases you, one circles you and lays Slime, one keeps away and fires 2 Darts every 4 s. Touching any Broodling costs a life. The fight ends with the third (changed in tester-1+1c52828) |
+| Frenzy | When the first Broodling dies the others go into a frenzy: hot green with red cores, 1.25 times faster. Every 4 s two of them close on you from opposite sides: each stops for 0.8 s, flashing white, with a green aim line to a point 140 u past you, then drives through that point at 320 u/s for up to 1.2 s. A lone survivor keeps the speed and hunts you (new in tester-1+1c52828) |
+| Counter | Break the pods fast, then pour fire into the core. Step off the charge lane. In the frenzy, move off the line between the two aim lines before they drive (changed in tester-1+1c52828) |
 | Intro | "Brood, Keeper of the Nest, wakes." / "It kept small shapes safe and warm." / "A fallen legend took its green light." / "Now it guards its nest from everyone." / "Three pods shield it. Break all three," / "then strike. Step off its charge line." / Torus: "It is not cruel, {callsign}. It is lost." |
 | Freed | "Green light returns. Brood is free." / "One star wakes. Vertane remembers you." |
 
@@ -980,13 +1003,14 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | 2,576 hits on Normal |
+| Health | 519 hits on Normal (changed in tester-1+1c52828) |
 | Phases | 2 |
 | Movement | Seeks you at 55 u/s |
 | Attacks | Rings: every 3.7 s (2.8 s in phase 2) it sends out a ring with a 70 degree gap facing you, growing at 300 u/s. In phase 2 each ring has a second gap on the far side. Shield and swarm: 10 s into the fight and every 14 s after, it stops, raises a shield for 4 s and releases 10 Hornets in two bursts. In phase 2 the dropping shield also fires a ring of 12 bullets |
 | Hornets | Small, 1 hit, 300 u/s. They fly straight for 0.35 s, become deadly at 0.6 s and fade at about 5.4 s. 8 on Easy, 13 on Hard, 16 on Insane |
 | Weak state | Its core is shut except for 2.0 s after each ring's warning ends, and 2.0 s after the shield drops |
-| Counter | Fly through the gap in each ring, then shoot during the 2 s opening. Clear Hornets with spread or a bomb |
+| Fury | When its Shield strip empties it breaks for 4.5 s, growing corner spikes as it turns hot red, then stays enraged with a slow pulse: it seeks at 80 u/s, rings come every 2.4 s, and it adds a dash charge. 3 s after the break, then every 8 s, it stops and aims for 0.8 s (a blinking red dashed line shows the way), dashes at 300 u/s for up to 1 s or until a wall, fires a ring of 12 bullets where it stops and opens its core for 2 s. It never dashes while its shield is up (new in tester-1+1c52828) |
+| Counter | Fly through the gap in each ring, then shoot during the 2 s opening. Clear Hornets with spread or a bomb. Enraged, step off the aim line, then punish the open core after the dash (changed in tester-1+1c52828) |
 | Intro | "Warden, Keeper of the Old Gate." / "It once opened the ways between places." / "The fallen legend broke its trust." / "Now it shuts every way, for everyone." / "Fly through the gap in its rings." / "Its shell opens just after each ring." / Torus: "A closed gate still remembers the key." |
 | Freed | "Blue light returns. The Old Gate opens." / "Far off, a grey shape watches, and goes." |
 
@@ -996,10 +1020,11 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | 5,918 hits on Normal (with armour) |
+| Health | 1,350 hits on Normal (changed in tester-1+1c52828) |
 | Phases | 2 |
 | Movement | Circles the arena centre at 200 u |
-| Attacks | Sweep arms: 2 arms (3 in phase 2), 380 u long, turning round it. Every 5 s the arms freeze thin and dim for the warning, then turn the other way. Pellet: 1 bullet every 3.0 s (3.6 s in phase 2), never during an arm warning |
+| Attacks | Sweep arms: 2 arms (3 in phase 2), 380 u long, turning round it. Every 5 s the arms freeze thin and dim for the warning, then turn the other way. Pellet: 1 bullet every 3.0 s (3.6 s in phase 2), never during an arm warning. Needles: each arm tip flings a bullet along its sweep every 1.2 s, never from a tip within 150 u of you and never while the arms are frozen (changed in tester-1+1c52828) |
+| Fury | When its Shield strip empties it breaks for 4.5 s, then stays enraged: its arms turn hot red, a fourth arm joins, each sweep turns at its own speed, the arms reverse every 3 s and needles fly every 0.9 s (new in tester-1+1c52828) |
 | Weak state | Always open |
 | Counter | Stay in the open space between the arms. When they go dim, get ready for them to turn back |
 | Intro | "Spindle, Turner of Days." / "It turned the hours of Vertane gently." / "The fallen legend tangled its turning." / "Now its arms sweep only to push away." / "Stay in the open space between its arms." / "When the arms go dim, they turn back." / Torus: "A legend came before you. Remember that." |
@@ -1011,11 +1036,13 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | 3,205 hits on Normal |
+| Health | 822 hits on Normal (changed in tester-1+1c52828) |
 | Phases | 3, each faster than the last |
 | Attacks | Dash: it winds up behind a lane warning, then dashes at 760 u/s (faster each phase), dropping a Mine every 120 u. It bounces off up to 2 walls; a third wall stuns it. Fan: after a dash that ends in open floor it fires 3 bullets 14 degrees apart |
 | Weak state | Can be hit only while it rests or is stunned. A dash that touched a wall ends in a 2.0 s stun. A dash that ends in open floor ends in a rest of 1.8 s (shorter each phase) |
-| Counter | Stand near a wall so it dashes into one, then hit it during the stun. Shoot the Mines it leaves |
+| Leavers | Every stun releases 2 enraged Leavers at its body, at most 4 of its Leavers alive at once (new in tester-1+1c52828) |
+| Fury | When its Shield strip empties it breaks for 4.5 s, then burns as a blue flame pulsing blue, purple and white: its dash is 1.2 times faster, it bounces off up to 3 walls and each stun releases 3 Leavers (new in tester-1+1c52828) |
+| Counter | Stand near a wall so it dashes into one, then hit it during the stun. Shoot the Mines it leaves, and back away from the Leavers it releases (changed in tester-1+1c52828) |
 | Intro | "Ember, the Hearth Flame." / "It kept all of Vertane warm." / "The fallen legend fed on its fire." / "Now it burns wild and cannot rest." / "It dashes and drops mines on the way." / "Hit it when it stops after a wall." / Torus: "Help it rest, and it will warm you." |
 | Freed | "Orange light returns. Vertane is warm." / "Two acts of the trial are done." |
 
@@ -1025,12 +1052,13 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | 5,932 hits on Normal (with armour) |
+| Health | 1,150 hits on Normal (changed in tester-1+1c52828) |
 | Phases | 3 |
-| Attacks | Warp: every 3.0 s (2.5 s, then 2.0 s by phase) it warps to a spot 200 to 300 u from you. A ring marks the spot 0.5 s early. It will not land while you are close to the spot. Lanes: on landing it fires 8 lanes outward, 600 u long, each with a 0.8 s warning |
-| Weak state | Its shield lets hits through only a 70 degree open arc that turns slowly round it. Shots that land elsewhere do nothing |
+| Attacks | Warp: every 3.0 s (2.5 s, then 2.0 s by phase) it warps to a spot 200 to 300 u from you. A ring marks the spot 0.5 s early. It will not land while you are close to the spot. Lanes: on landing it fires 8 lanes outward, 600 u long, each with a 0.8 s warning. One lane always runs through where you are (changed in tester-1+1c52828) |
+| Weak state | Its shield lets hits through only a 180 degree open arc that turns slowly round it. Shots that land elsewhere do nothing (changed in tester-1+1c52828) |
 | Mirrors | At the second crack it leaves 2 Mirror copies on its last two landing spots. They pop in 1 hit, are safe to touch and come back every 6 s |
-| Counter | Move off the ring, step between the lanes, and time shots into the open arc |
+| Fury | When its Shield strip empties its mirror ring shatters and it breaks for 4.5 s, then stays enraged with a flickering double image and a white hot edge. Every warp now shows 3 landing rings at least 120 u apart. Only one is real; the false rings vanish 0.2 s before the landing (new in tester-1+1c52828) |
+| Counter | Move off the ring, step out of the lane aimed at you, and time shots into the open arc. Enraged, keep clear of all three rings (changed in tester-1+1c52828) |
 | Intro | "Mirage, Keeper of True Sight." / "It showed Vertane what was real." / "The fallen legend taught it to trick." / "Now it shows only what is not there." / "A ring shows where it will land. Move." / "Shoot through the gap in its shield." / Torus: "When it sees true, you will see too." |
 | Freed | "Magenta light returns. Mirage sees true." / "And it shows you what really happened." / "A legend named Vecta took their light." / "He wanted all of it for himself." |
 
@@ -1040,13 +1068,14 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | 7,602 hits on Normal (with armour) |
+| Health | 1,704 hits on Normal (changed in tester-1+1c52828) |
 | Phases | 3 |
 | Movement | Seeks you at 45 u/s and pulls you toward it within 300 u (up to 100 u/s). The pull never kills by itself |
 | Attacks | Collapsing rings: a ring starts at 480 u and closes in at 220 u/s with a 60 degree gap facing you, every 5 s (4 s, then 3 s by phase) |
 | Weak state | It takes no damage until all 3 anchors are gone. Anchors circle it at 140 u and take 6 hits each. Each lost anchor weakens the pull by a third. Anchors never regrow, even after you die. Then the core stays open |
-| Split | At the second crack it splits into 2 Gravitants, 160 hits each, circling a shared centre that follows you. Each has its own pull. The rings keep closing on them. Touching a Gravitant costs a life |
-| Counter | Shoot the anchors first. Fly out through each ring's gap. Fight the pull by moving away |
+| Split | At the second crack it splits into 2 Gravitants that share its remaining health, circling a shared centre that follows you. Each has its own pull. The rings keep closing on them. Touching a Gravitant costs a life (changed in tester-1+1c52828) |
+| Fury | When its Shield strip empties it breaks for 4.5 s, collapsing to a point and swelling back, then stays enraged, violet with a spinning white ring. Tide: every 4 s its pull flips to a push of the same strength and back, and a ring flashes on its body 0.8 s before each flip. Shelter pools: every 3 s it leaves a violet pool of radius 80 u where it stands. A pool lasts 8 s and shrinks away over its last 2 s; at most 4 are out at once. Inside a pool there is no pull or push, and your ship floats (section 7). After the split the tide and the pools follow the pair (new in tester-1+1c52828) |
+| Counter | Shoot the anchors first. Fly out through each ring's gap. Fight the pull by moving away. Enraged, shelter in a pool when the tide turns against you (changed in tester-1+1c52828) |
 | Intro | "Gravitas, Heart of the Deep." / "Its pull held all of Vertane together." / "Vecta made its pull too strong." / "Now it pulls everything to itself." / "Break its three anchors to weaken it." / "Fly out through the gap in each ring." / Torus: "No more riddles. I am with you." |
 | Freed | "Violet light returns. The heart is calm." / "Vertane holds together again." / "And now you see him, far on the rim." / "Vecta, the Grey Legend, sees you too." |
 
@@ -1056,7 +1085,7 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | 5,222 hits on Normal (with armour) |
+| Health | 1,833 hits on Normal (changed in tester-1+1c52828) |
 | Phases | 3, set by its turrets, not its health |
 | Movement | Holds the centre and turns slowly |
 | Attacks | 4 corner turrets (30 hits each) act in turn, one every 1.125 s, each firing a lane (600 u long) or a bullet, alternately. Bulwarks: 1 every 12 s (2 on Insane) |
@@ -1070,7 +1099,7 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | 5,020 hits on Normal (with armour) |
+| Health | 1,832 hits on Normal (changed in tester-1+1c52828) |
 | Phases | 3 |
 | Movement | Laps the arena close to the wall at 140 u/s, laying Slime every 1 s |
 | Attacks | Dash: every 5.0 s (4.2, then 3.3 by phase) a 0.6 s lane warning across the floor, then a dash at 600 u/s to the far wall, then a 1.5 s rest |
@@ -1084,7 +1113,7 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | 5,918 hits on Normal (with armour), shared by both bodies on one bar |
+| Health | 2,250 hits on Normal, shared by both bodies on one bar (changed in tester-1+1c52828) |
 | Phases | 2 |
 | Movement | Two bodies circle the centre on opposite sides. The space between them breathes from 300 to 500 u |
 | Attacks | Tether: a deadly bar joins them whenever they are at least 250 u apart. Rings: one every 3.5 s, from each body in turn, with a 60 degree gap facing you |
@@ -1098,7 +1127,7 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | 1,840 hits on Normal |
+| Health | 844 hits on Normal (changed in tester-1+1c52828) |
 | Phases | 4 (at 75, 50 and 25 percent) |
 | Movement | Drifts between 4 points on the diagonals at 90 u/s |
 | Weak state | It cycles every 4 s: 2.3 s guarded in colour, 0.5 s turning white, then 1.2 s white. While white it takes full damage; otherwise only a quarter of each hit gets through |
@@ -1107,8 +1136,8 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 ### Guardians in Endless and Free Play
 
-- **Endless.** A guardian arrives every 3 minutes of play (segments 6, 12, 18 and so on), 10 s into the segment. The order is Warden, Brood, Spindle, Ember, Mirage, Gravitas, Bastion, Tempest, Twins, Prism, then from Ember again with more health. The wave clock stops while the guardian lives. The HUD label reads "Boss". A kill gives 5,000 points per guardian tier (Warden, Brood and Spindle tier 1; Ember, Mirage and Gravitas tier 2; Bastion, Tempest and Twins tier 3; Prism tier 4), plus 20 geoms.
-- **Free Play.** The Bosses row offers Off (default), "Every 3 min" (the Endless order) or one guardian by name. The first arrives at 1:40 of wave clock, then one every 5 minutes. Every guardian can fight on a drum in Free Play. Kill bonuses are as in Endless.
+- **Endless.** A guardian arrives every 3 minutes of play (segments 6, 12, 18 and so on), 10 s into the segment. The order is Brood, Warden, Spindle, Ember, Mirage, Gravitas, Bastion, Tempest, Twins, Prism, then from Ember again with more health. The wave clock stops while the guardian lives. The HUD label reads "Boss". A kill gives 5,000 points per guardian tier (Warden, Brood and Spindle tier 1; Ember, Mirage and Gravitas tier 2; Bastion, Tempest and Twins tier 3; Prism tier 4), plus 20 geoms. (changed in tester-1+1c52828)
+- **Free Play.** The Bosses row offers Off (default), "Every 2 min" or one guardian by name. With "Every 2 min", guardians come one at a time in the Endless order: the first at 2:00 of wave clock, then each next one 2 minutes of wave clock after the last one falls. With one guardian chosen, the first arrives at 1:40 of wave clock, then one every 5 minutes. Every guardian can fight on a drum in Free Play. Kill bonuses are as in Endless. (changed in tester-1+1c52828)
 
 ## 14. Endless and Free Play
 
@@ -1128,7 +1157,7 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 |---|---|---|
 | 0:00 | Level 1 | Grunt, Wanderer, Pinwheel |
 | 1:30 | Level 7 (band 2) | Weaver, Dart, Charger, Swirl and Splime can appear. Speed x1.05 |
-| 3:00 | Level 13 | Leavers can appear from here. The first guardian arrives at 3:10 |
+| 3:00 | Level 13 | Leavers can appear from here. The first guardian, Brood, arrives at 3:10 (changed in tester-1+1c52828) |
 | 4:00 | Level 17 (band 3) | Snake, Bulwark and Blink can appear. Speed x1.10 |
 | 7:30 | Level 31 (band 4) | Sower can appear. Speed x1.20. From here every segment adds one more enemy per wave, with no limit |
 | 17:30 | Level 71 | Speed reaches its cap of x1.40 |
@@ -1142,7 +1171,8 @@ Free Play is on the main menu. It opens a setup screen: "Endless waves on your r
 | Section | Row | Choices | Default |
 |---|---|---|---|
 | Difficulty | | Easy, Normal, Hard, Insane | Normal |
-| Arena | Arena | Rectangle, Circle, Drum | Rectangle |
+| Arena | Arena surface | Flat, Trough | Flat (new in tester-1+1c52828) |
+| Arena | Arena | Rectangle, Circle, Drum (fixed while the surface is Trough) | Rectangle (changed in tester-1+1c52828) |
 | Arena | Size | Small, Medium, Large | Medium |
 | Arena | Barriers | On, Off | Off |
 | Enemies | Kinds | A button for each of the 13 enemy kinds, plus All and None | None picked, which plays every enemy (the normal Endless mix) |
@@ -1153,10 +1183,11 @@ Free Play is on the main menu. It opens a setup screen: "Endless waves on your r
 | Loadout | Pickups | On, Off | On |
 | Loadout | Drone | Attack, Collect, Ram | Attack |
 | Loadout | Super | Homing, Detonate, Turbo | Turbo |
-| Hazards | Bosses | Off, Every 3 min, or one guardian | Off |
+| Hazards | Bosses | Off, Every 2 min, or one guardian | Off (changed in tester-1+1c52828) |
 | Hazards | Wells | Off, Normal, Many | Normal |
 | Hazards | Drum drift | Off, Low, High (shown only for Drum) | Low |
 
+- **Arena surface.** Trough turns the arena into a trough (section 12), always a rectangle, so the Arena row is greyed out and a note says "Trough is always a rectangle, so the shape is fixed." Size still applies. Barriers place 2 bars on the floor, and the Wells row places at most 1 well. (new in tester-1+1c52828)
 - **Size.** Small is 0.75 times and Large 1.3 times Medium. The Medium rectangle is 1600 by 1000 u.
 - **Barriers.** 2 to 3 bars on a rectangle or circle. A drum gets rings or pillars.
 - **Density.** Low 0.6 times, Swarm 1.95 times the enemies (and a higher cap).
@@ -1164,6 +1195,7 @@ Free Play is on the main menu. It opens a setup screen: "Endless waves on your r
 - **Length.** A timed run ends at its time with "Time up". Endless runs until your lives are gone.
 - **Weapon.** Start holding that weapon for 20 s. With Pickups Off it lasts the whole run.
 - **Wells.** Normal places 1 to 2, Many places 2 to 4, and more arrive twice as often.
+- **Bosses.** Every 2 min brings one guardian at a time: the first at 2:00, then 2 minutes after each one falls (section 13). (new in tester-1+1c52828)
 - **Drum drift.** High is twice Low. Drift runs only on a drum without barriers.
 - Snakes, when allowed, come at least 3 per segment.
 - Free Play starts with a 1.5 s "Ready". It saves no scores, stars or bests.
@@ -1216,7 +1248,7 @@ Settings opens from the menu and from the pause screen. The panel sits on the le
 | Show FPS | On, Off | Off | Shows a frame rate readout at the top | Use it to check the other settings |
 | Glow | Bloom, Fallback | Bloom | Bloom uses a full screen glow pass. Fallback uses glow sprites instead | Neon works on both |
 | Run seed and Play seed | 0 to 4294967295 | empty | Plays level 1 of the typed seed | Session only: it unlocks nothing, records no bests and saves no reward. The line under the box says "Type a run seed (0 to 4294967295)", "Not a valid seed", or the seed and its level 1 code |
-| Reset progress | Two taps within 3 s | | The first tap reads "Tap again to reset", the second "Progress reset". Sets the unlocked level back to 1, clears Adventure bests and stars, and drops a held par reward | Keeps your settings, run seed, Endless top 10, Free Play setup, last difficulty, call sign and the record of story scenes seen |
+| Reset progress | Two taps within 3 s | | The first tap reads "Tap again: clears levels, story and call sign", the second "Progress, story and call sign reset". Sets the unlocked level back to 1, clears Adventure bests and stars, drops a held par reward, and clears your call sign and the record of story scenes seen, so the opening plays again | Keeps your settings, run seed, Endless top 10, Free Play setup and last difficulty (changed in tester-1+1c52828) |
 | Back | | | Closes Settings | |
 
 At the bottom a small label shows the build. Difficulty and space physics are not settings: difficulty is picked on each start card, and space physics follows it.
@@ -1248,7 +1280,8 @@ All sound is made live by the game. There are no recordings.
 | Whoosh and thud | A gravity well arriving; a slither when a well releases snakes |
 | Thump and watery whoosh | A pond ripple |
 | Shield hum, chord and pings | A guardian's shield going up and shattering |
-| Guardian rumble, hits, shots and death | A guardian enters, is hit, fires and falls |
+| Guardian rumble, shots and death | A guardian enters, fires and falls (changed in tester-1+1c52828) |
+| Soft tick | Your shot hurts a guardian or one of its parts. A duller, quieter thunk means the shot was blocked (new in tester-1+1c52828) |
 | Scroll blip | Scrolling Settings, How to and other panels |
 
 ### Level music
@@ -1312,15 +1345,21 @@ A soft chime at 1:00, another at 0:30, and a low tick each second from 0:05, sli
 - **Offline.** After the first load the game is stored on the phone and runs with no connection. Updates install themselves.
 - **Where progress lives.** Everything is stored on the phone, in the browser's storage for the game: your run seed, unlocked level, Adventure bests and stars, the Endless top 10, the Free Play setup, your call sign, the story scenes you have seen, and every setting. Nothing is sent anywhere.
 - **Old address.** If you open the game at its old address, a strip on the menu points you to play.shapelegend.com. Progress at the old address does not carry over.
-- **Resetting.** Settings, Reset progress (tap twice) sets the unlocked level to 1 and clears Adventure bests (section 16). To wipe everything, clear the site's data in your browser settings.
+- **Resetting.** Settings, Reset progress (tap twice) sets the unlocked level to 1, clears Adventure bests and clears the story and your call sign (section 16). To wipe everything, clear the site's data in your browser settings. (changed in tester-1+1c52828)
+- **Version.** The main menu footer reads "Shape Legend v0.9.0 (build <code>)". Quote it when you report a bug. (new in tester-1+1c52828)
 
 ### For testers
 
-These are left in the game for testing:
+These are left in the game for testing. Since tester-1+1c52828 most of them show only in a tester session: add ?dev=1 to the game address, or use a tester build. (changed in tester-1+1c52828)
 
-- The HUD level line ends with the level code ("#" and 8 characters). The same code is "Level code" on the results Details, and the start card Details show the seed. Two players on the same seed and level get the same code.
-- A two finger long press of 1 s near the top left corner opens a small debug panel with Show FPS and Glow toggles.
-- Tapping the build label at the bottom of Settings 5 times within 3 s shows a stress test button. It starts a test level.
+- For everyone: the results Details show the "Level code" ("#" and 8 characters), and the start card Details show the seed. Two players on the same seed and level get the same code.
+- Tester session only: the HUD level line ends with the level code. (changed in tester-1+1c52828)
+- Tester session only: a two finger long press of 1 s near the top left corner opens a small debug panel with Show FPS and Glow toggles. (changed in tester-1+1c52828)
+- Tester session only: tapping the build label at the bottom of Settings 5 times within 3 s shows a stress test button. It starts a test level. (changed in tester-1+1c52828)
+- Tester session only: Settings shows "Unlock all levels". Tap it twice ("Tap again: unlock levels 1 to 50") to unlock levels 1 to 50. Stars and scores are not touched. (new in tester-1+1c52828)
+- Tester session only: when a guardian falls, a line with the fight time shows for 6 s and again on the results, for example "Warden 1:05 (to break 0:31, break 0:05, enraged 0:29)" or "Brood 1:52 (body 0:58, Broodlings 0:54)". Paused time does not count. (new in tester-1+1c52828)
+- Guardian levels are built by generator version 14 and trough levels by version 12; other levels are unchanged. (new in tester-1+1c52828)
+- The Android test app ships no offline copy of the web game and drops one left by an old install on first launch. Android backup keeps your progress but leaves out that offline copy. (new in tester-1+1c52828)
 
 ## 19. Glossary
 
@@ -1336,7 +1375,8 @@ These are left in the game for testing:
 | Drone | Your helper: Attack, Collect or Ram |
 | Drone pickup | A ring that gives your drone a mode for 20 s |
 | Drum | A cylinder arena that wraps left to right |
-| Enraged | Faster after crossing a membrane (enemies) or after a long fight (guardians) |
+| Enraged | Faster after crossing a membrane (enemies), after a long fight (guardians), or after a guardian's fury break (changed in tester-1+1c52828) |
+| Fury | A guardian's second form: a 4.5 s break when its Shield strip empties, then enraged until it falls (new in tester-1+1c52828) |
 | Geom | Lime green diamond dropped by kills. Plus 1 multiplier, plus 1 super charge |
 | Guardian | A boss. Every 5th Adventure level |
 | Level code | The 8 character code after "#" that identifies a level. Same seed and level, same code |
@@ -1350,16 +1390,20 @@ These are left in the game for testing:
 | Roster | The enemy kinds a level can spawn, 3 to 6, always with Grunt |
 | Run seed | The number your Adventure levels are built from |
 | Segment | 30 s of Endless with its own roster and waves |
+| Shelter pool | A violet pool an enraged Gravitas leaves. No pull or push inside, and your ship floats (new in tester-1+1c52828) |
+| Shield strip | The blue top strip of a guardian's health bar. The guardian cracks when it empties (new in tester-1+1c52828) |
 | Super | Homing, Detonate or Turbo. Charged by 60 geoms |
 | Super nova | A gravity well's whirlpool state, with a wider, stronger pull |
 | Telegraph | The 0.6 s flashing outline before an enemy goes live |
 | Threat | How dangerous the arena is right now, 0 to 1. Drives the music |
+| Trough | A valley arena that pulls your ship toward its floor, from level 24 (new in tester-1+1c52828) |
 | Wave clock | The level timer. It stops while you are dead |
 
 ## 20. Changelog
 
 | Version or sha | Date | What changed in the game | What changed in the guide |
 |---|---|---|---|
+| tester-1+1c52828 | 2026-11-12 | Guardian Shield and Health bar; fury for Warden, Spindle, Ember, Mirage and Gravitas and a Broodling frenzy; new guardian hit points; Spindle needles, Ember Leavers, wider Mirage opening with an aimed lane, Gravitas tide and shelter pools; fewer regular enemies in guardian fights by difficulty; bigger guardian arenas from level 10; guardian par per difficulty; hit flash, sparks and tick (old guardian hit sound removed); Pierce 1.5x on guardians and through the Bulwark shield for 2 damage; trough levels from 24 and a Free Play Arena surface row; Endless and Free Play open with Brood then Warden; Free Play Every 2 min guardians; start card mission type and Return to Menu; no clock on destroy and guardian levels; Reset progress clears story and call sign; developer items only in tester sessions; menu footer with version | Updated sections 1, 4 to 8, 10 to 14 and 16 to 19; HUD diagrams drop the level code; new trough, fury, health bar and hit feedback entries |
 | tester-1+96dcc2a | 2026-11-10 | The game is Shape Legend. Story scenes and call sign; guardian order Brood then Warden; difficulty and the fourth star; shorter levels with minute beats, a final rush and a clock with warnings; par rewards; Free Play; Leaver; arriving wells, super nova, nova snakes and pond ripples; membranes; drum maps and drift; menu, boss and Turbo music; How to; play.shapelegend.com | Full rewrite of every section against the code; new sections for the legend, guardians, difficulty, levels and missions, surfaces and Free Play; all four diagrams redrawn |
 | tester-1 (d9bfb54) | 2026-11-05 | Tester release 1 (then named Shape of War) | No guide change |
 | v3 (91c49c8) | 2026-11-02 | Ten bosses every 5th level; weapon combos; drone pickups; chainsaw; wells arriving in play; nova snakes; 3D tilt setting; more music and menu themes; cylinder levels | Changed in this version rewritten; header updated |
