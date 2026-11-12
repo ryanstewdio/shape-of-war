@@ -561,7 +561,7 @@ import {
   turboRate,
   turboWidth,
 } from './turboFx';
-import { createSpriteBuf, fxHalo, pushArc, pushLine, resetSpriteBuf, type FxHalo } from './fxSprites';
+import { createSpriteBuf, F_GLOW, fxHalo, pushArc, pushLine, pushSprite, resetSpriteBuf, type FxHalo } from './fxSprites';
 import { createFxSpriteLayer, makeBossFxAtlas } from './fxSpriteLayer';
 // G3C boss identity (run 0288): Prism window from 'sim:bossWindow', per boss hit flash, cracks from
 // 'sim:bossCrack', owner hue attacks, the tier 3 halo and the Twins enrage flare (bossIdentity.ts).
@@ -621,6 +621,8 @@ import {
   pincerStreakDir,
   pincerStreakOn,
 } from './furyFixes';
+// Fury tune (glow-fury-tune): straight shots tinted violet white, the ship's pool halo (the aimed lane is hazardFx.ts).
+import { bulletStraight, bulletTint, poolHaloAlpha, poolHaloRing, POOL_HALO_RING, POOL_HALO_RING_W, poolHaloRingAlpha, POOL_HALO_SCALE, shipPoolHaloOn, stepPoolHalo } from './furyTune';
 // Fury three (glow-fury-three): Brood's Broodlings, Mirage's shatter and double image, Gravitas's tide.
 import {
   broodSplitFlash,
@@ -826,7 +828,7 @@ import {
 import type { ShapePrim } from './shapeSpecs';
 import { createEnemyBulletLayer } from './enemyBullets';
 import type { EnemyBulletFrame, EnemyBulletsLike } from './enemyBulletFx';
-import { HAZARD_LANE, HAZARD_POOL, HAZARD_PULL, HAZARD_SPRITE_CAP, HAZARD_SWEEP, planEntranceRing, planHazard, type HazardInput } from './hazardFx';
+import { HAZARD_LANE, HAZARD_POOL, HAZARD_PULL, HAZARD_SPRITE_CAP, HAZARD_SWEEP, planEntranceRing, planHazard, ringSegments, type HazardInput } from './hazardFx';
 import { BOSS_PULL_ACCEL, KICK_BOSS_DOWN, KICK_BOSS_PHASE } from './lattice/kicks';
 import { HEAT_BOSS } from './lattice/heat';
 import { RIPPLE_BOSS } from './fx';
@@ -850,6 +852,8 @@ export interface BulletPoolLike {
   readonly spikeLen?: Float32Array;
   /** GW3: orbit spike phase (rad round the ship), for the chain order (BulletPool.phase). */
   readonly phase?: Float32Array;
+  /** glow-fury-tune: 1 for a shot fired from inside a Gravitas pool (BulletPool.straight); absent is off. */
+  readonly straight?: Uint8Array;
 }
 
 /** Structural view of one circle from Thumbs' stickVisuals output, in CSS px. */
@@ -1728,6 +1732,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   // glow-fury-fixes: the Brood pincer read once a frame, and where each pincer Broodling drew (slot 0
   // is pincerA, 1 pincerB) with its drawn move this frame (the streak direction).
   let pinAim = false;
+  // glow-fury-tune: the ship's pool halo strength (0 to 1, eased) and the ship radius it scales from.
+  let poolHaloK = 0;
+  let poolHaloR = 12;
   let pinAimLeft = -1;
   let pinDrive = false;
   const pinX = new Float32Array(2);
@@ -1853,6 +1860,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const bulletEmitters: Emitter[] = [];
   /** styleCode shown per bullet slot, -1 unknown, so frame, tint and trail change once. */
   let bulletCodeShown = new Int8Array(0);
+  // glow-fury-tune: 1 where the slot is styled as a straight shot (violet white), 0 otherwise.
+  let bulletStraightShown = new Uint8Array(0);
   /** Scratch for attachedTrailFor (no allocation per restyle). */
   const trailShape: AttachedTrail = { len: 0, thick: 0, taper: false };
 
@@ -1964,7 +1973,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const item = bulletItems[i];
     const tail = trailItems[i];
     if (!item || !tail) return;
-    const tint = palette[v.tint];
+    const tint = bulletTint(palette[v.tint], bulletStraightShown[i] === 1, palette.bossViolet);
     item.texture = atlas.frames[v.frame];
     item.anchorX = v.anchorX;
     item.scaleX = item.scaleY = v.scale;
@@ -2003,6 +2012,11 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       const next = new Int8Array(cap).fill(-1);
       next.set(bulletCodeShown);
       bulletCodeShown = next;
+    }
+    if (bulletStraightShown.length < cap) {
+      const next = new Uint8Array(cap);
+      next.set(bulletStraightShown);
+      bulletStraightShown = next;
     }
   }
 
@@ -3499,6 +3513,21 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
   }
 
+  /**
+   * glow-fury-tune: while the ship floats in a Gravitas shelter pool, a faint violet halo round it (the
+   * drift cue), easing in and out. Low draws the soft glow only; standard and high add a thin ring.
+   */
+  function planShipPoolHalo(timeSec: number): void {
+    const a = poolHaloAlpha(poolHaloK, timeSec);
+    if (!(a > 0) || !shipDrawn) return;
+    const r = poolHaloR * POOL_HALO_SCALE;
+    const violet = palette.bossViolet;
+    pushSprite(hazardBuf, F_GLOW, shipDrawX, shipDrawY, 0, 2 * r, 2 * r, a, violet);
+    if (!poolHaloRing(getEffectsTier())) return;
+    const rr = r * POOL_HALO_RING;
+    pushArc(hazardBuf, shipDrawX, shipDrawY, rr, 0, Math.PI * 2, ringSegments(rr, Math.PI * 2), POOL_HALO_RING_W, poolHaloRingAlpha(a), violet, halo);
+  }
+
   /** Entrance telegraph ring while the boss enters, then sync the hazard layer. */
   function drawHazards(timeSec: number): void {
     if (bossView.active) {
@@ -3508,6 +3537,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
     planFuryThree(timeSec);
     planPincer();
+    planShipPoolHalo(timeSec);
     if (hazardBuf.count > 0 || hazardLayer.shown > 0) hazardLayer.sync(hazardBuf);
     stats.hazardSprites = hazardBuf.count;
   }
@@ -5833,6 +5863,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     penOwner(penBegin(sawPen, sawG, drum), shipX, shipY);
     const spikeLen = pool.spikeLen;
     const spikePh = pool.phase;
+    const straight = pool.straight;
+    const violet = palette.bossViolet;
     chainN[0] = 0;
     chainN[1] = 0;
     for (let i = 0; i < bulletItems.length; i++) {
@@ -5853,8 +5885,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const code = bulletDrawCode(st, h, i < spikeMask.length ? (spikeMask[i] ?? 0) : 0);
         const spike = code === SPIKE_CODE;
         const vis = visualForCode(code);
-        if (bulletCodeShown[i] !== code) {
+        // glow-fury-tune: a shot fired from a pool flies true and is tinted violet white (shots only;
+        // orbit blades and teeth keep their look).
+        const sv = vis.orient === 'velocity' && !spike && bulletStraight(straight, i) ? 1 : 0;
+        if (bulletCodeShown[i] !== code || bulletStraightShown[i] !== sv) {
           bulletCodeShown[i] = code;
+          bulletStraightShown[i] = sv;
           styleSlot(i, vis);
           restyled = true;
         }
@@ -5907,13 +5943,13 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
           tail.x = PARK;
           tail.y = PARK;
         }
-        if (vis.emitsTrail) emitBulletTrail(em, bulletTrailRate(st), x, y, vx, vy, st, palette[vis.tint], dt);
+        if (vis.emitsTrail) emitBulletTrail(em, bulletTrailRate(st), x, y, vx, vy, st, bulletTint(palette[vis.tint], sv === 1, violet), dt);
         else em.acc = 0;
       } else if (item.x !== PARK) {
         // Just died: a bullet that ended at a wall lights it there (orbit blades never do).
         if (wallGlowOn) {
           const vis = visualForCode(bulletCodeShown[i] ?? -1);
-          if (vis.orient === 'velocity') bulletWallGlow(item.x, item.y, palette[vis.tint]);
+          if (vis.orient === 'velocity') bulletWallGlow(item.x, item.y, bulletTint(palette[vis.tint], bulletStraightShown[i] === 1, palette.bossViolet));
         }
         item.x = PARK;
         item.y = PARK;
@@ -5960,6 +5996,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
     stepPond(w.time);
     drawEntities(w, a, nowSec, fxDt);
+    poolHaloK = stepPoolHalo(poolHaloK, shipPoolHaloOn(bossView.active ? bossView.shipInPool : false, w.alive[0] === 1 && shipActive(w)), fxDt);
+    poolHaloR = w.radius[0] ?? poolHaloR;
     drawHazards(nowSec);
     drawGhost();
     drawDashGhosts();
@@ -6158,6 +6196,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       if (g.view) g.view.visible = false;
     }
     turboK = 0;
+    poolHaloK = 0;
     turboPrevActive = null;
     turboPrevTimer = 0;
     resetShellState(shell);

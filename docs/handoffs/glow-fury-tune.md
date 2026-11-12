@@ -1,0 +1,6 @@
+HAND-OFF glow: fury-tune  Branch: feat/glow-fury-tune  Head: see git log (code and hand-off in one commit)
+Files: src/render/furyTune.ts (new, pure), hazardFx.ts (laneTelegraphSec, hazardForm teleSec, aimed lane look), renderer.ts (straight shot tint, ship pool halo); tests/render/furyTune.test.ts (new, 15)
+Mirage: a Lane with w.vy above 0 telegraphs for w.vy s (thin form, ramp, lethal flash), a touch brighter and whiter while it warns; w.vy 0 lanes unchanged. Straight shots (BulletPool.straight 1) draw violet white, head, trail and wall glow; orbit blades and teeth unchanged. Ship in pool: faint breathing violet halo easing in and out over 0.2 s; Low draws the soft glow only, no edge ring.
+npm test: 5476 pass, 1 fail (accepted generator perf timing)  npm run build: pass  v7 grep: clean
+Verify on device: 1. Mirage (after Swarm): the aimed lane warns about twice as long as the others and reads brighter. 2. Gravitas enraged: stand in a pool, fire; the shots are violet white and fly true, shots outside look as before. 3. In a pool the ship has a faint violet halo that fades on leaving. 4. Repeat on Low.
+Dependencies: none. Requests: none. Gaps: needs Swarm's w.vy, straight and shipInPool to show; halo is drawn flat (not through the drum pen); untested on device.
