@@ -7,6 +7,7 @@ import { barHpOf, barMaxOf } from './core';
 import { bossOf } from './state';
 import { dashAimOf, dashHeadingOf } from './warden';
 import { tideFlipInOf, tideOf } from './gravitas';
+import { pincerView } from './brood';
 
 /** One boss as render and HUD see it. No allocation: callers pass one reused object as out. */
 export interface BossView {
@@ -112,15 +113,19 @@ export function readBoss(w: World, out: BossView): BossView {
   out.frenzy = live && bs !== null && bs.spec.id === 'brood' && bs.fury === 2;
   out.tide = live && bs !== null ? tideOf(bs) : 0;
   out.tideFlipIn = live && bs !== null ? tideFlipInOf(bs) : -1;
-  // Fury fixes stub: the Brood pincer reads as none until Swarm writes it.
-  out.pincerAim = -1;
-  out.pincerDrive = false;
-  out.pincerA = -1;
-  out.pincerAx = 0;
-  out.pincerAy = 0;
-  out.pincerB = -1;
-  out.pincerBx = 0;
-  out.pincerBy = 0;
+  // Fury fixes: the Brood pincer (none for any other guardian or no boss).
+  if (live && bs !== null && bs.spec.id === 'brood') {
+    pincerView(w, bs, out);
+  } else {
+    out.pincerAim = -1;
+    out.pincerDrive = false;
+    out.pincerA = -1;
+    out.pincerAx = 0;
+    out.pincerAy = 0;
+    out.pincerB = -1;
+    out.pincerBx = 0;
+    out.pincerBy = 0;
+  }
   if (bs === null || bs.status !== 'alive' || id <= 0 || w.alive[id] !== 1 || w.kind[id] !== Kind.Boss) {
     out.active = false;
     return out;

@@ -1,12 +1,13 @@
 // Mirage (tier 2, magenta, level 25; docs/12 roster row 5). Every 3.0 s (2.5 s in phase 2, 2.0 s
 // in phase 3) it warps to a point 200 to 300 u from its target. A ring marks the landing point
 // 0.5 s early (a marker: telegraph only, never lethal). On landing eight lanes radiate from it,
-// set 22.5 deg off the ship's bearing so the ship starts midway between two (0.8 s telegraph, then
-// 0.3 s lethal). A landing waits 0.3 s and picks again while the ship is on the spot. Its shield
-// ring blocks every shot except through a 70 deg open arc centred on w.rot, turning at 1.5 rad/s
-// (the gate below). Scratch: t0 warp clock, t1 and t2 landing point, t3 marker countdown, n0
-// marker id, n1 warp counter (hash index), n2 0 idle, 1 marked, 2 lanes waiting, angle arc centre,
-// retry the lane recheck.
+// one aimed through the ship's position (fury fixes, Ryan 2026-11-12: laneOffsetDeg 0), each with
+// the full tier telegraph (0.8 s at Normal) before 0.3 s lethal, so the ship steps out of the aimed
+// lane inside the telegraph; the burst never waits on the ship. A landing waits 0.3 s and picks
+// again while the ship is on the spot. Its shield ring blocks every shot except through a 180 deg
+// open arc centred on w.rot, turning at 0.8 rad/s (the gate below). Scratch: t0 warp clock, t1 and
+// t2 landing point, t3 marker countdown, n0 marker id, n1 warp counter (hash index), n2 0 idle,
+// 1 marked (2 lanes waiting is no longer entered), angle arc centre, retry the old lane recheck.
 //
 // Mirrors (boss abilities wave): at the stage 2 crack Mirage leaves two mirror images (Kind.BossPart,
 // PartType.Mirror, 1 HP, body radius, slots 0 and 1, no contact kill) while the real body keeps
@@ -31,12 +32,12 @@ import { removeEntity } from '../remove';
 import { SHIP_RADIUS } from '../ship';
 import { angleBetween, entityHash, inFrontArc, moveTo, targetOf } from '../steer';
 import { Kind, type World } from '../world';
-import { crackBody, livePart, spawnLane, spawnPart, spawnRingMarker } from './core';
+import { crackBody, HAZARD_OVERLAP, livePart, spawnLane, spawnPart, spawnRingMarker } from './core';
 import { furyClampDamage, furyDue, furyOnPhase, furyPhaseOf, startFuryBreak, stepFury } from './fury';
-import { hazardHitsOn, pointDistOn, wrapPi } from './kit';
+import { pointDistOn, wrapPi } from './kit';
 import type { BossState } from './state';
 import { HAZARD_RECHECK_SEC, MIRAGE, MIRAGE_FURY, MIRROR } from './table';
-import { BossMode, HazardType, PartType, type BossDef } from './types';
+import { BossMode, PartType, type BossDef } from './types';
 
 const H0X = 0;
 const H0Y = 1;
@@ -229,23 +230,29 @@ function spotClear(w: World, bs: BossState, r: number): boolean {
   return pointDistOn(w.surface, w.x[0] ?? 0, w.y[0] ?? 0, bs.t1, bs.t2) > r + SHIP_RADIUS + MIRAGE.landPad;
 }
 
-/** Fire the eight lane burst, or wait 0.3 s when any lane would cover the ship now. */
+/**
+ * One lane of a burst along a. A lane that covers the ship now (the aimed one) is born along the
+ * opposite bearing and turned onto a at once: the core refuses a hazard born on the ship, but this
+ * lane is meant to cross it, and its full telegraph still runs from its birth before it is lethal.
+ * Skipped only when both bearings cover the ship (it is inside the body). Returns the id or -1.
+ */
+function aimedLane(w: World, bs: BossState, x: number, y: number, a: number): number {
+  const h = spawnLane(w, bs, x, y, a, MIRAGE.laneLength, MIRAGE.laneHalfWidth);
+  if (h !== HAZARD_OVERLAP) return h;
+  const back = spawnLane(w, bs, x, y, wrapPi(a + Math.PI), MIRAGE.laneLength, MIRAGE.laneHalfWidth);
+  if (back < 0) return -1;
+  w.rot[back] = a;
+  return back;
+}
+
+/** Fire the eight lane burst, one lane through the ship's position. It never waits on the ship. */
 function burst(w: World, id: number, bs: BossState): void {
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
   const a0 = laneStart(angleBetween(w, id, 0)); // lanes are aimed by the ship, never the decoy
   const n = MIRAGE.lanes;
-  if (w.ship.active) {
-    for (let k = 0; k < n; k++) {
-      const a = a0 + (k * TAU) / n;
-      if (hazardHitsOn(w.surface, HazardType.Lane, w.x[0] ?? 0, w.y[0] ?? 0, SHIP_RADIUS, x, y, a, MIRAGE.laneHalfWidth, MIRAGE.laneLength, 0)) {
-        bs.retry = HAZARD_RECHECK_SEC;
-        bs.n2 = MirageWarp.Lanes;
-        return;
-      }
-    }
-  }
-  for (let k = 0; k < n; k++) spawnLane(w, bs, x, y, wrapPi(a0 + (k * TAU) / n), MIRAGE.laneLength, MIRAGE.laneHalfWidth);
+  for (let k = 0; k < n; k++) aimedLane(w, bs, x, y, wrapPi(a0 + (k * TAU) / n));
+  bs.retry = 0;
   bs.n2 = MirageWarp.Idle;
 }
 

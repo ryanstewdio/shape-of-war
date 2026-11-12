@@ -1,6 +1,6 @@
 // Fairness rules 5 and 6 for the tier 2 bosses (docs/13 boss rules 5 and 6): every lethal hazard
 // shows the 0.8 s tier 2 telegraph, rings keep a gap of at least 60 deg, lanes are at most 60 u
-// wide, no lethal hazard is born on the ship, the live caps hold, respawn invulnerability is
+// wide, no lethal hazard is born on the ship (Mirage's aimed lane may, if the ship can leave it in time), the live caps hold, respawn invulnerability is
 // honoured, and a ship death clears hazards, keeps the boss's hit points and pauses its attacks.
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
@@ -9,7 +9,7 @@ import { hazardHits, hazardTelegraph, ringGapMin } from '../../src/game/bosses/k
 import { MAX_HAZARDS, MAX_PARTS } from '../../src/game/bosses/table';
 import { HazardType } from '../../src/game/bosses/types';
 import { stepGame } from '../../src/game/game';
-import { SHIP_RADIUS } from '../../src/game/ship';
+import { SHIP_RADIUS, SHIP_SPEED } from '../../src/game/ship';
 import { gs } from '../../src/game/state';
 import { Kind } from '../../src/game/world';
 import type { InputState } from '../../src/input/types';
@@ -59,6 +59,13 @@ describe('tier 2 fairness', () => {
           if (type === HazardType.Ring) expect((w.vx[h] ?? 0) * 2).toBeGreaterThanOrEqual(ringGapMin(2) - 1e-6);
           if (type === HazardType.Lane) expect((w.radius[h] ?? 0) * 2).toBeLessThanOrEqual(60);
           const hit = hazardHits(type, w.x[0] ?? 0, w.y[0] ?? 0, SHIP_RADIUS, w.x[h] ?? 0, w.y[h] ?? 0, w.rot[h] ?? 0, w.radius[h] ?? 0, w.vx[h] ?? 0, w.vy[h] ?? 0);
+          if (hit && id === 'mirage' && type === HazardType.Lane) {
+            // Fury fixes: Mirage's aimed lane crosses the ship; the ship leaves it sideways inside the telegraph.
+            const rot = w.rot[h] ?? 0;
+            const perp = Math.abs(-((w.x[0] ?? 0) - (w.x[h] ?? 0)) * Math.sin(rot) + ((w.y[0] ?? 0) - (w.y[h] ?? 0)) * Math.cos(rot));
+            expect(((w.radius[h] ?? 0) + SHIP_RADIUS - perp) / SHIP_SPEED).toBeLessThan(s.hzTele[h] ?? 0);
+            continue;
+          }
           expect(hit).toBe(false);
         }
       }

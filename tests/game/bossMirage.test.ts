@@ -1,6 +1,6 @@
 // Mirage (docs/12 roster row 5): warps to a point 200 to 300 u from the ship, a ring marks the
-// spot 0.5 s early, eight lanes radiate on landing with the ship midway between two of them, and
-// its shield counts shots only through a 70 deg open arc turning at 1.5 rad/s. Three phases.
+// spot 0.5 s early, eight lanes radiate on landing with one aimed through the ship (fury fixes), and
+// its shield counts shots only through a 180 deg open arc turning at 0.8 rad/s. Three phases.
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
 import { damageBoss } from '../../src/game/bosses/core';
@@ -54,11 +54,12 @@ describe('mirage: pure helpers', () => {
     expect(warpEveryFor(3)).toBe(2.0);
   });
 
-  it('the open arc is 70 deg wide', () => {
-    expect(arcHalf() * 2).toBeCloseTo(70 * DEG);
+  it('the open arc is 180 deg wide (fury fixes, 70 before)', () => {
+    expect(MIRAGE.arcDeg).toBe(180);
+    expect(arcHalf() * 2).toBeCloseTo(180 * DEG);
     expect(throughArc(0, 0, 0, 50, 0)).toBe(true);
-    expect(throughArc(0, 0, 0, 50 * Math.cos(34 * DEG), 50 * Math.sin(34 * DEG))).toBe(true);
-    expect(throughArc(0, 0, 0, 50 * Math.cos(36 * DEG), 50 * Math.sin(36 * DEG))).toBe(false);
+    expect(throughArc(0, 0, 0, 50 * Math.cos(89 * DEG), 50 * Math.sin(89 * DEG))).toBe(true);
+    expect(throughArc(0, 0, 0, 50 * Math.cos(91 * DEG), 50 * Math.sin(91 * DEG))).toBe(false);
     expect(throughArc(0, 0, 0, -50, 0)).toBe(false);
   });
 
@@ -72,8 +73,10 @@ describe('mirage: pure helpers', () => {
     }
   });
 
-  it('lanes start 22.5 deg off the bearing to the ship', () => {
-    expect(laneStart(0)).toBeCloseTo(22.5 * DEG);
+  it('the first lane runs along the bearing to the ship (fury fixes, 22.5 deg off before)', () => {
+    expect(MIRAGE.laneOffsetDeg).toBe(0);
+    expect(laneStart(0)).toBeCloseTo(0);
+    expect(laneStart(1.2)).toBeCloseTo(1.2);
   });
 });
 
@@ -91,12 +94,12 @@ describe('mirage', () => {
       const rot = w.rot[id] ?? 0;
       const x = w.x[id] ?? 0;
       const y = w.y[id] ?? 0;
-      // Inside the arc (10 deg off its centre) and outside it (60 and 180 deg off).
+      // Inside the arc (10 deg off its centre) and outside it (120 and 180 deg off).
       const hp0 = w.hp[id] ?? 0;
       damageBoss(w, 1, x + Math.cos(rot + 10 * DEG) * r, y + Math.sin(rot + 10 * DEG) * r);
       expect(w.hp[id]).toBe(hp0 - 1);
       inHits++;
-      damageBoss(w, 1, x + Math.cos(rot + 60 * DEG) * r, y + Math.sin(rot + 60 * DEG) * r);
+      damageBoss(w, 1, x + Math.cos(rot + 120 * DEG) * r, y + Math.sin(rot + 120 * DEG) * r);
       damageBoss(w, 1, x + Math.cos(rot + Math.PI) * r, y + Math.sin(rot + Math.PI) * r);
       expect(w.hp[id]).toBe(hp0 - 1);
       outHits += 2;
@@ -133,7 +136,8 @@ describe('mirage', () => {
     expect(blocked).toBeGreaterThan(0);
   });
 
-  it('the shield arc turns at 1.5 rad/s', () => {
+  it('the shield arc turns at 0.8 rad/s (fury fixes, 1.5 before)', () => {
+    expect(MIRAGE.arcRate).toBe(0.8);
     const w = bossGame('mirage');
     park(w, 500, 300);
     const id = enter(w);
@@ -200,27 +204,66 @@ describe('mirage', () => {
     expect(s.hzLife[m] ?? 0).toBeLessThan(hazardTelegraph(2));
   });
 
-  it('eight lanes radiate on landing, and none covers a ship that stays put', () => {
+  it('eight lanes radiate on landing, exactly one aimed through the ship, with the full telegraph', () => {
     const w = bossGame('mirage', { lives: 3 }, {}, false);
     park(w, 100, 50);
     w.ship.invuln = 0;
     enter(w);
+    const s = bs(w);
     for (let k = 0; k < 3; k++) {
-      untilLanding(w);
+      const landing = untilLanding(w);
       const ls = lanes(w);
       expect(ls.length).toBe(MIRAGE.lanes);
+      let covering = 0;
       for (const h of ls) {
         expect(w.radius[h]).toBeLessThanOrEqual(30);
         expect(w.vx[h]).toBe(MIRAGE.laneLength);
-        expect(hazardHits(HazardType.Lane, w.x[0] ?? 0, w.y[0] ?? 0, SHIP_RADIUS, w.x[h] ?? 0, w.y[h] ?? 0, w.rot[h] ?? 0, w.radius[h] ?? 0, w.vx[h] ?? 0, 0)).toBe(false);
+        expect(s.hzTele[h]).toBeCloseTo(hazardTelegraph(2), 5); // 0.8 s at Normal
+        expect(w.t[h] ?? 0).toBeLessThanOrEqual(DT * 1.5);
+        if (hazardHits(HazardType.Lane, w.x[0] ?? 0, w.y[0] ?? 0, SHIP_RADIUS, w.x[h] ?? 0, w.y[h] ?? 0, w.rot[h] ?? 0, w.radius[h] ?? 0, w.vx[h] ?? 0, 0)) {
+          covering++;
+          // It runs through the ship's position.
+          expect(Math.abs(wrapPi((w.rot[h] ?? 0) - Math.atan2(50 - landing.y, 100 - landing.x)))).toBeLessThan(1e-6);
+        }
       }
+      expect(covering).toBe(1);
       // Neighbours are 45 deg apart.
       const rots = ls.map((h) => w.rot[h] ?? 0).sort((a, b) => a - b);
       for (let i = 1; i < rots.length; i++) expect((rots[i] ?? 0) - (rots[i - 1] ?? 0)).toBeCloseTo(Math.PI / 4, 3);
+      // The ship steps sideways out of the aimed lane inside the telegraph (one sidestep of 60 u).
+      const a = Math.atan2(50 - landing.y, 100 - landing.x) + Math.PI / 2;
+      park(w, 100 + Math.cos(a) * 60, 50 + Math.sin(a) * 60);
+      run(w, 1.2); // past the telegraph and the lethal 0.3 s
+      expect(w.ship.active).toBe(true);
       park(w, 100, 50);
     }
-    run(w, 2);
-    expect(w.ship.active).toBe(true);
+  });
+
+  it('the burst never waits on the ship: the lanes come on the landing step', () => {
+    const w = bossGame('mirage', { lives: 99 });
+    park(w, 0, 0);
+    enter(w);
+    for (let k = 0; k < 4; k++) {
+      untilLanding(w);
+      expect(lanes(w).length).toBe(MIRAGE.lanes);
+      expect(bs(w).n2).toBe(MirageWarp.Idle);
+      park(w, 0, 0);
+    }
+  });
+
+  it('a ship that stays in the aimed lane dies only after the full telegraph', () => {
+    const w = bossGame('mirage', { lives: 3 }, {}, false);
+    park(w, 100, 50);
+    w.ship.invuln = 0;
+    enter(w);
+    untilLanding(w);
+    const born = w.time;
+    for (let i = 0; i < 120 * 2 && w.ship.active; i++) {
+      park(w, 100, 50);
+      stepGame(w, DT, idle());
+    }
+    expect(w.ship.active).toBe(false);
+    expect(w.time - born).toBeGreaterThanOrEqual(hazardTelegraph(2) - 1e-6);
   });
 
   it('a landing waits while the ship stands on the marked spot', () => {
