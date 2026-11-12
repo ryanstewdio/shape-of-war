@@ -28,6 +28,7 @@ import {
   clampRingGapHalf,
   clampSweepArms,
   hazardHitsOn,
+  pointDistOn,
   pullSpeed,
   wrapPi,
 } from './kit';
@@ -48,6 +49,7 @@ import {
   ENRAGE_AFTER_SEC,
   ENRAGE_RATE,
   ENTRANCE_SEC,
+  GRAVITAS_POOL,
   HAZARD,
   HORNET,
   levelAttackScale,
@@ -394,6 +396,8 @@ export function stepHazard(w: World, id: number, dt: number): void {
   }
   const t = (w.t[id] ?? 0) + dt;
   w.t[id] = t;
+  // A shelter pool (Gravitas) shrinks to 0 over its last fadeSec; w.vx holds its full life.
+  if (w.a[id] === HazardType.Pool) w.radius[id] = poolRadiusAt(t, w.vx[id] ?? 0);
   const boss = bs.id;
   if (bs.hzFollow[id] === 1 && boss > 0 && w.alive[boss] === 1) {
     w.x[id] = w.x[boss] ?? 0;
@@ -444,7 +448,10 @@ export function bossContacts(w: World, dt: number): boolean {
   const sx = w.x[0] ?? 0;
   const sy = w.y[0] ?? 0;
   const blend = 1 - pullRetain(dt);
-  for (let h = 1; h < w.cap; h++) {
+  // Gravitas shelter: a ship inside a live pool gets no pull this step and floats on the next.
+  const shelter = bs.spec.id === 'gravitas' && shipSheltered(w);
+  if (shelter) w.ship.float = true;
+  for (let h = 1; h < w.cap && !shelter; h++) {
     if (w.alive[h] !== 1 || w.kind[h] !== Kind.BossHazard || w.a[h] !== HazardType.Pull) continue;
     // A pull stores its strength (u/s at the centre) in hzRate (Gravitas weakens it per anchor).
     const v = pullSpeed(distBetween(w, h, 0), w.radius[h] ?? 0, bs.hzRate[h] ?? HAZARD.pullMax);
@@ -857,6 +864,27 @@ function defeatBoss(w: World, bs: BossState, id: number, px = 0, py = 0): void {
 
 // ---------------------------------------------------------------------------------------------
 // Hazards
+
+/** Pure: the live radius of a shelter pool age seconds into a life of life seconds (GRAVITAS_POOL). */
+export function poolRadiusAt(age: number, life: number): number {
+  const left = life - age;
+  if (!(left > 0)) return 0;
+  const fade = GRAVITAS_POOL.fadeSec;
+  return left >= fade ? GRAVITAS_POOL.radius : (GRAVITAS_POOL.radius * left) / fade;
+}
+
+/** True when the ship's centre is inside a live shelter pool (HazardType.Pool of radius above 0). */
+export function shipSheltered(w: World): boolean {
+  if (!w.ship.active) return false;
+  const sx = w.x[0] ?? 0;
+  const sy = w.y[0] ?? 0;
+  for (let h = 1; h < w.cap; h++) {
+    if (w.alive[h] !== 1 || w.kind[h] !== Kind.BossHazard || w.a[h] !== HazardType.Pool) continue;
+    const r = w.radius[h] ?? 0;
+    if (r > 0 && pointDistOn(w.surface, sx, sy, w.x[h] ?? 0, w.y[h] ?? 0) < r) return true;
+  }
+  return false;
+}
 
 /** Live boss hazards. */
 export function countHazards(w: World): number {

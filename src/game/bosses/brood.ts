@@ -25,7 +25,9 @@
 // past the ship on the far side from the other for aimSec, then drives through it at driveSpeed (at
 // most driveSec). A lone survivor keeps the speed and hunts the ship. Frenzy scratch (bs.abl): 0 the
 // pincer clock, 1 the pincer stage (0 none, 1 aim, 2 drive), 2 stage seconds left, 3 to 8 each
-// slot's drive point (x, y), 9 to 11 1 while that slot still drives.
+// slot's drive point (x, y), 9 to 11 1 while that slot still drives, 12 and 13 the entity ids of the
+// two pincer Broodlings (A and B, -1 when none). Fury fixes (Ryan 2026-11-12): aim 0.8 s, drive
+// 320 u/s for 1.2 s; readBoss reads the pincer through pincerView for Glow's telegraph.
 import { bus } from '../../core/events';
 import * as dart from '../enemies/dart';
 import { dropSlime } from '../enemies/slime';
@@ -37,6 +39,7 @@ import { bossTele, minionCount } from './scale';
 import { bossOf, type BossState } from './state';
 import { BROOD, BROOD_FRENZY, BROODLING, MAX_ADDS, MAX_PARTS } from './table';
 import { BossMode, PartType, type BossDef } from './types';
+import type { BossView } from './view';
 import { removeEntity } from '../remove';
 import { difficultyOf } from '../difficulty';
 
@@ -435,6 +438,8 @@ const P_STAGE = 1;
 const P_LEFT = 2;
 const P_PT = 3;
 const P_DRIVE = 9;
+const P_A = 12;
+const P_B = 13;
 
 /** Pincer stages (bs.abl[P_STAGE]). */
 export const enum Pincer {
@@ -509,8 +514,39 @@ function startPincer(w: World, bs: BossState, a: number, b: number): void {
     bs.abl[P_PT + 2 * k + 1] = pt.y;
     bs.abl[P_DRIVE + k] = 1;
   }
+  bs.abl[P_A] = a;
+  bs.abl[P_B] = b;
   bs.abl[P_STAGE] = Pincer.Aim;
   bs.abl[P_LEFT] = BROOD_FRENZY.aimSec;
+}
+
+/** A pincer Broodling id kept in scratch while it lives, else -1. */
+function pincerPart(w: World, bs: BossState, slot: number): number {
+  const p = bs.abl[slot] ?? -1;
+  if (!(p > 0)) return -1;
+  for (let k = 0; k < BROODLING.count; k++) if (livePart(w, bs, k) === p) return p;
+  return -1;
+}
+
+/**
+ * readBoss: the pincer of a live split Brood into out. pincerAim the seconds of aim left (-1 when not
+ * aiming), pincerDrive true while it drives, pincerA and pincerB the two Broodlings (-1 when none or
+ * dead) and the point each drives through. Every field reads as none outside a pincer.
+ */
+export function pincerView(w: World, bs: BossState, out: BossView): void {
+  const stage = bs.status === 'alive' && bs.split && bs.fury === 2 ? (bs.abl[P_STAGE] ?? 0) : Pincer.None;
+  out.pincerAim = stage === Pincer.Aim ? (bs.abl[P_LEFT] ?? 0) : -1;
+  out.pincerDrive = stage === Pincer.Drive;
+  const a = stage === Pincer.None ? -1 : pincerPart(w, bs, P_A);
+  const b = stage === Pincer.None ? -1 : pincerPart(w, bs, P_B);
+  const ka = a > 0 ? slotOf(bs, a) : -1;
+  const kb = b > 0 ? slotOf(bs, b) : -1;
+  out.pincerA = ka >= 0 ? a : -1;
+  out.pincerAx = ka >= 0 ? (bs.abl[P_PT + 2 * ka] ?? 0) : 0;
+  out.pincerAy = ka >= 0 ? (bs.abl[P_PT + 2 * ka + 1] ?? 0) : 0;
+  out.pincerB = kb >= 0 ? b : -1;
+  out.pincerBx = kb >= 0 ? (bs.abl[P_PT + 2 * kb] ?? 0) : 0;
+  out.pincerBy = kb >= 0 ? (bs.abl[P_PT + 2 * kb + 1] ?? 0) : 0;
 }
 
 /** The pincer clock, run once per step by the first live Broodling. */

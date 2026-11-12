@@ -44,7 +44,7 @@ export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
   brood: { tier: 1, hp: 340, phases: 2, radius: 52, colour: 'bossGreen' },
   spindle: { tier: 1, hp: 1350, phases: 2, radius: 48, colour: 'bossYellow' },
   ember: { tier: 2, hp: 822, phases: 3, radius: 44, colour: 'bossOrange' },
-  mirage: { tier: 2, hp: 1620, phases: 3, radius: 50, colour: 'bossMagenta' },
+  mirage: { tier: 2, hp: 1150, phases: 3, radius: 50, colour: 'bossMagenta' },
   gravitas: { tier: 2, hp: 1704, phases: 3, radius: 60, colour: 'bossViolet' },
   bastion: { tier: 3, hp: 1833, phases: 3, radius: 70, colour: 'bossRed' },
   tempest: { tier: 3, hp: 1832, phases: 3, radius: 46, colour: 'bossRed' },
@@ -366,10 +366,12 @@ export const BROODLING = {
 export const BROOD_FRENZY = {
   speedMul: 1.25,
   everySec: 4,
-  aimSec: 0.4,
+  /** Fury fixes (Ryan 2026-11-12): 0.8 s of aim (0.4 before) so the telegraph reads. */
+  aimSec: 0.8,
   reach: 140,
-  driveSpeed: 200,
-  driveSec: 1.6,
+  /** Fury fixes: a faster drive (200 u/s for 1.6 s before). */
+  driveSpeed: 320,
+  driveSec: 1.2,
 } as const;
 
 /** Spindle (tier 1, level 15). */
@@ -477,12 +479,17 @@ export const MIRAGE = {
   /** A landing waits while the ship is within the body radius plus this pad of the spot. */
   landPad: 40,
   lanes: 8,
-  /** Lanes sit this far off the ship's bearing, so the ship starts midway between two of them. */
-  laneOffsetDeg: 22.5,
+  /**
+   * Lanes sit this far off the ship's bearing. Fury fixes (Ryan 2026-11-12): 0, so one lane runs
+   * through the ship's position at the burst (22.5 before: the ship midway between two). The aimed
+   * lane keeps the full tier telegraph; the ship steps out of it inside that time.
+   */
+  laneOffsetDeg: 0,
   laneLength: 600,
   laneHalfWidth: 22,
-  arcDeg: 70,
-  arcRate: 1.5,
+  /** Fury fixes (Ryan 2026-11-12): 180 deg turning at 0.8 rad/s (70 deg at 1.5 rad/s before). */
+  arcDeg: 180,
+  arcRate: 0.8,
   /** First warp marker this long after the entrance ends. */
   firstWarp: 1.5,
   entryHome: 0.5,
@@ -551,6 +558,11 @@ export const GRAVITAS_POOL = {
   lifeSec: 8,
   fadeSec: 2,
   max: 4,
+  /**
+   * Hazard slots a pool always leaves free for the rings (at most two live at once): a pool spawns
+   * only while the live hazards plus this many stay inside MAX_HAZARDS. The pulls spawn first.
+   */
+  reserve: 2,
 } as const;
 
 /**
