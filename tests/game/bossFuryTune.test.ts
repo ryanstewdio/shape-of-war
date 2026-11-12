@@ -5,8 +5,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
 import { createThrustOut, SPACE_TABLE, stepThrust, stepThrustRow, type ThrustLevel } from '../../src/core/physics';
-import { bossBodyContact, damageBoss, hazardLethalAt, livePart } from '../../src/game/bosses/core';
-import { bendFalloff, bendShots, bendSide, dropPool, livePull } from '../../src/game/bosses/gravitas';
+import { bossBodyContact, damageBoss, damageBossPart, hazardLethalAt, livePart } from '../../src/game/bosses/core';
+import { bendAt, bendFalloff, bendShots, bendSide, dropPool, livePull } from '../../src/game/bosses/gravitas';
 import { aimedTele } from '../../src/game/bosses/mirage';
 import { INSANE_TELEGRAPH_SCALE } from '../../src/game/bosses/scale';
 import { BOSS_TABLE, CRACK_AT, GRAVITANT, GRAVITAS, GRAVITAS_BEND, GRAVITAS_FURY, GRAVITAS_POOL, HAZARD, MIRAGE } from '../../src/game/bosses/table';
@@ -402,5 +402,37 @@ describe('fury tune: the float row', () => {
     // Released: little drag, it coasts (high would bleed 1.2/s).
     stepGame(w, DT, idle());
     expect(w.vy[0] ?? 0).toBeGreaterThan(v * Math.exp(-GRAVITAS_POOL.float.drag * DT) - 1e-3);
+  });
+});
+
+describe('fury tune: the enraged body keeps a bend field with no anchors (Ryan 2026-11-12)', () => {
+  it('bendAt at full strength turns a shot near the enraged body; not before the fury', () => {
+    const on = gravitas(0.5);
+    const off = gravitas(null);
+    for (const g of [on, off]) {
+      spawnBullet(g.w.bullets, -150, 30, 1400, 0, 1);
+      bendAt(g.w, bs(g.w), g.id, 1, DT);
+    }
+    const f = bendFalloff(Math.hypot(150, 30), on.w.radius[on.id] ?? 0);
+    expect(Math.atan2(on.w.bullets.vy[0] ?? 0, on.w.bullets.vx[0] ?? 0)).toBeCloseTo(GRAVITAS_BEND.rate * f * DT, 4);
+    expect(off.w.bullets.vy[0]).toBe(0);
+  });
+
+  it('in play with every anchor gone and no pull, an enraged step still bends a shot near the body', () => {
+    const { w } = gravitas(0.5);
+    const s = bs(w);
+    for (let k = 0; k < GRAVITAS.anchors; k++) {
+      const p = livePart(w, s, k);
+      if (p > 0) damageBossPart(w, p, 9999, w.x[p] ?? 0, w.y[p] ?? 0);
+    }
+    run(w, 0.2);
+    s.fury = 2;
+    s.furyT = 0.5;
+    placeBoss(w, 0, 0);
+    expect(livePull(w, s)).toBeLessThan(0);
+    clearBullets(w);
+    spawnBullet(w.bullets, -150, 30, 1400, 0, 1);
+    stepGame(w, DT, idle());
+    expect(w.bullets.vy[0] ?? 0).toBeGreaterThan(1);
   });
 });
