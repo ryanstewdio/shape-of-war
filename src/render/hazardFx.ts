@@ -10,6 +10,7 @@ import { isTier3, tetherPulse, tetherThick } from './bossTier3';
 import { clampNum } from './color';
 import type { EffectsTier } from './effects';
 import { F_BAR, F_DOT, F_GLOW, pushArc, pushBand, pushLine, pushSprite, type FxHalo, type SpriteBuf } from './fxSprites';
+import { aimedLaneAlpha, aimedLaneTint, laneAimed } from './furyTune';
 import { POOL_FILL_A, POOL_RING_A, POOL_RING_W, POOL_SPECK_A, POOL_SPECK_SIZE, POOL_TURN, poolDashes, poolFade, poolSpeck, poolSpeckCount } from './furyFixes';
 
 export const HAZARD_LANE = 0;
@@ -30,6 +31,14 @@ export const HAZARD_TELEGRAPH_SEC: Readonly<Record<1 | 2 | 3 | 4, number>> = { 1
 /** Pure: telegraph seconds for a tier, read from the sim's table (glue after wave A merged). */
 export function hazardTelegraphSec(tier: number): number {
   return hazardTelegraph(tierOf(tier));
+}
+
+/**
+ * Pure (glow-fury-tune): the telegraph seconds of a lane. w.vy above 0 is the lane's own telegraph
+ * (Mirage's aimed lane, the Lane contract in src/game/bosses/types.ts); 0 or less keeps the tier one.
+ */
+export function laneTelegraphSec(vy: number, tier: number): number {
+  return laneAimed(vy) ? vy : hazardTelegraphSec(tier);
 }
 
 /** Telegraph alpha ramps from TELE_A0 to TELE_A1 over the telegraph; lethal is 1. */
@@ -65,12 +74,16 @@ export interface HazardForm {
   flash: number;
 }
 
-/** Pure: the drawn form of a hazard at an age. */
-export function hazardForm(age: number, tier: number, out: HazardForm): HazardForm {
-  const tele = hazardTelegraphSec(tier);
+/**
+ * Pure: the drawn form of a hazard at an age. teleSec, when finite and above 0, replaces the tier
+ * telegraph (glow-fury-tune: the aimed lane's own telegraph) for the thin form, the ramp and the flash.
+ */
+export function hazardForm(age: number, tier: number, out: HazardForm, teleSec?: number): HazardForm {
+  const own = teleSec !== undefined && Number.isFinite(teleSec) && teleSec > 0;
+  const tele = own ? teleSec : hazardTelegraphSec(tier);
   const a = Number.isFinite(age) ? Math.max(0, age) : 0;
   out.lethal = a >= tele;
-  out.alpha = hazardTelegraphAlpha(a, tier);
+  out.alpha = out.lethal ? 1 : TELE_A0 + (TELE_A1 - TELE_A0) * (a / tele);
   out.thick = out.lethal ? 1 : TELE_THICK;
   out.flash = out.lethal ? clampNum(1 - (a - tele) / LETHAL_FLASH_SEC, 0, 1) : 0;
   return out;
@@ -239,11 +252,15 @@ function planLane(h: HazardInput, b: SpriteBuf, halo: Readonly<FxHalo>, f: Hazar
   const nx = -dy * hw;
   const ny = dx * hw;
   const w = HAZARD_LINE * tierWeight(h.tier) * f.thick * flashBoost(f);
-  const a = f.alpha;
-  let n = pushBand(b, h.x, h.y, x1, y1, 2 * hw, a * (f.lethal ? ZONE_FILL : ZONE_FILL_TELE), h.tint);
-  n += pushLine(b, h.x + nx, h.y + ny, x1 + nx, y1 + ny, w, a, h.tint, halo);
-  n += pushLine(b, h.x - nx, h.y - ny, x1 - nx, y1 - ny, w, a, h.tint, halo);
-  n += pushLine(b, h.x, h.y, x1, y1, w * 0.6, a * 0.7, h.tint, halo);
+  // glow-fury-tune: the aimed lane reads a little brighter and whiter while it telegraphs. Same
+  // instance count as any lane, so Low pays nothing extra.
+  const aimed = laneAimed(h.vy);
+  const a = aimedLaneAlpha(f.alpha, aimed, f.lethal);
+  const tint = aimedLaneTint(h.tint, aimed, f.lethal);
+  let n = pushBand(b, h.x, h.y, x1, y1, 2 * hw, a * (f.lethal ? ZONE_FILL : ZONE_FILL_TELE), tint);
+  n += pushLine(b, h.x + nx, h.y + ny, x1 + nx, y1 + ny, w, a, tint, halo);
+  n += pushLine(b, h.x - nx, h.y - ny, x1 - nx, y1 - ny, w, a, tint, halo);
+  n += pushLine(b, h.x, h.y, x1, y1, w * 0.6, a * 0.7, tint, halo);
   return n;
 }
 
@@ -358,7 +375,7 @@ function planPool(h: HazardInput, b: SpriteBuf, halo: Readonly<FxHalo>): number 
 export function planHazard(h: HazardInput, b: SpriteBuf, halo: Readonly<FxHalo>): number {
   if (h.type === HAZARD_PULL) return planPull(h, b, halo);
   if (h.type === HAZARD_POOL) return planPool(h, b, halo);
-  hazardForm(h.age, h.tier, form);
+  hazardForm(h.age, h.tier, form, h.type === HAZARD_LANE ? laneTelegraphSec(h.vy, h.tier) : undefined);
   if (h.type === HAZARD_LANE) return planLane(h, b, halo, form);
   if (h.type === HAZARD_RING) return planRing(h, b, halo, form);
   if (h.type === HAZARD_SWEEP) return planSweep(h, b, halo, form);
