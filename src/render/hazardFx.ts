@@ -8,13 +8,17 @@ import { hazardTelegraph } from '../game/bosses/kit';
 import { tierOf, tierWeight } from './bossLook';
 import { isTier3, tetherPulse, tetherThick } from './bossTier3';
 import { clampNum } from './color';
-import { F_BAR, pushArc, pushBand, pushLine, pushSprite, type FxHalo, type SpriteBuf } from './fxSprites';
+import type { EffectsTier } from './effects';
+import { F_BAR, F_DOT, F_GLOW, pushArc, pushBand, pushLine, pushSprite, type FxHalo, type SpriteBuf } from './fxSprites';
+import { POOL_FILL_A, POOL_RING_A, POOL_RING_W, POOL_SPECK_A, POOL_SPECK_SIZE, POOL_TURN, poolDashes, poolFade, poolSpeck, poolSpeckCount } from './furyFixes';
 
 export const HAZARD_LANE = 0;
 export const HAZARD_RING = 1;
 export const HAZARD_SWEEP = 2;
 export const HAZARD_TETHER = 3;
 export const HAZARD_PULL = 4;
+/** Gravitas shelter pool (glow-fury-fixes): never lethal, drawn by planPool. */
+export const HAZARD_POOL = 5;
 
 /**
  * Telegraph seconds per tier, a mirror of hazardTelegraph(tier) in src/game/bosses/kit.ts (Swarm,
@@ -210,6 +214,8 @@ export interface HazardInput {
   alphaMul?: number;
   /** Optional: pull ripples run outward (glow-fury-three, the Gravitas tide pushing); inward if absent. */
   rippleOut?: boolean;
+  /** Optional effects tier (glow-fury-fixes: fewer pool specks and chords on Low); standard if absent. */
+  fx?: EffectsTier;
 }
 
 const form: HazardForm = { lethal: false, alpha: 0, thick: 0, flash: 0 };
@@ -315,12 +321,43 @@ function planPull(h: HazardInput, b: SpriteBuf, halo: Readonly<FxHalo>): number 
   return n;
 }
 
+const speck = { x: 0, y: 0, a: 0 };
+
+/**
+ * glow-fury-fixes Gravitas shelter pool: a dashed ring at w.radius turning slowly, a faint soft fill
+ * and specks rising inside, all dimming with poolFade (age w.t of life w.vx). Never lethal: no
+ * telegraph form and no lethal flash.
+ */
+function planPool(h: HazardInput, b: SpriteBuf, halo: Readonly<FxHalo>): number {
+  const R = h.radius;
+  if (!(R > 1)) return 0;
+  const k = poolFade(h.age, h.vx);
+  if (!(k > 0)) return 0;
+  const fx: EffectsTier = h.fx ?? 'standard';
+  const low = fx === 'low';
+  const w = HAZARD_LINE * tierWeight(h.tier) * POOL_RING_W;
+  let n = pushSprite(b, F_GLOW, h.x, h.y, 0, 2 * R, 2 * R, POOL_FILL_A * k, h.tint) ? 1 : 0;
+  const dashes = poolDashes(R);
+  const slot = (Math.PI * 2) / dashes;
+  const span = slot * 0.6;
+  const turn = (Number.isFinite(h.age) ? h.age : 0) * POOL_TURN;
+  for (let d = 0; d < dashes; d++) n += pushArc(b, h.x, h.y, R, turn + d * slot, span, low ? 1 : 2, w, POOL_RING_A * k, h.tint, halo);
+  const specks = poolSpeckCount(fx);
+  for (let s = 0; s < specks; s++) {
+    poolSpeck(s, R, h.age, speck);
+    if (!(speck.a > 0.02)) continue;
+    if (pushSprite(b, F_DOT, h.x + speck.x, h.y + speck.y, 0, POOL_SPECK_SIZE, POOL_SPECK_SIZE, POOL_SPECK_A * k * speck.a, h.tint)) n++;
+  }
+  return n;
+}
+
 /**
  * Pure on the buffer: write the instances of one hazard. Unknown types draw nothing. Returns the
  * number of instances written.
  */
 export function planHazard(h: HazardInput, b: SpriteBuf, halo: Readonly<FxHalo>): number {
   if (h.type === HAZARD_PULL) return planPull(h, b, halo);
+  if (h.type === HAZARD_POOL) return planPool(h, b, halo);
   hazardForm(h.age, h.tier, form);
   if (h.type === HAZARD_LANE) return planLane(h, b, halo, form);
   if (h.type === HAZARD_RING) return planRing(h, b, halo, form);

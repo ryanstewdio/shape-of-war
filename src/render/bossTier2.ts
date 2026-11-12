@@ -10,6 +10,7 @@ import { DYING_SEC, ENTRANCE_SEC, MODE_ATTACKING, MODE_DYING, MODE_ENTERING, MOD
 import { clampNum } from './color';
 import type { EffectsTier } from './effects';
 import { BOSS_PULL_ACCEL, WELL_PULL_ACCEL } from './lattice/kicks';
+import { MIRAGE } from '../game/bosses/table';
 
 /** Boss index of each tier 2 boss, as BossView.id reports it (index in BOSS_IDS). */
 export { BOSS_EMBER, BOSS_GRAVITAS, BOSS_MIRAGE } from './bossLook';
@@ -105,8 +106,11 @@ export function mineGlow(pulse: number): number {
 
 // Mirage --------------------------------------------------------------------------------------
 
-/** Half angle of Mirage's open arc at full openness (roster row 5: a 70 degree arc). */
-export const MIRAGE_ARC_HALF = 35 * DEG;
+/**
+ * Half angle of Mirage's open arc at full openness, read from the sim's MIRAGE.arcDeg (fury fixes,
+ * Ryan 2026-11-12: half the ring), so the drawn opening is always the one shots pass through.
+ */
+export const MIRAGE_ARC_HALF = (MIRAGE.arcDeg / 2) * DEG;
 /** Seconds the arc takes to open at the end of the entrance and after a phase change. */
 export const MIRAGE_ARC_OPEN_SEC = 0.3;
 /** Seconds the arc stays shut at a phase change before it reopens. */
@@ -115,7 +119,7 @@ export const MIRAGE_ARC_SHUT_SEC = 0.15;
 export const MIRAGE_WINDOW_HZ = 3;
 
 /**
- * Pure: arc openness, 0 shut to 1 fully open (70 degrees). It opens over the last MIRAGE_ARC_OPEN_SEC
+ * Pure: arc openness, 0 shut to 1 fully open (MIRAGE.arcDeg). It opens over the last MIRAGE_ARC_OPEN_SEC
  * of the entrance, snaps shut at a phase change and reopens. Every other mode is open, dying
  * included (the ring breaks with the body): the arc is the counter, shots count through it.
  */

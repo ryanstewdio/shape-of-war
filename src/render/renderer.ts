@@ -561,7 +561,7 @@ import {
   turboRate,
   turboWidth,
 } from './turboFx';
-import { createSpriteBuf, fxHalo, pushArc, resetSpriteBuf, type FxHalo } from './fxSprites';
+import { createSpriteBuf, fxHalo, pushArc, pushLine, resetSpriteBuf, type FxHalo } from './fxSprites';
 import { createFxSpriteLayer, makeBossFxAtlas } from './fxSpriteLayer';
 // G3C boss identity (run 0288): Prism window from 'sim:bossWindow', per boss hit flash, cracks from
 // 'sim:bossCrack', owner hue attacks, the tier 3 halo and the Twins enrage flare (bossIdentity.ts).
@@ -607,6 +607,20 @@ import {
 // Look v33: damage by incompleteness (no dark paint), the Ember flame body, the nova colour cycle.
 import { DETACH_ARC, damageColours, damagedSpec, EDGE_SPAN, edgeFlicker, STUB_LEN, type DamageColours } from './bossDamage';
 import { blueBodyAlpha, blueEdgeAlpha, blueEdgeWidth, emberFurySpark, emberFuryStops, emberFuryTint } from './emberFury';
+// Fury fixes (glow-fury-fixes): the Brood pincer telegraph and streak (Gravitas pools draw in hazardFx.ts).
+import {
+  isPincerId,
+  PINCER_LINE_W,
+  PINCER_LINE_WHITE,
+  PINCER_STREAK_A,
+  PINCER_STREAK_U,
+  PINCER_STREAK_W,
+  pincerAimOn,
+  pincerFlash,
+  pincerLineAlpha,
+  pincerStreakDir,
+  pincerStreakOn,
+} from './furyFixes';
 // Fury three (glow-fury-three): Brood's Broodlings, Mirage's shatter and double image, Gravitas's tide.
 import {
   broodSplitFlash,
@@ -812,7 +826,7 @@ import {
 import type { ShapePrim } from './shapeSpecs';
 import { createEnemyBulletLayer } from './enemyBullets';
 import type { EnemyBulletFrame, EnemyBulletsLike } from './enemyBulletFx';
-import { HAZARD_LANE, HAZARD_PULL, HAZARD_SPRITE_CAP, HAZARD_SWEEP, planEntranceRing, planHazard, type HazardInput } from './hazardFx';
+import { HAZARD_LANE, HAZARD_POOL, HAZARD_PULL, HAZARD_SPRITE_CAP, HAZARD_SWEEP, planEntranceRing, planHazard, type HazardInput } from './hazardFx';
 import { BOSS_PULL_ACCEL, KICK_BOSS_DOWN, KICK_BOSS_PHASE } from './lattice/kicks';
 import { HEAT_BOSS } from './lattice/heat';
 import { RIPPLE_BOSS } from './fx';
@@ -1711,6 +1725,18 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   let mirrorCount = 0;
   let echoView: Graphics | null = null;
   const echoOff: Offset = { x: 0, y: 0 };
+  // glow-fury-fixes: the Brood pincer read once a frame, and where each pincer Broodling drew (slot 0
+  // is pincerA, 1 pincerB) with its drawn move this frame (the streak direction).
+  let pinAim = false;
+  let pinAimLeft = -1;
+  let pinDrive = false;
+  const pinX = new Float32Array(2);
+  const pinY = new Float32Array(2);
+  const pinMx = new Float32Array(2);
+  const pinMy = new Float32Array(2);
+  const pinR = new Float32Array(2);
+  const pinSeen = new Uint8Array(2);
+  const pinDir = { x: 0, y: 0 };
   let bossBodyView: Graphics | null = null;
   const aimPen = createDrumPen();
   let dashAimShown = false;
@@ -3083,6 +3109,12 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     f3Frenzy = barOn && frenzyOn(bossView.frenzy);
     f3Tide = barOn ? tideOf(bossView.tide) : 0;
     f3FlipIn = barOn ? flipInOf(bossView.tideFlipIn) : -1;
+    // glow-fury-fixes: the pincer (absent fields read as off).
+    pinAim = barOn && bossIdx === BOSS_BROOD && pincerAimOn(bossView.pincerAim);
+    pinAimLeft = pinAim ? (bossView.pincerAim ?? 0) : -1;
+    pinDrive = barOn && bossIdx === BOSS_BROOD && bossView.pincerDrive === true;
+    pinSeen[0] = 0;
+    pinSeen[1] = 0;
     if (!bossView.active) {
       bossLastX = Number.NaN;
       bossLastY = Number.NaN;
@@ -3216,6 +3248,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     h.tier = bossTier;
     h.tint = palette[bossColourOf(bossIdx)];
     h.alphaMul = 1;
+    // glow-fury-fixes: a Gravitas shelter pool is always violet; Low draws fewer specks and chords.
+    h.fx = getEffectsTier();
+    if (h.type === HAZARD_POOL) h.tint = palette.bossViolet;
     // glow-fury-three: while the Gravitas tide pushes its pull ripples run outward.
     h.rippleOut = bossIdx === BOSS_GRAVITAS && ripplesOut(f3Tide);
     // glow-fury-two: Spindle's beam arms cross to hot red in fury and pulse slowly while enraged.
@@ -3437,6 +3472,33 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     ghostView.alpha = a;
   }
 
+  /**
+   * glow-fury-fixes Brood pincer, on the hazard layer: while it aims, a thin hot green line from each
+   * pincer Broodling to its drive point, brightening as the aim runs out; while it drives, a short
+   * streak behind each (none on Low). The white flash rides the Broodling views (drawEntities).
+   */
+  function planPincer(): void {
+    if (!pinAim && !pinDrive) return;
+    const hot = mixRgb(palette.bossGreen, 0xffffff, PINCER_LINE_WHITE);
+    const streak = pincerStreakOn(pinDrive, getEffectsTier());
+    for (let k = 0; k < 2; k++) {
+      if (pinSeen[k] !== 1) continue;
+      const x = pinX[k] ?? 0;
+      const y = pinY[k] ?? 0;
+      const tx = k === 0 ? (bossView.pincerAx ?? x) : (bossView.pincerBx ?? x);
+      const ty = k === 0 ? (bossView.pincerAy ?? y) : (bossView.pincerBy ?? y);
+      if (pinAim) pushLine(hazardBuf, x, y, tx, ty, PINCER_LINE_W, pincerLineAlpha(pinAimLeft), hot, halo);
+      if (!streak) continue;
+      pincerStreakDir(pinMx[k] ?? 0, pinMy[k] ?? 0, tx - x, ty - y, pinDir);
+      if (pinDir.x === 0 && pinDir.y === 0) continue;
+      const r0 = (pinR[k] ?? 0) * 0.6;
+      const mid = r0 + PINCER_STREAK_U * 0.5;
+      const end = r0 + PINCER_STREAK_U;
+      pushLine(hazardBuf, x + pinDir.x * r0, y + pinDir.y * r0, x + pinDir.x * mid, y + pinDir.y * mid, PINCER_STREAK_W, PINCER_STREAK_A, hot, halo);
+      pushLine(hazardBuf, x + pinDir.x * mid, y + pinDir.y * mid, x + pinDir.x * end, y + pinDir.y * end, PINCER_STREAK_W * 0.6, PINCER_STREAK_A * 0.4, hot, halo);
+    }
+  }
+
   /** Entrance telegraph ring while the boss enters, then sync the hazard layer. */
   function drawHazards(timeSec: number): void {
     if (bossView.active) {
@@ -3445,6 +3507,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       planTier2(timeSec);
     }
     planFuryThree(timeSec);
+    planPincer();
     if (hazardBuf.count > 0 || hazardLayer.shown > 0) hazardLayer.sync(hazardBuf);
     stats.hazardSprites = hazardBuf.count;
   }
@@ -5496,6 +5559,17 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
         const pa = w.a[i] ?? 0;
         if (isBroodlingPart(pa)) {
           broodLook = broodFlash ? 1 : f3Frenzy ? 2 : 0;
+          // glow-fury-fixes: the two pincer Broodlings flash white at about 6 Hz while the pincer aims.
+          if ((pinAim || pinDrive) && isPincerId(i, bossView.pincerA, bossView.pincerB)) {
+            const k = i === bossView.pincerA ? 0 : 1;
+            pinX[k] = ev.x;
+            pinY[k] = ev.y;
+            pinMx[k] = (w.x[i] ?? 0) - (w.prevX[i] ?? 0);
+            pinMy[k] = (w.y[i] ?? 0) - (w.prevY[i] ?? 0);
+            pinR[k] = partR(pa) * ev.scaleX;
+            pinSeen[k] = 1;
+            if (pinAim && pincerFlash(timeSec)) broodLook = 1;
+          }
           const c = broodLook === 0 ? contextForSlot(slot) : broodlingContext(slot, broodLook === 2);
           if (v.context !== c) v.context = c;
           if (broodLook === 1) ev.glowMul *= 1.8;
