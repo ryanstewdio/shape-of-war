@@ -5,7 +5,8 @@
 // seeds), a chaser that bombs and supers, and a ship that never moves. Every tick asserts:
 //   rule 5  a hazard born this tick (not a Pull, not a Brood marker) has the tier telegraph (1.0,
 //           0.8, 0.6, 0.6 s), a ring gap of at least 60 deg (tiers 1 and 2) or 45 deg (3 and 4), a
-//           lane at most 60 u wide, sweep gaps of at least 90 deg, and does not overlap the ship;
+//           lane at most 60 u wide, sweep gaps of at least 90 deg, and does not overlap the ship
+//           (Mirage's aimed lane may: the ship must be able to leave it inside the telegraph);
 //           a marker's life ends before its telegraph does; a ship death never lands while the
 //           respawn invulnerability still has time on it;
 //           live caps: 8 hazards, 8 boss adds, 4 parts, 32 enemy bullets, ENTITY_CAP entities,
@@ -24,7 +25,7 @@ import { MAX_ADDS, MAX_HAZARDS, MAX_PARTS } from '../../src/game/bosses/table';
 import { HazardType } from '../../src/game/bosses/types';
 import { ENEMY_BULLET_CAP, enemyBulletsOf } from '../../src/game/enemyBullets';
 import { createGame, stepGame } from '../../src/game/game';
-import { SHIP_RADIUS } from '../../src/game/ship';
+import { SHIP_RADIUS, SHIP_SPEED } from '../../src/game/ship';
 import { countWaveEnemies } from '../../src/game/spawner';
 import { gs } from '../../src/game/state';
 import { ENTITY_CAP, Kind } from '../../src/game/world';
@@ -54,6 +55,15 @@ interface Tally {
   bossDownTick: number;
   /** Share of the boss bar taken by the session end (the HUD readout, split parts included); 1 when defeated. */
   bossLost: number;
+  /** Mirage lanes born through the ship (the aimed lane, judged by laneEscapeSec). */
+  aimed: number;
+}
+
+/** Seconds a ship at (px, py) at full speed needs to leave a lane sideways (0 when outside it). */
+function laneEscapeSec(px: number, py: number, x: number, y: number, rot: number, halfWidth: number): number {
+  const perp = Math.abs(-(px - x) * Math.sin(rot) + (py - y) * Math.cos(rot));
+  const e = halfWidth + SHIP_RADIUS - perp;
+  return e > 0 ? e / SHIP_SPEED : 0;
 }
 
 /** [mode, hash01 seed] of every session a boss plays. */
@@ -78,7 +88,7 @@ function sweepOne(id: BossId, mode: number, seed: number): Tally {
   const w = createGame(level, { vibrate: () => undefined });
   const bs = bossOf(w);
   if (bs === null) throw new Error('no boss state for ' + id);
-  const t: Tally = { violations: [], births: 0, markers: 0, deaths: 0, respawnTicks: 0, maxHazards: 0, maxAdds: 0, maxParts: 0, maxBullets: 0, maxWave: 0, maxEntities: 0, bossDownTick: -1, bossLost: 0 };
+  const t: Tally = { violations: [], births: 0, markers: 0, deaths: 0, respawnTicks: 0, maxHazards: 0, maxAdds: 0, maxParts: 0, maxBullets: 0, maxWave: 0, maxEntities: 0, bossDownTick: -1, bossLost: 0, aimed: 0 };
   const bad = (step: number, msg: string): void => {
     if (t.violations.length < 12) t.violations.push(id + ' mode ' + String(mode) + ' seed ' + String(seed) + ' tick ' + String(step) + ': ' + msg);
   };
@@ -153,7 +163,13 @@ function sweepOne(id: BossId, mode: number, seed: number): Tally {
         const args = [SHIP_RADIUS, w.x[h] ?? 0, w.y[h] ?? 0, w.rot[h] ?? 0, w.radius[h] ?? 0, w.vx[h] ?? 0, w.vy[h] ?? 0] as const;
         const pre = hazardHits(type, px0, py0, args[0], args[1], args[2], args[3], args[4], args[5], args[6]);
         const post = hazardHits(type, px1, py1, args[0], args[1], args[2], args[3], args[4], args[5], args[6]);
-        if (pre && post) bad(step, 'lethal hazard type ' + String(type) + ' born on the ship');
+        if (pre && post && id === 'mirage' && type === HazardType.Lane) {
+          // Fury fixes (Ryan 2026-11-12): Mirage aims one lane through the ship. Fair when the ship
+          // can leave it sideways at full speed inside the telegraph.
+          t.aimed++;
+          const esc = laneEscapeSec(px1, py1, args[1], args[2], args[3], args[4]);
+          if (!(esc < (bs.hzTele[h] ?? 0))) bad(step, 'aimed lane needs ' + String(esc) + ' s to leave, telegraph ' + String(bs.hzTele[h]));
+        } else if (pre && post) bad(step, 'lethal hazard type ' + String(type) + ' born on the ship');
       }
     }
 
@@ -228,6 +244,7 @@ describe('fairness sweep: every boss, 60 s, six fuzzed sessions each (rules 5 an
     expect(sum((x) => x.deaths)).toBeGreaterThan(100);
     expect(sum((x) => x.respawnTicks)).toBeGreaterThan(1000);
     expect(sum((x) => x.markers)).toBeGreaterThan(0);
+    expect(sum((x) => x.aimed)).toBeGreaterThan(0); // Mirage's aimed lanes were judged
     // Release polish (docs/14 item 7): fights last 210 to 260 s, so a 60 s session no longer kills a
     // boss. The sessions must still hurt it (measured: 16 of 60 take a fifth of the bar); the kill
     // path is swept on the legacy hit points below.

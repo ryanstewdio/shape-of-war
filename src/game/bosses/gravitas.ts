@@ -21,22 +21,47 @@
 // render) and the push goes into the ship pull channel with the same falloff and blend, so it never
 // moves the ship faster than the pull could. furyT runs on through the stage 2 split (the lead
 // Gravitant counts it), so the tide carries onto the pair. Anchors and rings are unchanged.
+//
+// Shelter pools (fury fixes, GRAVITAS_POOL; Ryan 2026-11-12): enraged, Gravitas leaves a pool
+// (Kind.BossHazard, HazardType.Pool, never lethal) where it stands every everySec of attack time,
+// after the split at the pair centre. The core shrinks it over its last fadeSec (w.t its age, w.vx its
+// full life). At most max live (the oldest goes first), and a pool is skipped, never a ring or a
+// pull, when it would leave fewer than reserve hazard slots. A ship inside one gets no pull or push
+// (core.ts bossContacts and pushShip below) and floats (ShipState.float). Ability scratch (bs.abl):
+// 0 the pool clock.
 import { bus } from '../../core/events';
 import { pullRetain } from '../enemies/gravitywell';
 import { gs } from '../state';
 import { angleBetween, distBetween, moveHeading, moveTo, targetOf } from '../steer';
 import { Kind, type World } from '../world';
-import { bossAdt, clearHazards, countParts, crackBody, HAZARD_OVERLAP, livePart, pullStrength, setPullStrength, spawnPart, spawnPull, spawnRing } from './core';
+import {
+  bossAdt,
+  clearHazards,
+  countHazards,
+  countParts,
+  crackBody,
+  HAZARD_OVERLAP,
+  livePart,
+  pullStrength,
+  setPullStrength,
+  shipSheltered,
+  spawnHazard,
+  spawnPart,
+  spawnPull,
+  spawnRing,
+} from './core';
 import { emitFury, furyClampDamage, furyDue, furyOnPhase, furyPhaseOf, startFuryBreak, stepFury } from './fury';
 import { angleToOn, pullSpeed } from './kit';
 import { bossOf, type BossState } from './state';
-import { FURY_BREAK_SEC, GRAVITANT, GRAVITAS, GRAVITAS_FURY, HAZARD_RECHECK_SEC, MAX_PARTS } from './table';
+import { FURY_BREAK_SEC, GRAVITANT, GRAVITAS, GRAVITAS_FURY, GRAVITAS_POOL, HAZARD_RECHECK_SEC, MAX_HAZARDS, MAX_PARTS } from './table';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
 import { removeEntity } from '../remove';
 import { splitHp } from './tempest';
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
+/** bs.abl slot of the pool clock (attack seconds since the last pool). */
+const POOL_CLOCK = 0;
 
 /** Pure: seconds between collapsing rings in a phase. */
 export function ringEveryFor(phase: number): number {
@@ -89,7 +114,7 @@ export function tideFlipInOf(bs: BossState): number {
 
 /** Push the ship out from pull p at strength s: the core pull's falloff and blend, reversed. */
 function pushShip(w: World, p: number, s: number, dt: number): void {
-  if (!w.ship.active) return;
+  if (!w.ship.active || shipSheltered(w)) return; // a ship in a shelter pool feels no push
   const v = pullSpeed(distBetween(w, p, 0), w.radius[p] ?? 0, s);
   if (v <= 0) return;
   const a = angleBetween(w, 0, p);
@@ -105,6 +130,48 @@ function holdPull(w: World, bs: BossState, p: number, s: number, dt: number): vo
   if (tideAt(bs.fury, bs.furyT) >= 0) return;
   bs.hzRate[p] = 0; // the core pull is off: the push replaces it
   pushShip(w, p, pullStrength(s), dt);
+}
+
+/** Live shelter pools now. */
+export function countPools(w: World): number {
+  let n = 0;
+  for (let h = 1; h < w.cap; h++) if (w.alive[h] === 1 && w.kind[h] === Kind.BossHazard && w.a[h] === HazardType.Pool) n++;
+  return n;
+}
+
+/**
+ * Leave a pool at (x, y): at the cap the oldest goes first. Skipped (never a ring or a pull) when it
+ * would leave fewer than GRAVITAS_POOL.reserve hazard slots free. Returns the id or -1.
+ */
+export function dropPool(w: World, bs: BossState, x: number, y: number): number {
+  let n = 0;
+  let oldest = -1;
+  let age = -1;
+  for (let h = 1; h < w.cap; h++) {
+    if (w.alive[h] !== 1 || w.kind[h] !== Kind.BossHazard || w.a[h] !== HazardType.Pool) continue;
+    n++;
+    if ((w.t[h] ?? 0) > age) {
+      age = w.t[h] ?? 0;
+      oldest = h;
+    }
+  }
+  const full = n >= GRAVITAS_POOL.max && oldest > 0;
+  if (countHazards(w) - (full ? 1 : 0) + 1 + GRAVITAS_POOL.reserve > MAX_HAZARDS) return -1;
+  if (full) removeEntity(w, oldest);
+  const life = GRAVITAS_POOL.lifeSec;
+  return spawnHazard(w, bs, HazardType.Pool, x, y, 0, GRAVITAS_POOL.radius, life, 0, 0, life, false);
+}
+
+/** The pool clock: enraged only, a pool at (x, y) every everySec of attack time. */
+function stepPools(w: World, bs: BossState, x: number, y: number, adt: number): void {
+  if (bs.fury !== 2) return;
+  const c = (bs.abl[POOL_CLOCK] ?? 0) + adt;
+  if (c < GRAVITAS_POOL.everySec) {
+    bs.abl[POOL_CLOCK] = c;
+    return;
+  }
+  bs.abl[POOL_CLOCK] = c - GRAVITAS_POOL.everySec;
+  dropPool(w, bs, x, y);
 }
 
 /** The live pull id, or -1. */
@@ -209,6 +276,7 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
     const every = ringEveryFor(bs.phase);
     if (bs.t0 >= every) fireRing(w, id, bs, every);
   }
+  stepPools(w, bs, w.x[id] ?? 0, w.y[id] ?? 0, adt);
   setWindow(bs, n);
 }
 
@@ -399,6 +467,7 @@ export function stepGravitant(w: World, id: number, dt: number): void {
     const every = ringEveryFor(bs.phase);
     if (bs.t0 >= every) fireSplitRing(w, bs, every);
   }
+  stepPools(w, bs, bs.t1, bs.t2, adt);
 }
 
 export const def: BossDef = { reset, step, onPhase, entryHome, cracks, clampDamage, afterDamage, phaseOf, fury: true };
