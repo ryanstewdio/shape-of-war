@@ -50,6 +50,13 @@ export interface BulletPool {
   extra: Uint8Array;
   /** extra given to every bullet spawned now (Turbo sets 1 while it runs, 0 otherwise). */
   spawnExtra: number;
+  /**
+   * Fury tune contract stub (Ryan 2026-11-12, Gravitas bent shots): 1 when the bullet was fired from
+   * inside a Gravitas shelter pool, so the Gravitas pull never bends it; 0 otherwise. Glow tints it.
+   */
+  straight: Uint8Array;
+  /** straight given to every bullet spawned now (the boss sim sets 1 while the ship is in a pool). */
+  spawnStraight: number;
   /** Every enemy id a pierce bullet has hit, PIERCE_HITS slots per bullet, -1 empty. */
   hitLog: Int32Array;
   /** Orbit blade angle in radians, written each step from the ship. */
@@ -93,6 +100,8 @@ export function createBulletPool(cap: number = BULLET_CAP): BulletPool {
     lastHit: new Int32Array(cap).fill(-1),
     extra: new Uint8Array(cap),
     spawnExtra: 0,
+    straight: new Uint8Array(cap),
+    spawnStraight: 0,
     hitLog: new Int32Array(cap * PIERCE_HITS).fill(-1),
     phase: new Float32Array(cap),
     combo: new Uint8Array(cap),
@@ -127,6 +136,7 @@ export function spawnBullet(p: BulletPool, x: number, y: number, vx: number, vy:
   p.pierce[id] = 0;
   p.lastHit[id] = -1;
   p.extra[id] = p.spawnExtra;
+  p.straight[id] = p.spawnStraight;
   p.phase[id] = 0;
   p.combo[id] = 0;
   p.spikeLen[id] = 0;
