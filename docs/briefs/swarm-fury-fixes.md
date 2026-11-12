@@ -1,0 +1,30 @@
+# Swarm: fury-fixes
+
+Create and check out branch feat/swarm-fury-fixes before any edit. Never push main (main is protected; Morpheus merges your branch through a PR). You have explicit go ahead now: call add_repo for ryanstewdio/shape-of-war with push access before your first commit, so the push at the end works. If git remote -v is empty first run: git remote add origin https://github.com/ryanstewdio/shape-of-war.git
+
+Model: opus
+Owned paths: src/game/bosses/ (mirage.ts, brood.ts, gravitas.ts, core.ts only where the pools need it, table.ts rows MIRAGE, BOSS_TABLE.mirage, BROOD_FRENZY, GRAVITAS_POOL, view.ts readBoss only), tests/game/ (bossFightBot.ts included), tests/qa/ boss pins only
+One approved outside edit: src/game/ship.ts, at most 15 lines, the float hook in item 6 (explain it in the hand off).
+Do not touch: the BossView field names and types and the HazardType values (Morpheus stubs: pincer fields, HazardType.Pool), src/core/ (events.ts included), warden.ts, spindle.ts, ember.ts, bastion.ts, tempest.ts, twins.ts, prism.ts and their rows (keep bit identical), Brood hit points (BOSS_TABLE.brood and BROODLING.hp: Ryan ruled keep), src/render/, src/ui/, src/audio/, src/main.ts, src/levelgen/, docs/ other than your hand off
+Read first: mirage.ts, brood.ts, gravitas.ts, fury.ts, core.ts (spawnHazard, spawnRingMarker, the pull channel near line 440), view.ts, table.ts (MIRAGE, MIRAGE_FURY, BROOD_FRENZY, GRAVITAS, GRAVITAS_FURY, GRAVITAS_POOL), src/game/ship.ts and src/core/physics.ts (Space physics thrust), tests/game/bossFightBot.ts, bossFightLength.test.ts, bossMirage.test.ts, bossTier2Fairness.test.ts, docs/handoffs/swarm-fury-three.md
+
+## Goal
+Ryan's fury three device check on 4a5e3bc (2026-11-12) and his rulings the same day: Mirage could not be finished in reasonable time; Gravitas gets shelter pools (his low gravity puddle idea, version 1); the Brood pincer gets a clear telegraph and a faster drive. Glow draws the looks in parallel from the view fields and HazardType.Pool.
+
+## Background (Morpheus diagnosis, measured)
+The fight bot lands every hit on the body centre, and inFrontArc counts a zero distance hit as inside Mirage's open arc, so the bot never met the 70 deg gate: 94 s on the bot against 425 to 440 s for a gunner who stands still and about 290 s for one circling at half ship speed. With a gate aware gunner on the level 25 arenas of seeds 1, 1000 and 424242, arc 180, rate 0.8 and hp 1150 gave 93 to 94 s circling at 210 u/s and 124 to 134 s standing still.
+
+## Acceptance
+1. Fight bot (tests/game/bossFightBot.ts): for a guardian whose def has a gate (only Mirage today), each hit lands on the body edge on the ship's side (the surface aware bearing from the body to the ship), and before firing each step the bot ship circles toward the arc centre (w.rot of the body) at CHASE_SPEED, SHIP_SPEED / 2 (210 u/s), holding its distance clamped to 200 to 300 u, and only moves to points inside the arena (otherwise it stays). Every other guardian's bot seconds are unchanged.
+2. Mirage: MIRAGE.arcDeg 180, MIRAGE.arcRate 0.8, BOSS_TABLE.mirage.hp 1150 (Ryan approved). If the gate aware bot at Normal reads outside the 72 to 108 s band, do not retune: report the seconds in the hand off. Easy shorter, Insane longer, the tier ramp test holds.
+3. Mirage lanes: each burst turns so one lane runs through the ship's position at the burst (laneOffsetDeg 0, Ryan ruled). Every lane keeps the full tier telegraph (0.8 s at Normal) before it turns lethal. The wait while a lane would cover the ship must no longer block the burst forever; it may still never make a lane lethal without its full telegraph. The fairness sweep holds: from any spot the ship can leave the aimed lane inside the telegraph.
+4. Brood pincer: BROOD_FRENZY.aimSec 0.8, driveSpeed 320, driveSec 1.2 (reach, everySec and speedMul unchanged). readBoss writes pincerAim (seconds of aim left, -1 otherwise), pincerDrive, pincerA and pincerB (entity ids of the two pincer Broodlings, -1 when none) and their drive points pincerAx, pincerAy, pincerBx, pincerBy.
+5. Gravitas shelter pools (GRAVITAS_POOL, values from the stub): enraged only (fury 2), Gravitas leaves a pool (Kind.BossHazard, w.a HazardType.Pool) at its position every everySec of attack time; after the stage 2 split, at the pair centre. Radius 80; life 8 s; the radius shrinks linearly to 0 over the last fadeSec (2 s); w.t is its age and w.vx its full life. At most max (4) live, the oldest goes first. Never lethal, no contact kill. A pool never takes a hazard slot a ring or a pull needs: skip the pool, never the ring or pull. Cleared with the other boss hazards (break, ship death, bomb). The tide stays as is.
+6. Shelter: while the ship's centre is inside a live pool, no Gravitas or Gravitant pull or push reaches the ship that step, and the ship floats: it moves with the 'high' Space physics thrust handling (a ship already on the high setting feels no change). Outside every pool, handling and the pull are exactly as before. The ship.ts edit is a per step override that the boss sim writes and that is cleared every step. Regular enemies, gravity wells and shots are unchanged.
+7. All new numbers are named constants in table.ts.
+- Tests for each item: the bot's gate aware path, Mirage arc, rate and hp, the aimed lane and its telegraph, the pincer fields, pool spawn, cap, shrink and clear, shelter and float on and off, and the ship.ts hook leaving every step without a pool identical. The fairness sweep, normalDifficulty and every pin pass; update pins only where these changes explain them, named in the hand off.
+- No Math.random, no allocation per frame, TypeScript strict, no any.
+- npm test and npm run build pass on the branch (accepted generator perf exception aside). Hand off at docs/handoffs/swarm-fury-fixes.md under 12 lines: Mirage bot seconds at Easy, Normal and Insane, the outside edit, known gaps, requests. Commit and push the branch. Stop.
+
+## Rules
+Touch only. No em or en dashes. Nothing beyond this brief.

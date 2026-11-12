@@ -539,6 +539,21 @@ export const GRAVITAS_FURY = {
 } as const;
 
 /**
+ * Gravitas shelter pools (Ryan 2026-11-12, version 1 of the low gravity puddle redesign; fury fixes
+ * stub, starting values). Enraged, Gravitas (after the split, the pair centre) leaves a pool where it
+ * stands every everySec of attack time. A pool has radius u, lasts lifeSec and shrinks to 0 over its
+ * last fadeSec; at most max live at once (the oldest goes first). A ship inside gets no Gravitas pull
+ * or push and floats (the high Space physics thrust handling). The tide stays. HazardType.Pool.
+ */
+export const GRAVITAS_POOL = {
+  everySec: 3,
+  radius: 80,
+  lifeSec: 8,
+  fadeSec: 2,
+  max: 4,
+} as const;
+
+/**
  * Bastion (tier 3, red, level 35; roster row 7). Holds the centre and turns at 0.3 rad/s. Four
  * corner turrets (8 HP) take one turn every 1.125 s in order (GW5); a destroyed turret skips its turns. The
  * core takes damage once two turrets are down. Phases follow the turrets: four, two, none.

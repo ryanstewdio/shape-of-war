@@ -72,6 +72,20 @@ export interface BossView {
   frenzy?: boolean;
   tide?: -1 | 0 | 1;
   tideFlipIn?: number;
+  /**
+   * Fury fixes (contract stub, Ryan 2026-11-12; Swarm writes, Glow reads): the Brood pincer.
+   * pincerAim: seconds of aim left, -1 when no pincer is aiming. pincerDrive: true while the pincer
+   * drives. pincerA and pincerB: entity ids of the two Broodlings in the pincer (-1 when none);
+   * pincerAx, pincerAy and pincerBx, pincerBy: the point each one drives through.
+   */
+  pincerAim?: number;
+  pincerDrive?: boolean;
+  pincerA?: number;
+  pincerAx?: number;
+  pincerAy?: number;
+  pincerB?: number;
+  pincerBx?: number;
+  pincerBy?: number;
 }
 
 /** Fill out from the boss of the world and return it. No allocation: out is the caller's object. */
@@ -98,6 +112,15 @@ export function readBoss(w: World, out: BossView): BossView {
   out.frenzy = live && bs !== null && bs.spec.id === 'brood' && bs.fury === 2;
   out.tide = live && bs !== null ? tideOf(bs) : 0;
   out.tideFlipIn = live && bs !== null ? tideFlipInOf(bs) : -1;
+  // Fury fixes stub: the Brood pincer reads as none until Swarm writes it.
+  out.pincerAim = -1;
+  out.pincerDrive = false;
+  out.pincerA = -1;
+  out.pincerAx = 0;
+  out.pincerAy = 0;
+  out.pincerB = -1;
+  out.pincerBx = 0;
+  out.pincerBy = 0;
   if (bs === null || bs.status !== 'alive' || id <= 0 || w.alive[id] !== 1 || w.kind[id] !== Kind.Boss) {
     out.active = false;
     return out;
@@ -123,5 +146,5 @@ export function readBoss(w: World, out: BossView): BossView {
 
 /** A fresh BossView for a caller to keep and reuse (allocates once; call at setup, not per frame). */
 export function createBossView(): BossView {
-  return { active: false, id: 0, mode: 0, phase: 1, hp: 0, maxHp: 0, modeT: 0, x: 0, y: 0, rot: 0, radius: 0, exposed: false, exposedLeft: -1, exposedT: 0, shielded: false, shieldLeft: 0, barOn: false, barHp: 0, barMax: 0, broodlings: false, fury: 0, furyT: 0, dashAim: -1, dashHeading: 0, hitT: -1 };
+  return { active: false, id: 0, mode: 0, phase: 1, hp: 0, maxHp: 0, modeT: 0, x: 0, y: 0, rot: 0, radius: 0, exposed: false, exposedLeft: -1, exposedT: 0, shielded: false, shieldLeft: 0, barOn: false, barHp: 0, barMax: 0, broodlings: false, fury: 0, furyT: 0, dashAim: -1, dashHeading: 0, hitT: -1, frenzy: false, tide: 0, tideFlipIn: -1, pincerAim: -1, pincerDrive: false, pincerA: -1, pincerAx: 0, pincerAy: 0, pincerB: -1, pincerBx: 0, pincerBy: 0 };
 }

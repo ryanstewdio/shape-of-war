@@ -21,6 +21,12 @@ export const enum HazardType {
   Sweep = 2,
   Tether = 3,
   Pull = 4,
+  /**
+   * Gravitas shelter pool (fury fixes stub, Ryan 2026-11-12; Swarm spawns, Glow draws). Never lethal.
+   * w.radius is the live radius (it shrinks to 0 over the pool's last GRAVITAS_POOL.fadeSec), w.t its
+   * age and w.vx its full life in seconds. A ship inside gets no Gravitas pull or push and floats.
+   */
+  Pool = 5,
 }
 
 /** Kind.BossPart w.a: the part type. */
