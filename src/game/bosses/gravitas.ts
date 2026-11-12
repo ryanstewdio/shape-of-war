@@ -166,8 +166,16 @@ const bv = { x: 0, y: 0 };
  * the pull's (w.vx keeps it through the tide) over the full GRAVITAS.pullMax. Enraged only.
  */
 export function bendShots(w: World, bs: BossState, core: number, p: number, dt: number): void {
-  if (bs.fury !== 2 || core <= 0 || p <= 0 || w.alive[core] !== 1) return;
-  const k = (w.vx[p] ?? 0) / GRAVITAS.pullMax;
+  if (p <= 0) return;
+  bendAt(w, bs, core, (w.vx[p] ?? 0) / GRAVITAS.pullMax, dt);
+}
+
+/**
+ * Bend at strength share k (1 is the full body pull). Ryan 2026-11-12: with no anchors left the
+ * enraged body has no pull but keeps a full bend field (k 1), so shots bend from the break on.
+ */
+export function bendAt(w: World, bs: BossState, core: number, k: number, dt: number): void {
+  if (bs.fury !== 2 || core <= 0 || w.alive[core] !== 1) return;
   if (!(k > 0)) return;
   const b = w.bullets;
   const cx = w.x[core] ?? 0;
@@ -336,7 +344,8 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
   placeAnchors(w, id, bs);
   const n = countParts(w, bs);
   syncPull(w, id, bs, n, dt);
-  bendShots(w, bs, id, livePull(w, bs), dt);
+  const bp = livePull(w, bs);
+  bendAt(w, bs, id, bp > 0 ? (w.vx[bp] ?? 0) / GRAVITAS.pullMax : 1, dt); // no anchors: a bend field, no pull
   if (bs.retry > 0) {
     bs.retry = bs.retry - dt > 0 ? bs.retry - dt : 0;
   } else {
