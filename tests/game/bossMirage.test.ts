@@ -204,7 +204,7 @@ describe('mirage', () => {
     expect(s.hzLife[m] ?? 0).toBeLessThan(hazardTelegraph(2));
   });
 
-  it('eight lanes radiate on landing, exactly one aimed through the ship, with the full telegraph', () => {
+  it('eight lanes radiate on landing, exactly one aimed through the ship on its own telegraph, the rest on the tier one', () => {
     const w = bossGame('mirage', { lives: 3 }, {}, false);
     park(w, 100, 50);
     w.ship.invuln = 0;
@@ -218,12 +218,16 @@ describe('mirage', () => {
       for (const h of ls) {
         expect(w.radius[h]).toBeLessThanOrEqual(30);
         expect(w.vx[h]).toBe(MIRAGE.laneLength);
-        expect(s.hzTele[h]).toBeCloseTo(hazardTelegraph(2), 5); // 0.8 s at Normal
         expect(w.t[h] ?? 0).toBeLessThanOrEqual(DT * 1.5);
         if (hazardHits(HazardType.Lane, w.x[0] ?? 0, w.y[0] ?? 0, SHIP_RADIUS, w.x[h] ?? 0, w.y[h] ?? 0, w.rot[h] ?? 0, w.radius[h] ?? 0, w.vx[h] ?? 0, 0)) {
           covering++;
-          // It runs through the ship's position.
+          // It runs through the ship's position, on its own telegraph (fury tune: 1.2 s, in w.vy).
           expect(Math.abs(wrapPi((w.rot[h] ?? 0) - Math.atan2(50 - landing.y, 100 - landing.x)))).toBeLessThan(1e-6);
+          expect(s.hzTele[h]).toBeCloseTo(MIRAGE.aimedTeleSec, 5);
+          expect(w.vy[h]).toBeCloseTo(MIRAGE.aimedTeleSec, 5);
+        } else {
+          expect(s.hzTele[h]).toBeCloseTo(hazardTelegraph(2), 5); // 0.8 s at Normal
+          expect(w.vy[h]).toBe(0);
         }
       }
       expect(covering).toBe(1);
@@ -233,7 +237,7 @@ describe('mirage', () => {
       // The ship steps sideways out of the aimed lane inside the telegraph (one sidestep of 60 u).
       const a = Math.atan2(50 - landing.y, 100 - landing.x) + Math.PI / 2;
       park(w, 100 + Math.cos(a) * 60, 50 + Math.sin(a) * 60);
-      run(w, 1.2); // past the telegraph and the lethal 0.3 s
+      run(w, MIRAGE.aimedTeleSec + 0.4); // past the aimed telegraph and the lethal 0.3 s
       expect(w.ship.active).toBe(true);
       park(w, 100, 50);
     }

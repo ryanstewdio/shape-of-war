@@ -4,7 +4,8 @@
 // under six fuzzed player sessions: the strafing shooter, three random walks (different hash01
 // seeds), a chaser that bombs and supers, and a ship that never moves. Every tick asserts:
 //   rule 5  a hazard born this tick (not a Pull, not a Brood marker) has the tier telegraph (1.0,
-//           0.8, 0.6, 0.6 s), a ring gap of at least 60 deg (tiers 1 and 2) or 45 deg (3 and 4), a
+//           0.8, 0.6, 0.6 s; Mirage's aimed lane its own, MIRAGE.aimedTeleSec, in w.vy), a
+//           ring gap of at least 60 deg (tiers 1 and 2) or 45 deg (3 and 4), a
 //           lane at most 60 u wide, sweep gaps of at least 90 deg, and does not overlap the ship
 //           (Mirage's aimed lane may: the ship must be able to leave it inside the telegraph);
 //           a marker's life ends before its telegraph does; a ship death never lands while the
@@ -21,6 +22,7 @@ import { bus } from '../../src/core/events';
 import { countAdds, countHazards } from '../../src/game/bosses/core';
 import { hazardHits } from '../../src/game/bosses/kit';
 import { bossOf } from '../../src/game/bosses/state';
+import { aimedTele } from '../../src/game/bosses/mirage';
 import { MAX_ADDS, MAX_HAZARDS, MAX_PARTS } from '../../src/game/bosses/table';
 import { HazardType } from '../../src/game/bosses/types';
 import { ENEMY_BULLET_CAP, enemyBulletsOf } from '../../src/game/enemyBullets';
@@ -154,7 +156,11 @@ function sweepOne(id: BossId, mode: number, seed: number): Tally {
         continue;
       }
       t.births++;
-      const want = TELEGRAPH_BY_TIER[tier] ?? 0.6;
+      // Fury tune: Mirage's aimed lane carries its own telegraph in w.vy (the Lane contract), the
+      // aimed telegraph at the boss's scale; every other hazard the tier telegraph.
+      const aimedLane = id === 'mirage' && type === HazardType.Lane && (w.vy[h] ?? 0) > 0;
+      if (aimedLane && Math.abs((w.vy[h] ?? 0) - (bs.hzTele[h] ?? 0)) > EPS) bad(step, 'aimed lane w.vy ' + String(w.vy[h]) + ' is not its telegraph');
+      const want = aimedLane ? aimedTele(bs.teleScale) : (TELEGRAPH_BY_TIER[tier] ?? 0.6);
       if (Math.abs((bs.hzTele[h] ?? 0) - want) > EPS) bad(step, 'hazard type ' + String(type) + ' telegraph ' + String(bs.hzTele[h]) + ', tier ' + String(tier) + ' wants ' + String(want));
       if (type === HazardType.Ring && (w.vx[h] ?? 0) * 2 < (RING_GAP_MIN_DEG[tier] ?? 45) * DEG - EPS) bad(step, 'ring gap ' + String(((w.vx[h] ?? 0) * 2) / DEG) + ' deg');
       if (type === HazardType.Lane && (w.radius[h] ?? 0) * 2 > 60 + EPS) bad(step, 'lane ' + String((w.radius[h] ?? 0) * 2) + ' u wide');

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
 import { countHazards } from '../../src/game/bosses/core';
 import { hazardHits, hazardTelegraph, ringGapMin } from '../../src/game/bosses/kit';
-import { MAX_HAZARDS, MAX_PARTS } from '../../src/game/bosses/table';
+import { MAX_HAZARDS, MAX_PARTS, MIRAGE } from '../../src/game/bosses/table';
 import { HazardType } from '../../src/game/bosses/types';
 import { stepGame } from '../../src/game/game';
 import { SHIP_RADIUS, SHIP_SPEED } from '../../src/game/ship';
@@ -55,7 +55,10 @@ describe('tier 2 fairness', () => {
             continue;
           }
           born++;
-          expect(s.hzTele[h]).toBeCloseTo(0.8, 5);
+          // Fury tune: Mirage's aimed lane has its own telegraph (w.vy, the Lane contract); every other 0.8 s.
+          const aimed = id === 'mirage' && type === HazardType.Lane && (w.vy[h] ?? 0) > 0;
+          expect(s.hzTele[h]).toBeCloseTo(aimed ? MIRAGE.aimedTeleSec : 0.8, 5);
+          if (aimed) expect(w.vy[h]).toBeCloseTo(MIRAGE.aimedTeleSec, 5);
           if (type === HazardType.Ring) expect((w.vx[h] ?? 0) * 2).toBeGreaterThanOrEqual(ringGapMin(2) - 1e-6);
           if (type === HazardType.Lane) expect((w.radius[h] ?? 0) * 2).toBeLessThanOrEqual(60);
           const hit = hazardHits(type, w.x[0] ?? 0, w.y[0] ?? 0, SHIP_RADIUS, w.x[h] ?? 0, w.y[h] ?? 0, w.rot[h] ?? 0, w.radius[h] ?? 0, w.vx[h] ?? 0, w.vy[h] ?? 0);

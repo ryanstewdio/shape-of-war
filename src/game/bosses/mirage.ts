@@ -1,9 +1,10 @@
 // Mirage (tier 2, magenta, level 25; docs/12 roster row 5). Every 3.0 s (2.5 s in phase 2, 2.0 s
 // in phase 3) it warps to a point 200 to 300 u from its target. A ring marks the landing point
 // 0.5 s early (a marker: telegraph only, never lethal). On landing eight lanes radiate from it,
-// one aimed through the ship's position (fury fixes, Ryan 2026-11-12: laneOffsetDeg 0), each with
-// the full tier telegraph (0.8 s at Normal) before 0.3 s lethal, so the ship steps out of the aimed
-// lane inside the telegraph; the burst never waits on the ship. A landing waits 0.3 s and picks
+// one aimed through the ship's position (fury fixes, Ryan 2026-11-12: laneOffsetDeg 0). The aimed
+// lane telegraphs MIRAGE.aimedTeleSec (fury tune: 1.2 s, times the Insane scale; w.vy carries it, the
+// Lane contract), the other seven the tier telegraph (0.8 s at Normal, w.vy 0), each then 0.3 s
+// lethal, so the ship steps out of the aimed lane inside its telegraph; the burst never waits on it. A landing waits 0.3 s and picks
 // again while the ship is on the spot. Its shield ring blocks every shot except through a 180 deg
 // open arc centred on w.rot, turning at 0.8 rad/s (the gate below). Scratch: t0 warp clock, t1 and
 // t2 landing point, t3 marker countdown, n0 marker id, n1 warp counter (hash index), n2 0 idle,
@@ -36,7 +37,7 @@ import { crackBody, HAZARD_OVERLAP, livePart, spawnLane, spawnPart, spawnRingMar
 import { furyClampDamage, furyDue, furyOnPhase, furyPhaseOf, startFuryBreak, stepFury } from './fury';
 import { pointDistOn, wrapPi } from './kit';
 import type { BossState } from './state';
-import { HAZARD_RECHECK_SEC, MIRAGE, MIRAGE_FURY, MIRROR } from './table';
+import { HAZARD, HAZARD_RECHECK_SEC, MIRAGE, MIRAGE_FURY, MIRROR } from './table';
 import { BossMode, PartType, type BossDef } from './types';
 
 const H0X = 0;
@@ -245,13 +246,33 @@ function aimedLane(w: World, bs: BossState, x: number, y: number, a: number): nu
   return back;
 }
 
+/** Pure: the aimed lane's telegraph, s: MIRAGE.aimedTeleSec times the boss telegraph scale (Insane cut). */
+export function aimedTele(teleScale: number): number {
+  return MIRAGE.aimedTeleSec * teleScale;
+}
+
+/**
+ * Give lane h the aimed lane's own telegraph: lethal only after aimedTele, then HAZARD.laneLethalSec,
+ * and w.vy carries the telegraph seconds (the Lane contract: 0 means the tier telegraph).
+ */
+function aimLaneTele(w: World, bs: BossState, h: number): void {
+  if (h <= 0) return;
+  const tele = aimedTele(bs.teleScale);
+  bs.hzTele[h] = tele;
+  bs.hzLife[h] = tele + HAZARD.laneLethalSec;
+  w.vy[h] = tele;
+}
+
 /** Fire the eight lane burst, one lane through the ship's position. It never waits on the ship. */
 function burst(w: World, id: number, bs: BossState): void {
   const x = w.x[id] ?? 0;
   const y = w.y[id] ?? 0;
   const a0 = laneStart(angleBetween(w, id, 0)); // lanes are aimed by the ship, never the decoy
   const n = MIRAGE.lanes;
-  for (let k = 0; k < n; k++) aimedLane(w, bs, x, y, wrapPi(a0 + (k * TAU) / n));
+  for (let k = 0; k < n; k++) {
+    const h = aimedLane(w, bs, x, y, wrapPi(a0 + (k * TAU) / n));
+    if (k === 0) aimLaneTele(w, bs, h); // lane 0 runs through the ship (laneOffsetDeg 0)
+  }
   bs.retry = 0;
   bs.n2 = MirageWarp.Idle;
 }

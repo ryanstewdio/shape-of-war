@@ -3,7 +3,7 @@
 // nothing draws. Reads only: never changes the simulation.
 import { BOSS_IDS } from '../../levelgen/leveldef';
 import { Kind, type World } from '../world';
-import { barHpOf, barMaxOf } from './core';
+import { barHpOf, barMaxOf, shipSheltered } from './core';
 import { bossOf } from './state';
 import { dashAimOf, dashHeadingOf } from './warden';
 import { tideFlipInOf, tideOf } from './gravitas';
@@ -128,7 +128,8 @@ export function readBoss(w: World, out: BossView): BossView {
     out.pincerBx = 0;
     out.pincerBy = 0;
   }
-  out.shipInPool = false; // fury tune stub: Swarm writes it
+  // Fury tune: the ship's centre in a live Gravitas shelter pool (also after the split, with no body).
+  out.shipInPool = bs !== null && bs.status === 'alive' && bs.spec.id === 'gravitas' && shipSheltered(w);
   if (bs === null || bs.status !== 'alive' || id <= 0 || w.alive[id] !== 1 || w.kind[id] !== Kind.Boss) {
     out.active = false;
     return out;
