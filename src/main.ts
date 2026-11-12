@@ -105,7 +105,7 @@ import { arenaName, armIntro, createIntroScreen, endlessIntroCard, introActive, 
 import { createResultsScreen } from './ui/results';
 import { createDoubleBack, installBackButton } from './native/backButton';
 import { installServiceWorkerCleanup } from './native/dropServiceWorker';
-import { createSettingsModel, createSettingsScreen } from './ui/settings';
+import { captureShowFps, createSettingsModel, createSettingsScreen } from './ui/settings';
 
 // Foundry's generator, if src/levelgen/generator.ts exists at build time. import.meta.glob
 // resolves to an empty record when the file is absent, so this builds either way.
@@ -661,10 +661,10 @@ async function boot(): Promise<void> {
     reward: (bonus, nextLevel) => {
       if (!customSeed) savePendingBonus({ level: nextLevel, bonus });
     },
-  });
+  }, { capture: gated.capture });
   // Neon goes only through applyNeon; Show FPS and glow path through Glow's exported functions.
   const settingsModel = createSettingsModel({
-    setShowFps,
+    setShowFps: captureShowFps(setShowFps, gated.capture), // capture mode: never shown, setting kept
     setGlowPath,
     applyNeon: (n) => {
       try {

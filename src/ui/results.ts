@@ -206,8 +206,8 @@ export function detailItems(r: LevelResult): LabelledValue[] {
   ]);
 }
 
-/** Pure: the text shown for a result. */
-export function resultLines(r: LevelResult): ResultText {
+/** Pure: the text shown for a result. Capture mode (?dev=1&capture=1) never shows the dev fight line. */
+export function resultLines(r: LevelResult, capture = false): ResultText {
   const difficulty = r.difficulty === undefined ? '' : difficultyLabel(r.difficulty);
   const none = {
     difficulty,
@@ -224,7 +224,7 @@ export function resultLines(r: LevelResult): ResultText {
     newBest: false,
     details: detailItems(r),
     goalLine: '',
-    fightLine: r.fightLine ?? '',
+    fightLine: capture ? '' : (r.fightLine ?? ''),
     parReached: false,
     primary: 'retry' as const,
   };
@@ -271,7 +271,12 @@ export function headlineTone(r: Pick<LevelResult, 'mode' | 'success'>): VectorTo
 
 const pct = (f: number): string => `${Math.round(f * 1000) / 10}%`;
 
-export function createResultsScreen(parent: HTMLElement, actions: ResultsActions): ResultsScreen {
+/** Screen options. `capture`: capture mode is on, so dev readouts stay hidden. */
+export interface ResultsOptions {
+  capture?: boolean;
+}
+
+export function createResultsScreen(parent: HTMLElement, actions: ResultsActions, opts: ResultsOptions = {}): ResultsScreen {
   const s = createScreen(parent);
   s.root.classList.add('sow-card-screen');
   const card = el('div', 'sow-card sow-results');
@@ -342,7 +347,7 @@ export function createResultsScreen(parent: HTMLElement, actions: ResultsActions
   return {
     ...s,
     showResult(r) {
-      const t = resultLines(r);
+      const t = resultLines(r, opts.capture === true);
       setVectorText(title, t.title, { tone: headlineTone(r) });
       card.classList.toggle('sow-win', r.mode === 'adventure' && r.success);
       card.classList.toggle('sow-lose', r.mode === 'adventure' && !r.success);

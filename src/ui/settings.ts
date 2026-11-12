@@ -48,6 +48,14 @@ import { UNLOCK_ALL_CONFIRM, UNLOCK_ALL_DONE, UNLOCK_ALL_LABEL } from './devUnlo
 export const RESET_CONFIRM_TEXT = 'Tap again: clears levels, story and call sign';
 export const RESET_DONE_TEXT = 'Progress, story and call sign reset';
 
+/**
+ * Capture mode (?dev=1&capture=1): the fps readout never shows, whatever Show FPS says. Wraps
+ * Glow's setShowFps so the stored setting and the Settings toggle stay as the player left them.
+ */
+export function captureShowFps(setShowFps: (on: boolean) => void, capture: boolean): (on: boolean) => void {
+  return capture ? () => setShowFps(false) : setShowFps;
+}
+
 export interface SettingsEffects {
   /** Glow's setShowFps from src/render/devpanel.ts. */
   setShowFps(on: boolean): void;
