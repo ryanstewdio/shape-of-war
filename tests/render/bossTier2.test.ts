@@ -3,6 +3,7 @@
 // Ember lane, trails and Mine pulse), the sprite planners and the bounded Gravitas lattice pull.
 import { describe, expect, it } from 'vitest';
 import { Kind } from '../../src/game/world';
+import { MIRAGE } from '../../src/game/bosses/table';
 import {
   BOSS_EMBER,
   BOSS_GRAVITAS,
@@ -127,7 +128,7 @@ describe('tier 2 registry coverage', () => {
     }
   });
 
-  it('the Mirage shield gap spans 70 degrees: the ring starts and ends at plus and minus 35', () => {
+  it('the Mirage shield gap spans MIRAGE.arcDeg: the ring starts and ends at plus and minus half of it', () => {
     const p = mirageShield(50);
     expect(p.t).toBe('line');
     if (p.t !== 'line') return;
@@ -165,7 +166,7 @@ describe('tier 2 line weight', () => {
 });
 
 describe('Mirage arc openness', () => {
-  it('opens over the end of the entrance, from shut to the full 70 degrees', () => {
+  it('opens over the end of the entrance, from shut to the full MIRAGE.arcDeg', () => {
     expect(mirageArcOpenness(MODE_ENTERING, 0)).toBe(0);
     expect(mirageArcOpenness(MODE_ENTERING, 1.5)).toBe(0);
     expect(mirageArcOpenness(MODE_ENTERING, 1.85)).toBeGreaterThan(0);
@@ -180,8 +181,8 @@ describe('Mirage arc openness', () => {
     for (const m of [MODE_GUARDED, MODE_ATTACKING, MODE_VULNERABLE, MODE_STUNNED, MODE_DYING]) expect(mirageArcOpenness(m, 0)).toBe(1);
   });
 
-  it('half angle is openness times 35 degrees, clamped, NaN safe', () => {
-    expect(mirageArcHalf(1)).toBeCloseTo((35 * Math.PI) / 180, 9);
+  it('half angle is openness times half of MIRAGE.arcDeg, clamped, NaN safe', () => {
+    expect(mirageArcHalf(1)).toBeCloseTo((MIRAGE.arcDeg / 2) * (Math.PI / 180), 9);
     expect(mirageArcHalf(0.5)).toBeCloseTo(MIRAGE_ARC_HALF / 2, 9);
     expect(mirageArcHalf(2)).toBe(MIRAGE_ARC_HALF);
     expect(mirageArcHalf(-1)).toBe(0);

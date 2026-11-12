@@ -280,7 +280,7 @@ export const MIRAGE_SHIELD = 1.0;
 
 /**
  * Pure: Mirage shield ring with its open arc centred on +x (the view turns it to the arc angle), at
- * the full 70 degree opening. The renderer draws the closing (entrance, phase change) and the bright
+ * the full opening (MIRAGE.arcDeg). The renderer draws the closing (entrance, phase change) and the bright
  * window over it on the sprite layer, so one prebuilt ring serves every state.
  */
 export function mirageShield(R: number): ShapePrim {
@@ -300,7 +300,7 @@ export function mirageLips(R: number): ShapePrim[] {
 }
 
 /**
- * Mirage (magenta, tier 2): a shield ring with a 70 degree open arc (shots count only through it),
+ * Mirage (magenta, tier 2): a shield ring with an open arc of MIRAGE.arcDeg (shots count only through it),
  * bright lips at the arc edges, a diamond lens inside and the white core.
  */
 function mirageSpec(o: number): ShapeSpec {
