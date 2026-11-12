@@ -7,7 +7,7 @@ Describes main at 1c528280eeb531681d8e54bce0c814031a72a6ec (version tester-1+1c5
 This edition updates the tester-1+96dcc2a edition. Entries marked "(changed in tester-1+1c52828)" or "(new in tester-1+1c52828)" are what moved.
 
 - **Guardian health bar.** Every guardian shows a blue Shield strip over a red Health strip. It cracks when the Shield strip empties (section 13).
-- **Fury.** Warden, Spindle, Ember, Mirage and Gravitas break for 4.5 s when their Shield strip empties, then fight enraged until they fall. Brood's Broodlings go into a frenzy instead (section 13).
+- **Fury.** Warden, Spindle, Ember, Mirage and Gravitas break for a moment when their Shield strip empties, then fight enraged until they fall. Brood's Broodlings go into a frenzy instead (section 13).
 - **Guardian retune.** New hit points for every guardian, Brood splits into Broodlings with their own bar, Spindle needles, Ember Leavers, a wider Mirage opening, Gravitas tide and shelter pools (section 13).
 - **Calmer guardian fights.** Fewer regular enemies while a guardian is on the field, set by difficulty: none on Easy (sections 6 and 13).
 - **Bigger guardian arenas** from level 10, and par per difficulty on guardian levels (sections 4, 12 and 13).
@@ -435,7 +435,7 @@ Space physics is set by difficulty: Easy Off, Normal Low, Hard Medium, Insane Hi
 - Half deflection gives half push, but the top speed stays the same.
 - Respawning zeroes your speed.
 - Slime halves your top speed. Turbo raises it by 35 percent.
-- Inside a Gravitas shelter pool (section 13) your ship handles as on High for as long as you stay in it, whatever the difficulty. (new in tester-1+1c52828)
+- Inside a Gravitas shelter pool (section 13) there is no pull, and your ship drifts for as long as you stay in it, whatever the difficulty. (new in tester-1+1c52828)
 
 ### Trough pull
 
@@ -970,7 +970,7 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 - **Health bar.** The bar has two strips: a blue Shield strip on top and a red Health strip under it. The Shield strip holds the top 34 percent of the guardian's health and empties first. The guardian cracks the moment it is empty, and the strip dims. Then the Health strip drains; the second crack comes halfway down it. Gravitas and Tempest carry their remaining health into their parts, so the bar runs on. Brood's Broodlings get a full bar of their own. (new in tester-1+1c52828)
 - **Phases.** A 2 phase guardian changes at half health; a 3 phase one at two thirds and one third; Prism at 75, 50 and 25 percent. A guardian with a fury starts phase 2 at its break instead. Each change pauses its attacks for 1 s. (changed in tester-1+1c52828)
 - **Cracks.** When the Shield strip empties (below 66 percent health) its outline cracks; below 33 percent it cracks further and a piece breaks off. The cracks glow brighter as its health drops. Gravitas and Tempest split into smaller parts at the second crack. Brood splits when both its strips are empty. The Twins crack only once their shared Shield strip is gone. (changed in tester-1+1c52828)
-- **Fury.** Warden, Spindle, Ember, Mirage and Gravitas have a fury. When the Shield strip empties the guardian breaks: for 4.5 s it stands still, shakes and flashes, its attacks and Hornets clear, its core closes, and no hit hurts it. Then it is enraged until it falls: it changes colour and its attacks change (see each guardian below). Your death does not end the fury. Brood has no fury of its own; its Broodlings go into a frenzy instead. (new in tester-1+1c52828)
+- **Fury.** Warden, Spindle, Ember, Mirage and Gravitas have a fury. When the Shield strip empties the guardian breaks: for a short time (4.5 s for Warden, Spindle and Ember) it stands still, shakes and flashes, its attacks and Hornets clear, its core closes, and no hit hurts it. Then it is enraged until it falls: it changes colour and its attacks change (see each guardian below). Your death does not end the fury. Brood has no fury of its own; its Broodlings go into a frenzy instead. (new in tester-1+1c52828)
 - **Hit feedback.** A shot that hurts a guardian, or one of its parts, flashes its body white for an instant, throws sparks in its colour and plays a soft tick. A blocked shot throws one small grey spark and a duller, quieter thunk. (new in tester-1+1c52828)
 - **Warnings.** Every attack shows a warning first (1.0 s on early guardians, 0.8 s on Ember, Mirage and Gravitas, 0.6 s on the rest), during which it is harmless. An attack that would appear right on you waits 0.3 s.
 - **Shots.** Every guardian also fires a volley every 5 to 6.5 s, cycling an aimed fan, a ring burst and a pincer, more bullets each phase. Guardian bullets fly straight, at most 240 u/s, and are only fired while you are at least 300 u away.
@@ -986,13 +986,13 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | Body 340 hits on Normal, then 3 Broodlings of 45 hits each. Three quarters of both on its first fight at level 5 (changed in tester-1+1c52828) |
+| Health | A body, then 3 Broodlings. Both are weaker on its first fight at level 5. Brood is being retuned, so this guide gives no numbers for its health (changed in tester-1+1c52828) |
 | Phases | 2 (phase 2 below half health) |
 | Movement | Prowls toward you at 75 u/s (90 in phase 2) for 3 s (2.2 s in phase 2), then charges |
 | Attacks | Charge: a lane warning for 1.0 s, then a charge at 320 u/s (360 in phase 2) for up to 1.8 s or until it hits a wall, then a 0.6 s recovery. Darts: 3 every 6 s (4 every 5 s in phase 2) |
 | Weak state | Immune while any of its 3 pods lives. The pods circle at 90 u and pop in 1 hit. Break all three and its core opens for 5 s: it flees and never charges. Pods regrow 9 s after the last one broke |
 | Split | When both its strips are empty its body and pods vanish and 3 Broodlings appear, flashing white. They get their own full bar, labelled "Broodlings". One chases you, one circles you and lays Slime, one keeps away and fires 2 Darts every 4 s. Touching any Broodling costs a life. The fight ends with the third (changed in tester-1+1c52828) |
-| Frenzy | When the first Broodling dies the others go into a frenzy: hot green with red cores, 1.25 times faster. Every 4 s two of them close on you from opposite sides: each stops for 0.8 s, flashing white, with a green aim line to a point 140 u past you, then drives through that point at 320 u/s for up to 1.2 s. A lone survivor keeps the speed and hunts you (new in tester-1+1c52828) |
+| Frenzy | When the first Broodling dies the others go into a frenzy: hot green with red cores, and faster. Then they pincer you: two of them close on you from opposite sides, stop and flash white while green aim lines show where they will go, then drive through along those lines. A lone survivor hunts you (new in tester-1+1c52828) |
 | Counter | Break the pods fast, then pour fire into the core. Step off the charge lane. In the frenzy, move off the line between the two aim lines before they drive (changed in tester-1+1c52828) |
 | Intro | "Brood, Keeper of the Nest, wakes." / "It kept small shapes safe and warm." / "A fallen legend took its green light." / "Now it guards its nest from everyone." / "Three pods shield it. Break all three," / "then strike. Step off its charge line." / Torus: "It is not cruel, {callsign}. It is lost." |
 | Freed | "Green light returns. Brood is free." / "One star wakes. Vertane remembers you." |
@@ -1052,12 +1052,12 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | 1,150 hits on Normal (changed in tester-1+1c52828) |
+| Health | Mirage is being retuned, so this guide gives no numbers for its health (changed in tester-1+1c52828) |
 | Phases | 3 |
 | Attacks | Warp: every 3.0 s (2.5 s, then 2.0 s by phase) it warps to a spot 200 to 300 u from you. A ring marks the spot 0.5 s early. It will not land while you are close to the spot. Lanes: on landing it fires 8 lanes outward, 600 u long, each with a 0.8 s warning. One lane always runs through where you are (changed in tester-1+1c52828) |
-| Weak state | Its shield lets hits through only a 180 degree open arc that turns slowly round it. Shots that land elsewhere do nothing (changed in tester-1+1c52828) |
+| Weak state | Its shield lets hits through only an open arc of half its ring, which turns slowly round it. Shots that land elsewhere do nothing (changed in tester-1+1c52828) |
 | Mirrors | At the second crack it leaves 2 Mirror copies on its last two landing spots. They pop in 1 hit, are safe to touch and come back every 6 s |
-| Fury | When its Shield strip empties its mirror ring shatters and it breaks for 4.5 s, then stays enraged with a flickering double image and a white hot edge. Every warp now shows 3 landing rings at least 120 u apart. Only one is real; the false rings vanish 0.2 s before the landing (new in tester-1+1c52828) |
+| Fury | When its Shield strip empties its mirror ring shatters and it breaks, then stays enraged with a flickering double image and a white hot edge. Every warp now shows 3 landing rings. Only one is real; the false rings vanish just before the landing (new in tester-1+1c52828) |
 | Counter | Move off the ring, step out of the lane aimed at you, and time shots into the open arc. Enraged, keep clear of all three rings (changed in tester-1+1c52828) |
 | Intro | "Mirage, Keeper of True Sight." / "It showed Vertane what was real." / "The fallen legend taught it to trick." / "Now it shows only what is not there." / "A ring shows where it will land. Move." / "Shoot through the gap in its shield." / Torus: "When it sees true, you will see too." |
 | Freed | "Magenta light returns. Mirage sees true." / "And it shows you what really happened." / "A legend named Vecta took their light." / "He wanted all of it for himself." |
@@ -1068,13 +1068,13 @@ Settings, 3D tilt: Off (default), Low (7 degrees) or High (13 degrees). It tilts
 
 | Field | Detail |
 |---|---|
-| Health | 1,704 hits on Normal (changed in tester-1+1c52828) |
+| Health | Gravitas is being retuned, so this guide gives no numbers for its health (changed in tester-1+1c52828) |
 | Phases | 3 |
 | Movement | Seeks you at 45 u/s and pulls you toward it within 300 u (up to 100 u/s). The pull never kills by itself |
 | Attacks | Collapsing rings: a ring starts at 480 u and closes in at 220 u/s with a 60 degree gap facing you, every 5 s (4 s, then 3 s by phase) |
 | Weak state | It takes no damage until all 3 anchors are gone. Anchors circle it at 140 u and take 6 hits each. Each lost anchor weakens the pull by a third. Anchors never regrow, even after you die. Then the core stays open |
 | Split | At the second crack it splits into 2 Gravitants that share its remaining health, circling a shared centre that follows you. Each has its own pull. The rings keep closing on them. Touching a Gravitant costs a life (changed in tester-1+1c52828) |
-| Fury | When its Shield strip empties it breaks for 4.5 s, collapsing to a point and swelling back, then stays enraged, violet with a spinning white ring. Tide: every 4 s its pull flips to a push of the same strength and back, and a ring flashes on its body 0.8 s before each flip. Shelter pools: every 3 s it leaves a violet pool of radius 80 u where it stands. A pool lasts 8 s and shrinks away over its last 2 s; at most 4 are out at once. Inside a pool there is no pull or push, and your ship floats (section 7). After the split the tide and the pools follow the pair (new in tester-1+1c52828) |
+| Fury | When its Shield strip empties it breaks, collapsing to a point and swelling back, then stays enraged, violet with a spinning white ring. Tide: its pull keeps flipping to a push and back, and a ring flashes on its body just before each flip. Shelter pools: it leaves violet pools where it stands, which shrink away after a while. Inside a pool there is no pull or push, and your ship drifts (section 7). After the split the tide and the pools follow the pair (new in tester-1+1c52828) |
 | Counter | Shoot the anchors first. Fly out through each ring's gap. Fight the pull by moving away. Enraged, shelter in a pool when the tide turns against you (changed in tester-1+1c52828) |
 | Intro | "Gravitas, Heart of the Deep." / "Its pull held all of Vertane together." / "Vecta made its pull too strong." / "Now it pulls everything to itself." / "Break its three anchors to weaken it." / "Fly out through the gap in each ring." / Torus: "No more riddles. I am with you." |
 | Freed | "Violet light returns. The heart is calm." / "Vertane holds together again." / "And now you see him, far on the rim." / "Vecta, the Grey Legend, sees you too." |
@@ -1357,7 +1357,7 @@ These are left in the game for testing. Since tester-1+1c52828 most of them show
 - Tester session only: a two finger long press of 1 s near the top left corner opens a small debug panel with Show FPS and Glow toggles. (changed in tester-1+1c52828)
 - Tester session only: tapping the build label at the bottom of Settings 5 times within 3 s shows a stress test button. It starts a test level. (changed in tester-1+1c52828)
 - Tester session only: Settings shows "Unlock all levels". Tap it twice ("Tap again: unlock levels 1 to 50") to unlock levels 1 to 50. Stars and scores are not touched. (new in tester-1+1c52828)
-- Tester session only: when a guardian falls, a line with the fight time shows for 6 s and again on the results, for example "Warden 1:05 (to break 0:31, break 0:05, enraged 0:29)" or "Brood 1:52 (body 0:58, Broodlings 0:54)". Paused time does not count. (new in tester-1+1c52828)
+- Tester session only: when a guardian falls, a line with the fight time shows for 6 s and again on the results, for example "Warden 1:05 (to break 0:31, break 0:05, enraged 0:29)". After Brood the line splits the body and Broodlings times. Paused time does not count. (new in tester-1+1c52828)
 - Guardian levels are built by generator version 14 and trough levels by version 12; other levels are unchanged. (new in tester-1+1c52828)
 - The Android test app ships no offline copy of the web game and drops one left by an old install on first launch. Android backup keeps your progress but leaves out that offline copy. (new in tester-1+1c52828)
 
@@ -1376,7 +1376,7 @@ These are left in the game for testing. Since tester-1+1c52828 most of them show
 | Drone pickup | A ring that gives your drone a mode for 20 s |
 | Drum | A cylinder arena that wraps left to right |
 | Enraged | Faster after crossing a membrane (enemies), after a long fight (guardians), or after a guardian's fury break (changed in tester-1+1c52828) |
-| Fury | A guardian's second form: a 4.5 s break when its Shield strip empties, then enraged until it falls (new in tester-1+1c52828) |
+| Fury | A guardian's second form: a short break when its Shield strip empties, then enraged until it falls (new in tester-1+1c52828) |
 | Geom | Lime green diamond dropped by kills. Plus 1 multiplier, plus 1 super charge |
 | Guardian | A boss. Every 5th Adventure level |
 | Level code | The 8 character code after "#" that identifies a level. Same seed and level, same code |
@@ -1390,7 +1390,7 @@ These are left in the game for testing. Since tester-1+1c52828 most of them show
 | Roster | The enemy kinds a level can spawn, 3 to 6, always with Grunt |
 | Run seed | The number your Adventure levels are built from |
 | Segment | 30 s of Endless with its own roster and waves |
-| Shelter pool | A violet pool an enraged Gravitas leaves. No pull or push inside, and your ship floats (new in tester-1+1c52828) |
+| Shelter pool | A violet pool an enraged Gravitas leaves. No pull or push inside, and your ship drifts (new in tester-1+1c52828) |
 | Shield strip | The blue top strip of a guardian's health bar. The guardian cracks when it empties (new in tester-1+1c52828) |
 | Super | Homing, Detonate or Turbo. Charged by 60 geoms |
 | Super nova | A gravity well's whirlpool state, with a wider, stronger pull |

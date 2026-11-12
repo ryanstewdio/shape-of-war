@@ -8,4 +8,5 @@ Canon conflicts (code wins, guide follows code):
 - docs/01-game-design.md:372 five build label taps reveal the stress button; code needs a dev session (src/ui/settings.ts:583).
 - docs/13-v3-spec-addendum.md:86 Endless boss 1 is Warden; code opens with Brood (src/levelgen/boss.ts orderedBossOfNumber, bossForSegment).
 - docs/11-v2-spec-addendum.md:30 Bulwark shield absorbs player bullets; Pierce passes through for 2 damage (src/game/combat.ts:210, src/game/enemies/bulwark.ts PIERCE_BULWARK_DAMAGE).
+Amendment (Morpheus 2026-11-12): Mirage, Gravitas and Brood are described by behaviour only, with no health numbers and no fury seconds, speeds or sizes (Health rows, Frenzy, Mirage and Gravitas Fury rows, half ring opening, shelter pool drift, Fury rule, glossary, tester fight line example). Their older non fury numbers are unchanged.
 Unknowns: none written as unknown. Note: the guardian kill bonus reads Normal par on every difficulty (src/game/bosses/core.ts:851 w.level.par); the guide now says so.
