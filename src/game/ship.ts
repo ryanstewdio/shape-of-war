@@ -3,7 +3,8 @@
 // invulnerability timer.
 import type { InputState } from '../input/types';
 import { bus } from '../core/events';
-import { createThrustOut, stepThrust, type SpaceLevel } from '../core/physics';
+import { createThrustOut, stepThrust, stepThrustRow, type SpaceLevel } from '../core/physics';
+import { GRAVITAS_POOL } from './bosses/table';
 import { confineOn, createConfineResult } from './arena';
 import { fireWeapon, weaponRate } from './weapons';
 import type { World } from './world';
@@ -37,7 +38,7 @@ export interface ShipState {
   slowUntil: number;
   /** Speed multiplier while slowed (Swarm sets 0.8 in wave C). */
   slowFactor: number;
-  /** Fury fixes: one step override the boss sim writes (Gravitas shelter pool); thrust on 'high'. Cleared every step. */
+  /** Fury fixes: one step override the boss sim writes (Gravitas shelter pool); thrust on GRAVITAS_POOL.float. Cleared every step. */
   float: boolean;
 }
 
@@ -94,7 +95,8 @@ const thrust = createThrustOut();
 
 export function stepShip(w: World, dt: number, input: InputState): void {
   const s = w.ship;
-  const space = s.float ? 'high' : s.space;
+  const space = s.space;
+  const float = s.float;
   s.float = false;
   if (!s.active) return;
   if (s.invuln > 0) s.invuln = Math.max(0, s.invuln - dt);
@@ -116,11 +118,12 @@ export function stepShip(w: World, dt: number, input: InputState): void {
     vx *= cap;
     vy *= cap;
   }
-  if (space !== 'off') {
+  if (float || space !== 'off') {
     // Thrust (docs/11 "Space physics"): velocity integrates from the stored post slide velocity.
     const held = input.move.active && (mx !== 0 || my !== 0);
     const slow = (w.time < s.slowUntil ? s.slowFactor : 1) * cap;
-    stepThrust(space, w.vx[SHIP_ID] ?? 0, w.vy[SHIP_ID] ?? 0, mx, my, held, s.holdT, dt, slow, thrust);
+    if (float) stepThrustRow(GRAVITAS_POOL.float, w.vx[SHIP_ID] ?? 0, w.vy[SHIP_ID] ?? 0, mx, my, held, s.holdT, dt, slow, thrust);
+    else stepThrust(space, w.vx[SHIP_ID] ?? 0, w.vy[SHIP_ID] ?? 0, mx, my, held, s.holdT, dt, slow, thrust);
     vx = thrust.vx;
     vy = thrust.vy;
     s.holdT = thrust.holdT;

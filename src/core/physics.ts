@@ -69,7 +69,25 @@ export function stepThrust(
     out.holdT = 0;
     return out;
   }
-  const row = SPACE_TABLE[level];
+  return stepThrustRow(SPACE_TABLE[level], vx, vy, dirX, dirY, held, holdT, dt, slowFactor, out);
+}
+
+/**
+ * One sim step of thrust physics on a given row (stepThrust passes its SPACE_TABLE row; the Gravitas
+ * shelter pool passes its float row). Same arguments and output as stepThrust past level 'off'.
+ */
+export function stepThrustRow(
+  row: ThrustRow,
+  vx: number,
+  vy: number,
+  dirX: number,
+  dirY: number,
+  held: boolean,
+  holdT: number,
+  dt: number,
+  slowFactor: number,
+  out: ThrustOut,
+): ThrustOut {
   if (held) {
     const t = holdT + dt;
     let a = thrustAccel(row, t);

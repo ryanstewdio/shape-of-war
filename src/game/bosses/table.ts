@@ -44,7 +44,8 @@ export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
   brood: { tier: 1, hp: 340, phases: 2, radius: 52, colour: 'bossGreen' },
   spindle: { tier: 1, hp: 1350, phases: 2, radius: 48, colour: 'bossYellow' },
   ember: { tier: 2, hp: 822, phases: 3, radius: 44, colour: 'bossOrange' },
-  mirage: { tier: 2, hp: 1150, phases: 3, radius: 50, colour: 'bossMagenta' },
+  /** Fury tune (Ryan 2026-11-12, from his 2:45 device fight): 650 (1150 before). */
+  mirage: { tier: 2, hp: 650, phases: 3, radius: 50, colour: 'bossMagenta' },
   gravitas: { tier: 2, hp: 1704, phases: 3, radius: 60, colour: 'bossViolet' },
   bastion: { tier: 3, hp: 1833, phases: 3, radius: 70, colour: 'bossRed' },
   tempest: { tier: 3, hp: 1832, phases: 3, radius: 46, colour: 'bossRed' },
@@ -548,15 +549,16 @@ export const GRAVITAS_FURY = {
 } as const;
 
 /**
- * Gravitas bent shots (Ryan 2026-11-12, option A; fury tune stub, starting values). Enraged, inside
- * radius u of each Gravitas pull (the body, then each Gravitant at its own strength) a player shot not
- * fired from a pool (BulletPool.straight 0) turns away from the core toward the side it is passing, at
- * up to rate rad/s at the body edge, falling off to 0 at radius. While the tide pushes, the shot is
- * also pushed outward at up to scatter u/s^2. Swarm tunes rate and scatter to the brief's acceptance.
+ * Gravitas bent shots (Ryan 2026-11-12, option A). Enraged, inside radius u of each Gravitas pull (the
+ * body, then each Gravitant at its own strength) a player shot not fired from a pool
+ * (BulletPool.straight 0) turns away from the core toward the side it is passing, at up to rate rad/s
+ * at the body edge, falling off to 0 at radius. While the tide pushes, the shot is also pushed outward
+ * at up to scatter u/s^2. Fury tune: rate 10 (7 in the stub; 9.5 is the least that sends a spread
+ * volley at the core centre from 200 to 300 u wide at the 1600 u/s top shot speed), scatter 5000.
  */
 export const GRAVITAS_BEND = {
   radius: 300,
-  rate: 7,
+  rate: 10,
   scatter: 5000,
 } as const;
 
