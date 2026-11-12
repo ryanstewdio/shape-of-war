@@ -119,11 +119,12 @@ describe('Settings build label taps are a ?dev=1 item', () => {
 
 describe('main.ts dev gates', () => {
   const main = read('src/main.ts');
-  it('the debug panel install sits behind gated.dev', () => {
-    expect(main).toMatch(/if \(gated\.dev\) \{\s+const panel = installDevPanel\(/);
+  it('the debug panel install sits behind gated.dev (and off in capture mode)', () => {
+    expect(main).toContain('const view = devView(gated.dev, gated.capture);');
+    expect(main).toMatch(/if \(view\.panel\) \{\s+const panel = installDevPanel\(/);
   });
   it('the settings screen and HUD receive the dev flag', () => {
     expect(main).toContain('dev: gated.dev,');
-    expect(main).toContain('hud.setDevCode(gated.dev)');
+    expect(main).toContain('hud.setDevCode(view.readouts)');
   });
 });
