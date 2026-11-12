@@ -16,6 +16,10 @@ export const enum BossMode {
 
 /** Kind.BossHazard w.a: the hazard primitive. */
 export const enum HazardType {
+  /**
+   * A lane: w.vx its length, w.radius its half width. Fury tune contract (Ryan 2026-11-12): w.vy above
+   * 0 is the lane's own telegraph in seconds (Mirage's aimed lane); 0 means the tier telegraph.
+   */
   Lane = 0,
   Ring = 1,
   Sweep = 2,

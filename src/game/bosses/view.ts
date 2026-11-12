@@ -87,6 +87,8 @@ export interface BossView {
   pincerB?: number;
   pincerBx?: number;
   pincerBy?: number;
+  /** Fury tune contract stub (Ryan 2026-11-12; Swarm writes, Glow reads): true while the ship is inside a Gravitas shelter pool. */
+  shipInPool?: boolean;
 }
 
 /** Fill out from the boss of the world and return it. No allocation: out is the caller's object. */
@@ -126,6 +128,7 @@ export function readBoss(w: World, out: BossView): BossView {
     out.pincerBx = 0;
     out.pincerBy = 0;
   }
+  out.shipInPool = false; // fury tune stub: Swarm writes it
   if (bs === null || bs.status !== 'alive' || id <= 0 || w.alive[id] !== 1 || w.kind[id] !== Kind.Boss) {
     out.active = false;
     return out;
@@ -151,5 +154,5 @@ export function readBoss(w: World, out: BossView): BossView {
 
 /** A fresh BossView for a caller to keep and reuse (allocates once; call at setup, not per frame). */
 export function createBossView(): BossView {
-  return { active: false, id: 0, mode: 0, phase: 1, hp: 0, maxHp: 0, modeT: 0, x: 0, y: 0, rot: 0, radius: 0, exposed: false, exposedLeft: -1, exposedT: 0, shielded: false, shieldLeft: 0, barOn: false, barHp: 0, barMax: 0, broodlings: false, fury: 0, furyT: 0, dashAim: -1, dashHeading: 0, hitT: -1, frenzy: false, tide: 0, tideFlipIn: -1, pincerAim: -1, pincerDrive: false, pincerA: -1, pincerAx: 0, pincerAy: 0, pincerB: -1, pincerBx: 0, pincerBy: 0 };
+  return { active: false, id: 0, mode: 0, phase: 1, hp: 0, maxHp: 0, modeT: 0, x: 0, y: 0, rot: 0, radius: 0, exposed: false, exposedLeft: -1, exposedT: 0, shielded: false, shieldLeft: 0, barOn: false, barHp: 0, barMax: 0, broodlings: false, fury: 0, furyT: 0, dashAim: -1, dashHeading: 0, hitT: -1, frenzy: false, tide: 0, tideFlipIn: -1, pincerAim: -1, pincerDrive: false, pincerA: -1, pincerAx: 0, pincerAy: 0, pincerB: -1, pincerBx: 0, pincerBy: 0, shipInPool: false };
 }

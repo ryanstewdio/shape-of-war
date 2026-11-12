@@ -272,8 +272,15 @@ async function boot(): Promise<void> {
   const showLabel = (): void => {
     viewportLabel.style.display = !gated.capture && (query.debug || failed) ? '' : 'none';
   };
+  // Where an error came from (file:line:col and the first stack frame) so a phone report maps to source.
+  const errorWhere = (e: ErrorEvent): string => {
+    const file = e.filename.split('/').pop() ?? '';
+    const err: unknown = e.error;
+    const frame = err instanceof Error && typeof err.stack === 'string' ? (err.stack.split('\n')[1] ?? '').trim().replace(/[a-z]+:\/\/\S*\//gi, '') : '';
+    return ` @ ${file}:${e.lineno}:${e.colno}${frame !== '' ? ` | ${frame}` : ''}`;
+  };
   window.addEventListener('error', (e) => {
-    note = `error: ${e.message}`;
+    note = `error: ${e.message}${errorWhere(e)}`;
     failed = true;
     showLabel();
     paintLabel();

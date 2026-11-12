@@ -485,6 +485,8 @@ export const MIRAGE = {
    * lane keeps the full tier telegraph; the ship steps out of it inside that time.
    */
   laneOffsetDeg: 0,
+  /** Fury tune (Ryan 2026-11-12): the aimed lane's own telegraph, s (the other lanes keep the tier telegraph). */
+  aimedTeleSec: 1.2,
   laneLength: 600,
   laneHalfWidth: 22,
   /** Fury fixes (Ryan 2026-11-12): 180 deg turning at 0.8 rad/s (70 deg at 1.5 rad/s before). */
@@ -546,11 +548,24 @@ export const GRAVITAS_FURY = {
 } as const;
 
 /**
+ * Gravitas bent shots (Ryan 2026-11-12, option A; fury tune stub, starting values). Enraged, inside
+ * radius u of each Gravitas pull (the body, then each Gravitant at its own strength) a player shot not
+ * fired from a pool (BulletPool.straight 0) turns away from the core toward the side it is passing, at
+ * up to rate rad/s at the body edge, falling off to 0 at radius. While the tide pushes, the shot is
+ * also pushed outward at up to scatter u/s^2. Swarm tunes rate and scatter to the brief's acceptance.
+ */
+export const GRAVITAS_BEND = {
+  radius: 300,
+  rate: 7,
+  scatter: 5000,
+} as const;
+
+/**
  * Gravitas shelter pools (Ryan 2026-11-12, version 1 of the low gravity puddle redesign; fury fixes
  * stub, starting values). Enraged, Gravitas (after the split, the pair centre) leaves a pool where it
  * stands every everySec of attack time. A pool has radius u, lasts lifeSec and shrinks to 0 over its
  * last fadeSec; at most max live at once (the oldest goes first). A ship inside gets no Gravitas pull
- * or push and floats (the high Space physics thrust handling). The tide stays. HazardType.Pool.
+ * or push and floats (the float thrust row below). The tide stays. HazardType.Pool.
  */
 export const GRAVITAS_POOL = {
   everySec: 3,
@@ -558,6 +573,11 @@ export const GRAVITAS_POOL = {
   lifeSec: 8,
   fadeSec: 2,
   max: 4,
+  /**
+   * Fury tune (Ryan 2026-11-12): the drift inside a pool, a thrust row about a third of the low Space
+   * physics grip with no brake assist and little drag (stepThrust row fields), replacing 'high'.
+   */
+  float: { aMin: 400, tau: 0.6, aMax: 800, vMax: 420, drag: 0.2, brake: 1 },
   /**
    * Hazard slots a pool always leaves free for the rings (at most two live at once): a pool spawns
    * only while the live hazards plus this many stay inside MAX_HAZARDS. The pulls spawn first.
