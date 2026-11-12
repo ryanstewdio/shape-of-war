@@ -443,13 +443,15 @@ export function hazardLethalAt(w: World, bs: BossState, id: number, px: number, 
  */
 export function bossContacts(w: World, dt: number): boolean {
   const bs = bossOf(w);
+  // Gravitas shelter: a ship inside a live pool gets no pull this step and floats on the next, and
+  // its shots from the next step on fly straight (fury tune: BulletPool.spawnStraight, 0 otherwise).
+  const shelter = bs !== null && bs.status === 'alive' && bs.spec.id === 'gravitas' && shipSheltered(w);
+  w.bullets.spawnStraight = shelter ? 1 : 0;
   if (bs === null || bs.status !== 'alive' || !w.ship.active) return false;
   const g = gs(w);
   const sx = w.x[0] ?? 0;
   const sy = w.y[0] ?? 0;
   const blend = 1 - pullRetain(dt);
-  // Gravitas shelter: a ship inside a live pool gets no pull this step and floats on the next.
-  const shelter = bs.spec.id === 'gravitas' && shipSheltered(w);
   if (shelter) w.ship.float = true;
   for (let h = 1; h < w.cap && !shelter; h++) {
     if (w.alive[h] !== 1 || w.kind[h] !== Kind.BossHazard || w.a[h] !== HazardType.Pull) continue;

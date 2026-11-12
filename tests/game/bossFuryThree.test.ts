@@ -343,10 +343,16 @@ describe('mirage false landings', () => {
     const order = new Set<number>();
     for (let warp = 0; warp < 12; warp++) {
       let guard = 0;
-      while (s.n2 !== MirageWarp.Marked && guard++ < 1200) stepGame(w, DT, idle());
+      let clock = w.time;
+      while (s.n2 !== MirageWarp.Marked && guard++ < 1200) {
+        clock = w.time;
+        stepGame(w, DT, idle());
+      }
       const m = markers(w);
-      const k = m.findIndex((h) => isReal(w, h));
-      if (m.length === MIRAGE_FURY.rings) order.add(k);
+      expect(m.some((h) => isReal(w, h))).toBe(true);
+      // Fury tune: the candidate index of the real ring (the marker id order follows id reuse, which
+      // the aimed lane's longer life changed), read the way markFury picks it on the marking step.
+      if (m.length === MIRAGE_FURY.rings) order.add(realRingIndex(clock, s.n1 - 1, m.length));
       while (s.n2 === MirageWarp.Marked && guard++ < 2400) stepGame(w, DT, idle());
     }
     expect(order.size).toBeGreaterThan(1);

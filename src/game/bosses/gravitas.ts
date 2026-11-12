@@ -29,7 +29,15 @@
 // pull, when it would leave fewer than reserve hazard slots. A ship inside one gets no pull or push
 // (core.ts bossContacts and pushShip below) and floats (ShipState.float). Ability scratch (bs.abl):
 // 0 the pool clock.
+//
+// Bent shots (fury tune, Ryan 2026-11-12 option A; GRAVITAS_BEND): enraged, inside bend radius of each
+// live Gravitas pull (the body, then each Gravitant at its own strength) every player bullet but the
+// orbit blades and the straight ones (fired from a pool: BulletPool.straight) turns away from the core
+// toward the side it is passing, up to rate rad/s at the body edge, falling off to 0 at the radius;
+// while the tide pushes it is also pushed outward at up to scatter u/s^2. No PRNG, no allocation.
+// The boss sim writes BulletPool.spawnStraight (core.ts bossContacts).
 import { bus } from '../../core/events';
+import { STYLE_ORBIT } from '../bullets';
 import { pullRetain } from '../enemies/gravitywell';
 import { gs } from '../state';
 import { angleBetween, distBetween, moveHeading, moveTo, targetOf } from '../steer';
@@ -53,7 +61,7 @@ import {
 import { emitFury, furyClampDamage, furyDue, furyOnPhase, furyPhaseOf, startFuryBreak, stepFury } from './fury';
 import { angleToOn, pullSpeed } from './kit';
 import { bossOf, type BossState } from './state';
-import { FURY_BREAK_SEC, GRAVITANT, GRAVITAS, GRAVITAS_FURY, GRAVITAS_POOL, HAZARD_RECHECK_SEC, MAX_HAZARDS, MAX_PARTS } from './table';
+import { FURY_BREAK_SEC, GRAVITANT, GRAVITAS, GRAVITAS_BEND, GRAVITAS_FURY, GRAVITAS_POOL, HAZARD_RECHECK_SEC, MAX_HAZARDS, MAX_PARTS } from './table';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
 import { removeEntity } from '../remove';
 import { splitHp } from './tempest';
@@ -130,6 +138,65 @@ function holdPull(w: World, bs: BossState, p: number, s: number, dt: number): vo
   if (tideAt(bs.fury, bs.furyT) >= 0) return;
   bs.hzRate[p] = 0; // the core pull is off: the push replaces it
   pushShip(w, p, pullStrength(s), dt);
+}
+
+/** Pure: the bend share at d u from a core of radius coreR: 1 at the body edge, 0 at GRAVITAS_BEND.radius. */
+export function bendFalloff(d: number, coreR: number): number {
+  const R = GRAVITAS_BEND.radius;
+  if (!(d < R)) return 0;
+  if (d <= coreR) return 1;
+  const span = R - coreR;
+  return span > 0 ? (R - d) / span : 1;
+}
+
+/**
+ * Pure: the way a shot with velocity (vx, vy) turns, given (rx, ry) from the shot to the core: away
+ * from the core toward the side it is passing, -1 clockwise, 1 counter clockwise. A dead centre shot
+ * turns counter clockwise.
+ */
+export function bendSide(vx: number, vy: number, rx: number, ry: number): -1 | 1 {
+  return vx * ry - vy * rx > 0 ? -1 : 1;
+}
+
+/** Scratch for the shot to core delta. */
+const bv = { x: 0, y: 0 };
+
+/**
+ * Bend every bendable player shot near core (the body or a Gravitant) whose pull is p: strength is
+ * the pull's (w.vx keeps it through the tide) over the full GRAVITAS.pullMax. Enraged only.
+ */
+export function bendShots(w: World, bs: BossState, core: number, p: number, dt: number): void {
+  if (bs.fury !== 2 || core <= 0 || p <= 0 || w.alive[core] !== 1) return;
+  const k = (w.vx[p] ?? 0) / GRAVITAS.pullMax;
+  if (!(k > 0)) return;
+  const b = w.bullets;
+  const cx = w.x[core] ?? 0;
+  const cy = w.y[core] ?? 0;
+  const coreR = w.radius[core] ?? 0;
+  const push = tideAt(bs.fury, bs.furyT) < 0;
+  const rate = GRAVITAS_BEND.rate * k * dt;
+  const scatter = GRAVITAS_BEND.scatter * k * dt;
+  for (let i = 0; i < b.cap; i++) {
+    if (b.alive[i] !== 1 || b.style[i] === STYLE_ORBIT || b.straight[i] === 1) continue;
+    w.surface.delta(b.x[i] ?? 0, b.y[i] ?? 0, cx, cy, bv);
+    const d = Math.hypot(bv.x, bv.y);
+    const f = bendFalloff(d, coreR);
+    if (f <= 0) continue;
+    let vx = b.vx[i] ?? 0;
+    let vy = b.vy[i] ?? 0;
+    const a = bendSide(vx, vy, bv.x, bv.y) * rate * f;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    const nx = vx * c - vy * s;
+    vy = vx * s + vy * c;
+    vx = nx;
+    if (push && d > 0) {
+      vx -= (bv.x / d) * scatter * f;
+      vy -= (bv.y / d) * scatter * f;
+    }
+    b.vx[i] = vx;
+    b.vy[i] = vy;
+  }
 }
 
 /** Live shelter pools now. */
@@ -269,6 +336,7 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
   placeAnchors(w, id, bs);
   const n = countParts(w, bs);
   syncPull(w, id, bs, n, dt);
+  bendShots(w, bs, id, livePull(w, bs), dt);
   if (bs.retry > 0) {
     bs.retry = bs.retry - dt > 0 ? bs.retry - dt : 0;
   } else {
@@ -459,7 +527,10 @@ export function stepGravitant(w: World, id: number, dt: number): void {
   } else if (bs.fury === 2) {
     bs.furyT += dt; // the tide carries on through the split
   }
-  for (let k = 0; k < GRAVITANT.count; k++) syncSplitPull(w, bs, k, dt);
+  for (let k = 0; k < GRAVITANT.count; k++) {
+    syncSplitPull(w, bs, k, dt);
+    bendShots(w, bs, livePart(w, bs, k), pullAt(w, k === 0 ? bs.n0 : bs.n1), dt);
+  }
   if (bs.retry > 0) {
     bs.retry = bs.retry - dt > 0 ? bs.retry - dt : 0;
   } else {

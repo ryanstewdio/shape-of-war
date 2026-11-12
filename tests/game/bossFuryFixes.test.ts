@@ -4,7 +4,7 @@
 // shelter (no pull or push) and the float (ShipState.float, the 'high' thrust for one step).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bus } from '../../src/core/events';
-import { createThrustOut, stepThrust } from '../../src/core/physics';
+import { createThrustOut, stepThrust, stepThrustRow } from '../../src/core/physics';
 import {
   bossOnBomb,
   bossOnShipDeath,
@@ -75,10 +75,10 @@ const MAIN_BOT_STEPS: Readonly<Record<string, number>> = {
 };
 
 describe('fury fixes: the gate aware fight bot and Mirage', () => {
-  it('Mirage numbers: arc 180 deg at 0.8 rad/s, 1150 hit points, lanes on the bearing', () => {
+  it('Mirage numbers: arc 180 deg at 0.8 rad/s, 650 hit points (fury tune; 1150 at fury fixes), lanes on the bearing', () => {
     expect(MIRAGE.arcDeg).toBe(180);
     expect(MIRAGE.arcRate).toBe(0.8);
-    expect(BOSS_TABLE.mirage.hp).toBe(1150);
+    expect(BOSS_TABLE.mirage.hp).toBe(650);
     expect(MIRAGE.laneOffsetDeg).toBe(0);
     expect(CHASE_SPEED).toBe(SHIP_SPEED / 2);
     expect(CHASE_SPEED).toBe(210);
@@ -121,14 +121,14 @@ describe('fury fixes: the gate aware fight bot and Mirage', () => {
     expect(w.y[0]).toBe(250);
   });
 
-  it('only Mirage has a gate; Mirage on the gate aware bot reads 72 to 108 s at Normal, Easy shorter, Insane longer', () => {
+  it('only Mirage has a gate; Mirage on the gate aware bot reads 35 to 53 s at Normal (fury tune, 650 hit points), Easy shorter, Insane longer', () => {
     for (const id of BOSS_IDS) {
       const w = bossGame(id);
       expect(bs(w).def.gate !== undefined).toBe(id === 'mirage');
     }
     const normal = fightSeconds('mirage', { levelIndex: 25 });
-    expect(normal).toBeGreaterThanOrEqual(72);
-    expect(normal).toBeLessThanOrEqual(108);
+    expect(normal).toBeGreaterThanOrEqual(35);
+    expect(normal).toBeLessThanOrEqual(53);
     expect(fightSeconds('mirage', { levelIndex: 25, difficulty: 'easy' })).toBeLessThan(normal);
     expect(fightSeconds('mirage', { levelIndex: 25, difficulty: 'insane' })).toBeGreaterThan(normal);
   });
@@ -418,7 +418,7 @@ describe('fury fixes: shelter and float', () => {
     expect(w.x[0]).toBe(150);
   });
 
-  it('a sheltered ship floats: the next step moves on the high thrust; out of the pool it is the v1 path again', () => {
+  it('a sheltered ship floats: the next step moves on the float row (fury tune); out of the pool it is the v1 path again', () => {
     const { w } = gravitas();
     enrage(w, 0.5);
     placeBoss(w, -500, 0);
@@ -430,7 +430,7 @@ describe('fury fixes: shelter and float', () => {
     expect(w.ship.float).toBe(true);
     const vx0 = w.vx[0] ?? 0;
     const vy0 = w.vy[0] ?? 0;
-    const want = stepThrust('high', vx0, vy0, 0, 1, true, w.ship.holdT, DT, 1, createThrustOut());
+    const want = stepThrustRow(GRAVITAS_POOL.float, vx0, vy0, 0, 1, true, w.ship.holdT, DT, 1, createThrustOut());
     stepGame(w, DT, stick(0, 1));
     expect(w.vx[0]).toBeCloseTo(want.vx, 6);
     expect(w.vy[0]).toBeCloseTo(want.vy, 6);
@@ -444,7 +444,7 @@ describe('fury fixes: shelter and float', () => {
     expect(w.vy[0]).toBe(SHIP_SPEED);
   });
 
-  it('ship.ts hook: no float, every space level steps exactly as before; float on high changes nothing', () => {
+  it('ship.ts hook: no float, every space level steps exactly as before; a float steps the float row on any level', () => {
     const levels = ['off', 'low', 'medium', 'high'] as const;
     for (const level of levels) {
       const { w } = makeGame();
@@ -474,23 +474,26 @@ describe('fury fixes: shelter and float', () => {
         expect(Number.isFinite(x0)).toBe(true);
       }
     }
-    // On high a float is no change at all.
-    const a = makeGame().w;
-    const b = makeGame().w;
-    a.ship.space = 'high';
-    b.ship.space = 'high';
-    for (let i = 0; i < 120; i++) {
-      b.ship.float = true;
-      a.x[0] = 0;
-      a.y[0] = 0;
-      b.x[0] = 0;
-      b.y[0] = 0;
-      const input = stick(Math.cos(i * 0.1), Math.sin(i * 0.07));
-      stepGame(a, DT, input);
-      stepGame(b, DT, input);
-      expect(b.x[0]).toBe(a.x[0]);
-      expect(b.y[0]).toBe(a.y[0]);
-      expect(b.vx[0]).toBe(a.vx[0]);
+    // Fury tune: a float steps GRAVITAS_POOL.float (not 'high') on every level, 'off' included.
+    for (const level of levels) {
+      const b = makeGame().w;
+      b.ship.space = level;
+      const out = createThrustOut();
+      for (let i = 0; i < 120; i++) {
+        b.ship.float = true;
+        b.x[0] = 0;
+        b.y[0] = 0;
+        const held = i % 50 < 40;
+        const k = Math.hypot(Math.cos(i * 0.1), Math.sin(i * 0.07));
+        const mx = (Math.cos(i * 0.1) / k) * 0.9; // inside the unit stick
+        const my = (Math.sin(i * 0.07) / k) * 0.9;
+        const vx0 = b.vx[0] ?? 0;
+        const vy0 = b.vy[0] ?? 0;
+        stepThrustRow(GRAVITAS_POOL.float, vx0, vy0, held ? mx : 0, held ? my : 0, held, b.ship.holdT, DT, 1, out);
+        stepGame(b, DT, held ? stick(mx, my) : idle());
+        expect(b.vx[0]).toBeCloseTo(out.vx, 3);
+        expect(b.vy[0]).toBeCloseTo(out.vy, 3);
+      }
     }
   });
 
