@@ -70,7 +70,7 @@ import { createScreenAnnouncer } from './ui/screenEvent';
 import { applyNeon, currentNeon, getNeonState, onNeonChanged } from './render/neon';
 import { syncFourthStarStyle } from './ui/fourthStar';
 import { syncVectorFontStyle } from './ui/vectorFont';
-import { createRenderer, type GameRenderer, type StickCircleLike } from './render/renderer';
+import { createRenderer, type GameRenderer } from './render/renderer';
 import { attachTouch, type TouchHandle } from './input/touch';
 import { createCuePort, type SimSnapshot } from './ui/cueFlow';
 import { confine, createUiRoot, setTapSound } from './ui/dom';
@@ -85,6 +85,7 @@ import { createHowToScreen } from './ui/howTo';
 import { createLevelSelect } from './ui/levelSelect';
 import { continueLabel, createMenuScreen, footerLine, shortSha } from './ui/menu';
 import { gateSearch, isDev } from './ui/devGate';
+import { devView, isCapture, stickCircles } from './ui/capture';
 import { unlockAllLevels } from './ui/devUnlock';
 import { FIGHT_TOAST_MS, FIGHT_TIMER_START, fightLine, fightStep, type FightTimer } from './ui/fightTimer';
 import { createSplashScreen } from './ui/splash';
@@ -104,7 +105,7 @@ import { arenaName, armIntro, createIntroScreen, endlessIntroCard, introActive, 
 import { createResultsScreen } from './ui/results';
 import { createDoubleBack, installBackButton } from './native/backButton';
 import { installServiceWorkerCleanup } from './native/dropServiceWorker';
-import { createSettingsModel, createSettingsScreen } from './ui/settings';
+import { captureShowFps, createSettingsModel, createSettingsScreen } from './ui/settings';
 
 // Foundry's generator, if src/levelgen/generator.ts exists at build time. import.meta.glob
 // resolves to an empty record when the file is absent, so this builds either way.
@@ -173,7 +174,7 @@ type ReleaseGameOptions = GameOptions & { difficulty: Difficulty; startBonus?: S
  * bar before any other module reads window.location (renderer, touch and devpanel read it later
  * in boot), so every test knob is ignored on a tester's phone.
  */
-function gateLocation(): { search: string; dev: boolean } {
+function gateLocation(): { search: string; dev: boolean; capture: boolean } {
   const raw = window.location.search;
   const search = gateSearch(raw);
   if (search !== raw) {
@@ -183,7 +184,7 @@ function gateLocation(): { search: string; dev: boolean } {
       // a sandboxed frame may refuse: main.ts still reads the gated query below
     }
   }
-  return { search, dev: isDev(raw) };
+  return { search, dev: isDev(raw), capture: isCapture(search) };
 }
 
 function readQuery(search: string): { stress: number; particles: number; sprite: boolean; debug: boolean } {
@@ -243,11 +244,14 @@ async function boot(): Promise<void> {
   const viewportLabel = byId('sow-viewport');
   const host = byId('game');
   const gated = gateLocation(); // first, before any module reads window.location
+  // Capture mode (?dev=1&capture=1): developer readouts, the dev panel gesture and the stick knobs
+  // are off for clean clips. Nothing in the sim or input changes.
+  const view = devView(gated.dev, gated.capture);
   buildLabel.textContent = `build ${__BUILD_ID__}`;
   buildLabel.style.zIndex = '25'; // above the UI layer (z 20) so menus never hide the build id
   // Tester build: the corner build label is a debug readout, shown only with ?dev=1. The menu
   // footer carries the short sha and seed for screenshots instead.
-  buildLabel.style.display = gated.dev ? '' : 'none';
+  buildLabel.style.display = view.readouts ? '' : 'none';
 
   let note = 'renderer: starting';
   let gestureDone = false; // fullscreen and audio unlock ran (boot tap or first pointerup)
@@ -266,7 +270,7 @@ async function boot(): Promise<void> {
   const query = readQuery(gated.search);
   let failed = false;
   const showLabel = (): void => {
-    viewportLabel.style.display = query.debug || failed ? '' : 'none';
+    viewportLabel.style.display = !gated.capture && (query.debug || failed) ? '' : 'none';
   };
   window.addEventListener('error', (e) => {
     note = `error: ${e.message}`;
@@ -371,7 +375,7 @@ async function boot(): Promise<void> {
   // reducer; none of them touches the world.
   const uiRoot = createUiRoot();
   const hud = createHud(uiRoot);
-  hud.setDevCode(gated.dev); // the level code on the HUD line is a developer item (?dev=1)
+  hud.setDevCode(view.readouts); // the level code on the HUD line is a developer item (?dev=1, not capture)
   hud.listen(bus);
   let flow: FlowState = bootFlow(menuLevel());
   let intro: IntroGate = NO_INTRO; // B7: level intro card or Endless Ready, holds the sim
@@ -437,7 +441,7 @@ async function boot(): Promise<void> {
   // Dev only: guardian fight timer on the sim clock (world.time), so paused time never counts.
   let fight: FightTimer = { ...FIGHT_TIMER_START };
   let fightLineText = '';
-  if (gated.dev) {
+  if (view.readouts) {
     bus.on('game:start', () => {
       fight = { ...FIGHT_TIMER_START };
       fightLineText = '';
@@ -657,10 +661,10 @@ async function boot(): Promise<void> {
     reward: (bonus, nextLevel) => {
       if (!customSeed) savePendingBonus({ level: nextLevel, bonus });
     },
-  });
+  }, { capture: gated.capture });
   // Neon goes only through applyNeon; Show FPS and glow path through Glow's exported functions.
   const settingsModel = createSettingsModel({
-    setShowFps,
+    setShowFps: captureShowFps(setShowFps, gated.capture), // capture mode: never shown, setting kept
     setGlowPath,
     applyNeon: (n) => {
       try {
@@ -941,7 +945,7 @@ async function boot(): Promise<void> {
       bestStars: customSeed ? end.stars : (loadAdventureScores()[String(index)]?.stars ?? 0),
     };
     if (level.boss !== undefined) result.bossName = bossName(level.boss.id);
-    if (gated.dev && fightLineText !== '') result.fightLine = fightLineText;
+    if (view.readouts && fightLineText !== '') result.fightLine = fightLineText;
     // The results "Boss defeated" line reports the number the sim paid: scoring.bossBonus, the only copy.
     if (success && bossDown) result.bossBonus = bossBonus(level.par, 'adventure', level.boss?.tier ?? 0);
     // Story: a boss win plays its freeing scene first; progress is already saved above.
@@ -1018,7 +1022,7 @@ async function boot(): Promise<void> {
         }
       }
       if (renderer === null) return;
-      if (touch !== null && simRunning(flow)) renderer.setSticks(stickCircles(touch));
+      if (touch !== null && simRunning(flow)) renderer.setSticks(stickCircles(touch.stickVisuals(), gated.capture));
       renderer.draw(sceneWorld, alpha);
       // Glue: renderer.draw() already calls app.render(); a second call doubled GPU cost.
       // Divisor policy (docs/04 section 13), evaluated every 15 rendered frames.
@@ -1057,8 +1061,8 @@ async function boot(): Promise<void> {
     };
     // Glow's debug panel binds setShowFps and setGlowPath to a live controller. Changes made in
     // the panel are mirrored into the settings model so the glow path persists too.
-    // The two finger long press that opens the panel is a developer item: only with ?dev=1.
-    if (gated.dev) {
+    // The two finger long press that opens the panel is a developer item: only with ?dev=1, never in capture mode.
+    if (view.panel) {
       const panel = installDevPanel({
         renderer: r,
         settings,
@@ -1217,15 +1221,3 @@ async function boot(): Promise<void> {
 }
 
 void boot();
-
-/** Glue: Thumbs stick visuals to Glow stick circles. Rings 0.25, knobs 0.6 filled (docs/01 section 3). */
-function stickCircles(t: TouchHandle): StickCircleLike[] {
-  const out: StickCircleLike[] = [];
-  const v = t.stickVisuals();
-  for (const sv of [v.move, v.aim]) {
-    if (sv === null) continue;
-    // G3 feedback (Ryan): no ring outline under the thumbs; a faint knob only.
-    out.push({ x: sv.knob.x, y: sv.knob.y, r: sv.knob.r * 0.6, alpha: 0.3, filled: true });
-  }
-  return out;
-}

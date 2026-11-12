@@ -135,7 +135,9 @@ describe('dev gate for every URL knob', () => {
   });
 
   it('the corner build label is hidden unless dev', () => {
-    expect(read('src/main.ts')).toContain("buildLabel.style.display = gated.dev ? '' : 'none';");
+    const main = read('src/main.ts');
+    expect(main).toContain('const view = devView(gated.dev, gated.capture);');
+    expect(main).toContain("buildLabel.style.display = view.readouts ? '' : 'none';");
   });
 
   it('Show FPS still defaults to off', async () => {

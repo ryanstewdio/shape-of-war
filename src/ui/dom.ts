@@ -5,6 +5,13 @@ const STYLE_ID = 'sow-ui-style';
 
 /** Smallest touch target height in CSS px for any button row (docs/01 section 10, v2 addendum). */
 export const MIN_HIT_PX = 44;
+/**
+ * Free Play All and None: the chip row sits in a column flex box, so the shared .sow-choice-btns
+ * basis (240px) became its height. It is pinned to auto there, and an invisible band above and
+ * below lifts the 44 px chips to a 48 px touch target without changing how they look. The band is
+ * measured from the padding box, so it is 2 px of extra target plus the 2 px button border.
+ */
+export const FP_SHORTCUT_PAD_PX = 4;
 
 /** The shared stylesheet text, exported so tests can check the touch target rules without a DOM. */
 export const UI_CSS = `
@@ -180,6 +187,9 @@ export const UI_CSS = `
 .sow-btn.sow-fp-foe.sow-on { opacity: 1; }
 .sow-fp-enemies { display: flex; flex-direction: column; gap: 6px; width: 100%; }
 .sow-fp-enemies .sow-btn { min-width: 0; min-height: ${MIN_HIT_PX}px; font-size: 14px; padding: 6px 4px; flex: 1 1 0; }
+.sow-fp-enemies .sow-choice-btns { flex: 0 0 auto; }
+.sow-fp-enemies .sow-choice-btns .sow-btn { position: relative; }
+.sow-fp-enemies .sow-choice-btns .sow-btn::after { content: ''; position: absolute; inset: -${FP_SHORTCUT_PAD_PX}px 0; }
 .sow-fp-note { opacity: 0.75; }
 .sow-fp-foot { flex: 0 0 auto; }
 .sow-block { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }

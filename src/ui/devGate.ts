@@ -1,5 +1,5 @@
 // Tester build gate (docs/14 item 4). Every test URL knob (?boss, ?tilt, ?seed, ?level, ?debug,
-// ?surface, ?glow, ?stress, ?particles, the bloom knobs and any other) works only when ?dev=1 is
+// ?surface, ?glow, ?stress, ?particles, the bloom knobs, ?capture and any other) works only when ?dev=1 is
 // also present. Without it main.ts reads an empty query and strips the query from the address bar
 // before any other module looks at window.location, so a stray link from a tester changes nothing.
 // Pure: no DOM.
@@ -21,6 +21,7 @@ export const DEV_KNOBS: readonly string[] = [
   'bloomRes',
   'bloomQuality',
   'bloomBlur',
+  'capture',
 ];
 
 /** The build time flag: VITE_SOW_DEV=1 turns every dev item on (the build:cap:dev test APK). */
