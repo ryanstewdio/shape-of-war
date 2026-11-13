@@ -46,7 +46,8 @@ export const BOSS_TABLE: Readonly<Record<BossId, BossRow>> = {
   ember: { tier: 2, hp: 822, phases: 3, radius: 44, colour: 'bossOrange' },
   /** Fury tune (Ryan 2026-11-12, from his 2:45 device fight): 650 (1150 before). */
   mirage: { tier: 2, hp: 650, phases: 3, radius: 50, colour: 'bossMagenta' },
-  gravitas: { tier: 2, hp: 1704, phases: 3, radius: 60, colour: 'bossViolet' },
+  /** Fury orbs (Ryan 2026-11-13, from his 2:15 device fight against 90 s): 1300 (1704 before). */
+  gravitas: { tier: 2, hp: 1300, phases: 3, radius: 60, colour: 'bossViolet' },
   bastion: { tier: 3, hp: 1833, phases: 3, radius: 70, colour: 'bossRed' },
   tempest: { tier: 3, hp: 1832, phases: 3, radius: 46, colour: 'bossRed' },
   twins: { tier: 3, hp: 2250, phases: 2, radius: 44, colour: 'bossRed' },
@@ -582,9 +583,20 @@ export const GRAVITAS_ORB = {
 } as const;
 
 /**
+ * Gravitas orb Snakes (fury orbs). Each Snake of a launch spawns spawnPad u past the body edge (after
+ * the split, past the outer edge of the orbiting pair), sideDeg off the orb's path on alternate sides
+ * (the next pair sideDeg further out), so it never sits on the orb's line.
+ */
+export const GRAVITAS_ORB_SNAKE = {
+  spawnPad: 8,
+  sideDeg: 35,
+} as const;
+
+/**
  * Gravitas shelter pools (Ryan 2026-11-12, version 1 of the low gravity puddle redesign; fury fixes
- * stub, starting values). Enraged, Gravitas (after the split, the pair centre) leaves a pool where it
- * stands every everySec of attack time. A pool has radius u, lasts lifeSec and shrinks to 0 over its
+ * stub, starting values). A pool opens where a pool orb stops (GRAVITAS_ORB, fury orbs; the trail
+ * of pools where Gravitas stood every everySec is gone and everySec is no longer read, the orb clock
+ * is GRAVITAS_ORB.everySec). A pool has radius u, lasts lifeSec and shrinks to 0 over its
  * last fadeSec; at most max live at once (the oldest goes first). A ship inside gets no Gravitas pull
  * or push and floats (the float thrust row below). The tide stays. HazardType.Pool.
  */

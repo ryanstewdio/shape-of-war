@@ -1,0 +1,9 @@
+# Swarm hand-off: fury-orbs
+Branch feat/swarm-fury-orbs. Enraged Gravitas launches a pool orb (HazardType.Orb, w.vx stop distance, w.vy distance flown) every 3 s of attack time from its body edge (after the split from the pair centre) toward the ship. Each orb stops at orbStopDist (0.55 of the launch distance, clamped 120 to 260 u) or at the wall, and a pool opens there. The pool trail where Gravitas stood is gone. An orb launches only while it plus the pool reserve fit in MAX_HAZARDS, and its pool takes its slot.
+Snakes: each launch releases minionCount(1) enraged Snakes (spawnSnake, World.enraged, 'sim:enrage') 8 u past the edge, 35 deg off the path (GRAVITAS_ORB_SNAKE). Cap minionCount(2): Normal 1 a launch up to 2, Easy 1 up to 2, Insane 2 up to 3. They sit in the add slots inside maxLiveEnemies.
+Gravitas hp 1704 to 1300. Bot seconds: Easy 45.7, Normal 78.2, Insane 123.0. FIGHT_TARGET_SEC gravitas 78, and Gravitas joins DEVICE_TUNED.
+core.ts: bossOnShipDeath now forgets the add slot ids (killShip already removed every add). The sweep caught a wave or well Snake reusing a dead Gravitas Snake's id and counting as a boss add during the respawn delay.
+Tests: bossFuryOrbs.test.ts (18 new). Pins updated: bossFuryFixes (the pool test now waits for an orb; post-split pools land on the way to the ship; MAIN_BOT_STEPS gravitas 12079 to 9387), bossFightLength (gravitas row 78, DEVICE_TUNED, tier 2 ramp is Ember alone).
+npm test 5514 passed, 1 failed (accepted generator perf exception). npm run build passes.
+Known gaps: orbs fly only while Gravitas steps (a bomb or a ship death clears them anyway). A wall stop opens the pool at the last point inside. GRAVITAS_POOL.everySec is no longer read. The bot does not model orbs, Snakes or bending. Untuned on device.
+Requests: Glow draws the orb (glow-fury-orbs brief).
