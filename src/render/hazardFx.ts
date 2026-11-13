@@ -11,6 +11,8 @@ import { clampNum } from './color';
 import type { EffectsTier } from './effects';
 import { F_BAR, F_DOT, F_GLOW, pushArc, pushBand, pushLine, pushSprite, type FxHalo, type SpriteBuf } from './fxSprites';
 import { aimedLaneAlpha, aimedLaneTint, laneAimed } from './furyTune';
+import { mixRgb } from './mapFx';
+import { ORB_CORE, ORB_CORE_A, ORB_CORE_WHITE, ORB_GLOW, ORB_GLOW_A, ORB_TRAIL_A, ORB_TRAIL_SIZE, orbFadeIn, orbRadius, orbShimmer, orbTrailAlpha, orbTrailCount, orbTrailDist, orbTrailScale } from './furyOrbs';
 import { POOL_FILL_A, POOL_RING_A, POOL_RING_W, POOL_SPECK_A, POOL_SPECK_SIZE, POOL_TURN, poolDashes, poolFade, poolSpeck, poolSpeckCount } from './furyFixes';
 
 export const HAZARD_LANE = 0;
@@ -20,6 +22,8 @@ export const HAZARD_TETHER = 3;
 export const HAZARD_PULL = 4;
 /** Gravitas shelter pool (glow-fury-fixes): never lethal, drawn by planPool. */
 export const HAZARD_POOL = 5;
+/** Gravitas pool orb (glow-fury-orbs): never lethal, drawn by planOrb. */
+export const HAZARD_ORB = 6;
 
 /**
  * Telegraph seconds per tier, a mirror of hazardTelegraph(tier) in src/game/bosses/kit.ts (Swarm,
@@ -369,12 +373,39 @@ function planPool(h: HazardInput, b: SpriteBuf, halo: Readonly<FxHalo>): number 
 }
 
 /**
+ * glow-fury-orbs Gravitas pool orb: a short trail of soft puffs behind it along w.rot, a soft violet
+ * glow and a hot violet white core, shimmering a little. Never lethal: no telegraph form and no
+ * lethal flash, whatever its age. Where it stops the sim opens a Pool (planPool).
+ */
+function planOrb(h: HazardInput, b: SpriteBuf): number {
+  const r = orbRadius(h.radius);
+  const k = orbFadeIn(h.age);
+  if (!(k > 0)) return 0;
+  const dx = Math.cos(Number.isFinite(h.rot) ? h.rot : 0);
+  const dy = Math.sin(Number.isFinite(h.rot) ? h.rot : 0);
+  const trail = orbTrailCount(h.fx);
+  let n = 0;
+  for (let t = trail - 1; t >= 0; t--) {
+    const d = orbTrailDist(t, r);
+    const s = ORB_TRAIL_SIZE * r * orbTrailScale(t, trail);
+    if (pushSprite(b, F_GLOW, h.x - dx * d, h.y - dy * d, 0, s, s, ORB_TRAIL_A * orbTrailAlpha(t, trail) * k, h.tint)) n++;
+  }
+  const sh = orbShimmer(h.timeSec);
+  const g = ORB_GLOW * r * sh;
+  if (pushSprite(b, F_GLOW, h.x, h.y, 0, g, g, ORB_GLOW_A * k, h.tint)) n++;
+  const c = ORB_CORE * r * sh;
+  if (pushSprite(b, F_DOT, h.x, h.y, 0, c, c, ORB_CORE_A * k, mixRgb(h.tint, 0xffffff, ORB_CORE_WHITE))) n++;
+  return n;
+}
+
+/**
  * Pure on the buffer: write the instances of one hazard. Unknown types draw nothing. Returns the
  * number of instances written.
  */
 export function planHazard(h: HazardInput, b: SpriteBuf, halo: Readonly<FxHalo>): number {
   if (h.type === HAZARD_PULL) return planPull(h, b, halo);
   if (h.type === HAZARD_POOL) return planPool(h, b, halo);
+  if (h.type === HAZARD_ORB) return planOrb(h, b);
   hazardForm(h.age, h.tier, form, h.type === HAZARD_LANE ? laneTelegraphSec(h.vy, h.tier) : undefined);
   if (h.type === HAZARD_LANE) return planLane(h, b, halo, form);
   if (h.type === HAZARD_RING) return planRing(h, b, halo, form);

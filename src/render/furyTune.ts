@@ -3,7 +3,8 @@
 // laneTelegraphSec) and reads a little brighter and whiter than the other lanes while it telegraphs.
 // Straight shots: a player bullet with BulletPool.straight 1 (fired from inside a Gravitas pool) takes a
 // violet white tint so the player learns pool shots fly true.
-// Ship in a pool: while view.shipInPool is true the ship carries a faint violet halo, the drift cue.
+// Ship in a pool: while view.shipInPool is true the ship carries a violet halo, the drift cue
+// (glow-fury-orbs: brighter, with a hot core glow, and shown after the stage 2 split too).
 // Pure maths, no pixi, no PRNG, no allocation. Colours come from palette keys passed in by the caller.
 import type { EffectsTier } from './effects';
 import { mixRgb } from './mapFx';
@@ -57,15 +58,25 @@ export function bulletTint(base: number, straight: boolean, violet: number): num
 
 // Ship in a pool ---------------------------------------------------------------------------------
 
-/** Halo size as a multiple of the ship radius, its base alpha and the slow breathe (Hz, depth). */
+/**
+ * Halo size as a multiple of the ship radius, its base alpha and the slow breathe (Hz, depth).
+ * glow-fury-orbs (Ryan 2026-11-13, the halo was not seen): alpha 0.22 to 0.5, shallower breathe.
+ */
 export const POOL_HALO_SCALE = 3.2;
-export const POOL_HALO_A = 0.22;
+export const POOL_HALO_A = 0.5;
 export const POOL_HALO_HZ = 0.6;
-export const POOL_HALO_BREATHE = 0.25;
+export const POOL_HALO_BREATHE = 0.18;
 /** The thin ring at the halo edge (standard and high only), as a share of the halo radius. */
 export const POOL_HALO_RING = 0.62;
-export const POOL_HALO_RING_A = 0.35;
-export const POOL_HALO_RING_W = 1.2;
+export const POOL_HALO_RING_A = 0.75;
+export const POOL_HALO_RING_W = 1.8;
+/**
+ * glow-fury-orbs: a smaller, hotter violet glow hugging the ship on every tier (Low too, so Low reads
+ * clearly with two sprites and no ring), as a share of the halo radius, its alpha and white mix.
+ */
+export const POOL_HALO_CORE = 0.45;
+export const POOL_HALO_CORE_A = 0.55;
+export const POOL_HALO_CORE_WHITE = 0.3;
 /** Seconds for the halo to fade in on entering a pool and out on leaving it. */
 export const POOL_HALO_EASE = 0.2;
 
@@ -97,4 +108,14 @@ export function poolHaloRingAlpha(haloAlpha: number): number {
 /** Pure: whether the halo draws its edge ring (one glow sprite only on Low). */
 export function poolHaloRing(tier: EffectsTier): boolean {
   return tier !== 'low';
+}
+
+/** Pure (glow-fury-orbs): the inner core glow alpha that goes with a halo alpha (same breathe and ease). */
+export function poolHaloCoreAlpha(haloAlpha: number): number {
+  return POOL_HALO_CORE_A * Math.max(0, fin(haloAlpha, 0)) / POOL_HALO_A;
+}
+
+/** Pure (glow-fury-orbs): the core glow tint, the palette violet a little toward white. */
+export function poolHaloCoreTint(violet: number): number {
+  return mixRgb(violet, 0xffffff, POOL_HALO_CORE_WHITE);
 }

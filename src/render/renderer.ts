@@ -171,7 +171,8 @@ import {
 } from './pondWave';
 import { addShake, createShake, stepShake } from './shake';
 import { buildBloomSourceContext, buildContext, buildGlowSourceContext, contextForSlot, rebuildShapeContexts } from './shapes';
-import type { GraphicsContext } from 'pixi.js';
+import { GraphicsContext } from 'pixi.js';
+import { releaseRetired, type ContextHolder } from './contextGuard';
 import type { ShapeSpec } from './shapeSpecs';
 import { exposedBossSlot, MAX_SLOT, PICKUP_KIND, PICKUP_SPIN, pickupAlpha, specForSlot, visualSlot } from './shapeSpecs';
 import {
@@ -622,7 +623,7 @@ import {
   pincerStreakOn,
 } from './furyFixes';
 // Fury tune (glow-fury-tune): straight shots tinted violet white, the ship's pool halo (the aimed lane is hazardFx.ts).
-import { bulletStraight, bulletTint, poolHaloAlpha, poolHaloRing, POOL_HALO_RING, POOL_HALO_RING_W, poolHaloRingAlpha, POOL_HALO_SCALE, shipPoolHaloOn, stepPoolHalo } from './furyTune';
+import { bulletStraight, bulletTint, POOL_HALO_CORE, poolHaloAlpha, poolHaloCoreAlpha, poolHaloCoreTint, poolHaloRing, POOL_HALO_RING, POOL_HALO_RING_W, poolHaloRingAlpha, POOL_HALO_SCALE, shipPoolHaloOn, stepPoolHalo } from './furyTune';
 // Fury three (glow-fury-three): Brood's Broodlings, Mirage's shatter and double image, Gravitas's tide.
 import {
   broodSplitFlash,
@@ -828,7 +829,7 @@ import {
 import type { ShapePrim } from './shapeSpecs';
 import { createEnemyBulletLayer } from './enemyBullets';
 import type { EnemyBulletFrame, EnemyBulletsLike } from './enemyBulletFx';
-import { HAZARD_LANE, HAZARD_POOL, HAZARD_PULL, HAZARD_SPRITE_CAP, HAZARD_SWEEP, planEntranceRing, planHazard, ringSegments, type HazardInput } from './hazardFx';
+import { HAZARD_LANE, HAZARD_ORB, HAZARD_POOL, HAZARD_PULL, HAZARD_SPRITE_CAP, HAZARD_SWEEP, planEntranceRing, planHazard, ringSegments, type HazardInput } from './hazardFx';
 import { BOSS_PULL_ACCEL, KICK_BOSS_DOWN, KICK_BOSS_PHASE } from './lattice/kicks';
 import { HEAT_BOSS } from './lattice/heat';
 import { RIPPLE_BOSS } from './fx';
@@ -1912,6 +1913,26 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   const ringList: { x: number; y: number; age: number; colour: PaletteKey }[] = [];
   // Old shape contexts are freed after the next render, once no view batches from them.
   let retiredContexts: GraphicsContext[] = [];
+  // glow-fury-orbs context guard (contextGuard.ts): the shared empty context every holder still on a
+  // retired context moves onto before the destroy, the fixed list of holders outside the views pool
+  // (filled in place, no allocation) and the slot resets that make the next draw assign a live one.
+  const emptyCtx = new GraphicsContext();
+  const GUARD_GHOST = 0;
+  const GUARD_ECHO = 1;
+  const GUARD_BODY = 2;
+  const GUARD_DASH = 3;
+  const guardExtras: (ContextHolder<GraphicsContext> | null)[] = new Array<ContextHolder<GraphicsContext> | null>(GUARD_DASH + DASH_GHOSTS).fill(null);
+  const forgetView = (i: number): void => {
+    viewKind[i] = -1;
+    viewTint[i] = -1;
+  };
+  const forgetExtra = (i: number): void => {
+    if (i === GUARD_GHOST) ghostSlot = -1;
+    else if (i >= GUARD_DASH) {
+      const g = dashGhosts[i - GUARD_DASH];
+      if (g) g.slot = -1;
+    }
+  };
   /** Look v33: damaged boss glow textures replaced this frame, destroyed at the next draw. */
   let retiredTextures: Texture[] = [];
 
@@ -3264,7 +3285,8 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     h.alphaMul = 1;
     // glow-fury-fixes: a Gravitas shelter pool is always violet; Low draws fewer specks and chords.
     h.fx = getEffectsTier();
-    if (h.type === HAZARD_POOL) h.tint = palette.bossViolet;
+    // glow-fury-orbs: the pool orb Gravitas launches is violet too.
+    if (h.type === HAZARD_POOL || h.type === HAZARD_ORB) h.tint = palette.bossViolet;
     // glow-fury-three: while the Gravitas tide pushes its pull ripples run outward.
     h.rippleOut = bossIdx === BOSS_GRAVITAS && ripplesOut(f3Tide);
     // glow-fury-two: Spindle's beam arms cross to hot red in fury and pulse slowly while enraged.
@@ -3514,8 +3536,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
   }
 
   /**
-   * glow-fury-tune: while the ship floats in a Gravitas shelter pool, a faint violet halo round it (the
-   * drift cue), easing in and out. Low draws the soft glow only; standard and high add a thin ring.
+   * glow-fury-tune: while the ship floats in a Gravitas shelter pool, a violet halo round it (the
+   * drift cue), easing in and out. glow-fury-orbs: brighter, plus a hot core glow; Low draws the two
+   * glows only, standard and high add a thin ring.
    */
   function planShipPoolHalo(timeSec: number): void {
     const a = poolHaloAlpha(poolHaloK, timeSec);
@@ -3523,6 +3546,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     const r = poolHaloR * POOL_HALO_SCALE;
     const violet = palette.bossViolet;
     pushSprite(hazardBuf, F_GLOW, shipDrawX, shipDrawY, 0, 2 * r, 2 * r, a, violet);
+    // glow-fury-orbs: a hot core glow on every tier, so Low reads clearly with two sprites.
+    const rc = r * POOL_HALO_CORE;
+    pushSprite(hazardBuf, F_GLOW, shipDrawX, shipDrawY, 0, 2 * rc, 2 * rc, poolHaloCoreAlpha(a), poolHaloCoreTint(violet));
     if (!poolHaloRing(getEffectsTier())) return;
     const rr = r * POOL_HALO_RING;
     pushArc(hazardBuf, shipDrawX, shipDrawY, rr, 0, Math.PI * 2, ringSegments(rr, Math.PI * 2), POOL_HALO_RING_W, poolHaloRingAlpha(a), violet, halo);
@@ -5996,7 +6022,9 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     }
     stepPond(w.time);
     drawEntities(w, a, nowSec, fxDt);
-    poolHaloK = stepPoolHalo(poolHaloK, shipPoolHaloOn(bossView.active ? bossView.shipInPool : false, w.alive[0] === 1 && shipActive(w)), fxDt);
+    // glow-fury-orbs: the halo follows view.shipInPool alone, so it still shows after the stage 2 split
+    // (view.active is false there while the bar lives).
+    poolHaloK = stepPoolHalo(poolHaloK, shipPoolHaloOn(bossView.shipInPool, w.alive[0] === 1 && shipActive(w)), fxDt);
     poolHaloR = w.radius[0] ?? poolHaloR;
     drawHazards(nowSec);
     drawGhost();
@@ -6056,9 +6084,28 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
       retiredTextures = [];
     }
     if (retiredContexts.length > 0) {
+      guardRetired();
       for (const c of retiredContexts) c.destroy();
       retiredContexts = [];
     }
+  }
+
+  /**
+   * glow-fury-orbs context guard. destroy() nulls a context's instructions and pixi reads
+   * instructions.length when any Graphics still holding it renders or rebuilds (Ryan's crash after
+   * guardian fights). Only the views drawn this frame got a new context, so before the destroy every
+   * holder still on a retired one (the views pool, which holds the boss body, Broodlings and every
+   * hidden pooled view, then the Mirage afterimage and echo and the Tempest dash ghosts) moves onto the
+   * shared empty context and forgets its slot; its next draw assigns a live context. One rule for
+   * every retire path (neon rebuild, damaged and fury body, Broodling looks).
+   */
+  function guardRetired(): void {
+    releaseRetired(views, retiredContexts, emptyCtx, forgetView);
+    guardExtras[GUARD_GHOST] = ghostView;
+    guardExtras[GUARD_ECHO] = echoView;
+    guardExtras[GUARD_BODY] = bossBodyView;
+    for (let k = 0; k < DASH_GHOSTS; k++) guardExtras[GUARD_DASH + k] = dashGhosts[k]?.view ?? null;
+    releaseRetired(guardExtras, retiredContexts, emptyCtx, forgetExtra);
   }
 
   /** Tilt level changed (setTilt): new camera, projected or flat walls and lattice, new fit. */
@@ -6256,6 +6303,7 @@ export async function createRenderer(host: HTMLElement): Promise<GameRenderer> {
     for (const t of glowTextures) t?.destroy(true);
     for (const t of bloomTextures) t?.destroy(true);
     app.destroy(true, { children: true });
+    emptyCtx.destroy();
     // Mesh.destroy leaves its geometry; free the comet ribbon once both meshes are gone.
     cometGeom.destroy();
   }
