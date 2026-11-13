@@ -27,7 +27,7 @@ SPEC 3.4 is headed "Enemy catalogue (v1)" and lists eight rows, Grunt to Spawner
 | Name | Behaviour | Colour family |
 |---|---|---|
 | Charger | Winds up while turning toward the ship (a lane line is drawn), dashes straight along the locked heading, rests. A wall ends the dash | Glow assigns |
-| Bulwark | Slow seeker with a limited turn rate. A frontal shield arc absorbs player bullets, drone shots and orbit blades. Bombs and Detonate ignore it. Flank it | Glow assigns |
+| Bulwark | Slow seeker with a limited turn rate. A frontal shield arc absorbs player bullets, drone shots and orbit blades, except Pierce and its combos, which pass through it for 2 damage (PIERCE_BULWARK_DAMAGE, Ryan 2026-11-11). Bombs and Detonate ignore it. Flank it | Glow assigns |
 | Blink | Drifts toward the ship, then a harmless, untargetable warp phase (ghost at the old spot, ring at the destination), then jumps to a point near the ship | Glow assigns |
 | Swirl | Orbits the ship while closing in, then commits to a straight dive | Glow assigns |
 | Sower | Hugs the nearest arena boundary and drops Mines on a timer | Glow assigns |

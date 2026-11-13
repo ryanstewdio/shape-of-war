@@ -83,7 +83,7 @@ After level 50 the list loops from Ember in passes of seven bosses, each pass wi
 
 ### Endless cadence (Ryan, Q3)
 
-`bossForSegment(s)` returns a boss when segment `s` is a positive multiple of 6 (Ryan, Q3). Segments last 30 s, so the bosses arrive at 3:00, 6:00 and 9:00 of wave clock and every 3 minutes after. The Endless boss number `j = s / 6` walks the same list with the same pass rule (the first is warden, the tenth is prism). `atSec` is 10 s after the segment start. While an Endless boss lives the wave clock is paused and no wave spawns, so segments and bosses never stack. The Endless arena stays the fixed 1600 x 1000 rectangle.
+`bossForSegment(s)` returns a boss when segment `s` is a positive multiple of 6 (Ryan, Q3). Segments last 30 s, so the bosses arrive at 3:00, 6:00 and 9:00 of wave clock and every 3 minutes after. The Endless boss number `j = s / 6` walks the Adventure pass 1 order (Ryan 2026-11-10, orderedBossOfNumber: the first is brood, the second warden, the tenth prism) with the plain hit point ladder. `atSec` is 10 s after the segment start. While an Endless boss lives the wave clock is paused and no wave spawns, so segments and bosses never stack. The Endless arena stays the fixed 1600 x 1000 rectangle.
 
 ### Boss rules (all ten)
 
