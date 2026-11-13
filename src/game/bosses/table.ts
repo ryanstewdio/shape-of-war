@@ -563,6 +563,25 @@ export const GRAVITAS_BEND = {
 } as const;
 
 /**
+ * Gravitas pool orbs (Ryan 2026-11-13; fury orbs stub, ruled values). Enraged, every everySec of attack
+ * time Gravitas (after the split, the pair centre) launches a harmless orb (HazardType.Orb) toward the
+ * ship at speed u/s. It stops after share of the distance to the ship at launch, clamped to minDist to
+ * maxDist u from the launch point, and opens a shelter pool there (GRAVITAS_POOL; the trail of pools
+ * ends). Each orb is launched with snakesPerOrb enraged Snakes, at most snakeCap Gravitas Snakes alive,
+ * the difficulty add scale applying.
+ */
+export const GRAVITAS_ORB = {
+  everySec: 3,
+  speed: 220,
+  share: 0.55,
+  minDist: 120,
+  maxDist: 260,
+  radius: 14,
+  snakesPerOrb: 1,
+  snakeCap: 2,
+} as const;
+
+/**
  * Gravitas shelter pools (Ryan 2026-11-12, version 1 of the low gravity puddle redesign; fury fixes
  * stub, starting values). Enraged, Gravitas (after the split, the pair centre) leaves a pool where it
  * stands every everySec of attack time. A pool has radius u, lasts lifeSec and shrinks to 0 over its

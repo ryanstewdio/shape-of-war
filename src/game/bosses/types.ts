@@ -31,6 +31,12 @@ export const enum HazardType {
    * age and w.vx its full life in seconds. A ship inside gets no Gravitas pull or push and floats.
    */
   Pool = 5,
+  /**
+   * Gravitas pool orb (fury orbs stub, Ryan 2026-11-13; Swarm spawns, Glow draws). Never lethal. It flies
+   * from Gravitas toward the ship along w.rot at GRAVITAS_ORB.speed, w.radius its radius, w.t its age;
+   * where it stops it is removed and a Pool opens.
+   */
+  Orb = 6,
 }
 
 /** Kind.BossPart w.a: the part type. */
