@@ -22,13 +22,25 @@
 // moves the ship faster than the pull could. furyT runs on through the stage 2 split (the lead
 // Gravitant counts it), so the tide carries onto the pair. Anchors and rings are unchanged.
 //
-// Shelter pools (fury fixes, GRAVITAS_POOL; Ryan 2026-11-12): enraged, Gravitas leaves a pool
-// (Kind.BossHazard, HazardType.Pool, never lethal) where it stands every everySec of attack time,
-// after the split at the pair centre. The core shrinks it over its last fadeSec (w.t its age, w.vx its
+// Shelter pools (fury fixes, GRAVITAS_POOL; Ryan 2026-11-12): a pool is Kind.BossHazard,
+// HazardType.Pool, never lethal. The core shrinks it over its last fadeSec (w.t its age, w.vx its
 // full life). At most max live (the oldest goes first), and a pool is skipped, never a ring or a
 // pull, when it would leave fewer than reserve hazard slots. A ship inside one gets no pull or push
-// (core.ts bossContacts and pushShip below) and floats (ShipState.float). Ability scratch (bs.abl):
-// 0 the pool clock.
+// (core.ts bossContacts and pushShip below) and floats (ShipState.float).
+//
+// Pool orbs (fury orbs, GRAVITAS_ORB; Ryan 2026-11-13, replacing the trail of pools where Gravitas
+// stood): enraged, every everySec of attack time Gravitas launches an orb (Kind.BossHazard,
+// HazardType.Orb, never lethal, no contact kill) from its body edge toward the ship (after the split
+// from the pair centre). w.rot its heading, w.radius its radius, w.t its age (core), w.vx the stop
+// distance (share of the distance to the ship at launch, clamped to minDist to maxDist), w.vy the
+// distance flown. It flies at speed and where it stops (or at the arena wall) it is removed and a
+// pool opens there (dropPool). An orb launches only while the live hazards plus one plus the pool
+// reserve fit inside MAX_HAZARDS, so it never takes a ring's slot; it hands its slot to its pool.
+// Each launch releases snakesPerOrb Snakes (spawnSnake) beside the orb's path at the body edge,
+// enraged as Ember's Leavers are (World.enraged, 'sim:enrage'), at most snakeCap Gravitas Snakes
+// alive (heads), both scaled by the difficulty addScale through minionCount, kept in the add slots
+// (so a ship death, the break and the defeat treat them as any boss add) and inside maxLiveEnemies.
+// Ability scratch (bs.abl): 0 the orb clock.
 //
 // Bent shots (fury tune, Ryan 2026-11-12 option A; GRAVITAS_BEND): enraged, inside bend radius of each
 // live Gravitas pull (the body, then each Gravitant at its own strength) every player bullet but the
@@ -61,15 +73,32 @@ import {
 import { emitFury, furyClampDamage, furyDue, furyOnPhase, furyPhaseOf, startFuryBreak, stepFury } from './fury';
 import { angleToOn, pullSpeed } from './kit';
 import { bossOf, type BossState } from './state';
-import { FURY_BREAK_SEC, GRAVITANT, GRAVITAS, GRAVITAS_BEND, GRAVITAS_FURY, GRAVITAS_POOL, HAZARD_RECHECK_SEC, MAX_HAZARDS, MAX_PARTS } from './table';
+import {
+  FURY_BREAK_SEC,
+  GRAVITANT,
+  GRAVITAS,
+  GRAVITAS_BEND,
+  GRAVITAS_FURY,
+  GRAVITAS_ORB,
+  GRAVITAS_ORB_SNAKE,
+  GRAVITAS_POOL,
+  HAZARD_RECHECK_SEC,
+  MAX_ADDS,
+  MAX_HAZARDS,
+  MAX_PARTS,
+} from './table';
 import { BossMode, HazardType, PartType, type BossDef } from './types';
 import { removeEntity } from '../remove';
 import { splitHp } from './tempest';
+import { confineOn, createConfineResult, isInsideOn } from '../arena';
+import { def as snakeDef, spawnSnake } from '../enemies/snake';
+import { countWaveEnemies, TELEGRAPH_SEC } from '../spawner';
+import { minionCount } from './scale';
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
-/** bs.abl slot of the pool clock (attack seconds since the last pool). */
-const POOL_CLOCK = 0;
+/** bs.abl slot of the orb clock (attack seconds since the last orb). */
+const ORB_CLOCK = 0;
 
 /** Pure: seconds between collapsing rings in a phase. */
 export function ringEveryFor(phase: number): number {
@@ -237,16 +266,165 @@ export function dropPool(w: World, bs: BossState, x: number, y: number): number 
   return spawnHazard(w, bs, HazardType.Pool, x, y, 0, GRAVITAS_POOL.radius, life, 0, 0, life, false);
 }
 
-/** The pool clock: enraged only, a pool at (x, y) every everySec of attack time. */
-function stepPools(w: World, bs: BossState, x: number, y: number, adt: number): void {
+/** Live orbs now. */
+export function countOrbs(w: World): number {
+  let n = 0;
+  for (let h = 1; h < w.cap; h++) if (w.alive[h] === 1 && w.kind[h] === Kind.BossHazard && w.a[h] === HazardType.Orb) n++;
+  return n;
+}
+
+/** Pure: how far an orb flies, d u from the ship at launch: share of d, clamped to minDist to maxDist. */
+export function orbStopDist(d: number): number {
+  const v = Number.isFinite(d) && d > 0 ? d * GRAVITAS_ORB.share : 0;
+  return v < GRAVITAS_ORB.minDist ? GRAVITAS_ORB.minDist : v > GRAVITAS_ORB.maxDist ? GRAVITAS_ORB.maxDist : v;
+}
+
+/** Pure: true when an orb may launch with live hazards up: it and the pool reserve still fit. */
+export function orbFits(live: number): boolean {
+  return live + 1 + GRAVITAS_POOL.reserve <= MAX_HAZARDS;
+}
+
+/** Pure: Gravitas Snakes allowed alive at addScale (snakeCap scaled, inside the add slots). */
+export function snakeCapFor(addScale: number): number {
+  return minionCount(GRAVITAS_ORB.snakeCap, addScale, MAX_ADDS);
+}
+
+/** Pure: Snakes one launch releases at addScale with live Gravitas Snakes already alive (the cap holds). */
+export function snakesToRelease(addScale: number, live: number): number {
+  const cap = snakeCapFor(addScale);
+  const room = cap - (live > 0 ? live : 0);
+  const n = minionCount(GRAVITAS_ORB.snakesPerOrb, addScale, cap);
+  return room <= 0 ? 0 : n < room ? n : room;
+}
+
+/** Pure: the side offset (radians) of the k-th Snake of a launch: +s, -s, +2s, -2s and so on. */
+export function snakeSide(k: number): number {
+  const step = GRAVITAS_ORB_SNAKE.sideDeg * DEG * (1 + Math.floor(k / 2));
+  return k % 2 === 0 ? step : -step;
+}
+
+/** Live Gravitas Snakes (heads in this boss's add slots). */
+export function gravitasSnakes(w: World, bs: BossState): number {
+  let n = 0;
+  for (let i = 0; i < MAX_ADDS; i++) {
+    const a = bs.addIds[i] ?? -1;
+    if (a > 0 && w.alive[a] === 1 && w.kind[a] === Kind.SnakeHead && bs.addKind[i] === Kind.SnakeHead) n++;
+  }
+  return n;
+}
+
+const cres = createConfineResult();
+const enrageFx = { id: 0, x: 0, y: 0 };
+
+/**
+ * A Snake as a boss add: a free add slot, room under maxLiveEnemies, then spawnSnake (the normal
+ * telegraph; its own slot and entity checks). Kept in the add slots. Returns the head id or -1.
+ */
+function spawnSnakeAdd(w: World, bs: BossState, x: number, y: number): number {
+  let slot = -1;
+  for (let i = 0; i < MAX_ADDS && slot < 0; i++) {
+    const id = bs.addIds[i] ?? -1;
+    if (!(id > 0 && w.alive[id] === 1 && w.kind[id] === bs.addKind[i])) slot = i;
+  }
+  if (slot < 0) return -1;
+  if (countWaveEnemies(w) >= w.level.waves.maxLiveEnemies) return -1;
+  const c = confineOn(w.surface, w.level.arena, x, y, snakeDef.radius, cres);
+  const head = spawnSnake(w, c.x, c.y, TELEGRAPH_SEC);
+  if (head < 0) return -1;
+  bs.addIds[slot] = head;
+  bs.addKind[slot] = Kind.SnakeHead;
+  return head;
+}
+
+/**
+ * Release the enraged Snakes of a launch from a centre (cx, cy) along heading a: at edge u plus the
+ * pad, beside the orb's path. Returns the number released.
+ */
+export function releaseSnakes(w: World, bs: BossState, cx: number, cy: number, a: number, edge: number): number {
+  const n = snakesToRelease(bs.addScale, gravitasSnakes(w, bs));
+  const d = edge + GRAVITAS_ORB_SNAKE.spawnPad + snakeDef.radius;
+  let made = 0;
+  for (let k = 0; k < n; k++) {
+    const s = a + snakeSide(k);
+    const head = spawnSnakeAdd(w, bs, cx + Math.cos(s) * d, cy + Math.sin(s) * d);
+    if (head < 0) break;
+    w.enraged[head] = 1;
+    enrageFx.id = head;
+    enrageFx.x = w.x[head] ?? 0;
+    enrageFx.y = w.y[head] ?? 0;
+    bus.emit('sim:enrage', enrageFx);
+    made++;
+  }
+  return made;
+}
+
+/** Scratch for the orb's moves (read both fields before the next call). */
+const ov = { x: 0, y: 0 };
+
+/**
+ * Launch an orb from (cx, cy), edge u out toward the ship, with its Snakes. Skipped (no orb, no
+ * Snakes) while it would touch the pool reserve or the world is full. Returns the orb id or -1.
+ */
+export function launchOrb(w: World, bs: BossState, cx: number, cy: number, orbEdge: number, snakeEdge: number): number {
+  if (!w.ship.active || !orbFits(countHazards(w))) return -1;
+  const a = angleToOn(w.surface, cx, cy, w.x[0] ?? 0, w.y[0] ?? 0);
+  ov.x = cx + Math.cos(a) * orbEdge;
+  ov.y = cy + Math.sin(a) * orbEdge;
+  w.surface.wrap(ov);
+  const ox = ov.x;
+  const oy = ov.y;
+  w.surface.delta(ox, oy, w.x[0] ?? 0, w.y[0] ?? 0, ov);
+  const stop = orbStopDist(Math.hypot(ov.x, ov.y));
+  const h = spawnHazard(w, bs, HazardType.Orb, ox, oy, a, GRAVITAS_ORB.radius, stop, 0, 0, -1, false);
+  if (h <= 0) return -1;
+  releaseSnakes(w, bs, cx, cy, a, snakeEdge);
+  return h;
+}
+
+/** Fly orb h for dt: where it stops (its distance flown, or the arena wall next) a pool opens. */
+export function stepOrb(w: World, bs: BossState, h: number, dt: number): void {
+  const x = w.x[h] ?? 0;
+  const y = w.y[h] ?? 0;
+  const stop = w.vx[h] ?? 0;
+  const flown = w.vy[h] ?? 0;
+  const left = stop - flown;
+  const move = GRAVITAS_ORB.speed * (dt > 0 ? dt : 0);
+  const m = move < left ? move : left > 0 ? left : 0;
+  const a = w.rot[h] ?? 0;
+  ov.x = x + Math.cos(a) * m;
+  ov.y = y + Math.sin(a) * m;
+  w.surface.wrap(ov);
+  const wall = !isInsideOn(w.surface, w.level.arena, ov.x, ov.y, GRAVITAS_ORB.radius);
+  if (!wall) {
+    w.x[h] = ov.x;
+    w.y[h] = ov.y;
+    w.vy[h] = flown + m;
+  }
+  if (!wall && flown + m < stop - 1e-9) return;
+  const px = w.x[h] ?? 0;
+  const py = w.y[h] ?? 0;
+  removeEntity(w, h);
+  dropPool(w, bs, px, py);
+}
+
+/** Every live orb flies one step. */
+function stepOrbs(w: World, bs: BossState, dt: number): void {
+  for (let h = 1; h < w.cap; h++) {
+    if (w.alive[h] === 1 && w.kind[h] === Kind.BossHazard && w.a[h] === HazardType.Orb) stepOrb(w, bs, h, dt);
+  }
+}
+
+/** The orb clock: enraged only, an orb from (cx, cy) every everySec of attack time; live orbs fly. */
+function stepOrbClock(w: World, bs: BossState, cx: number, cy: number, orbEdge: number, snakeEdge: number, dt: number, adt: number): void {
+  stepOrbs(w, bs, dt);
   if (bs.fury !== 2) return;
-  const c = (bs.abl[POOL_CLOCK] ?? 0) + adt;
-  if (c < GRAVITAS_POOL.everySec) {
-    bs.abl[POOL_CLOCK] = c;
+  const c = (bs.abl[ORB_CLOCK] ?? 0) + adt;
+  if (c < GRAVITAS_ORB.everySec) {
+    bs.abl[ORB_CLOCK] = c;
     return;
   }
-  bs.abl[POOL_CLOCK] = c - GRAVITAS_POOL.everySec;
-  dropPool(w, bs, x, y);
+  bs.abl[ORB_CLOCK] = c - GRAVITAS_ORB.everySec;
+  launchOrb(w, bs, cx, cy, orbEdge, snakeEdge);
 }
 
 /** The live pull id, or -1. */
@@ -353,7 +531,8 @@ export function step(w: World, id: number, bs: BossState, dt: number, adt: numbe
     const every = ringEveryFor(bs.phase);
     if (bs.t0 >= every) fireRing(w, id, bs, every);
   }
-  stepPools(w, bs, w.x[id] ?? 0, w.y[id] ?? 0, adt);
+  const r = w.radius[id] ?? 0;
+  stepOrbClock(w, bs, w.x[id] ?? 0, w.y[id] ?? 0, r + GRAVITAS_ORB.radius, r, dt, adt);
   setWindow(bs, n);
 }
 
@@ -547,7 +726,7 @@ export function stepGravitant(w: World, id: number, dt: number): void {
     const every = ringEveryFor(bs.phase);
     if (bs.t0 >= every) fireSplitRing(w, bs, every);
   }
-  stepPools(w, bs, bs.t1, bs.t2, adt);
+  stepOrbClock(w, bs, bs.t1, bs.t2, 0, bs.t3 + GRAVITANT.radius, dt, adt); // from the pair centre
 }
 
 export const def: BossDef = { reset, step, onPhase, entryHome, cracks, clampDamage, afterDamage, phaseOf, fury: true };
