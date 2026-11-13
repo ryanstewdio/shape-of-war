@@ -797,6 +797,9 @@ export function bossOnShipDeath(w: World): void {
   clearHazards(w);
   clearHornets(w, bs); // killShip keeps boss parts; Hornets are adds and go like the others
   cancelVolley(bs); // killShip clears the bullets too
+  // killShip removed every add: forget their ids, so an id reused by a wave or well enemy of the
+  // same kind (a Snake, fury orbs) never reads as a boss add.
+  bs.addIds.fill(-1);
   bs.stagger = 0;
   bs.phaseT = 0;
   bs.retry = 0;

@@ -8,6 +8,7 @@
 // ember 345, mirage 330, gravitas 326, bastion 328, tempest 329, twins 329, prism 335.
 // Warden fury wave: warden 72 to 65 (the dash windows), brood 59 to 27 (device time retune).
 // Fury tune (Ryan 2026-11-12): mirage 96 to 44 (1150 to 650 hit points from his 2:45 device fight).
+// Fury orbs (Ryan 2026-11-13): gravitas 95 to 78 (1704 to 1300 hit points from his 2:15 device fight).
 import { afterEach, describe, expect, it } from 'vitest';
 import { bus } from '../../src/core/events';
 import { bossNominalLevel } from '../../src/game/bosses/table';
@@ -23,6 +24,9 @@ afterEach(() => bus.clear());
  * not the bot; the bot reads about 27 s for the retuned fight (59 before); the calm pass (body 340, Broodlings 450) reads 44 s, so its band sits there.
  * Mirage (fury tune, Ryan 2026-11-12): tuned from Ryan's device time like Brood (2:45 on device on
  * 1150 hit points); on 650 the gate aware bot reads 44.4 s (Easy 30.6, Insane 95.2), so its band sits there.
+ * Gravitas (fury orbs, Ryan 2026-11-13): tuned from Ryan's device time like Brood and Mirage (2:15 on
+ * device on 1704 hit points against 90 s); on 1300 the bot reads 78.2 s (Easy 45.7, Insane 123.0), so
+ * its band sits there.
  */
 const FIGHT_TARGET_SEC: Readonly<Record<BossId, number>> = {
   brood: 44,
@@ -30,15 +34,15 @@ const FIGHT_TARGET_SEC: Readonly<Record<BossId, number>> = {
   spindle: 75,
   ember: 85,
   mirage: 44,
-  gravitas: 95,
+  gravitas: 78,
   bastion: 115,
   tempest: 120,
   twins: 125,
   prism: 150,
 };
 const BAND = 0.2;
-/** Rows tuned from Ryan's device time, not the bot ramp: they leave the tier ramp check (Mirage, fury tune). */
-const DEVICE_TUNED: ReadonlySet<BossId> = new Set<BossId>(['mirage']);
+/** Rows tuned from Ryan's device time, not the bot ramp: they leave the tier ramp check (Mirage, fury tune; Gravitas, fury orbs). */
+const DEVICE_TUNED: ReadonlySet<BossId> = new Set<BossId>(['mirage', 'gravitas']);
 
 /** The Adventure level of a guardian (version 9 swaps the first two bosses). */
 function adventureLevel(id: BossId): number {
@@ -78,7 +82,7 @@ describe('fight length on the bot, each guardian on its Adventure level (boss he
     });
   }
 
-  it('the fights ramp by tier: every tier 2 fight outlasts every tier 1 fight, and so on up to Prism (Mirage, device tuned, left out)', () => {
+  it('the fights ramp by tier: every tier 2 fight outlasts every tier 1 fight, and so on up to Prism (Mirage and Gravitas, device tuned, left out)', () => {
     const all: BossId[][] = [
       ['brood', 'warden', 'spindle'],
       ['ember', 'mirage', 'gravitas'],
@@ -86,7 +90,7 @@ describe('fight length on the bot, each guardian on its Adventure level (boss he
       ['prism'],
     ];
     const tiers = all.map((t) => t.filter((id) => !DEVICE_TUNED.has(id)));
-    expect(tiers[1]).toEqual(['ember', 'gravitas']);
+    expect(tiers[1]).toEqual(['ember']);
     for (let k = 1; k < tiers.length; k++) {
       const lo = Math.max(...(tiers[k - 1] ?? []).map((id) => normal.get(id) ?? 0));
       const hi = Math.min(...(tiers[k] ?? []).map((id) => normal.get(id) ?? 0));

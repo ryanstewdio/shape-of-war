@@ -20,7 +20,7 @@ import {
 } from '../../src/game/bosses/core';
 import { Pincer } from '../../src/game/bosses/brood';
 import { countPools, dropPool } from '../../src/game/bosses/gravitas';
-import { BOSS_TABLE, BROOD_FRENZY, CRACK_AT, GRAVITAS, GRAVITAS_FURY, GRAVITAS_POOL, MAX_HAZARDS, MIRAGE } from '../../src/game/bosses/table';
+import { BOSS_TABLE, BROOD_FRENZY, CRACK_AT, GRAVITAS, GRAVITAS_FURY, GRAVITAS_ORB, GRAVITAS_POOL, MAX_HAZARDS, MIRAGE } from '../../src/game/bosses/table';
 import { HazardType } from '../../src/game/bosses/types';
 import { createBossView, readBoss } from '../../src/game/bosses/view';
 import { stepGame } from '../../src/game/game';
@@ -67,7 +67,7 @@ const MAIN_BOT_STEPS: Readonly<Record<string, number>> = {
   brood: 5325,
   spindle: 9539,
   ember: 10888,
-  gravitas: 12079,
+  gravitas: 9387, // fury orbs: 1300 hit points (12079 on 1704)
   bastion: 13677,
   tempest: 14486,
   twins: 14999,
@@ -294,7 +294,7 @@ describe('fury fixes: Gravitas shelter pools', () => {
     expect(countPools(w)).toBe(0);
   });
 
-  it('enraged: a pool where Gravitas stands every 3 s of attack time, never lethal, shrinking and gone at 8 s', () => {
+  it('a pool opens where an orb stops (fury orbs: no pool where Gravitas stands), never lethal, shrinking and gone at 8 s', () => {
     const { w, id } = gravitas();
     park(w, 500, 300);
     enrage(w);
@@ -302,19 +302,18 @@ describe('fury fixes: Gravitas shelter pools', () => {
     let t = 0;
     let bx = 0;
     let by = 0;
-    while (countPools(w) === 0 && t < 5) {
+    while (countPools(w) === 0 && t < 6) {
       stepGame(w, DT, idle());
       bx = w.x[id] ?? 0;
       by = w.y[id] ?? 0;
       t += DT;
     }
-    expect(t).toBeGreaterThan(GRAVITAS_POOL.everySec / 1.31 - DT);
-    expect(t).toBeLessThanOrEqual(GRAVITAS_POOL.everySec + DT);
+    expect(t).toBeGreaterThan(GRAVITAS_ORB.everySec / 1.31 - DT);
+    expect(t).toBeLessThanOrEqual(GRAVITAS_ORB.everySec + GRAVITAS_ORB.maxDist / GRAVITAS_ORB.speed + 2 * DT);
     const p = pools(w)[0] ?? -1;
     expect(w.kind[p]).toBe(Kind.BossHazard);
     expect(w.a[p]).toBe(HazardType.Pool);
-    expect(w.x[p]).toBeCloseTo(bx, 3);
-    expect(w.y[p]).toBeCloseTo(by, 3);
+    expect(Math.hypot((w.x[p] ?? 0) - bx, (w.y[p] ?? 0) - by)).toBeGreaterThan(GRAVITAS_ORB.minDist);
     expect(w.radius[p]).toBe(GRAVITAS_POOL.radius);
     expect(w.vx[p]).toBe(GRAVITAS_POOL.lifeSec);
     expect(hazardLethalAt(w, s, p, w.x[p] ?? 0, w.y[p] ?? 0)).toBe(false);
@@ -370,7 +369,7 @@ describe('fury fixes: Gravitas shelter pools', () => {
     expect(countPools(w)).toBe(0);
   });
 
-  it('after the stage 2 split the pools land at the pair centre', () => {
+  it('after the stage 2 split the orbs fly from the pair centre and their pools open on the way to the ship', () => {
     const { w, id } = gravitas();
     park(w, 500, 300);
     enrage(w);
@@ -380,11 +379,12 @@ describe('fury fixes: Gravitas shelter pools', () => {
     expect(s.split).toBe(true);
     s.t0 = -1e9;
     let guard = 0;
-    while (countPools(w) === 0 && guard++ < 800) stepGame(w, DT, idle());
+    while (countPools(w) === 0 && guard++ < 1000) stepGame(w, DT, idle());
     const p = pools(w)[0] ?? -1;
     expect(p).toBeGreaterThan(0);
-    expect(w.x[p]).toBeCloseTo(s.t1, 3);
-    expect(w.y[p]).toBeCloseTo(s.t2, 3);
+    const d = Math.hypot((w.x[p] ?? 0) - s.t1, (w.y[p] ?? 0) - s.t2);
+    expect(d).toBeGreaterThan(GRAVITAS_ORB.minDist - 20);
+    expect(d).toBeLessThan(GRAVITAS_ORB.maxDist + 20);
   });
 });
 
