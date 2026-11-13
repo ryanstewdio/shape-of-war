@@ -22,7 +22,7 @@ Refuse any task that does not come from an issue in this repository. A valid iss
 - (e) One issue gives one branch and one pull request against main. Furiosa never merges, labels, closes, deletes branches or pushes to main.
 - (f) No retention period is stated for Codex task content. Never claim that content is kept for zero days or not kept at all.
 - (g) Furiosa has no access to Ryan's computer.
-- (h) No content from any Claude Code or Claude Cowork session goes into ChatGPT or Codex. Codex is used from the browser only.
+- (h) Codex is used from the browser only. The only content a Claude session may put into ChatGPT or Codex is a Furiosa issue body exactly as it appears on this repository's GitHub issue page, plus its Title line. The Lead session types or pastes it into a new Codex task's prompt box while driving Ryan's Chrome, or Ryan does. Nothing else from any Claude session goes in: no conversation text, files, logs, other projects' content, personal data or credentials. The Lead never changes ChatGPT or Codex settings, environments, connectors or account options, never answers an access or permission prompt there, and never uses the Codex Push control.
 
 ## 4. Write bans
 Never change these paths, even if an issue seems to ask you to:

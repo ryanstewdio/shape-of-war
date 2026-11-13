@@ -302,7 +302,7 @@ Two side columns and no top band: the left column is 160 px wide (score and obje
 | Weapon indicator | top left, right of the multiplier | 76, 32 | 10 px label, 5 px high bar below it | Weapon name and time left. Hidden while the weapon is Spread (docs/11) |
 | Objective bar | top left | 16, 58 | 136 x 12 bar | Progress fill |
 | Objective label | top left | 16, 72 | 11 px text, up to 2 lines | Objective text, see below |
-| Level line | top left | 16, 106 | 11 px text, up to 2 lines | Adventure: "L3  Par 1,000  #abcd1234" (level, par, level hash). Endless: "Endless  Seed N  m:ss" |
+| Level line | top left | 16, 106 | 11 px text, up to 2 lines | Adventure: "L3  Par 1,000" (level, par); a dev session adds the level hash, "#abcd1234". Endless: "Endless  Seed N  m:ss" |
 | Pause button | top right | centre 32 in from the top and right edges | 56 x 56 hit area, 20 px icon | Two bars |
 | Lives | right column, right aligned | right edge 12 in, y 64 | 12 px icons | Up to 5 icons, then one icon and "x N" |
 | Bombs | right column, right aligned | right edge 12 in, y 82 | 10 px icons | As lives |
@@ -369,7 +369,7 @@ menu -> endless play (no intro card, 1.5 s "Ready" text) -> results -> menu
 | Play | Arena, HUD | Pause button, objective end |
 | Pause | Resume, Restart level, Settings, Quit to menu. Simulation halted. Auto-pause on `visibilitychange` to hidden and on aspect class change (fold or unfold) | Each item |
 | Results | Success or failure title, score, stars earned, par, best, new best flag. Buttons: Next (success only), Retry, Menu | Each button |
-| Settings | Neon slider 0 to 100 with live preview arena (grid plus one of each enemy drifting), Volume slider 0 to 100 (default 70), Music slider (0 is off), Space physics (Off, Low, Medium, High), Weapon pickups (On, Off), Effects (Low, Standard, High), Show FPS toggle, Glow toggle (Bloom or Fallback), Play seed (a run seed field and button that start Adventure level 1 on that seed, with a line under the field showing its level 1 hash), Reset progress (two-tap confirm). The Music, Space physics, Weapon pickups and Effects rows are specified in docs/11. A "build" version line sits at the foot; five taps on it within 3 s reveal a debug button, "Stress: 400 entities, 2000 particles" | Back |
+| Settings | Neon slider 0 to 100 with live preview arena (grid plus one of each enemy drifting), Volume slider 0 to 100 (default 70), Music slider (0 is off), Space physics (Off, Low, Medium, High), Weapon pickups (On, Off), Effects (Low, Standard, High), Show FPS toggle, Glow toggle (Bloom or Fallback), Play seed (a run seed field and button that start Adventure level 1 on that seed, with a line under the field showing its level 1 hash), Reset progress (two-tap confirm). The Music, Space physics, Weapon pickups and Effects rows are specified in docs/11. A "build" version line sits at the foot; in a dev session (?dev=1 or a dev build) five taps on it within 3 s reveal a debug button, "Stress: 400 entities, 2000 particles" | Back |
 
 Persistence keys (localStorage): `sow.settings.neon` (SPEC), `sow.settings.volume`, `sow.progress.runSeed`, `sow.progress.unlocked`, `sow.scores.adventure` (map of level index to best score and stars), `sow.scores.endless` (top 10 array). All reads tolerate missing or corrupt values and fall back to defaults.
 
