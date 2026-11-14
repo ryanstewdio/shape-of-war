@@ -14,7 +14,7 @@ Furiosa is the Codex Cloud lane described in AGENTS.md. This runsheet is the ord
 - The Lead never changes the model control and never answers a question a task asks in its thread. When a task asks for the model name, Ryan answers in the thread.
 
 ## Known facts that shape the steps
-- Codex caches the task container for up to 12 hours, built from main as it was when the cache was made, so a task can start hours behind main. There is no reset control on our environment page. Changing an environment variable did not bring the checkout to current main (issue 19 started at 8ba70ea while main was de4ba97), so the runsheet no longer changes one. On 2026-11-13 issues 72 to 75 all started at current main (80a6a4c); the Lead still compares every start sha with main.
+- Codex caches the task container for up to 12 hours, built from main as it was when the cache was made, so a task can start hours behind main. There is no reset control on our environment page. Changing an environment variable did not bring the checkout to current main (issue 19 started at 8ba70ea while main was de4ba97), so the runsheet no longer changes one. On 2026-11-13 issues 72 to 75 all started at current main (80a6a4c); on 2026-11-14 issues 81 to 84 all started at fb53948, two docs only commits behind main (819cedd). The Lead still compares every start sha with main.
 - The sandbox cannot git push, and the Codex Push control failed on issue 19 ("Failed to push changes"). Publishing works through the GitHub connector: create the issue's branch from current main on GitHub, upload only the allowed files as one commit, open one PR. Because that uploads whole files onto current main, Furiosa must stop if an allowed file changed on main after the start sha.
 - Every PR body states its start sha. The Lead compares it with main at launch.
 - The sandbox home folder cannot hold the npm cache: install with `npm ci --cache /tmp/npm-cache`.
@@ -22,6 +22,7 @@ Furiosa is the Codex Cloud lane described in AGENTS.md. This runsheet is the ord
 - Furiosa commits are authored as Ryan's GitHub account (the ChatGPT connector writes with it).
 - Publishing an environment can stall. Wait and look again later; never click publish repeatedly.
 - The Codex app is at chatgpt.com/codex/cloud; chatgpt.com/codex is a marketing page (seen 2026-11-13). The prompt box opens on the environment used last, so read the environment chip before every send.
+- The model control can show another default in a new chat: on 2026-11-14 it read "GPT-6.1 Sol Light" after one task had gone out on "GPT-6 Astra High", and it no longer settled. The Lead reads the label before every Send and stops if it is not the label Ryan gave; Ryan sets the control.
 - A long paste becomes a card above the prompt box. Click "Show in text field" on the card so the issue body sits in the prompt itself.
 - GitHub drops text in angle brackets outside code spans, so a rendered issue body loses a placeholder written that way. Template 1 keeps the verdict lines in code spans for that reason.
 - A task thread is used once. Any follow up or rerun starts in a new chat. Any thread started outside this runsheet is abandoned, never continued.
